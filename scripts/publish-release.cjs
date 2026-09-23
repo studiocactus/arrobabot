@@ -1,13 +1,15 @@
 const fs=require('node:fs'),cp=require('node:child_process'),path=require('node:path'),os=require('node:os');
+const {publicManifest}=require('./release-manifest.cjs');
 const v=process.env.RELEASE_VERSION,repo=process.env.GH_REPO;
 if(!/^\d+\.\d+\.\d+$/.test(v||'')||repo!=='studiocactus/arrobabot')throw Error('Destino de publicação inválido');
 const tag='v'+v;const gh=(...args)=>cp.execFileSync('gh',args,{encoding:'utf8',stdio:['ignore','pipe','inherit']});
 const temp=fs.mkdtempSync(path.join(os.tmpdir(),'botlive-release-'));
 gh('release','download',tag,'--pattern','latest.json','--dir',temp);
 const manifest=JSON.parse(fs.readFileSync(path.join(temp,'latest.json'),'utf8'));
-if(manifest.version!==v)throw Error('Versão do manifesto diverge do pacote');
-const platforms=Object.entries(manifest.platforms||{}).filter(([key])=>key.startsWith('windows-x86_64'));
-if(!platforms.length||platforms.some(([,p])=>!p.signature||!p.url?.startsWith('https://github.com/'+repo+'/releases/download/'+tag+'/')))throw Error('Manifesto sem assinatura ou destino incorreto');
+const {databaseId}=JSON.parse(gh('release','view',tag,'--json','databaseId'));
+const release=JSON.parse(gh('api','repos/'+repo+'/releases/'+databaseId));
+fs.writeFileSync(path.join(temp,'latest.json'),JSON.stringify(publicManifest(manifest,release,v,repo),null,2)+'\n');
+gh('release','upload',tag,path.join(temp,'latest.json'),'--clobber');
 gh('release','upload',tag,'docs/MANUAL.html#Manual do BotLive','updates/'+v+'.md#Notas da atualização','--clobber');
 gh('release','edit',tag,'--draft=false','--latest');
 console.log('Publicada '+tag+' com manifesto assinado, instaladores, manual e notas.');

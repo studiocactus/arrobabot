@@ -64,6 +64,8 @@ Não gere outra chave para cada atualização: a chave pública embutida nos apl
 
 ## Falhas e conferência
 
+O manifesto gerado pelo empacotador pode usar endereços da API do GitHub. Antes da publicação, o script confere cada endereço contra os arquivos reais do rascunho e o converte para o download público da mesma versão. A assinatura é preservada. Arquivos desconhecidos, assinaturas ausentes e versões divergentes interrompem a publicação. O script também recusa modificar uma release que já esteja publicada.
+
 Consulte a aba Actions do repositório. Uma falha nos testes ou na assinatura impede a publicação final. Confira os assets, notas, tag, commit e latest.json antes de anunciar a versão. Uma release em rascunho não é disponibilizada pelo endpoint latest.
 
 Para uma falha de infraestrutura antes de publicar, é possível reexecutar o workflow do mesmo commit. Para corrigir código, crie outro commit com outra versão e novas notas. Não use uma versão publicada para distribuir conteúdo diferente.

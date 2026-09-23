@@ -1,6 +1,6 @@
 {
   "name": "botlive",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "type": "module",
   "scripts": {
@@ -16,7 +16,7 @@
     "update:prepare": "node scripts/update.cjs prepare",
     "update:check": "node scripts/update.cjs check",
     "repo:setup": "git config core.hooksPath .githooks",
-    "test:updates": "node --test scripts/update.test.cjs"
+    "test:updates": "node --test scripts/update.test.cjs scripts/release-manifest.test.cjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.8.0",
