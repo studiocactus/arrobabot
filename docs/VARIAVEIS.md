@@ -107,7 +107,11 @@ No conteúdo das ações Definir/Incrementar, a interpretação continua sendo t
 
 Texto numérico entre aspas é texto e não pode ser incrementado. Resultados fora do limite numérico produzem erro sem alterar o valor. Cada ação concluída é independente: uma falha posterior não desfaz incrementos anteriores.
 
-Uma ação real de IA disponibiliza `{{local.aiResponse}}` depois de enviar a resposta. A prévia e a simulação não chamam a IA e não fabricam esse resultado; use um valor local de teste ou um default para conferir as próximas mensagens.
+**Gerar resposta da IA (variável)** disponibiliza `{{local.aiResponse}}` sem publicar. Na próxima ação, clique em **+ Resposta da IA** para usar o texto em uma mensagem, voz ou overlay. **Responder com IA** também disponibiliza o valor, mas já o envia ao chat. O catálogo tem a categoria **IA**, com **Resposta da IA** e **IA respondeu com sucesso?** (`{{local.aiSuccess}}`).
+
+O conteúdo é gerado a partir da mensagem atual, conversa recente do perfil, personalidade, orientação da ação e memórias recuperadas. Cada execução tem sua própria resposta. Um nome personalizado como `resenha` cria também `{{local.resenha}}`. A geração deve acontecer antes de usar o valor; inserir o marcador sozinho não chama a IA. Marcadores dentro da resposta gerada são texto literal, sem segunda interpretação.
+
+Na falha do provedor, a resposta alternativa configurada ocupa a variável e aiSuccess fica false. Na prévia e simulação, nenhum provedor é chamado: o texto **[Prévia: resposta contextual da IA]** ocupa o valor e aiSuccess fica false. Para avaliar uma resposta real sem publicar, use **Testar resposta contextual**. Consulte a receita **Resenha com IA** no [capítulo de inteligência artificial](04-IA-E-MEMORIA.md).
 
 ## Filtros
 

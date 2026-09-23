@@ -16,6 +16,8 @@ A imagem mostra a interface de teste. Nomes e conteúdos são exemplos.
 
 ## Comando simples
 
+Para responder ao assunto da conversa com humor, use **Resenha com IA**. Escolha um trecho da mensagem e o tom; o aplicativo monta a geração contextual e o envio em sequência. Edite o fluxo depois para mudar os intervalos ou reutilizar a resposta em voz e overlay. A receita completa e o teste sem publicação estão no [capítulo de IA e memória](04-IA-E-MEMORIA.md).
+
 Abra **Comandos → Novo comando**. Preencha nome, comando, resposta, permissão e intervalos. Salve e confira se está ativo.
 
 Um comando como !oi casa com o primeiro termo da mensagem: !oi tudo bem dispara; !oie não dispara. Letras maiúsculas e minúsculas não alteram esse reconhecimento. O nome interno pode conter espaços; o campo Comando não.
@@ -82,6 +84,7 @@ A presença da opção no editor não garante que todas as plataformas emitam aq
 |---|---|---|
 | Enviar mensagem | Texto e variáveis | Publica no chat do perfil |
 | Responder com IA | Instrução, como Responda brevemente: $message | Consulta o provedor configurado e envia a resposta |
+| Gerar resposta da IA (variável) | Tom/orientação e nome local da resposta | Usa a conversa recente e guarda o texto para as próximas ações, sem publicar |
 | Registrar memória | Conteúdo e arquivo, como eventos/chegadas.md | Acrescenta uma entrada datada na nota |
 | Esperar | Milissegundos, até 30000 | Aguarda antes da próxima ação |
 | Atualizar overlay | Texto | Emite uma atualização para clientes locais |

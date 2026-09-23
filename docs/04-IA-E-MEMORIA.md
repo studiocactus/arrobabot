@@ -54,6 +54,26 @@ Os filtros por classificação não garantem compreensão perfeita de todo assun
 
 ## Colocar a IA em um comando
 
+### Resenha contextual em poucos cliques
+
+Em **Comandos** ou **Automações**, clique em **Resenha com IA**. Informe o trecho que dispara a resposta (por exemplo, `amassando`) e como a IA deve responder. O modelo inicial já pede humor de live e uma provocação leve sobre a jogada. Salvar cria duas ações conectadas: **Gerar resposta da IA (variável)** → **Enviar mensagem**. O intervalo inicial é 60 segundos entre respostas e 120 por pessoa.
+
+A geração recebe automaticamente a mensagem atual, quem a escreveu, até 12 falas anteriores do mesmo perfil nos últimos cinco minutos e as memórias selecionadas. Respostas enviadas pelo próprio bot também entram nesse contexto. Cada fala antiga é limitada a 500 caracteres. Mensagens barradas pela moderação não entram. O contexto recente fica em RAM, é descartado ao fechar o app e limpo quando o perfil é excluído ou troca de canal; os registros normais do Histórico continuam seguindo o comportamento do aplicativo. Ao usar um provedor remoto, esse contexto é enviado a ele quando uma ação de IA é executada.
+
+Exemplo de mensagem: **“O Thenees hoje está amassando na play.”** Uma resposta coerente com o tom pode ser **“Hoje até a mira resolveu trabalhar, daqui a pouco o poste pede revanche!”** Isso é um exemplo editorial, não uma frase fixa nem resultado de homologação de um modelo. Para mencionar que ele passou a semana errando, essa informação precisa aparecer na conversa ou nas memórias recuperadas. O bot é orientado a não inventar esse histórico.
+
+Abra **Testar resposta contextual**, escreva a mensagem e, se quiser, algumas falas anteriores, uma por linha. **Gerar resposta de teste** chama o provedor salvo no perfil, pode consumir créditos e mostra o resultado somente no painel. Não envia mensagem nem grava memória. Usa a conversa fornecida no teste e as notas existentes, sem misturar o chat ao vivo. Configure e salve o provedor primeiro em **Inteligência artificial**. No navegador, este teste fica desativado; execute no aplicativo desktop.
+
+### Reutilizar a resposta em mensagens, voz e overlay
+
+No editor visual, **Gerar resposta da IA (variável)** apenas guarda o texto. A ação seguinte pode ser **Enviar mensagem**, **Ler em voz alta** ou **Atualizar overlay**. No conteúdo, clique em **+ Resposta da IA**: o editor insere `{{local.aiResponse}}`. Você também pode combinar `{{user}}: {{local.aiResponse}}`.
+
+O campo **Nome da resposta** permite guardar respostas diferentes, por exemplo `resenha`, usada depois como `{{local.resenha}}`. A resposta mais recente também fica em `local.aiResponse`. Esses valores são locais à execução, sem compartilhar o texto entre espectadores. Uma nova referência à mesma variável reutiliza o texto; não faz outra chamada ao modelo. Gerar antes de usar é obrigatório. Se a geração falhar, a variável recebe a alternativa configurada e `{{local.aiSuccess}}` fica `false`; quando há resposta válida, fica `true`. Esses valores não criam ramificações no editor atual.
+
+**Responder com IA** continua enviando diretamente ao chat e agora também usa contexto. Evite adicionar outro Enviar mensagem com a mesma resposta se não quiser publicá-la duas vezes. A simulação e a prévia de variáveis não chamam a IA: usam o marcador explícito **[Prévia: resposta contextual da IA]** e sucesso `false` para conferir a sequência.
+
+### Configuração manual de um comando
+
 1. Configure e teste o provedor.
 2. Abra Automações e crie um fluxo.
 3. Use gatilho Comando de chat e texto !bot.

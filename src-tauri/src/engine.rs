@@ -10,6 +10,7 @@ pub struct Runtime {
  pub connections:Mutex<HashMap<String,tokio::task::JoinHandle<()>>>,
  pub statuses:Mutex<HashMap<String,String>>,
  pub cooldowns:Mutex<HashMap<String,Instant>>,
+ pub conversation:Mutex<crate::conversation::History>,
  pub seen:Mutex<HashMap<String,Instant>>,
  pub module_lock:Mutex<()>,pub vault_lock:Mutex<()>,pub send_locks:Mutex<HashMap<String,Arc<tokio::sync::Mutex<Instant>>>>,
  pub api_token:String,pub api_port:Mutex<u16>,pub actor:Mutex<String>,
@@ -21,7 +22,7 @@ impl Runtime {
  let (tx,rx)=mpsc::channel(512);let (broadcast,_)=broadcast::channel(512);
  let http=reqwest::Client::builder().timeout(Duration::from_secs(30)).redirect(reqwest::redirect::Policy::none()).build().map_err(|e|e.to_string())?;
  let actor=if db.get("accessEnabled")==true{"locked"}else{"owner"}.to_owned();
- let rt=Arc::new(Self{actor:Mutex::new(actor),db,base,http,tx,broadcast,app:Mutex::new(None),connections:Mutex::new(HashMap::new()),statuses:Mutex::new(HashMap::new()),cooldowns:Mutex::new(HashMap::new()),seen:Mutex::new(HashMap::new()),module_lock:Mutex::new(()),vault_lock:Mutex::new(()),send_locks:Mutex::new(HashMap::new()),api_token:format!("{}{}",uuid::Uuid::new_v4().simple(),uuid::Uuid::new_v4().simple()),api_port:Mutex::new(0)});
+ let rt=Arc::new(Self{actor:Mutex::new(actor),db,base,http,tx,broadcast,app:Mutex::new(None),connections:Mutex::new(HashMap::new()),statuses:Mutex::new(HashMap::new()),cooldowns:Mutex::new(HashMap::new()),conversation:Mutex::new(crate::conversation::History::default()),seen:Mutex::new(HashMap::new()),module_lock:Mutex::new(()),vault_lock:Mutex::new(()),send_locks:Mutex::new(HashMap::new()),api_token:format!("{}{}",uuid::Uuid::new_v4().simple(),uuid::Uuid::new_v4().simple()),api_port:Mutex::new(0)});
  tokio::spawn(worker(rt.clone(),rx));Ok(rt)
  }
  pub fn emit(&self,kind:&str,payload:Value){
@@ -74,6 +75,7 @@ impl Runtime {
  let fresh=self.db.profile(&p.id)?;
  if blocked(text,&fresh){return Err("Mensagem bloqueada pelas restrições atuais do perfil".into())}
  platforms::send(self,&fresh,text).await?;*last=Instant::now();
+ self.conversation.lock().unwrap().sent(&p.id,text);
  self.log(&p.id,"chat",text,"success");Ok(())
  }
 }
@@ -87,11 +89,15 @@ async fn worker(rt:Arc<Runtime>,mut rx:mpsc::Receiver<Event>){
 }
 pub async fn process(rt:Arc<Runtime>,e:Event){
  let Ok(p)=rt.db.profile(&e.profile_id) else{return};
+ if e.kind=="chat"&&!e.simulated&&!p.bot_id.is_empty()&&e.user_id==p.bot_id{return}
  if e.kind=="voice"&&p.modules["voice"]!=true{rt.log(&p.id,"voice","Controle por voz desativado","info");return}
  rt.log(&p.id,&e.kind,&format!("{}: {}",e.user,e.message),"info");
  rt.emit("platform-event",serde_json::to_value(&e).unwrap());
  if e.kind=="chat" {
  if let Some(reason)=crate::moderation::detect(&rt,&p,&e){rt.log(&p.id,"moderation",reason,"info");if let Err(err)=crate::moderation::act(&rt,&p,&e,reason).await{rt.log(&p.id,"moderation",&err,"error");}return}
+ }
+ let history=rt.conversation.lock().unwrap().receive(&e);
+ if e.kind=="chat" {
  match modules::chat(&rt,&p,&e) {
  Ok(Some(reply))=>{if let Err(err)=rt.send(&p,&e,&reply).await{rt.log(&p.id,"module",&err,"error");}return},
  Err(err)=>{rt.log(&p.id,"module",&err,"error");return},_=>{}
@@ -110,7 +116,7 @@ pub async fn process(rt:Arc<Runtime>,e:Event){
  let mut variables=match crate::variables::Context::new(&rt.db,&p,&e,Some(&f)){Ok(v)=>v,Err(err)=>{rt.log(&p.id,"variables",&err,"error");continue}};
  for a in &f.actions {
  if !a.condition.is_empty()&&!e.message.to_lowercase().contains(&a.condition.to_lowercase()){continue}
- let result=tokio::time::timeout(Duration::from_secs(65),action(&rt,&p,&e,a,&mut variables)).await;
+ let result=tokio::time::timeout(Duration::from_secs(65),action(&rt,&p,&e,a,&mut variables,&history)).await;
  match result{
  Ok(Ok(()))=>rt.log(&p.id,"action",&format!("{} · {}",f.name,a.kind),"success"),
  Ok(Err(err))=>{rt.log(&p.id,"action",&format!("{} · {err}",f.name),"error");break},
@@ -119,20 +125,21 @@ pub async fn process(rt:Arc<Runtime>,e:Event){
  }
  }
 }
-async fn action(rt:&Arc<Runtime>,p:&Profile,e:&Event,a:&Action,variables:&mut crate::variables::Context)->Result<(),String>{
+async fn action(rt:&Arc<Runtime>,p:&Profile,e:&Event,a:&Action,variables:&mut crate::variables::Context,history:&[Value])->Result<(),String>{
  let text=if a.kind=="variable.delete"{String::new()}else if a.kind=="script"{a.text.clone()}else{variables.render(&a.text)?};
  if a.kind.starts_with("variable."){variables.change(&rt.db,p,e,&a.target,a.kind.trim_start_matches("variable."),crate::variables::typed(&text))?;return Ok(())}
  if blocked(&text,p)&&matches!(a.kind.as_str(),"chat"|"tts"|"overlay"|"discord"){return Err("Conteúdo bloqueado".into())}
  // Simulations never perform external effects or change persistent module/vault state.
- if e.simulated && a.kind!="chat" {rt.log(&p.id,"simulation",&format!("Executaria {}: {}",a.kind,text.chars().take(200).collect::<String>()),"success");return Ok(())}
+ if e.simulated && a.kind!="chat" {if matches!(a.kind.as_str(),"ai"|"ai.generate"){crate::ai::save_response(variables,rt,p,e,a,"[Prévia: resposta contextual da IA]",false)?;}rt.log(&p.id,"simulation",&format!("Executaria {}: {}",a.kind,text.chars().take(200).collect::<String>()),"success");return Ok(())}
  match a.kind.as_str(){
  "chat"=>rt.send(p,e,&text).await,
- "ai"=>{
- let output=match ai::generate(&rt.http,&rt.base,p,&e.user,&text).await{
- Ok(answer)=>answer,Err(err)=>{rt.log(&p.id,"ai",&err,"error");p.ai.fallback.clone()}
+ "ai"|"ai.generate"=>{
+ let (output,success)=match ai::conversation(&rt.http,&rt.base,p,e,&text,history).await{
+ Ok(answer)=>(answer,true),Err(err)=>{rt.log(&p.id,"ai",&err,"error");(p.ai.fallback.clone(),false)}
  };
- rt.send(p,e,&output).await?;
- variables.change(&rt.db,p,e,"local.aiResponse","set",json!(output))?;
+ if blocked(&output,p){return Err("Resposta alternativa bloqueada pelas restrições do perfil".into())}
+ ai::save_response(variables,rt,p,e,a,&output,success)?;
+ if a.kind=="ai"{rt.send(p,e,&output).await?;}
  if p.ai.remember {let _lock=rt.vault_lock.lock().unwrap();rt.db.profile(&p.id)?;let name=format!("usuarios/{}.md",safe_name(&e.user_id));vault::write(&rt.base,&p.id,&name,&format!("{} disse: {}",e.user,e.message),true)?;}
  Ok(())
  },

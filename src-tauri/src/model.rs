@@ -95,7 +95,8 @@ pub fn validate_flow(f:&Flow)->Result<(),String> {
  if f.trigger.cooldown>86400||f.trigger.user_cooldown>86400{return Err("Cooldown máximo: 24 horas".into())}
  if f.trigger.kind=="command" && (!f.trigger.pattern.starts_with('!')||f.trigger.pattern.contains(char::is_whitespace)) {return Err("O comando deve começar com ! e não conter espaços".into())}
  for a in &f.actions {
- if !["chat","ai","memory","webhook","discord","overlay","delay","script","points","tts","variable.set","variable.increment","variable.delete"].contains(&a.kind.as_str()) {return Err("Tipo de ação inválido".into())}
+ if !["chat","ai","ai.generate","memory","webhook","discord","overlay","delay","script","points","tts","variable.set","variable.increment","variable.delete"].contains(&a.kind.as_str()) {return Err("Tipo de ação inválido".into())}
+ if a.kind=="ai.generate" {let (scope,name)=crate::variables::target(crate::ai::response_target(a))?;if scope!="local"||name=="aiSuccess"{return Err("Guarde a resposta da IA numa variável local de texto".into())}}
  if a.kind.starts_with("variable."){crate::variables::target(&a.target)?;}
  if a.text.len()>32768 {return Err("Ação muito longa".into())}
  if a.kind=="delay" && !(0..=30000).contains(&a.value) {return Err("Espera máxima: 30 segundos".into())}

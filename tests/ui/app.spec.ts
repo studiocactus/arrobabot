@@ -1,4 +1,25 @@
 import {test,expect} from '@playwright/test';
+test('resenha com IA cria geração antes do envio e variável por nome',async({page})=>{
+ await page.goto('/');
+ await page.getByRole('button',{name:'Criar primeiro bot',exact:true}).click();
+ await page.getByLabel('Nome do perfil',{exact:true}).fill('Resenha');
+ await page.getByRole('button',{name:'Salvar perfil',exact:true}).click();
+ await page.getByRole('dialog').getByRole('button',{name:'Fechar',exact:true}).click();
+ await page.getByRole('button',{name:'Comandos',exact:true}).click();
+ await page.getByRole('button',{name:'Resenha com IA',exact:true}).click();
+ await page.getByText('Testar resposta contextual',{exact:true}).click();
+ await expect(page.getByRole('textbox',{name:'Mensagem da pessoa',exact:true})).toHaveValue('O Thenees hoje está amassando na play');
+ await expect(page.getByRole('button',{name:'Gerar resposta de teste',exact:true})).toBeDisabled();
+ await page.getByRole('button',{name:'Salvar resenha do chat',exact:true}).click();
+ await page.getByRole('button',{name:'Editar Resenha do chat',exact:true}).click();
+ await expect(page.locator('.react-flow__node')).toHaveCount(3);
+ await page.locator('.react-flow__node').filter({hasText:'Gerar resposta da IA (variável)'}).click();
+ await expect(page.getByLabel('Nome da resposta',{exact:true})).toHaveValue('aiResponse');
+ await page.locator('.react-flow__node').filter({hasText:'Enviar mensagem'}).click();
+ await expect(page.getByRole('textbox',{name:'Mensagem / conteúdo',exact:true})).toHaveValue('{{local.aiResponse}}');
+ await expect(page.locator('.message-readable')).toContainText('Resposta da IA');
+ await page.screenshot({path:'artifacts/ai-contextual-flow.png',fullPage:true});
+});
 test('onboarding, comando, isolamento, memórias e navegação',async({page})=>{
  const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
  await page.goto('/');

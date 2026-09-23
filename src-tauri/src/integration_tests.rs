@@ -1,5 +1,69 @@
 use super::*;
 use serde_json::json;
+async fn mock_ai(answer:&str)->(String,tokio::task::JoinHandle<Value>){
+ use tokio::io::{AsyncReadExt,AsyncWriteExt};
+ let listener=tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();let address=listener.local_addr().unwrap();let answer=answer.to_owned();
+ let task=tokio::spawn(async move{
+  let(mut socket,_)=listener.accept().await.unwrap();let mut bytes=vec![];
+  let request=loop{
+   let mut part=[0u8;4096];let n=socket.read(&mut part).await.unwrap();assert!(n>0);bytes.extend_from_slice(&part[..n]);assert!(bytes.len()<100000);
+   if let Some(end)=bytes.windows(4).position(|w|w==b"\r\n\r\n"){
+    let headers=String::from_utf8_lossy(&bytes[..end]).to_lowercase();
+    let len:usize=headers.lines().find_map(|l|l.strip_prefix("content-length:")).unwrap().trim().parse().unwrap();
+    if bytes.len()>=end+4+len{break serde_json::from_slice::<Value>(&bytes[end+4..end+4+len]).unwrap()}
+   }
+  };
+  let body=json!({"message":{"content":answer}}).to_string();
+  socket.write_all(format!("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",body.len()).as_bytes()).await.unwrap();request
+ });
+ (format!("http://{address}"),task)
+}
+#[tokio::test]
+async fn contextual_ai_uses_chat_and_stores_single_pass_response_without_sending(){
+ let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();let mut p=profile("Resenha");p.modules=json!({});p.ai.model="test".into();
+ let (endpoint,request)=mock_ai("Hoje sim! {{message}}").await;p.ai.endpoint=endpoint;rt.db.save_profile(&p).unwrap();
+ let other=profile("Outro");rt.db.save_profile(&other).unwrap();
+ let mut echo=event(&p,"Mensagem do próprio bot",false);echo.user_id=p.bot_id.clone();engine::process(rt.clone(),echo).await;
+ engine::process(rt.clone(),event(&other,"Não deve entrar no contexto",false)).await;
+ engine::process(rt.clone(),event(&p,"Ontem estava errando os tiros",false)).await;
+ let mut f=flow(&p);f.actions=vec![Action{kind:"ai.generate".into(),text:"Faça uma resenha leve".into(),target:"local.resenha".into(),value:0,condition:"".into()},Action{kind:"overlay".into(),text:"{{local.resenha}} / {{local.aiSuccess}}".into(),target:"".into(),value:0,condition:"".into()}];rt.db.save_flow(&f).unwrap();
+ let mut receiver=rt.broadcast.subscribe();engine::process(rt.clone(),event(&p,"!oi Thenees hoje está amassando",false)).await;
+ let request=request.await.unwrap();let prompt:Value=serde_json::from_str(request["messages"][1]["content"].as_str().unwrap()).unwrap();
+ assert_eq!(prompt["conversation"]["currentMessage"]["message"],"!oi Thenees hoje está amassando");
+ assert_eq!(prompt["conversation"]["recentChat"].as_array().unwrap().len(),1);
+ assert_eq!(prompt["conversation"]["recentChat"][0]["message"],"Ontem estava errando os tiros");
+ assert!(request["messages"][0]["content"].as_str().unwrap().contains("Não invente"));
+ let mut found=false;while let Ok(e)=receiver.try_recv(){if e["type"]=="overlay"{assert_eq!(e["payload"]["text"],"Hoje sim! {{message}} / true");found=true}}assert!(found);
+ assert!(!rt.db.logs(&p.id).unwrap().iter().any(|l|l.kind=="chat"&&l.status=="success"));
+ assert!(variables::Context::new(&rt.db,&p,&event(&p,"oi",false),None).unwrap().render("{{local.aiResponse}}").is_err());
+}
+#[tokio::test]
+async fn ai_simulation_preview_and_fallback_define_response(){
+ let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();let mut p=profile("Simulação");p.ai.fallback="Volto já".into();rt.db.save_profile(&p).unwrap();
+ let mut f=flow(&p);f.actions=vec![Action{kind:"ai.generate".into(),text:"Resenha".into(),target:"local.aiResponse".into(),value:0,condition:"".into()},Action{kind:"chat".into(),text:"{{local.aiResponse}} / {{local.aiSuccess}}".into(),target:"".into(),value:0,condition:"".into()}];rt.db.save_flow(&f).unwrap();
+ engine::process(rt.clone(),event(&p,"!oi",true)).await;
+ assert!(rt.db.logs(&p.id).unwrap().iter().any(|l|l.message=="[Simulação] [Prévia: resposta contextual da IA] / false"));
+ let preview=dispatch(rt.clone(),"variables.preview",json!({"profileId":p.id,"flow":f,"event":event(&p,"!oi",true)})).await.unwrap();
+ assert_eq!(preview["steps"][1]["text"],"[Prévia: resposta contextual da IA] / false");
+ f.actions[1].kind="overlay".into();rt.db.save_flow(&f).unwrap();let mut rx=rt.broadcast.subscribe();engine::process(rt.clone(),event(&p,"!oi",false)).await;
+ let mut found=false;while let Ok(e)=rx.try_recv(){if e["type"]=="overlay"{assert_eq!(e["payload"]["text"],"Volto já / false");found=true}}assert!(found);
+ f.actions[0].target="global.resposta".into();assert!(model::validate_flow(&f).is_err());
+ f.actions[0].target="local.aiSuccess".into();assert!(model::validate_flow(&f).is_err());
+}
+#[tokio::test]
+async fn contextual_preview_calls_provider_without_chat_or_memory_writes(){
+ let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();let mut p=profile("Prévia");p.ai.model="test".into();p.ai.remember=true;
+ let(endpoint,request)=mock_ai("Hoje até a mira resolveu trabalhar!").await;p.ai.endpoint=endpoint;rt.db.save_profile(&p).unwrap();
+ let before=vault::list(&rt.base,&p.id).unwrap().len();
+ let result=dispatch(rt.clone(),"ai.preview",json!({"profileId":p.id,"message":"Está amassando!","recent":"Bia: ele acertou tudo","instruction":"Brinque com {{message}}"})).await.unwrap();
+ assert_eq!(result,"Hoje até a mira resolveu trabalhar!");
+ let request=request.await.unwrap();let prompt:Value=serde_json::from_str(request["messages"][1]["content"].as_str().unwrap()).unwrap();
+ assert_eq!(prompt["automationRequest"],"Brinque com Está amassando!");
+ assert_eq!(prompt["conversation"]["recentChat"][0]["message"],"Bia: ele acertou tudo");
+ assert_eq!(vault::list(&rt.base,&p.id).unwrap().len(),before);assert!(rt.db.logs(&p.id).unwrap().is_empty());
+ assert!(rt.conversation.lock().unwrap().receive(&event(&p,"nova",false)).is_empty());
+ *rt.actor.lock().unwrap()="intruso".into();assert!(dispatch(rt,"ai.preview",json!({"profileId":p.id,"message":"oi"})).await.is_err());
+}
 fn profile(name:&str)->Profile{Profile{id:uuid::Uuid::new_v4().to_string(),name:name.into(),platform:"twitch".into(),channel:name.into(),channel_id:"123".into(),bot_id:"456".into(),client_id:"client".into(),blocklist:vec!["proibido".into()],topics:vec![],editors:vec![],ai:AiConfig::default(),modules:json!({"points":true,"raffles":true,"predictions":true,"queue":true})}}
 fn event(p:&Profile,text:&str,simulated:bool)->Event{Event{id:uuid::Uuid::new_v4().to_string(),profile_id:p.id.clone(),kind:"chat".into(),user:"Ana".into(),user_id:"ana".into(),role:"everyone".into(),message:text.into(),data:Value::Null,simulated}}
 fn flow(p:&Profile)->Flow{Flow{id:uuid::Uuid::new_v4().to_string(),profile_id:p.id.clone(),name:"Teste".into(),enabled:true,trigger:Trigger{kind:"command".into(),pattern:"!oi".into(),permission:"everyone".into(),cooldown:5,user_cooldown:5},actions:vec!["Um $user","Dois","Três"].into_iter().map(|s|Action{kind:"chat".into(),text:s.into(),target:"".into(),value:0,condition:"".into()}).collect(),layout:Value::Null}}
