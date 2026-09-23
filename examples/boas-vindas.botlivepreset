@@ -1,0 +1,46 @@
+{
+  "format": "botlivepreset",
+  "version": 1,
+  "id": "c54dc09a-6a6f-441b-9c5a-5f2916c3a2f0",
+  "name": "Boas-vindas com overlay",
+  "kind": "flow",
+  "tags": [
+    "primeiros-passos",
+    "chat",
+    "obs"
+  ],
+  "data": {
+    "flows": [
+      {
+        "id": "97357a44-636d-4d26-913f-277b70a278ae",
+        "profileId": "1bb20bf0-7a4e-4daa-8878-6928f379d904",
+        "name": "Boas-vindas",
+        "enabled": false,
+        "trigger": {
+          "kind": "command",
+          "pattern": "!ola",
+          "permission": "everyone",
+          "cooldown": 10,
+          "userCooldown": 30
+        },
+        "actions": [
+          {
+            "kind": "chat",
+            "text": "Olá, $user! Boas-vindas ao canal $channel.",
+            "target": "",
+            "value": 0,
+            "condition": ""
+          },
+          {
+            "kind": "overlay",
+            "text": "$user chegou à comunidade!",
+            "target": "",
+            "value": 0,
+            "condition": ""
+          }
+        ],
+        "layout": null
+      }
+    ]
+  }
+}

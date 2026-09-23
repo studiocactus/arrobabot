@@ -1,0 +1,83 @@
+name: Validar e publicar atualização
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: updates-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-22.04
+    outputs:
+      version: ${{ steps.release.outputs.version }}
+      notes: ${{ steps.release.outputs.notes }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Verificar registro de cada commit
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if [ -n "$BASE" ] && [ "$BASE" != "0000000000000000000000000000000000000000" ]; then
+            node scripts/update.cjs check --range "$BASE..HEAD"
+          else
+            node scripts/update.cjs check --range HEAD
+          fi
+      - run: npm test
+      - run: npm run test:updates
+      - run: npm run build
+      - run: npm run docs
+      - id: release
+        run: node scripts/update.cjs metadata
+  windows:
+    needs: validate
+    runs-on: windows-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - run: npm ci
+      - run: cargo test --manifest-path src-tauri/Cargo.toml --locked --lib -j 1
+      - run: npx playwright test
+      - run: npm run docs
+      - name: Gerar release Windows assinada em rascunho
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: v__VERSION__
+          releaseName: BotLive __VERSION__
+          releaseBody: ${{ needs.validate.outputs.notes }}
+          releaseDraft: true
+          prerelease: false
+          uploadUpdaterJson: true
+          args: --bundles nsis,msi
+      - name: Anexar manual, verificar manifesto e publicar
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_VERSION: ${{ needs.validate.outputs.version }}
+          GH_REPO: ${{ github.repository }}
+        run: node scripts/publish-release.cjs

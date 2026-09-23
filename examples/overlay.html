@@ -1,0 +1,19 @@
+<!doctype html><html lang="pt-BR"><meta charset="utf-8"><title>Overlay BotLive</title><style>body{margin:0;background:transparent;color:#edf6df;font:22px system-ui}#text{display:none;background:#111b20ed;border:1px solid #b7ef7255;border-radius:16px;padding:22px 28px;max-width:700px}#status{font-size:12px;color:#ddd}</style><div id="text"></div><div id="status"></div><script>
+/* OBS: fonte Navegador > Arquivo local. Acrescente #token=...&profile=...&port=9876 ao endereço file:/// do overlay.
+   O fragmento não é enviado a servidores. A chave muda a cada abertura do BotLive. */
+const params=new URLSearchParams(location.hash.slice(1));
+const token=params.get('token'),profile=params.get('profile'),port=Number(params.get('port')||9876);
+const box=document.getElementById('text'),status=document.getElementById('status');
+let timer;function connect(){
+ if(!token){status.textContent='Configure a chave da sessão BotLive no fragmento #token=...';return}
+ const ws=new WebSocket('ws://127.0.0.1:'+port);
+ ws.onopen=()=>ws.send(JSON.stringify({token}));
+ ws.onmessage=e=>{let msg;try{msg=JSON.parse(e.data)}catch{return}
+ if(msg.type==='ready')status.textContent='';
+ if(params.get('view')==='songs'&&msg.type==='songs'&&(!profile||msg.payload.profileId===profile)){box.textContent=msg.payload.queue.slice(0,3).map((s,i)=>(i===0?'Agora: ':'A seguir: ')+s.url).join(' · ');box.style.display=msg.payload.queue.length?'block':'none';return;}
+ if(params.get('view')!=='songs'&&msg.type==='overlay'&&(!profile||msg.payload.profileId===profile)){box.textContent=msg.payload.text;box.style.display='block';clearTimeout(timer);timer=setTimeout(()=>box.style.display='none',10000)}
+ };
+ ws.onclose=()=>{status.textContent='Aguardando BotLive…';setTimeout(connect,5000)};
+ ws.onerror=()=>ws.close();
+}connect();
+</script></html>

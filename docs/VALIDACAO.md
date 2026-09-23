@@ -1,0 +1,44 @@
+# Registro de validação
+
+## Verificações realizadas
+
+- TypeScript: `npm run check` aprovado após as alterações de comunidade e onboarding.
+- Editor de fluxos: 4 testes Vitest aprovados.
+- Interface: 3 cenários Playwright aprovados (navegação/CRUD/persistência, janela estreita e personalização/restauração da cor).
+- Build Vite de produção aprovado com os módulos e temas atualizados.
+- Núcleo Rust: 17 testes aprovados (16 da suíte funcional e 1 de regressão da configuração do atualizador). A suíte inclui execução ordenada, cooldown, isolamento, presets, reembolsos, transações, reabertura SQLite, autenticação WebSocket, permissões e filtro de IA. Inclui também limites de músicas, emissão de overlay e transporte de configurações de pontos e tema em presets.
+- Compilação Windows concluída: executável, instalador NSIS e MSI gerados. Abertura nativa verificada: painel renderizado, sem o banner de prévia. Corrigidos o manifesto Common Controls e a configuração de inicialização do atualizador. A instalação em máquina limpa não foi testada.
+
+## Ambiente
+
+Windows x64, Node.js 25, Rust MSVC 1.98.1 e Visual Studio Build Tools 2022. A compilação usa um job e não gera símbolos de depuração para reduzir consumo de memória. O ambiente apresentou limitação de paginação em builds paralelos.
+
+## Limite de verificação
+
+Sem contas OAuth do usuário, não houve envio real de chat nem homologação de eventos nas plataformas. A prévia de navegador não valida IPC, cofre, OAuth ou módulos nativos. Os screenshots em artifacts documentam somente a interface testada.
+
+Houve falha temporária da revisão automática de aprovação. A revisão voltou a funcionar e os testes de interface foram executados normalmente.
+
+## Manual de uso
+
+Manual HTML offline verificado em 22/09/2026 no Microsoft Edge: 15 capítulos, destinos dos links internos, busca por conteúdo e sem acentos, limpeza da busca, estado sem resultados, impressão com todos os capítulos, imagem incorporada e leitura em janela de 390 px sem rolagem horizontal. Nenhum erro JavaScript ou requisição de rede ocorreu durante a leitura. Os links externos não fazem parte dessa validação.
+
+## Sistema de variáveis — 23/09/2026
+
+- 21 testes Rust aprovados: inclui quatro novos cenários para expansão sem recursão, filtros, erros, persistência, isolamento por perfil/plataforma/pessoa, sessão temporária, 400 incrementos concorrentes, simulação sem gravação, prévia e autorização. A execução real de uma sequência foi verificada por overlay local, sem enviar chat externo.
+- 4 testes Vitest aprovados; TypeScript e build Vite aprovados.
+- 4 cenários de interface aprovados no Edge (3 existentes e o novo catálogo/gerenciador). O novo cenário passou após corrigir um seletor do teste; a inserção de marcadores já estava funcionando. A prévia nativa é coberta pelo teste de RPC Rust; o navegador verifica a indicação de que essa execução exige o desktop.
+- O manual passou a ter 16 capítulos, incluindo a referência de variáveis.
+
+- Entrega Windows atualizada em 23/09/2026: executável, NSIS e MSI compilados. Inicialização da release e RPC snapshot verificados. O Windows não aceitou isolar a pasta de dados via APPDATA, então a edição pela janela nativa foi omitida para preservar os perfis existentes; a gravação e a prévia foram verificadas por RPC em banco temporário nos testes Rust.
+- Manual de 16 capítulos verificado: busca, links internos, tabelas de variáveis, impressão, tela de 390 px e ausência de requisições de rede. Hashes da entrega conferidos após a cópia.
+
+## Usabilidade das variáveis — 23/09/2026
+
+Editor com inserção na posição do cursor e substituição da seleção; atalhos por nome; leitura visual por etiquetas; catálogo por categorias; alternativa e formato por seletores. Gerenciador com tipos Texto, Número, Sim/Não e JSON avançado. Sete testes Vitest aprovados (incluem seleção, Unicode, filtros e preservação dos marcadores), verificação TypeScript aprovada e quatro cenários Playwright aprovados no Edge. A comparação com funções do Streamer.bot foi registrada na matriz, separando funções implementadas e pendências.
+
+A versão com o editor simplificado foi empacotada em executável, NSIS e MSI. Inicialização nativa e RPC snapshot aprovados; hashes da pasta entrega atualizados e conferidos. O cálculo de variáveis não mudou nesta revisão: os 21 testes Rust registrados acima continuam como evidência do motor; os testes desta revisão cobrem a interface e os auxiliares de edição. A última correção descarta prévias antigas quando o conteúdo é editado durante o cálculo.
+
+## Canal GitHub e versão 0.1.1
+
+Configuração do atualizador com endpoint oficial e chave pública embutidos, assinatura em secrets, script de versão e hook de commit. Validação local: 22 testes Rust, 7 Vitest, 4 Playwright e 3 testes Node do script de atualização aprovados; TypeScript e build Vite aprovados. O primeiro ensaio de interface esgotou o tempo no servidor de desenvolvimento; a suíte passou com a configuração final, que inicia uma prévia de produção isolada na porta 1421. O stage foi revisado sem chaves privadas, binários ou dados locais. A primeira release remota será validada pelo workflow após o push; não confundir configuração pronta com publicação já concluída.
