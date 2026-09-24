@@ -7,6 +7,7 @@ test('painel TXT e sons permite configurar regras e espectadores com limites cla
  await page.getByRole('combobox',{name:'Escolher resposta',exact:true}).selectOption('sequence');await expect(page.getByRole('button',{name:'Vincular TXT',exact:true})).toBeDisabled();
  await page.getByRole('button',{name:'Adicionar pessoa',exact:true}).click();await page.getByLabel('Nome no chat',{exact:true}).fill('ana');await page.getByLabel('Apelido',{exact:true}).fill('Aninha');
  await page.getByRole('combobox',{name:'Quando tocar',exact:true}).selectOption('interval');await page.getByRole('switch',{name:'Ativar sons por espectador',exact:true}).click();
+ await page.getByRole('combobox',{name:'Disparar som',exact:true}).selectOption('join');await page.getByRole('switch',{name:'Monitorar entradas silenciosas na Twitch',exact:true}).click();await expect(page.getByRole('combobox',{name:'Dispositivo de saída dos sons',exact:true})).toBeVisible();
  await expect(page.getByRole('switch',{name:'Ativar sons por espectador',exact:true})).toHaveAttribute('aria-checked','true');
  await expect(page.getByRole('button',{name:'Salvar respostas e sons',exact:true})).toBeDisabled();
  await page.screenshot({path:'artifacts/txt-and-viewer-sounds.png',fullPage:true});

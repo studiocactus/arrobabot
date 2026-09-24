@@ -24,6 +24,9 @@ pub async fn send(rt:&Runtime,p:&Profile,text:&str)->Result<(),String>{
  Ok(())
 }
 pub async fn twitch(rt:Arc<Runtime>,p:Profile)->Result<(),String>{
+ tokio::select!{result=twitch_events(rt.clone(),p.clone())=>result,_=crate::presence::run(rt,p)=>Ok(())}
+}
+async fn twitch_events(rt:Arc<Runtime>,p:Profile)->Result<(),String>{
  if crate::secrets::get(&p.id,"channel_token").is_ok() {
  tokio::try_join!(twitch_session(rt.clone(),p.clone(),"bot"),twitch_session(rt,p,"channel"))?;Ok(())
  }else{twitch_session(rt,p,"bot").await}

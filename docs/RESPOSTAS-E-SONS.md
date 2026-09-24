@@ -36,12 +36,23 @@ Clique em **Adicionar pessoa** e preencha:
 - **Apelido**: como você deseja identificar a pessoa no painel e nos registros; não substitui a identificação da conta.
 - **ID da pessoa (opcional)**: quando informado, a identificação usa esse ID. Recomendado para nomes exibidos iguais. Correspondências por ID têm prioridade sobre nome.
 - **Escolher som**: selecione WAV, MP3 ou OGG, até 5 MiB. O aplicativo guarda uma cópia; mover o original não quebra o som.
-- **Quando tocar**: primeira mensagem da sessão ou mensagens com intervalo. O intervalo individual mínimo é cinco segundos; o padrão é sessenta.
+- **Disparar som**: quando enviar mensagem, quando entrar mesmo sem falar, ou ao entrar ou enviar mensagem.
+- **Quando tocar**: uma vez por sessão ou repetir com intervalo. O intervalo individual mínimo é cinco segundos; o padrão é sessenta.
 - **Volume**: ajuste a intensidade e use **Testar som** para ouvir antes da live. O teste reproduz mesmo com a função desativada.
 
 Ative a pessoa e **Ativar sons por espectador**, depois clique em **Salvar respostas e sons**. Para suspender, desligue o controle geral ou o individual e salve. Remover uma pessoa também exige salvar. Mudanças valem para novos eventos; áudio já em reprodução ou na fila termina normalmente.
 
-“Chegar” significa enviar a primeira mensagem recebida pelo bot. Os adaptadores atuais não detectam espectadores silenciosos. Uma ponte autorizada pode enviar um evento `join` com identidade pela API local; ele usa as mesmas regras, sem privilégio de moderador. Um som no join conta como a primeira participação da sessão.
+### Entrada silenciosa na Twitch
+
+1. Ative **Monitorar entradas silenciosas na Twitch** e escolha **Quando entrar, mesmo sem falar** ou **Ao entrar ou enviar mensagem** para a pessoa.
+2. Em **Nome no chat**, informe o login atual da conta Twitch (não o nome decorativo). Mesmo com ID preenchido, esse login é necessário para localizar a entrada; o ID informado continua sendo conferido.
+3. Salve. No perfil, autorize novamente a conta do bot para conceder a permissão chat:read, depois conecte o perfil.
+4. Confira no Histórico o registro **Monitor de entradas ativo**. Se faltar autorização, o Histórico explica como corrigir; as mensagens continuam pelo conector normal.
+5. Teste com a pessoa entrando depois que o monitor estiver ativo. A lista inicial de pessoas já presentes não toca. Reconectar o bot não limpa os sons já consumidos na sessão.
+
+A Twitch informa conexões ao chat por IRC; isso não comprova que alguém está assistindo ao vídeo. Entradas podem atrasar ou não ser informadas, e a ordem dos eventos não é garantida. Para maior previsibilidade, escolha **Quando enviar mensagem**. O monitor é opcional e não envia mensagens pelo IRC. Ao desativar e salvar, ele encerra a observação; uma tentativa em andamento pode demorar até o limite de rede. Veja a [documentação Twitch](https://dev.twitch.tv/docs/chat/irc/).
+
+No YouTube, use mensagem: o conector não fornece presença silenciosa. Uma ponte autorizada pode enviar join com identidade pela API local em outras plataformas. Entradas contam para a mesma sessão de sons; com **Uma vez por sessão**, uma mensagem posterior não toca novamente. Cadastros antigos assumem **Quando enviar mensagem**, sem habilitar observação silenciosa automaticamente.
 
 Uma sessão começa ao abrir o aplicativo. **Reiniciar sessão de sons** libera novamente as pessoas deste perfil, sem alterar intervalos TXT. Desconectar e reconectar não reinicia a sessão. Participações enquanto a função está desativada não consomem a primeira reprodução. Existe intervalo global de cinco segundos; uma pessoa ignorada nesse intervalo poderá tocar na próxima participação. Mensagens barradas pela moderação e mensagens da própria conta do bot não disparam sons.
 
@@ -49,13 +60,15 @@ O player toca um som por vez, aceita até cinco solicitações pendentes e inter
 
 ## Fazer o som sair na live
 
+Escolha **Dispositivo de saída dos sons** no painel, clique em **Salvar respostas e sons** e use **Testar som**. A seleção é por perfil e aplica-se somente aos sons por espectador, não ao texto para fala. **Padrão do Windows** acompanha a saída padrão. **Atualizar dispositivos** recarrega a lista; nomes e disponibilidade dependem das permissões do Windows/WebView. Se o ambiente não oferecer seleção, use o Mixer de volume do Windows. Se uma saída salva desaparecer ou for recusada, o player informa erro e não muda silenciosamente para outra saída; escolha novamente e salve.
+
 Mantenha o BotLive aberto e desbloqueado e use **Testar som**. No OBS, inclua o áudio do desktop correspondente à saída usada pelo BotLive, ou uma captura de áudio do aplicativo. Confira o medidor e faça uma gravação local para validar volume e roteamento. Esta versão reproduz no computador; não configura o OBS automaticamente nem fornece um player de áudio em fonte de navegador. Evite capturar o mesmo áudio duas vezes.
 
 A simulação registra que tocaria o som, sem reproduzir ou consumir a sessão real. Há até 200 pessoas e 300 arquivos cadastrados por perfil (TXT e sons somados). Remover regras ou pessoas mantém os arquivos registrados para reutilização; não apaga originais nem cópias do áudio. Arquivos de áudio corrompidos podem ser recusados pelo player mesmo com extensão válida.
 
 ## Backup e migração
 
-As configurações ficam no banco. Preserve também a pasta **media** dentro da pasta de dados, que contém as cópias dos áudios. Os TXT ficam nos caminhos externos escolhidos e precisam de cópia separada. Estes recursos não são transportados pelos presets. Ao mudar a pasta de dados ou de computador, vincule novamente os arquivos para atualizar os caminhos registrados. Apagar um perfil remove seu cadastro do banco, mas conserva suas cópias de áudio no disco; elas não são executadas sem cadastro.
+As configurações ficam no banco. Preserve também a pasta **media** dentro da pasta de dados, que contém as cópias dos áudios. Os TXT ficam nos caminhos externos escolhidos e precisam de cópia separada. Estes recursos não são transportados pelos presets. Ao mudar de computador, selecione novamente o dispositivo de áudio: o identificador é local. Ao mudar a pasta de dados ou de computador, vincule novamente os arquivos para atualizar os caminhos registrados. Apagar um perfil remove seu cadastro do banco, mas conserva suas cópias de áudio no disco; elas não são executadas sem cadastro.
 
 ## Resolver problemas
 

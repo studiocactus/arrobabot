@@ -1,3 +1,4 @@
+mod presence;
 mod model;
 mod variables;
 mod db;

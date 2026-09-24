@@ -86,3 +86,7 @@ Em **Restrições de conteúdo**, coloque uma expressão por linha. A busca de p
 Apagar um perfil remove comandos, notas, economia e credenciais desse perfil. Não há lixeira. Faça backup antes. Os demais perfis têm dados separados.
 
 Nenhuma plataforma foi homologada com contas reais do usuário nesta entrega. Os procedimentos descrevem o fluxo implementado; mensagens de recusa de autorização, quota e escopo devem ser verificadas no Histórico.
+
+## Permissão para sons na entrada silenciosa
+
+A partir de 0.1.5, a autorização da conta do bot Twitch também solicita chat:read para o monitor opcional de entradas por IRC. Contas já autorizadas precisam de nova autorização para esse monitor; o chat por EventSub continua independente. Configure e salve os gatilhos no capítulo [Respostas TXT e sons](RESPOSTAS-E-SONS.md).

@@ -7,13 +7,14 @@ use rand::Rng;
 type R<T> = Result<T,String>;
 #[derive(Clone,Default,Serialize,Deserialize)]
 #[serde(default,rename_all="camelCase")]
-pub struct Config {pub replies_enabled:bool,pub sounds_enabled:bool,pub replies:Vec<Reply>,pub people:Vec<Person>}
+pub struct Config {pub presence_enabled:bool,pub audio_device_id:String,pub replies_enabled:bool,pub sounds_enabled:bool,pub replies:Vec<Reply>,pub people:Vec<Person>}
 #[derive(Clone,Serialize,Deserialize)]
 #[serde(rename_all="camelCase")]
 pub struct Reply {pub id:String,pub enabled:bool,pub keyword:String,pub matching:String,pub selection:String,pub asset:String,pub cooldown:u64,pub user_cooldown:u64}
+fn default_trigger()->String{"message".into()}
 #[derive(Clone,Serialize,Deserialize)]
 #[serde(rename_all="camelCase")]
-pub struct Person {pub id:String,pub enabled:bool,pub name:String,pub nickname:String,pub user_id:String,pub asset:String,pub mode:String,pub cooldown:u64,pub volume:f64}
+pub struct Person {#[serde(default="default_trigger")] pub trigger:String,pub id:String,pub enabled:bool,pub name:String,pub nickname:String,pub user_id:String,pub asset:String,pub mode:String,pub cooldown:u64,pub volume:f64}
 #[derive(Clone,Serialize,Deserialize)]
 #[serde(rename_all="camelCase")]
 pub struct Asset {pub id:String,pub kind:String,pub name:String,pub path:String}
@@ -70,6 +71,7 @@ pub fn operation(rt:&Runtime,p:&str,op:&str,args:&Value)->R<Value>{
  let mut c:Config=serde_json::from_value(args["config"].clone()).map_err(|_|"Configuração inválida")?;
  for r in &mut c.replies{r.keyword=r.keyword.trim().into();}
  for person in &mut c.people{person.name=person.name.trim().into();person.user_id=person.user_id.trim().into();person.nickname=person.nickname.trim().into();}
+ if c.audio_device_id.len()>512{return Err("Dispositivo de áudio inválido".into())}
  if c.replies.len()>100||c.people.len()>200{return Err("Limite: 100 respostas e 200 pessoas por perfil".into())}
  let mut ids=HashSet::new();let mut identities=HashSet::new();
  for r in &c.replies{
@@ -78,7 +80,7 @@ pub fn operation(rt:&Runtime,p:&str,op:&str,args:&Value)->R<Value>{
  }
  for person in &c.people{
  let identity=if person.user_id.trim().is_empty(){format!("name:{}",normalize(&person.name))}else{format!("id:{}",person.user_id.trim())};
- if !valid_id(&person.id)||!ids.insert(person.id.clone())||!identities.insert(identity)||person.name.trim().is_empty()||person.name.len()>200||person.nickname.len()>200||person.user_id.len()>200||!["first","interval"].contains(&person.mode.as_str())||!(5..=86400).contains(&person.cooldown)||!person.volume.is_finite()||!(0.0..=1.0).contains(&person.volume){return Err("Confira nomes únicos, volume e intervalo dos sons (mínimo 5s)".into())}
+ if !valid_id(&person.id)||!ids.insert(person.id.clone())||!identities.insert(identity)||person.name.trim().is_empty()||person.name.len()>200||person.nickname.len()>200||person.user_id.len()>200||!["message","join","either"].contains(&person.trigger.as_str())||!["first","interval"].contains(&person.mode.as_str())||!(5..=86400).contains(&person.cooldown)||!person.volume.is_finite()||!(0.0..=1.0).contains(&person.volume){return Err("Confira nomes únicos, volume e intervalo dos sons (mínimo 5s)".into())}
  asset(rt,p,&person.asset,"sound")?;
  }
  rt.db.set_module(p,"chatExtras",&json!(c))?;Ok(Value::Null)
@@ -104,6 +106,11 @@ pub fn keyword_matches(message:&str,keyword:&str,mode:&str)->bool{
 fn available(s:&State,key:&str,seconds:u64)->bool{!s.last.get(key).is_some_and(|t|t.elapsed()<Duration::from_secs(seconds))}
 #[cfg(test)] mod tests {
  use super::*;
+ #[test] fn triggers_and_old_configuration(){
+  assert!(trigger_matches("message","chat"));assert!(!trigger_matches("message","join"));assert!(trigger_matches("join","join"));assert!(!trigger_matches("join","chat"));assert!(trigger_matches("either","chat"));assert!(trigger_matches("either","join"));assert!(!trigger_matches("either","follow"));
+  let c:Config=serde_json::from_value(json!({"soundsEnabled":true,"people":[{"id":"p","enabled":true,"name":"ana","nickname":"Ana","userId":"123","asset":"a","mode":"first","cooldown":60,"volume":0.7}]})).unwrap();
+  assert_eq!(c.people[0].trigger,"message");assert!(!c.presence_enabled);assert_eq!(c.audio_device_id,"");
+ }
  fn p()->Profile{serde_json::from_value(json!({"id":uuid::Uuid::new_v4(),"name":"Teste","platform":"twitch","channel":"canal","blocklist":["bloqueado"]})).unwrap()}
  fn e(p:&Profile)->Event{serde_json::from_value(json!({"id":"1","profileId":p.id,"kind":"chat","user":"ANA","userId":"123","message":"Olá, café!"})).unwrap()}
  fn register(rt:&Runtime,p:&Profile,path:&Path,kind:&str)->String{operation(rt,&p.id,"chatExtras.import",&json!({"path":path,"kind":kind})).unwrap()["id"].as_str().unwrap().into()}
@@ -129,7 +136,7 @@ fn available(s:&State,key:&str,seconds:u64)->bool{!s.last.get(key).is_some_and(|
  #[tokio::test] async fn sound_copy_identity_toggles_session_and_simulation(){
   let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().join("app")).unwrap();let p=p();rt.db.save_profile(&p).unwrap();let path=dir.path().join("som.wav");std::fs::write(&path,b"RIFF0000WAVEfmt ").unwrap();let id=register(&rt,&p,&path,"sound");std::fs::remove_file(path).unwrap();
   assert!(operation(&rt,&p.id,"chatExtras.audio",&json!({"asset":id})).unwrap().as_str().unwrap().starts_with("data:audio/wav;base64,"));
-  let mut c=Config{sounds_enabled:true,people:vec![Person{id:uuid::Uuid::new_v4().to_string(),enabled:true,name:"OutroNome".into(),nickname:"Aninha".into(),user_id:"123".into(),asset:id,mode:"first".into(),cooldown:60,volume:0.7}],..Default::default()};save(&rt,&p,&c);
+  let mut c=Config{sounds_enabled:true,people:vec![Person{trigger:"either".into(),id:uuid::Uuid::new_v4().to_string(),enabled:true,name:"OutroNome".into(),nickname:"Aninha".into(),user_id:"123".into(),asset:id,mode:"first".into(),cooldown:60,volume:0.7}],..Default::default()};save(&rt,&p,&c);
   let mut event=e(&p);let mut rx=rt.broadcast.subscribe();event.simulated=true;sound(&rt,&p,&event);assert!(!std::iter::from_fn(||rx.try_recv().ok()).any(|v|v["type"]=="viewer-sound"));event.simulated=false;
   sound(&rt,&p,&event);sound(&rt,&p,&event);let events:Vec<_>=std::iter::from_fn(||rx.try_recv().ok()).filter(|v|v["type"]=="viewer-sound").collect();assert_eq!(events.len(),1);assert_eq!(events[0]["payload"]["nickname"],"Aninha");
   operation(&rt,&p.id,"chatExtras.reset",&json!({})).unwrap();c.people[0].enabled=false;save(&rt,&p,&c);sound(&rt,&p,&event);assert!(rx.try_recv().is_err());
@@ -138,15 +145,17 @@ fn available(s:&State,key:&str,seconds:u64)->bool{!s.last.get(key).is_some_and(|
   c.people.push(c.people[0].clone());assert!(operation(&rt,&p.id,"chatExtras.save",&json!({"config":c})).is_err());
  }
 }
+pub fn trigger_matches(trigger:&str,kind:&str)->bool{match trigger{"message"=>kind=="chat","join"=>kind=="join","either"=>kind=="chat"||kind=="join",_=>false}}
 pub fn sound(rt:&Runtime,p:&Profile,e:&Event){
  if e.kind!="chat"&&e.kind!="join"{return}let c=config(rt,&p.id);if !c.sounds_enabled{return}
  let person=c.people.iter().find(|a|a.enabled&&!a.user_id.is_empty()&&a.user_id==e.user_id).or_else(||c.people.iter().find(|a|a.enabled&&a.user_id.is_empty()&&normalize(&a.name)==normalize(&e.user)));let Some(person)=person else{return};
+ if !trigger_matches(&person.trigger,&e.kind){return}
  let key=format!("{}:sound:{}",p.id,person.id);let global=format!("{}:sound:global",p.id);
  let mut s=rt.chat_extras.lock().unwrap();
  if (person.mode=="first"&&s.seen.contains(&key))||!available(&s,&key,person.cooldown)||!available(&s,&global,5){return}
  if e.simulated{drop(s);rt.log(&p.id,"sound",&format!("[Simulação] Tocaria o som de {}",person.nickname),"info");return}
  s.seen.insert(key.clone());s.last.insert(key,Instant::now());s.last.insert(global,Instant::now());drop(s);
- rt.emit("viewer-sound",json!({"profileId":p.id,"asset":person.asset,"nickname":person.nickname,"volume":person.volume}));
+ rt.emit("viewer-sound",json!({"profileId":p.id,"asset":person.asset,"nickname":person.nickname,"volume":person.volume,"deviceId":c.audio_device_id}));
  rt.log(&p.id,"sound",&format!("Som solicitado para {}",person.nickname),"info");
 }
 pub fn response(rt:&Runtime,p:&Profile,e:&Event)->R<Option<String>>{

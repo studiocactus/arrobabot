@@ -8,6 +8,17 @@ A versão 0.1.1 estabelece esse canal e inclui a chave pública. Quem usa um exe
 
 O serviço só terá um manifesto disponível depois de a primeira release concluir a compilação e publicação. Até lá, a consulta pode informar falha. A assinatura do atualizador é diferente de um certificado Authenticode do Windows; não significa que os avisos do SmartScreen desaparecerão.
 
+## Atualizar o aplicativo instalado
+
+1. Abra **Configurações → Atualizações** no aplicativo desktop. A versão completa aparece nesse painel, ao lado de Configurações e no rodapé.
+2. Clique em **Verificar atualização**. O botão mostra **Verificando…** e o resultado fica no painel. A consulta tem limite de 30 segundos.
+3. Quando houver versão nova, confira as notas e clique em **Instalar atualização**. Salve o trabalho e faça isso fora da live: o instalador pode encerrar o aplicativo.
+4. Conclua o instalador e abra o BotLive novamente. Confira a versão exibida. Não é necessário baixar código nem usar Git.
+
+Se não houver versão nova, o botão de instalar fica desabilitado. Erros permanecem visíveis para consulta e nova tentativa. Um canal personalizado fica em **Configuração avançada do canal**; alterar o canal exige nova verificação. O download tem limite de dez minutos e valida a assinatura.
+
+Em versões antigas, o resultado podia aparecer apenas num aviso temporário, e a lateral mostrava v0.1 fixo. Isso não identifica a versão real. Se a atualização interna antiga não funcionar, instale o pacote da [release oficial](https://github.com/studiocactus/arrobabot/releases/latest) por cima da instalação existente, na mesma pasta. Faça backup dos dados antes e não desinstale nem apague a pasta de dados. O recurso corrigido passa a valer após instalar a versão 0.1.5 ou superior. Na prévia do navegador, a atualização permanece indisponível.
+
 ## O que cada commit precisa trazer
 
 1. Código, testes e documentação relacionados à mudança.
