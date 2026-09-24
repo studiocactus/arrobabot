@@ -1,3 +1,5 @@
+mod command_counter;
+mod timers;
 mod presence;
 mod model;
 mod variables;
@@ -49,6 +51,9 @@ pub async fn dispatch(rt:Arc<Runtime>,op:&str,args:Value)->R<Value>{
  std::fs::remove_dir_all(&root).map_err(|e|e.to_string())?;
  rt.db.delete_profile(&p)?;rt.conversation.lock().unwrap().clear(&p);secrets::clear(&p);Ok(Value::Null)
  },
+ "command.counters"=>command_counter::list(&rt.db,&p),
+ "command.counter.set"=>{let id=args["id"].as_str().ok_or("Comando ausente")?;let value=args["value"].as_i64().ok_or("Informe um número inteiro")?;let count=command_counter::change(&rt.db,&p,id,Some(value))?;rt.emit("command-counter",json!({"profileId":p,"id":id,"value":count}));Ok(json!(count))},
+ "timer.preview"=>{let f=rt.db.flows(&p)?.into_iter().find(|f|f.id==args["id"].as_str().unwrap_or("")&&f.trigger.kind=="timer").ok_or("Timer não encontrado")?;rt.submit(Event{id:uuid::Uuid::new_v4().to_string(),profile_id:p,kind:"timer".into(),user:"BotLive".into(),user_id:String::new(),role:"broadcaster".into(),message:String::new(),data:json!({"timerId":f.id}),simulated:true}).await?;Ok(Value::Null)},
  "flows"=>Ok(json!(rt.db.flows(&p)?)),
  "variables.list"=>{let profile=rt.db.profile(&p)?;let user=args["userId"].as_str().unwrap_or("");let key=if user.is_empty(){String::new()}else{format!("{}:{user}",profile.platform)};variables::list(&rt.db,&p,&key)},
  "variables.change"=>{let profile=rt.db.profile(&p)?;variables::mutate(&rt.db,&p,&profile.platform,args["userId"].as_str().unwrap_or(""),args["target"].as_str().ok_or("Variável ausente")?,args["operation"].as_str().unwrap_or("set"),args["value"].clone())},
@@ -125,6 +130,7 @@ pub fn run(){
  let base=app.path().app_data_dir()?;
  let rt=tauri::async_runtime::block_on(async{Runtime::new(base)})?;
  *rt.app.lock().unwrap()=Some(app.handle().clone());app.manage(rt.clone());
+ let timer_rt=rt.clone();tauri::async_runtime::spawn(timers::run(timer_rt));
  let scheduler_rt=rt.clone();tauri::async_runtime::spawn(scheduler::run(scheduler_rt));
  let update_rt=rt.clone();tauri::async_runtime::spawn(async move{if update_rt.db.get("autoUpdate")==true {if let Ok(v)=update::check(&update_rt,false).await{if v["available"]==true{update_rt.log("","update","Há uma atualização disponível nas configurações.","info");}}}});
  tauri::async_runtime::spawn(async move{if let Err(e)=local_api::serve(rt.clone()).await{rt.log("","api",&e,"error");}});

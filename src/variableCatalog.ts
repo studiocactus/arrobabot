@@ -1,5 +1,6 @@
 export type VariableChoice={key:string;label:string;group:string;example?:string};
 export const variableCatalog:VariableChoice[]=[
+ {key:'commandCount',label:'Contagem do comando',group:'Execução',example:'12 — contador individual salvo'},
  {key:'local.aiResponse',label:'Resposta da IA',group:'IA',example:'Disponível depois de gerar a resposta'},
  {key:'local.aiSuccess',label:'IA respondeu com sucesso?',group:'IA',example:'false quando usou a alternativa ou uma prévia'},
  {key:'user',label:'Nome da pessoa',group:'Pessoa',example:'Ana'},

@@ -1,5 +1,7 @@
 # Comandos e automações
 
+**Escolha rápida:** comando responde a alguém; timer publica pelo tempo; contador guarda quantas vezes um comando foi aceito. Configure timers e contadores diretamente em Comandos. Veja [passos e exemplos completos](TIMERS-E-CONTADORES.md) ou o [catálogo de receitas](EXEMPLOS-DE-USO.md).
+
 Para responder a palavras usando linhas de um arquivo externo, abra **Respostas TXT e sons**. Consulte o [guia de respostas TXT e sons por espectador](RESPOSTAS-E-SONS.md), com configuração, exemplo de arquivo, intervalos e teste sem publicar.
 
 ## Inserir informações na mensagem com um clique
@@ -67,6 +69,7 @@ Para reorganizar, remova as conexões antigas e conecte a sequência desejada. N
 
 | Opção | Uso |
 |---|---|
+| Timer periódico | Intervalo próprio entre execuções enquanto conectado |
 | Comando de chat | Primeiro termo igual ao comando cadastrado |
 | Mensagem contém | Trecho presente em uma mensagem de chat |
 | Toda mensagem | Qualquer mensagem de chat que chegue ao processamento |
@@ -94,6 +97,9 @@ A presença da opção no editor não garante que todas as plataformas emitam aq
 | Enviar ao Discord | Texto; webhook salvo no módulo Discord | Publica no canal do webhook |
 | Ler em voz alta | Texto; módulo TTS ativado | Solicita leitura na interface aberta |
 | Ajustar pontos | Número positivo ou negativo; módulo de pontos ativado | Altera o saldo de quem disparou |
+| Definir variável | Destino como global.meta e valor 10 | Guarda um valor para uso posterior |
+| Incrementar variável | Destino e valor numérico | Soma ao valor atual |
+| Apagar variável | Destino | Remove a variável |
 | Executar script Rhai | Código que devolve texto | Executa com limites e envia o texto resultante |
 
 Use HTTPS para serviços externos; HTTP é permitido somente no próprio computador. Um webhook pode produzir efeitos reais no destino. Não use a simulação como comprovação de que ele foi recebido.

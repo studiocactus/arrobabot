@@ -103,3 +103,10 @@ Erros HTTP são indícios, não diagnósticos completos. Verifique também o pai
 Informe versão, sistema operacional, tela/ação, perfil/plataforma afetados, horário, mensagem de erro e se aconteceu no desktop ou na prévia. Descreva o resultado esperado e os passos para reproduzir.
 
 Retire tokens, chaves, webhooks privados e informações pessoais de qualquer material compartilhado. Não envie o banco inteiro quando uma descrição ou trecho do erro for suficiente.
+
+## Timer ou contador não funcionou
+
+- Timer: confirme perfil conectado, timer ativo, intervalo salvo e espera do período completo. Conexão online não exige transmissão ao vivo; pause ao terminar. Não há envios retroativos. No Kick com ponte externa, timers nativos não iniciam.
+- Contador: confirme Contar usos deste comando, papel autorizado e intervalos liberados. Moderação, respostas TXT e comandos de comunidade podem consumir a mensagem antes. Simular não muda o total real.
+- Contador aumentou, mas não respondeu: a contagem ocorre antes das ações; confira falha de envio no Histórico. Ajuste o total pela lista se necessário.
+- Exemplos completos: [Timers e contadores](TIMERS-E-CONTADORES.md) e [Receitas por função](EXEMPLOS-DE-USO.md).

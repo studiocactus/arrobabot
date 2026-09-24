@@ -11,6 +11,7 @@ impl Db {
  CREATE TABLE IF NOT EXISTS profiles(id TEXT PRIMARY KEY,data TEXT NOT NULL);
  CREATE TABLE IF NOT EXISTS flows(id TEXT PRIMARY KEY,profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,data TEXT NOT NULL);
  CREATE INDEX IF NOT EXISTS flows_profile ON flows(profile_id);
+ CREATE TABLE IF NOT EXISTS command_counters(flow_id TEXT PRIMARY KEY REFERENCES flows(id) ON DELETE CASCADE,value INTEGER NOT NULL DEFAULT 0 CHECK(value>=0));
  CREATE TABLE IF NOT EXISTS logs(id INTEGER PRIMARY KEY AUTOINCREMENT,profile_id TEXT NOT NULL,timestamp TEXT NOT NULL,kind TEXT NOT NULL,message TEXT NOT NULL,status TEXT NOT NULL);
  CREATE INDEX IF NOT EXISTS logs_profile ON logs(profile_id,id);
  CREATE TABLE IF NOT EXISTS presets(id TEXT PRIMARY KEY,data TEXT NOT NULL);
@@ -19,7 +20,7 @@ impl Db {
  CREATE TABLE IF NOT EXISTS points(profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,user_id TEXT NOT NULL,balance INTEGER NOT NULL CHECK(balance>=0),PRIMARY KEY(profile_id,user_id));
  CREATE TABLE IF NOT EXISTS variables(profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,scope TEXT NOT NULL,user_id TEXT NOT NULL,name TEXT NOT NULL,data TEXT NOT NULL,PRIMARY KEY(profile_id,scope,user_id,name));
  CREATE TEMP TABLE session_variables(profile_id TEXT NOT NULL,scope TEXT NOT NULL,user_id TEXT NOT NULL,name TEXT NOT NULL,data TEXT NOT NULL,PRIMARY KEY(profile_id,scope,user_id,name));
- PRAGMA user_version=2;").map_err(|e|e.to_string())?;
+ PRAGMA user_version=3;").map_err(|e|e.to_string())?;
  Ok(Self(Mutex::new(c)))
  }
  pub fn profiles(&self)->R<Vec<Profile>> {

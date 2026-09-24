@@ -79,3 +79,7 @@ O botão de sol/lua na barra superior alterna o modo. A preferência fica salva.
 - Exportar: grava um arquivo para guardar ou compartilhar.
 - Aplicar: altera o perfil selecionado.
 - Tema do painel: aparência do aplicativo; não é o visual completo do overlay OBS.
+
+## Timers e contadores nos presets
+
+Timers são fluxos: exporte como Fluxo de automação ou Perfil completo. O intervalo e a opção de contar usos acompanham a configuração; os totais dos contadores não acompanham. Fluxos importados ficam desativados. Confira destino e intervalos antes de ativar.

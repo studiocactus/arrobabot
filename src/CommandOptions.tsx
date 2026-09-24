@@ -1,0 +1,4 @@
+import {Field,Toggle} from './components';
+export default function CommandOptions({timer,seconds,counter,onSeconds,onCounter}:{timer:boolean;seconds:number;counter:boolean;onSeconds:(n:number)=>void;onCounter:(v:boolean)=>void}){
+ return timer?<Field label="Repetir a cada (segundos)" hint="De 30 segundos a 24 horas. O primeiro envio aguarda o intervalo completo. Só funciona com o perfil conectado."><input type="number" required min="30" max="86400" step="1" value={seconds} onChange={e=>onSeconds(Number(e.target.value))}/></Field>:<><div className="switch-row"><span>Contar usos deste comando</span><Toggle label="Contar usos deste comando" checked={counter} onChange={onCounter}/></div><p className="help">Cada uso aceito soma 1 ao contador deste comando, antes das ações. Use + Contagem do comando na resposta. A contagem fica salva; simulações não alteram o total.</p></>
+}

@@ -2,6 +2,8 @@
 
 O BotLive organiza a automação de uma transmissão em perfis. Comece com um perfil e uma resposta simples; configure IA e módulos depois que essa primeira etapa funcionar.
 
+Para escolher uma função pelo resultado que você deseja, abra [Exemplos práticos](EXEMPLOS-DE-USO.md). Não precisa ler os capítulos técnicos para usar o bot.
+
 ## 1. Abra o aplicativo certo
 
 No diretório do projeto, execute INICIAR-BOTLIVE.cmd. Você também pode abrir entrega/BotLive.exe ou usar o aplicativo instalado. Veja [Instalação](01-INSTALACAO.md).
@@ -64,6 +66,9 @@ Os adaptadores ignoram mensagens da própria conta do bot para evitar respostas 
 | Quero… | Próxima tela |
 |---|---|
 | Uma resposta com várias etapas | Automações |
+| Lembretes automáticos em intervalos | Comandos → Timers |
+| Contador próprio de mortes ou vitórias | Comandos → Contar usos deste comando |
+| Respostas de TXT e sons de espectadores | Comandos → Respostas TXT e sons |
 | Respostas geradas por um modelo | Inteligência artificial |
 | Registrar o jogo, as regras e fatos da comunidade | Memórias |
 | Pontos, sorteios, música e jogos | Comunidade |

@@ -71,11 +71,12 @@ impl Context {
         let args:Vec<_>=tokens.collect();
         values.insert("command".into(),json!(command)); values.insert("rawInput".into(),json!(raw)); values.insert("args".into(),json!(args)); values.insert("argCount".into(),json!(args.len()));
         for (i,arg) in args.iter().enumerate() { values.insert(format!("arg{i}"),json!(arg)); }
-        if let Some(f)=flow { values.insert("actionId".into(),json!(f.id)); values.insert("actionName".into(),json!(f.name)); }
+        if let Some(f)=flow { values.insert("commandCount".into(),json!(crate::command_counter::get(db,&p.id,&f.id)?)); values.insert("actionId".into(),json!(f.id)); values.insert("actionName".into(),json!(f.name)); }
         let uid=if e.user_id.is_empty(){String::new()}else{format!("{}:{}",p.platform,e.user_id)};
         for item in list(db,&p.id,&uid)?.as_array().unwrap() { values.insert(format!("{}.{}",item["scope"].as_str().unwrap(),item["name"].as_str().unwrap()),item["value"].clone()); }
         Ok(Self{values,data:e.data.clone(),simulated:e.simulated})
     }
+    pub fn set_command_count(&mut self,n:i64){self.values.insert("commandCount".into(),json!(n));}
     fn lookup(&self, key: &str) -> Option<Value> {
         if let Some(path)=key.strip_prefix("data.") { let mut v=&self.data; for part in path.split('.') { v=if let Some(a)=v.as_array(){a.get(part.parse::<usize>().ok()?)?}else{v.get(part)?}; } Some(v.clone()) } else { self.values.get(key).cloned() }
     }

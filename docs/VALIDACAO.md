@@ -42,3 +42,10 @@ A versão com o editor simplificado foi empacotada em executável, NSIS e MSI. I
 ## Canal GitHub e versão 0.1.1
 
 Configuração do atualizador com endpoint oficial e chave pública embutidos, assinatura em secrets, script de versão e hook de commit. Validação local: 22 testes Rust, 7 Vitest, 4 Playwright e 3 testes Node do script de atualização aprovados; TypeScript e build Vite aprovados. O primeiro ensaio de interface esgotou o tempo no servidor de desenvolvimento; a suíte passou com a configuração final, que inicia uma prévia de produção isolada na porta 1421. O stage foi revisado sem chaves privadas, binários ou dados locais. A primeira release remota será validada pelo workflow após o push; não confundir configuração pronta com publicação já concluída.
+# Verificação de timers, contadores e manual — 0.1.6
+
+Executados: 36 testes Rust, dez Vitest, nove Playwright e sete testes de scripts de atualização. Compilação TypeScript/Vite aprovada. Após ajustes finais de navegação e editor, os dois testes Playwright de timers e manual foram repetidos e passaram; os 36 testes Rust foram repetidos após a proteção contra disparo de configuração antiga e passaram.
+
+Os novos testes verificam: contagem atômica com eventos concorrentes, persistência, remoção com comando, isolamento entre perfis, permissões, cooldown, simulação sem gravação, timer direcionado, bloqueio offline e de eventos externos reais, descarte após edição, intervalos independentes e ausência de recuperação acumulada. A interface verifica criação/reabertura de timer e contador. O manual verifica vinte capítulos, grupos, links e âncoras antigas, busca, tabelas, impressão e largura de 390 pixels. Captura desktop do manual inspecionada visualmente.
+
+Uma verificação inicial detectou rolagem horizontal de três pixels na barra com novos botões em 720 pixels; o layout foi corrigido e a suíte passou. Uma compilação inicialmente esbarrou na restrição de criação de processos do sandbox; a execução autorizada passou. Não houve teste de envio periódico com conta real de Twitch/YouTube nem migração sobre o aplicativo do usuário em execução.

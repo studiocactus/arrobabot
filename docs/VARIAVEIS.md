@@ -166,3 +166,7 @@ Se ocorrer “Variável ausente”, confira o nome, a ordem dos blocos, o escopo
 O Streamer.bot documenta argumentos locais, variáveis globais e por usuário, inspeção e funções inline em sua [documentação oficial de variáveis](https://docs.streamer.bot/guide/core/variables). O BotLive adota escopos explícitos, catálogo no editor, prévia sem gravação e expansão sem reinterpretação do texto recebido. Isso não representa compatibilidade integral nem superioridade geral: não importa ações C#, não implementa todas as funções inline e não oferece todos os campos de todas as integrações do Streamer.bot.
 
 A direção do projeto é oferecer funções equivalentes por controles simples, descrições em português e exemplos. A [matriz de aceite](MATRIZ-DE-ACEITE.md) registra a comparação por área e a ordem proposta para as funções que ainda faltam.
+
+## Contagem individual de um comando
+
+Ative **Contar usos deste comando** em Comandos e insira **Contagem do comando** pelo catálogo, ou use {{commandCount}}. O marcador mostra o total deste fluxo, independente dos outros comandos. Uma execução aceita soma um antes das ações; simular mostra o próximo total sem gravar. A prévia de variáveis mostra o total atual. Ajuste ou zere na coluna Contador da lista. Veja [Timers e contadores](TIMERS-E-CONTADORES.md) para receitas e limites.

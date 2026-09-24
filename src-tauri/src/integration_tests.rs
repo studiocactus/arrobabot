@@ -1,6 +1,29 @@
 use super::*;
 use serde_json::json;
 #[tokio::test]
+async fn command_counts_follow_permissions_cooldowns_and_simulations(){
+ let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();let mut p=profile("Contadores");p.editors=vec!["mod".into()];rt.db.save_profile(&p).unwrap();let other=profile("Outro");rt.db.save_profile(&other).unwrap();
+ let mut f=flow(&p);f.counter=true;f.trigger.permission="moderator".into();f.actions=vec![Action{kind:"overlay".into(),text:"{{commandCount}}".into(),target:String::new(),value:0,condition:String::new()}];rt.db.save_flow(&f).unwrap();
+ engine::process(rt.clone(),event(&p,"!oi",false)).await;assert_eq!(command_counter::get(&rt.db,&p.id,&f.id).unwrap(),0);
+ let mut e=event(&p,"!oi",false);e.role="moderator".into();let mut rx=rt.broadcast.subscribe();engine::process(rt.clone(),e.clone()).await;engine::process(rt.clone(),e.clone()).await;
+ assert_eq!(command_counter::get(&rt.db,&p.id,&f.id).unwrap(),1);assert!(std::iter::from_fn(||rx.try_recv().ok()).any(|v|v["type"]=="overlay"&&v["payload"]["text"]=="1"));
+ e.simulated=true;engine::process(rt.clone(),e).await;assert_eq!(command_counter::get(&rt.db,&p.id,&f.id).unwrap(),1);assert!(rt.db.logs(&p.id).unwrap().iter().any(|l|l.message.contains("Executaria overlay: 2")));
+ assert_eq!(command_counter::get(&rt.db,&other.id,&f.id).unwrap(),0);
+ let preview=variables::Context::new(&rt.db,&other,&event(&other,"!oi",true),Some(&f)).unwrap();assert_eq!(preview.render("{{commandCount}}").unwrap(),"0");
+ *rt.actor.lock().unwrap()="mod".into();assert!(dispatch(rt.clone(),"command.counter.set",json!({"profileId":other.id,"id":f.id,"value":12})).await.is_err());
+ assert_eq!(dispatch(rt.clone(),"command.counter.set",json!({"profileId":p.id,"id":f.id,"value":12})).await.unwrap(),12);
+}
+#[tokio::test]
+async fn timer_target_offline_preview_and_external_rejection(){
+ let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();let p=profile("Timers");rt.db.save_profile(&p).unwrap();let mut a=flow(&p);a.trigger.kind="timer".into();a.trigger.cooldown=0;a.trigger.user_cooldown=0;a.actions=vec![Action{kind:"overlay".into(),text:"Timer A".into(),target:String::new(),value:0,condition:String::new()}];let mut b=a.clone();b.id=uuid::Uuid::new_v4().to_string();b.actions[0].text="Timer B".into();rt.db.save_flow(&a).unwrap();rt.db.save_flow(&b).unwrap();
+ let mut e=event(&p,"",false);e.kind="timer".into();e.data=json!({"timerId":a.id,"timerRevision":timers::revision(&a)});e.role="broadcaster".into();assert!(rt.submit(e.clone()).await.is_err());
+ let mut rx=rt.broadcast.subscribe();engine::process(rt.clone(),e.clone()).await;assert!(!std::iter::from_fn(||rx.try_recv().ok()).any(|v|v["type"]=="overlay"));
+ rt.status(&p.id,"online");rt.timer_pending.lock().unwrap().insert(a.id.clone());engine::process(rt.clone(),e.clone()).await;assert!(rt.timer_pending.lock().unwrap().is_empty());let values:Vec<_>=std::iter::from_fn(||rx.try_recv().ok()).filter(|v|v["type"]=="overlay").collect();assert_eq!(values.len(),1);assert_eq!(values[0]["payload"]["text"],"Timer A");
+ a.name="Alterado".into();rt.db.save_flow(&a).unwrap();engine::process(rt.clone(),e.clone()).await;assert!(!std::iter::from_fn(||rx.try_recv().ok()).any(|v|v["type"]=="overlay"));
+ rt.status(&p.id,"offline");e.simulated=true;engine::process(rt.clone(),e).await;assert!(rt.db.logs(&p.id).unwrap().iter().any(|l|l.message.contains("Executaria overlay: Timer A")));
+ a.timer_seconds=0;assert!(rt.db.save_flow(&a).is_err());a.timer_seconds=30;a.counter=true;assert!(rt.db.save_flow(&a).is_err());
+}
+#[tokio::test]
 async fn txt_engine_simulation_and_file_configuration_permissions(){
  let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().join("app")).unwrap();let mut p=profile("TXT");p.editors=vec!["mod".into()];rt.db.save_profile(&p).unwrap();
  let file=dir.path().join("frases.txt");std::fs::write(&file,"Olá {{user}}: {{message}}").unwrap();
@@ -79,7 +102,7 @@ async fn contextual_preview_calls_provider_without_chat_or_memory_writes(){
 }
 fn profile(name:&str)->Profile{Profile{id:uuid::Uuid::new_v4().to_string(),name:name.into(),platform:"twitch".into(),channel:name.into(),channel_id:"123".into(),bot_id:"456".into(),client_id:"client".into(),blocklist:vec!["proibido".into()],topics:vec![],editors:vec![],ai:AiConfig::default(),modules:json!({"points":true,"raffles":true,"predictions":true,"queue":true})}}
 fn event(p:&Profile,text:&str,simulated:bool)->Event{Event{id:uuid::Uuid::new_v4().to_string(),profile_id:p.id.clone(),kind:"chat".into(),user:"Ana".into(),user_id:"ana".into(),role:"everyone".into(),message:text.into(),data:Value::Null,simulated}}
-fn flow(p:&Profile)->Flow{Flow{id:uuid::Uuid::new_v4().to_string(),profile_id:p.id.clone(),name:"Teste".into(),enabled:true,trigger:Trigger{kind:"command".into(),pattern:"!oi".into(),permission:"everyone".into(),cooldown:5,user_cooldown:5},actions:vec!["Um $user","Dois","Três"].into_iter().map(|s|Action{kind:"chat".into(),text:s.into(),target:"".into(),value:0,condition:"".into()}).collect(),layout:Value::Null}}
+fn flow(p:&Profile)->Flow{Flow{counter:false,timer_seconds:300,id:uuid::Uuid::new_v4().to_string(),profile_id:p.id.clone(),name:"Teste".into(),enabled:true,trigger:Trigger{kind:"command".into(),pattern:"!oi".into(),permission:"everyone".into(),cooldown:5,user_cooldown:5},actions:vec!["Um $user","Dois","Três"].into_iter().map(|s|Action{kind:"chat".into(),text:s.into(),target:"".into(),value:0,condition:"".into()}).collect(),layout:Value::Null}}
 #[tokio::test]
 async fn ordered_execution_cooldown_filter_and_isolation(){
  let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();let p=profile("Canal A");let b=profile("Canal B");rt.db.save_profile(&p).unwrap();rt.db.save_profile(&b).unwrap();

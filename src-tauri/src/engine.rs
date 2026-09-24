@@ -9,6 +9,7 @@ pub struct Runtime {
  pub app:Mutex<Option<tauri::AppHandle>>,
  pub connections:Mutex<HashMap<String,tokio::task::JoinHandle<()>>>,
  pub statuses:Mutex<HashMap<String,String>>,
+ pub timer_pending:Mutex<std::collections::HashSet<String>>,
  pub cooldowns:Mutex<HashMap<String,Instant>>,
  pub conversation:Mutex<crate::conversation::History>,
  pub chat_extras:Mutex<crate::chat_extras::State>,
@@ -23,7 +24,7 @@ impl Runtime {
  let (tx,rx)=mpsc::channel(512);let (broadcast,_)=broadcast::channel(512);
  let http=reqwest::Client::builder().timeout(Duration::from_secs(30)).redirect(reqwest::redirect::Policy::none()).build().map_err(|e|e.to_string())?;
  let actor=if db.get("accessEnabled")==true{"locked"}else{"owner"}.to_owned();
- let rt=Arc::new(Self{actor:Mutex::new(actor),db,base,http,tx,broadcast,app:Mutex::new(None),connections:Mutex::new(HashMap::new()),statuses:Mutex::new(HashMap::new()),cooldowns:Mutex::new(HashMap::new()),conversation:Mutex::new(crate::conversation::History::default()),chat_extras:Mutex::new(crate::chat_extras::State::default()),seen:Mutex::new(HashMap::new()),module_lock:Mutex::new(()),vault_lock:Mutex::new(()),send_locks:Mutex::new(HashMap::new()),api_token:format!("{}{}",uuid::Uuid::new_v4().simple(),uuid::Uuid::new_v4().simple()),api_port:Mutex::new(0)});
+ let rt=Arc::new(Self{actor:Mutex::new(actor),db,base,http,tx,broadcast,app:Mutex::new(None),connections:Mutex::new(HashMap::new()),statuses:Mutex::new(HashMap::new()),timer_pending:Mutex::new(std::collections::HashSet::new()),cooldowns:Mutex::new(HashMap::new()),conversation:Mutex::new(crate::conversation::History::default()),chat_extras:Mutex::new(crate::chat_extras::State::default()),seen:Mutex::new(HashMap::new()),module_lock:Mutex::new(()),vault_lock:Mutex::new(()),send_locks:Mutex::new(HashMap::new()),api_token:format!("{}{}",uuid::Uuid::new_v4().simple(),uuid::Uuid::new_v4().simple()),api_port:Mutex::new(0)});
  tokio::spawn(worker(rt.clone(),rx));Ok(rt)
  }
  pub fn emit(&self,kind:&str,payload:Value){
@@ -35,6 +36,7 @@ impl Runtime {
  pub fn log(&self,p:&str,kind:&str,msg:&str,status:&str){let log=self.db.log(p,kind,msg,status);self.emit("activity",serde_json::to_value(log).unwrap());}
  pub fn status(&self,p:&str,status:&str){self.statuses.lock().unwrap().insert(p.into(),status.into());self.emit("connection",json!({"profileId":p,"status":status}));}
  pub async fn submit(&self,e:Event)->Result<(),String>{
+ if e.kind=="timer"&&!e.simulated{return Err("Timers reais são executados apenas pelo agendador interno".into())}
  self.db.profile(&e.profile_id)?;
  if e.message.len()>16000||e.id.len()>200{return Err("Evento muito grande".into())}
  {
@@ -74,6 +76,7 @@ impl Runtime {
  let interval=Duration::from_millis(1600);
  if last.elapsed()<interval{tokio::time::sleep(interval-last.elapsed()).await;}
  let fresh=self.db.profile(&p.id)?;
+ if e.kind=="timer"&&e.data["timerId"].is_string()&&!e.simulated&&!crate::timers::event_active(self,e){return Err("Timer pausado ou perfil desconectado".into())}
  if blocked(text,&fresh){return Err("Mensagem bloqueada pelas restrições atuais do perfil".into())}
  platforms::send(self,&fresh,text).await?;*last=Instant::now();
  self.conversation.lock().unwrap().sent(&p.id,text);
@@ -89,6 +92,7 @@ async fn worker(rt:Arc<Runtime>,mut rx:mpsc::Receiver<Event>){
  }
 }
 pub async fn process(rt:Arc<Runtime>,e:Event){
+ let _pending=crate::timers::Pending(rt.clone(),if e.kind=="timer"&&!e.simulated{e.data["timerId"].as_str().map(str::to_owned)}else{None});
  let Ok(p)=rt.db.profile(&e.profile_id) else{return};
  if e.kind=="chat"&&!e.simulated&&!p.bot_id.is_empty()&&e.user_id==p.bot_id{return}
  if e.kind=="voice"&&p.modules["voice"]!=true{rt.log(&p.id,"voice","Controle por voz desativado","info");return}
@@ -106,7 +110,8 @@ pub async fn process(rt:Arc<Runtime>,e:Event){
  Err(err)=>{rt.log(&p.id,"module",&err,"error");return},_=>{}
  }
  }
- for f in rt.db.flows(&p.id).unwrap_or_default().into_iter().filter(|f|f.enabled&&matches(&f.trigger,&e)){
+ for f in rt.db.flows(&p.id).unwrap_or_default().into_iter().filter(|f|f.enabled&&(matches(&f.trigger,&e)||(e.kind=="timer"&&f.trigger.kind=="timer"&&e.data["timerId"]==f.id))){
+ if e.kind=="timer"&&!e.simulated&&!crate::timers::event_active(&rt,&e){continue}
  let allowed={
  let mut cd=rt.cooldowns.lock().unwrap();
  cd.retain(|_,t|t.elapsed()<Duration::from_secs(86400));
@@ -116,8 +121,12 @@ pub async fn process(rt:Arc<Runtime>,e:Event){
  };
  if !allowed{rt.log(&p.id,"cooldown",&format!("{} está em intervalo",f.name),"info");continue}
  rt.log(&p.id,"flow",&format!("Iniciando {}",f.name),"info");
+ let count=if f.counter{match if e.simulated{crate::command_counter::get(&rt.db,&p.id,&f.id).and_then(|n|n.checked_add(1).ok_or("Contador excedeu o limite".into()))}else{crate::command_counter::change(&rt.db,&p.id,&f.id,None)}{Ok(n)=>Some(n),Err(err)=>{rt.log(&p.id,"counter",&err,"error");continue}}}else{None};
+ if let Some(n)=count{if !e.simulated{rt.emit("command-counter",json!({"profileId":p.id,"id":f.id,"value":n}));}}
  let mut variables=match crate::variables::Context::new(&rt.db,&p,&e,Some(&f)){Ok(v)=>v,Err(err)=>{rt.log(&p.id,"variables",&err,"error");continue}};
+ if let Some(n)=count{variables.set_command_count(n);}
  for a in &f.actions {
+ if e.kind=="timer"&&!e.simulated&&!crate::timers::event_active(&rt,&e){break}
  if !a.condition.is_empty()&&!e.message.to_lowercase().contains(&a.condition.to_lowercase()){continue}
  let result=tokio::time::timeout(Duration::from_secs(65),action(&rt,&p,&e,a,&mut variables,&history)).await;
  match result{

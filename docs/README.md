@@ -2,6 +2,13 @@
 
 Esta documentação descreve a versão implementada do BotLive. Os exemplos usam nomes fictícios. A documentação de planejamento está em ../../documentação; para saber o que efetivamente funciona nesta versão, use este manual e a matriz de aceite.
 
+## Escolha pelo que quer fazer
+
+- [Exemplos práticos](EXEMPLOS-DE-USO.md): receitas de todas as áreas do bot, com entrada e resultado esperado.
+- [Timers e contadores](TIMERS-E-CONTADORES.md): lembretes periódicos, contagem individual, ajuste e simulação.
+- [Respostas TXT e sons](RESPOSTAS-E-SONS.md): arquivos externos, sons de pessoas e saída de áudio.
+- [Variáveis](VARIAVEIS.md): montar respostas usando informações do chat.
+
 ## Por onde começar
 
 Abra [MANUAL.html](MANUAL.html) para ler todos os capítulos em uma página, com busca, navegação e impressão. Não precisa iniciar servidor nem instalar ferramentas.
@@ -34,6 +41,8 @@ Abra [MANUAL.html](MANUAL.html) para ler todos os capítulos em uma página, com
 | Gatilho | Evento ou texto que inicia uma automação |
 | Ação | Etapa executada após um gatilho, como responder ou registrar memória |
 | Fluxo | Gatilho seguido de uma sequência de ações |
+| Timer | Automação periódica que espera o intervalo e executa enquanto o perfil está conectado |
+| Contador do comando | Total salvo de usos aceitos daquele comando, independente dos demais |
 | Cooldown / intervalo | Tempo mínimo antes de permitir outra execução |
 | Vault | Pasta de notas Markdown de um perfil |
 | Preset | Configuração reutilizável; não é backup de todos os dados |

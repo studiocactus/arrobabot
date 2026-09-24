@@ -27,10 +27,13 @@ impl Default for AiConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all="camelCase")]
 pub struct Flow {
+ #[serde(default)] pub counter:bool,
+ #[serde(default="timer_default")] pub timer_seconds:u64,
  pub id:String, pub profile_id:String, pub name:String, pub enabled:bool,
  pub trigger:Trigger, pub actions:Vec<Action>,
  #[serde(default)] pub layout:Value,
 }
+fn timer_default()->u64{300}
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all="camelCase")]
 pub struct Trigger {
@@ -82,6 +85,7 @@ pub fn permitted(required:&str, role:&str)->bool {
 pub fn matches(t:&Trigger,e:&Event)->bool {
  if !permitted(&t.permission,&e.role) { return false; }
  match t.kind.as_str() {
+ "timer"=>false, // Only the internal scheduler can execute periodic flows.
  "command"=>e.kind=="chat" && e.message.split_whitespace().next().is_some_and(|s| s.eq_ignore_ascii_case(&t.pattern)),
  "contains"=>e.kind=="chat" && !t.pattern.is_empty() && e.message.to_lowercase().contains(&t.pattern.to_lowercase()),
  "voice"=>e.kind=="voice" && (t.pattern.is_empty()||e.message.to_lowercase().contains(&t.pattern.to_lowercase())),
@@ -89,6 +93,8 @@ pub fn matches(t:&Trigger,e:&Event)->bool {
  }
 }
 pub fn validate_flow(f:&Flow)->Result<(),String> {
+ if f.trigger.kind=="timer"&&!(30..=86400).contains(&f.timer_seconds){return Err("Timer: escolha de 30 segundos a 24 horas".into())}
+ if f.counter&&f.trigger.kind!="command"{return Err("O contador individual é exclusivo de comandos".into())}
  if !valid_id(&f.id)||!valid_id(&f.profile_id) {return Err("Identificador inválido".into())}
  if f.name.trim().is_empty()||f.actions.is_empty()||f.actions.len()>64 {return Err("Dê um nome e adicione entre 1 e 64 ações".into())}
  if !["everyone","subscriber","moderator","broadcaster"].contains(&f.trigger.permission.as_str()) {return Err("Permissão inválida".into())}
