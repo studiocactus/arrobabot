@@ -1,15 +1,15 @@
 # Timers e contadores por comando
 
-Use **Comandos → Timers** para publicar lembretes periódicos. Use **Contar usos deste comando** para manter um total independente em cada comando. Um timer dispara pelo tempo; um contador aumenta quando um comando é aceito. Nenhum dos dois é uma contagem regressiva.
+Use **Timers** para publicar lembretes periódicos. Use **Contar usos deste comando** na configuração do comando para manter um total independente em cada um; os totais ficam reunidos em **Contadores**. Um timer dispara pelo tempo; um contador aumenta quando um comando é aceito. Nenhum dos dois é uma contagem regressiva.
 
 ## Receita: divulgar a comunidade a cada dez minutos
 
-1. Selecione o perfil do canal e abra **Comandos**.
+1. Selecione o perfil do canal e abra **Timers**.
 2. Clique em **Novo timer**.
 3. Em Nome, escreva Lembrete da comunidade.
 4. Em Resposta, escreva: Participe da nossa comunidade! Digite !discord para receber o convite.
 5. Em **Repetir a cada (segundos)**, informe **600**.
-6. Clique em **Salvar timer** e confira se está ativo na aba **Timers**.
+6. Clique em **Salvar timer** e confira se está ativo na lista de timers.
 7. Use o botão **Simular timer Lembrete da comunidade**. Confira a resposta no Histórico; nada é publicado nesse teste.
 8. Conecte o perfil. O primeiro envio real ocorre depois do intervalo completo; os seguintes repetem o intervalo.
 
@@ -45,7 +45,7 @@ Um timer não representa um espectador: o nome do evento é BotLive, o ID da pes
 
 ## Receita: contador de mortes
 
-1. Abra **Comandos → Novo comando**.
+1. Abra **Comandos** e clique em **Novo comando**.
 2. Nome: Mortes. Comando: **!mortes**.
 3. Ative **Contar usos deste comando**.
 4. Na Resposta, escreva **O streamer já morreu **, clique em **+ Contagem do comando** e complete com ** vezes.**
@@ -71,7 +71,7 @@ Crie outro comando chamado Vitórias, com **!vitorias**, ative o contador e use 
 
 ## Conferir, corrigir ou zerar
 
-Na lista de comandos, a coluna **Contador** mostra o total. Clique em **número · Ajustar**, digite o **Novo total** e confirme. Para iniciar outra sessão do zero, defina zero. O próximo uso aceito contará um. Essa operação altera somente o comando escolhido e não publica mensagem.
+Abra **Contadores** para ver o total de cada comando com contador ativo, junto com a soma do perfil. A coluna **Contador** em **Comandos** mostra o mesmo valor. Clique em **número · Ajustar**, digite o **Novo total** e confirme. Para iniciar outra sessão do zero, defina zero. O próximo uso aceito contará um. Essa operação altera somente o comando escolhido e não publica mensagem.
 
 O total permanece após fechar o BotLive, editar o nome ou mudar a resposta. Desativar o contador conserva o total; reativá-lo continua de onde parou. Apagar o comando apaga seu contador. Criar outro comando com o mesmo nome cria outro total.
 

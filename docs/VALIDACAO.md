@@ -49,3 +49,11 @@ Executados: 36 testes Rust, dez Vitest, nove Playwright e sete testes de scripts
 Os novos testes verificam: contagem atômica com eventos concorrentes, persistência, remoção com comando, isolamento entre perfis, permissões, cooldown, simulação sem gravação, timer direcionado, bloqueio offline e de eventos externos reais, descarte após edição, intervalos independentes e ausência de recuperação acumulada. A interface verifica criação/reabertura de timer e contador. O manual verifica vinte capítulos, grupos, links e âncoras antigas, busca, tabelas, impressão e largura de 390 pixels. Captura desktop do manual inspecionada visualmente.
 
 Uma verificação inicial detectou rolagem horizontal de três pixels na barra com novos botões em 720 pixels; o layout foi corrigido e a suíte passou. Uma compilação inicialmente esbarrou na restrição de criação de processos do sandbox; a execução autorizada passou. Não houve teste de envio periódico com conta real de Twitch/YouTube nem migração sobre o aplicativo do usuário em execução.
+
+## Verificação da reorganização de telas — 0.1.7
+
+Executados após a separação em Comandos, Timers, Respostas e sons e Contadores: `npm run check` (TypeScript), dez testes Vitest, sete testes dos scripts de atualização (`npm run test:updates`) e nove cenários Playwright no Edge, todos aprovados. O manual offline foi regerado pelo gerador, que validou os vinte capítulos e os links internos.
+
+Os testes de interface foram ajustados à nova navegação: a configuração de respostas é aberta pela entrada do menu lateral, o timer é criado a partir da tela Timers e o comando com contador é criado em Comandos. O cenário de timers passou também a abrir Contadores, confirmar que o comando aparece listado e gerar a captura correspondente.
+
+Verificado em execução pontual da interface que apenas um item da barra lateral permanece em estado ativo por vez e que a navegação com quatro entradas a mais não produz rolagem na barra lateral nem rolagem horizontal em janela estreita. Nenhum arquivo Rust foi alterado nesta revisão, então a suíte de 36 testes Rust não foi reexecutada; a compilação do pacote Windows, a instalação sobre a versão anterior e a homologação com contas reais também não foram realizadas aqui.

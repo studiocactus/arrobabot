@@ -169,4 +169,4 @@ A direção do projeto é oferecer funções equivalentes por controles simples,
 
 ## Contagem individual de um comando
 
-Ative **Contar usos deste comando** em Comandos e insira **Contagem do comando** pelo catálogo, ou use {{commandCount}}. O marcador mostra o total deste fluxo, independente dos outros comandos. Uma execução aceita soma um antes das ações; simular mostra o próximo total sem gravar. A prévia de variáveis mostra o total atual. Ajuste ou zere na coluna Contador da lista. Veja [Timers e contadores](TIMERS-E-CONTADORES.md) para receitas e limites.
+Ative **Contar usos deste comando** na tela **Comandos** e insira **Contagem do comando** pelo catálogo, ou use {{commandCount}}. O marcador mostra o total deste fluxo, independente dos outros comandos. Uma execução aceita soma um antes das ações; simular mostra o próximo total sem gravar. A prévia de variáveis mostra o total atual. Os totais ficam em **Contadores**; ajuste ou zere por lá ou pela coluna Contador da lista de comandos. Veja [Timers e contadores](TIMERS-E-CONTADORES.md) para receitas e limites.

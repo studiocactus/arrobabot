@@ -66,9 +66,9 @@ Os adaptadores ignoram mensagens da própria conta do bot para evitar respostas 
 | Quero… | Próxima tela |
 |---|---|
 | Uma resposta com várias etapas | Automações |
-| Lembretes automáticos em intervalos | Comandos → Timers |
-| Contador próprio de mortes ou vitórias | Comandos → Contar usos deste comando |
-| Respostas de TXT e sons de espectadores | Comandos → Respostas TXT e sons |
+| Lembretes automáticos em intervalos | Timers |
+| Contador próprio de mortes ou vitórias | Comandos → Contar usos deste comando; totais em Contadores |
+| Respostas de TXT e sons de espectadores | Respostas e sons |
 | Respostas geradas por um modelo | Inteligência artificial |
 | Registrar o jogo, as regras e fatos da comunidade | Memórias |
 | Pontos, sorteios, música e jogos | Comunidade |

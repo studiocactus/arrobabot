@@ -1,5 +1,42 @@
 # Histórico de atualizações
 
+# BotLive 0.1.7
+
+## O que mudou
+
+- O grupo Seu espaço passa a separar as tarefas em telas próprias: Comandos, Timers, Respostas e sons, Contadores e Automações, cada uma com título, resumo, busca e ações próprios na barra lateral e na paleta Ctrl+K.
+- A tela Comandos deixou de usar as abas "Comandos e contadores" e "Timers". Ela lista apenas comandos e fluxos de evento, mantém Resenha com IA, Variáveis, Simular evento, a coluna Contador e o atalho para Automações.
+- Novo painel Timers: lista os lembretes periódicos do perfil com busca, ativação, simulação sem publicação, atalho para presets, edição e exclusão, além de estado vazio com atalho para criar o primeiro timer.
+- Novo painel Contadores: reúne o total de cada comando com contagem ativa, soma dos usos do perfil, busca, ajuste do total e atalho para abrir o comando correspondente.
+- O conteúdo de Respostas TXT e sons deixou de abrir em modal e virou a tela Respostas e sons. O botão em Comunidade virou um atalho para essa tela, eliminando a configuração duplicada que existia nos dois lugares.
+- Diálogos de criação e edição de fluxo, simulação de evento, ajuste de contador, ativação e ações de linha foram extraídos para src/FlowTools.tsx e agora são compartilhados pelas telas novas e existentes, em vez de duplicados dentro de Commands.tsx.
+- A barra lateral ganhou quatro entradas sem corte: a navegação já comporta rolagem própria, e os títulos, resumos e itens da paleta acompanharam a nova estrutura.
+- Documentação ajustada em Guia de uso, Comandos e automações, Timers e contadores, Respostas e sons, Comunidade, Exemplos práticos, Variáveis e Arquitetura; o manual offline foi regerado.
+
+## Como usar
+
+Abra Seu espaço no menu lateral. Para um lembrete, clique em Timers e depois em Novo timer: nome Água, resposta Hora de beber água!, Repetir a cada (segundos) 900, Salvar timer e mantenha o controle de Ativar ligado. Conecte o perfil e aguarde o intervalo completo para o primeiro envio real.
+
+Para contar usos, abra Comandos, crie ou edite um comando, ative Contar usos deste comando e use + Contagem do comando na resposta. Os totais aparecem em Contadores, onde Ajustar define um novo total ou zero para reiniciar. O mesmo valor continua visível na coluna Contador da lista de comandos.
+
+Para respostas por palavra ou som por espectador, abra Respostas e sons no menu lateral ou o botão Respostas TXT e sons em Comunidade, configure as regras e clique em Salvar respostas e sons. As demais telas permanecem nos mesmos grupos de antes: IA e Memórias em Personalidade e memória; Comunidade, Presets, Histórico e Estatísticas em Ferramentas.
+
+## Validação
+
+Executados nesta revisão: compilação TypeScript (`npm run check`), dez testes Vitest, sete testes dos scripts de atualização (`npm run test:updates`) e nove cenários Playwright no Edge, todos aprovados. O manual offline foi regerado pelo gerador, que validou os vinte capítulos e os links internos.
+
+Os testes de interface foram adaptados à nova navegação: o painel de respostas agora é aberto pela entrada do menu lateral, o fluxo de timer parte da tela Timers e o comando com contador é criado direto em Comandos. O cenário de timers também passou a abrir Contadores e conferir que o comando aparece listado, com captura própria em artifacts.
+
+Nenhum arquivo Rust foi alterado nesta revisão, portanto a suíte de testes Rust não foi reexecutada. Verificou-se ainda, em execução pontual da interface, que apenas um item da barra lateral permanece em estado ativo por vez.
+
+## Limitações
+
+A alteração é de interface: motor, banco e formatos gravados não mudaram, e timers, comandos e contadores existentes continuam válidos sem migração. Timers seguem exigindo aplicativo aberto e perfil conectado, e contadores continuam medindo usos aceitos antes das ações, não entregas confirmadas.
+
+Ajuste de contador e vinculação de arquivos continuam disponíveis somente no aplicativo desktop; na prévia de navegador o total é exibido para leitura. Não houve nesta revisão execução de testes Rust, compilação do pacote Windows, instalação sobre a versão anterior nem homologação com contas reais de Twitch, YouTube ou Kick. O registro detalhado está em docs/VALIDACAO.md.
+
+---
+
 # BotLive 0.1.6
 
 # BotLive 0.1.6 — manual prático, timers e contadores individuais

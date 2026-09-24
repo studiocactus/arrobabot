@@ -1,6 +1,6 @@
 # Respostas TXT e sons por espectador
 
-Abra **Comandos → Respostas TXT e sons** ou o mesmo botão em **Comunidade**. Escolha o perfil correto. As alterações entram em vigor ao clicar em **Salvar respostas e sons**. Somente o proprietário pode vincular arquivos, salvar configurações e reiniciar a sessão; moderadores autorizados podem consultar e testar arquivos já cadastrados. O navegador mostra os controles, mas os arquivos e a execução dependem do aplicativo desktop.
+Abra **Respostas e sons** no menu lateral ou o botão **Respostas TXT e sons** em **Comunidade**. Escolha o perfil correto. As alterações entram em vigor ao clicar em **Salvar respostas e sons**. Somente o proprietário pode vincular arquivos, salvar configurações e reiniciar a sessão; moderadores autorizados podem consultar e testar arquivos já cadastrados. O navegador mostra os controles, mas os arquivos e a execução dependem do aplicativo desktop.
 
 ## Responder a uma palavra usando um TXT
 

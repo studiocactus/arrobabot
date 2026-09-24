@@ -1,6 +1,6 @@
 # Ferramentas de comunidade
 
-O botão **Respostas TXT e sons** permite cadastrar espectadores com apelido e áudio personalizado, ativar/desativar cada pessoa e escolher mensagem, entrada silenciosa na Twitch ou ambos, uma vez por sessão ou com intervalo. Consulte o [guia completo](RESPOSTAS-E-SONS.md), incluindo a seleção de saída e captura do áudio no OBS. Para receitas de cada módulo, abra [Exemplos práticos](EXEMPLOS-DE-USO.md).
+O botão **Respostas TXT e sons** abre a tela **Respostas e sons** e permite cadastrar espectadores com apelido e áudio personalizado, ativar/desativar cada pessoa e escolher mensagem, entrada silenciosa na Twitch ou ambos, uma vez por sessão ou com intervalo. Consulte o [guia completo](RESPOSTAS-E-SONS.md), incluindo a seleção de saída e captura do áudio no OBS. Para receitas de cada módulo, abra [Exemplos práticos](EXEMPLOS-DE-USO.md).
 
 Abra **Comunidade**, confira o perfil e ligue a chave do módulo desejado. Clique no nome do cartão para ver seu painel. Abrir um cartão não ativa o módulo. Desativar conserva os dados; não equivale a cancelar uma operação em andamento.
 

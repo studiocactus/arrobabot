@@ -1,6 +1,6 @@
 # Comandos e automações
 
-**Escolha rápida:** comando responde a alguém; timer publica pelo tempo; contador guarda quantas vezes um comando foi aceito. Configure timers e contadores diretamente em Comandos. Veja [passos e exemplos completos](TIMERS-E-CONTADORES.md) ou o [catálogo de receitas](EXEMPLOS-DE-USO.md).
+**Escolha rápida:** comando responde a alguém; timer publica pelo tempo; contador guarda quantas vezes um comando foi aceito. Cada um tem sua própria tela: **Comandos**, **Timers** e **Contadores**. Veja [passos e exemplos completos](TIMERS-E-CONTADORES.md) ou o [catálogo de receitas](EXEMPLOS-DE-USO.md).
 
 Para responder a palavras usando linhas de um arquivo externo, abra **Respostas TXT e sons**. Consulte o [guia de respostas TXT e sons por espectador](RESPOSTAS-E-SONS.md), com configuração, exemplo de arquivo, intervalos e teste sem publicar.
 
@@ -22,7 +22,7 @@ A imagem mostra a interface de teste. Nomes e conteúdos são exemplos.
 
 Para responder ao assunto da conversa com humor, use **Resenha com IA**. Escolha um trecho da mensagem e o tom; o aplicativo monta a geração contextual e o envio em sequência. Edite o fluxo depois para mudar os intervalos ou reutilizar a resposta em voz e overlay. A receita completa e o teste sem publicação estão no [capítulo de IA e memória](04-IA-E-MEMORIA.md).
 
-Abra **Comandos → Novo comando**. Preencha nome, comando, resposta, permissão e intervalos. Salve e confira se está ativo.
+Abra **Comandos** e clique em **Novo comando**. Preencha nome, comando, resposta, permissão e intervalos. Salve e confira se está ativo.
 
 Um comando como !oi casa com o primeiro termo da mensagem: !oi tudo bem dispara; !oie não dispara. Letras maiúsculas e minúsculas não alteram esse reconhecimento. O nome interno pode conter espaços; o campo Comando não.
 
