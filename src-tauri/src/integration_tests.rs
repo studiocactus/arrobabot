@@ -1,5 +1,18 @@
 use super::*;
 use serde_json::json;
+#[tokio::test]
+async fn txt_engine_simulation_and_file_configuration_permissions(){
+ let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().join("app")).unwrap();let mut p=profile("TXT");p.editors=vec!["mod".into()];rt.db.save_profile(&p).unwrap();
+ let file=dir.path().join("frases.txt");std::fs::write(&file,"Olá {{user}}: {{message}}").unwrap();
+ let a=dispatch(rt.clone(),"chatExtras.import",json!({"profileId":p.id,"kind":"txt","path":file})).await.unwrap();
+ let config=json!({"repliesEnabled":true,"soundsEnabled":false,"people":[],"replies":[{"id":uuid::Uuid::new_v4(),"enabled":true,"keyword":"oi","matching":"word","selection":"sequence","asset":a["id"],"cooldown":30,"userCooldown":60}]});
+ dispatch(rt.clone(),"chatExtras.save",json!({"profileId":p.id,"config":config})).await.unwrap();
+ engine::process(rt.clone(),event(&p,"oi {{global.secret}}",true)).await;
+ assert!(rt.db.logs(&p.id).unwrap().iter().any(|l|l.message=="[Simulação] Olá Ana: oi {{global.secret}}"));
+ *rt.actor.lock().unwrap()="mod".into();assert!(dispatch(rt.clone(),"chatExtras.save",json!({"profileId":p.id,"config":config})).await.is_err());assert!(dispatch(rt.clone(),"chatExtras.import",json!({"profileId":p.id,"path":file,"kind":"txt"})).await.is_err());
+ assert!(dispatch(rt.clone(),"chatExtras.preview",json!({"profileId":p.id,"asset":a["id"]})).await.is_ok());
+ *rt.actor.lock().unwrap()="intruso".into();assert!(dispatch(rt,"chatExtras.get",json!({"profileId":p.id})).await.is_err());
+}
 async fn mock_ai(answer:&str)->(String,tokio::task::JoinHandle<Value>){
  use tokio::io::{AsyncReadExt,AsyncWriteExt};
  let listener=tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();let address=listener.local_addr().unwrap();let answer=answer.to_owned();

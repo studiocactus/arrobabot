@@ -1,3 +1,4 @@
+import {playViewerSound,type ViewerSound} from './viewerSound';
 import {applyAccent} from './appearance';
 import {useState,useEffect,useCallback} from 'react';
 import {listen} from '@tauri-apps/api/event';
@@ -31,6 +32,7 @@ export default function App(){
  window.addEventListener('keydown',onKey);return()=>window.removeEventListener('keydown',onKey);
  },[]);
  useEffect(()=>{if(!desktop)return;let active=true;const off: (()=>void)[]=[];const track=(p:Promise<()=>void>)=>p.then(f=>active?off.push(f):f());
+ track(listen<ViewerSound>('viewer-sound',e=>{void playViewerSound(e.payload).catch(err=>notify(errorText(err)))}));
  track(listen<Log>('activity',e=>setSnapshot(s=>({...s,logs:[e.payload,...s.logs].slice(0,300)}))));
  track(listen<{profileId:string;status:string}>('connection',e=>setSnapshot(s=>({...s,statuses:{...s.statuses,[e.payload.profileId]:e.payload.status}}))));
  track(listen<{profileId:string;text:string;voice?:string;rate?:number}>('tts',e=>{if('speechSynthesis'in window){const utterance=new SpeechSynthesisUtterance(e.payload.text);utterance.lang='pt-BR';utterance.rate=e.payload.rate||1;utterance.voice=speechSynthesis.getVoices().find(v=>v.voiceURI===e.payload.voice)||null;speechSynthesis.speak(utterance)}}));

@@ -11,6 +11,7 @@ pub struct Runtime {
  pub statuses:Mutex<HashMap<String,String>>,
  pub cooldowns:Mutex<HashMap<String,Instant>>,
  pub conversation:Mutex<crate::conversation::History>,
+ pub chat_extras:Mutex<crate::chat_extras::State>,
  pub seen:Mutex<HashMap<String,Instant>>,
  pub module_lock:Mutex<()>,pub vault_lock:Mutex<()>,pub send_locks:Mutex<HashMap<String,Arc<tokio::sync::Mutex<Instant>>>>,
  pub api_token:String,pub api_port:Mutex<u16>,pub actor:Mutex<String>,
@@ -22,7 +23,7 @@ impl Runtime {
  let (tx,rx)=mpsc::channel(512);let (broadcast,_)=broadcast::channel(512);
  let http=reqwest::Client::builder().timeout(Duration::from_secs(30)).redirect(reqwest::redirect::Policy::none()).build().map_err(|e|e.to_string())?;
  let actor=if db.get("accessEnabled")==true{"locked"}else{"owner"}.to_owned();
- let rt=Arc::new(Self{actor:Mutex::new(actor),db,base,http,tx,broadcast,app:Mutex::new(None),connections:Mutex::new(HashMap::new()),statuses:Mutex::new(HashMap::new()),cooldowns:Mutex::new(HashMap::new()),conversation:Mutex::new(crate::conversation::History::default()),seen:Mutex::new(HashMap::new()),module_lock:Mutex::new(()),vault_lock:Mutex::new(()),send_locks:Mutex::new(HashMap::new()),api_token:format!("{}{}",uuid::Uuid::new_v4().simple(),uuid::Uuid::new_v4().simple()),api_port:Mutex::new(0)});
+ let rt=Arc::new(Self{actor:Mutex::new(actor),db,base,http,tx,broadcast,app:Mutex::new(None),connections:Mutex::new(HashMap::new()),statuses:Mutex::new(HashMap::new()),cooldowns:Mutex::new(HashMap::new()),conversation:Mutex::new(crate::conversation::History::default()),chat_extras:Mutex::new(crate::chat_extras::State::default()),seen:Mutex::new(HashMap::new()),module_lock:Mutex::new(()),vault_lock:Mutex::new(()),send_locks:Mutex::new(HashMap::new()),api_token:format!("{}{}",uuid::Uuid::new_v4().simple(),uuid::Uuid::new_v4().simple()),api_port:Mutex::new(0)});
  tokio::spawn(worker(rt.clone(),rx));Ok(rt)
  }
  pub fn emit(&self,kind:&str,payload:Value){
@@ -97,6 +98,8 @@ pub async fn process(rt:Arc<Runtime>,e:Event){
  if let Some(reason)=crate::moderation::detect(&rt,&p,&e){rt.log(&p.id,"moderation",reason,"info");if let Err(err)=crate::moderation::act(&rt,&p,&e,reason).await{rt.log(&p.id,"moderation",&err,"error");}return}
  }
  let history=rt.conversation.lock().unwrap().receive(&e);
+ crate::chat_extras::sound(&rt,&p,&e);
+ match crate::chat_extras::response(&rt,&p,&e){Ok(Some(text))=>{if let Err(err)=rt.send(&p,&e,&text).await{rt.log(&p.id,"txt",&err,"error");}return},Err(err)=>{rt.log(&p.id,"txt",&err,"error");return},_=>{}}
  if e.kind=="chat" {
  match modules::chat(&rt,&p,&e) {
  Ok(Some(reply))=>{if let Err(err)=rt.send(&p,&e,&reply).await{rt.log(&p.id,"module",&err,"error");}return},

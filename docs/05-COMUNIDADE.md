@@ -1,5 +1,7 @@
 # Ferramentas de comunidade
 
+O botão **Respostas TXT e sons** permite cadastrar espectadores com apelido e áudio personalizado, ativar/desativar cada pessoa e escolher primeira mensagem ou intervalo. Consulte o [guia completo](RESPOSTAS-E-SONS.md), incluindo a captura do áudio no OBS.
+
 Abra **Comunidade**, confira o perfil e ligue a chave do módulo desejado. Clique no nome do cartão para ver seu painel. Abrir um cartão não ativa o módulo. Desativar conserva os dados; não equivale a cancelar uma operação em andamento.
 
 Os comandos dos participantes funcionam no chat real. A simulação de fluxos não executa jogos, apostas ou concessão de pontos.

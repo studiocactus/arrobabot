@@ -11,7 +11,7 @@ const chapters = [
  ['06-PRESETS-E-APARENCIA.md','Presets e aparência'],['07-OPERACAO-E-BACKUP.md','Acesso e backup'],
  ['API-LOCAL.md','OBS e API local'],['08-SOLUCAO-DE-PROBLEMAS.md','Solução de problemas'],
  ['README.md','Glossário e índice'],['ARQUITETURA.md','Arquitetura'],
- ['DISTRIBUICAO.md','Desenvolvimento'],['VALIDACAO.md','Validação'],['MATRIZ-DE-ACEITE.md','Pendências'],['VARIAVEIS.md','Variáveis'],['ATUALIZACOES.md','Atualizações e commits']
+ ['DISTRIBUICAO.md','Desenvolvimento'],['VALIDACAO.md','Validação'],['MATRIZ-DE-ACEITE.md','Pendências'],['VARIAVEIS.md','Variáveis'],['ATUALIZACOES.md','Atualizações e commits'],['RESPOSTAS-E-SONS.md','Respostas TXT e sons']
 ].map(([file,title],i)=>({file,title,id:'capitulo-'+(i+1)}));
 const escape = s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const tick=String.fromCharCode(96), fence=tick.repeat(3);

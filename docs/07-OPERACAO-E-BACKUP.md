@@ -52,6 +52,8 @@ Copie a pasta inteira; podem existir arquivos auxiliares do SQLite. Não copie a
 
 O backup conserva configurações, histórico retido, notas e estados da comunidade, incluindo operações abertas. Ele não inclui as credenciais do cofre do sistema, nem os dados da prévia de navegador.
 
+Preserve também a pasta **media** para os sons por espectador. Arquivos TXT vinculados externamente precisam de backup separado. Ao mudar de computador ou pasta de dados, vincule os arquivos novamente. Veja os detalhes de [respostas e sons](RESPOSTAS-E-SONS.md).
+
 ## Restaurar no mesmo computador
 
 1. Feche o BotLive.

@@ -1,0 +1,3 @@
+{{user}}, o café está servido!
+Pausa para o café, {{user}}?
+Hoje a energia do canal vem do café!

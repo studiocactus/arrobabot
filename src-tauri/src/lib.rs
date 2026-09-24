@@ -5,6 +5,7 @@ mod vault;
 mod secrets;
 mod ai;
 mod conversation;
+mod chat_extras;
 mod oauth;
 mod engine;
 mod platforms;
@@ -33,6 +34,7 @@ pub async fn dispatch(rt:Arc<Runtime>,op:&str,args:Value)->R<Value>{
  access::guard(&rt,op,&args)?;
  if op.starts_with("access."){return access::operation(&rt,op,&args)}
  let p=args["profileId"].as_str().unwrap_or("").to_owned();
+ if op.starts_with("chatExtras."){return chat_extras::operation(&rt,&p,op,&args)}
  match op{
  "snapshot"=>Ok(json!({"profiles":rt.db.profiles()?.into_iter().filter(|p|access::allowed(&rt,p)).collect::<Vec<_>>(),"logs":rt.db.logs("")?.into_iter().filter(|l|access::current(&rt)=="owner"||rt.db.profile(&l.profile_id).is_ok_and(|p|access::allowed(&rt,&p))).collect::<Vec<_>>(),"statuses":*rt.statuses.lock().unwrap(),"theme":rt.db.get("theme"),"accent":rt.db.get("accent"),"apiPort":*rt.api_port.lock().unwrap(),"dataDir":rt.base.to_string_lossy()})),
  "profile.save"=>{let mut profile:Profile=serde_json::from_value(args["profile"].clone()).map_err(|_|"Perfil inválido")?;if let Ok(previous)=rt.db.profile(&profile.id){if previous.channel!=profile.channel||previous.channel_id!=profile.channel_id||previous.platform!=profile.platform{rt.conversation.lock().unwrap().clear(&profile.id);}if previous.platform!=profile.platform||previous.client_id!=profile.client_id{rt.disconnect(&profile.id);for key in ["bot_token","bot_refresh","channel_token","channel_refresh","bot_expires","channel_expires"]{let _=secrets::set(&profile.id,key,"");}}}profile.blocklist=profile.blocklist.into_iter().map(|s|s.trim().to_owned()).filter(|s|!s.is_empty()).collect();profile.editors=profile.editors.into_iter().map(|s|s.trim().to_lowercase()).filter(|s|!s.is_empty()).collect();profile.topics=profile.topics.into_iter().map(|s|s.trim().to_owned()).filter(|s|!s.is_empty()).collect();vault::root(&rt.base,&profile.id)?;rt.db.save_profile(&profile)?;Ok(json!(profile))},

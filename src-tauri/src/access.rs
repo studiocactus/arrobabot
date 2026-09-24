@@ -8,6 +8,7 @@ pub fn guard(rt:&Runtime,op:&str,args:&Value)->Result<(),String>{
  let actor=current(rt);if actor=="locked"{return Err("SESSION_LOCKED".into())}
  if actor=="owner"{return Ok(())}
  if ["snapshot","presets"].contains(&op){return Ok(())}
+ if matches!(op,"chatExtras.import"|"chatExtras.save"|"chatExtras.reset"){return Err("Somente o proprietário configura arquivos e sons".into())}
  if ["settings","settings.get","update.check","update.install","profile.delete","secret.save","oauth.start","oauth.finish"].contains(&op){return Err("Somente o proprietário pode realizar esta operação".into())}
  let id=args["profileId"].as_str().or(args["profile"]["id"].as_str()).or(args["flow"]["profileId"].as_str()).ok_or("Selecione um perfil autorizado")?;
  let p=rt.db.profile(id)?;if !p.editors.contains(&actor){return Err("Você não tem permissão para editar este perfil".into())}

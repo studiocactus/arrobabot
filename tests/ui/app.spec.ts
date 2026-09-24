@@ -1,4 +1,17 @@
 import {test,expect} from '@playwright/test';
+test('painel TXT e sons permite configurar regras e espectadores com limites claros',async({page})=>{
+ await page.goto('/');await page.getByRole('button',{name:'Criar primeiro bot',exact:true}).click();
+ await page.getByLabel('Nome do perfil',{exact:true}).fill('Arquivos e sons');await page.getByRole('button',{name:'Salvar perfil',exact:true}).click();await page.getByRole('dialog').getByRole('button',{name:'Fechar',exact:true}).click();
+ await page.getByRole('button',{name:'Comandos',exact:true}).click();await page.getByRole('button',{name:'Respostas TXT e sons',exact:true}).click();
+ await page.getByRole('button',{name:'Adicionar resposta TXT',exact:true}).click();await page.getByLabel('Palavra ou expressão',{exact:true}).fill('café');
+ await page.getByRole('combobox',{name:'Escolher resposta',exact:true}).selectOption('sequence');await expect(page.getByRole('button',{name:'Vincular TXT',exact:true})).toBeDisabled();
+ await page.getByRole('button',{name:'Adicionar pessoa',exact:true}).click();await page.getByLabel('Nome no chat',{exact:true}).fill('ana');await page.getByLabel('Apelido',{exact:true}).fill('Aninha');
+ await page.getByRole('combobox',{name:'Quando tocar',exact:true}).selectOption('interval');await page.getByRole('switch',{name:'Ativar sons por espectador',exact:true}).click();
+ await expect(page.getByRole('switch',{name:'Ativar sons por espectador',exact:true})).toHaveAttribute('aria-checked','true');
+ await expect(page.getByRole('button',{name:'Salvar respostas e sons',exact:true})).toBeDisabled();
+ await page.screenshot({path:'artifacts/txt-and-viewer-sounds.png',fullPage:true});
+ await page.getByRole('button',{name:'Remover pessoa',exact:true}).click();await expect(page.getByLabel('Nome no chat',{exact:true})).toHaveCount(0);
+});
 test('resenha com IA cria geração antes do envio e variável por nome',async({page})=>{
  await page.goto('/');
  await page.getByRole('button',{name:'Criar primeiro bot',exact:true}).click();
