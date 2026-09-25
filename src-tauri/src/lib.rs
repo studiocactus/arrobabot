@@ -57,7 +57,7 @@ pub async fn dispatch(rt:Arc<Runtime>,op:&str,args:Value)->R<Value>{
  },
  "command.counters"=>command_counter::list(&rt.db,&p),
  "command.counter.set"=>{let id=args["id"].as_str().ok_or("Comando ausente")?;let value=args["value"].as_i64().ok_or("Informe um número inteiro")?;let count=command_counter::change(&rt.db,&p,id,Some(value))?;rt.emit("command-counter",json!({"profileId":p,"id":id,"value":count}));Ok(json!(count))},
- "timer.preview"=>{let f=rt.db.flows(&p)?.into_iter().find(|f|f.id==args["id"].as_str().unwrap_or("")&&f.trigger.kind=="timer").ok_or("Timer não encontrado")?;rt.submit(Event{id:uuid::Uuid::new_v4().to_string(),profile_id:p,kind:"timer".into(),user:"BotLive".into(),user_id:String::new(),role:"broadcaster".into(),message:String::new(),data:json!({"timerId":f.id}),simulated:true}).await?;Ok(Value::Null)},
+ "timer.preview"=>{let f=rt.db.flows(&p)?.into_iter().find(|f|f.id==args["id"].as_str().unwrap_or("")&&f.trigger.kind=="timer").ok_or("Timer não encontrado")?;rt.submit(timers::event(&f,true)).await?;Ok(Value::Null)},
  "flows"=>Ok(json!(rt.db.flows(&p)?)),
  "variables.list"=>{let profile=rt.db.profile(&p)?;let user=args["userId"].as_str().unwrap_or("");let key=if user.is_empty(){String::new()}else{format!("{}:{user}",profile.platform)};variables::list(&rt.db,&p,&key)},
  "variables.change"=>{let profile=rt.db.profile(&p)?;variables::mutate(&rt.db,&p,&profile.platform,args["userId"].as_str().unwrap_or(""),args["target"].as_str().ok_or("Variável ausente")?,args["operation"].as_str().unwrap_or("set"),args["value"].clone())},
@@ -66,6 +66,8 @@ pub async fn dispatch(rt:Arc<Runtime>,op:&str,args:Value)->R<Value>{
  let mut e:Event=serde_json::from_value(args["event"].clone()).map_err(|_|"Evento inválido")?;
  e.profile_id=p.clone();e.simulated=true;
  let flow:Option<Flow>=args.get("flow").filter(|v|!v.is_null()).map(|v|serde_json::from_value(v.clone())).transpose().map_err(|_|"Fluxo inválido")?;
+ // A prévia entrega o evento que o gatilho produz na prática, não o dado de teste.
+ if let Some(f)=flow.as_ref(){e=model::preview_event(f,e);}
  let mut context=variables::Context::new(&rt.db,&profile,&e,flow.as_ref())?;
  let mut steps=vec![];
  if let Some(f)=flow {validate_flow(&f)?;for a in &f.actions {if !a.condition.is_empty()&&!e.message.to_lowercase().contains(&a.condition.to_lowercase()){continue}if a.kind=="script"{steps.push(json!({"kind":"script","text":"Script não executado na prévia"}));continue}let text=if a.kind=="variable.delete"{String::new()}else{context.render(&a.text)?};if a.kind.starts_with("variable."){context.change(&rt.db,&profile,&e,&a.target,a.kind.trim_start_matches("variable."),variables::typed(&text))?;}if matches!(a.kind.as_str(),"ai"|"ai.generate"){ai::save_response(&mut context,&rt,&profile,&e,a,"[Prévia: resposta contextual da IA]",false)?;}steps.push(json!({"kind":a.kind,"text":text}));}}

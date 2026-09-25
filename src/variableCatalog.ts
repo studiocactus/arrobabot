@@ -5,6 +5,7 @@ export const variableCatalog:VariableChoice[]=[
  {key:'local.aiSuccess',label:'IA respondeu com sucesso?',group:'IA',example:'false quando usou a alternativa ou uma prévia'},
  {key:'user',label:'Nome da pessoa',group:'Pessoa',example:'Ana'},
  {key:'userId',label:'Identificador da pessoa',group:'Pessoa'},
+ {key:'randomViewer',label:'Nome sorteado no chat',group:'Pessoa',example:'Ana'},
  {key:'role',label:'Papel no chat',group:'Pessoa',example:'subscriber'},
  {key:'isModerator',label:'É moderador ou streamer?',group:'Pessoa'},
  {key:'isBroadcaster',label:'É o streamer?',group:'Pessoa'},

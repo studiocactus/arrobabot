@@ -31,9 +31,13 @@ export function VariableHelp({profileId,text,onInsert,flow}:{profileId:string;te
  {error&&<p role="alert" className="inline-error">{error}</p>}
  <details className="variable-test"><summary>Testar como a mensagem vai ficar</summary>
  <h4>Conferir sem executar ações</h4><p className="help">{flow?'Calcula as ações de variável e os textos na ordem do fluxo.':'Resolve o conteúdo com os dados de teste.'} A prévia não envia mensagens nem grava variáveis. Scripts e serviços externos não são executados.</p>
+ {flow?.trigger.kind==='timer'
+  ?<p className="help">Este timer dispara sozinho, sem alguém enviando mensagem. A prévia usa o mesmo evento do disparo real: remetente BotLive, papel de streamer, sem ID de pessoa e sem mensagem de chat. Para citar alguém, use <code>{'{{randomViewer|default:alguém}}'}</code> — o nome é sorteado a cada conferência.</p>
+  :<>
  <Field label="Mensagem de teste"><input value={message} onChange={e=>setMessage(e.target.value)}/></Field>
  <Field label="Nome de teste"><input value={user} onChange={e=>setUser(e.target.value)}/></Field>
  <details><summary>Dados avançados do teste</summary><Field label="ID do usuário de teste"><input value={userId} onChange={e=>setUserId(e.target.value)}/></Field><Field label="Dados do evento (JSON)"><textarea rows={2} value={data} onChange={e=>setData(e.target.value)}/></Field></details>
+  </>}
  <button type="button" disabled={!desktop||busy} onClick={()=>void preview()}>{busy?'Calculando…':'Conferir variáveis'}</button>{!desktop&&<p className="help">Abra o aplicativo desktop para calcular a prévia com o motor real.</p>}
  {result&&<div aria-live="polite"><h4>Resultado</h4><pre className="variable-output">{flow?result.steps.map((s,i)=>`${i+1}. ${s.kind}: ${s.text}`).join('\n'):result.text}</pre><details><summary>Inspecionar valores disponíveis</summary><pre className="variable-output">{JSON.stringify(result.variables,null,2)}</pre></details></div>}</details>
  </details>

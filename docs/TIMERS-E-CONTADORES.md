@@ -41,7 +41,7 @@ O intervalo é aproximado: fila de eventos, espaçamento de mensagens e serviço
 
 Na resposta, use **Nome do canal**, data ou horário pelo catálogo de variáveis. Exemplo: São {{time}} no canal {{channel}}. Hora de beber água!
 
-Um timer não representa um espectador: o nome do evento é BotLive, o ID da pessoa e a mensagem recebida ficam vazios. Não use variáveis salvas por pessoa ou parâmetros de comando nesse contexto. Para combinar ações, edite o timer em **Automações**. O gatilho é **Timer periódico**; as ações seguem as mesmas regras dos demais fluxos.
+Um timer não representa um espectador: o nome do evento é BotLive, o ID da pessoa e a mensagem recebida ficam vazios. Não use variáveis salvas por pessoa ou parâmetros de comando nesse contexto. Para citar alguém, use `{{randomViewer|default:alguém}}`, que sorteia um nome entre quem já falou no chat; sem ninguém no cadastro, a alternativa é publicada. A prévia do timer mostra exatamente esse evento — remetente BotLive, sem ID e sem mensagem — em vez dos dados de teste, e por isso não apresenta campos de mensagem ou de nome. Para combinar ações, edite o timer em **Automações**. O gatilho é **Timer periódico**; as ações seguem as mesmas regras dos demais fluxos.
 
 ## Receita: contador de mortes
 

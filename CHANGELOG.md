@@ -1,5 +1,41 @@
 # Histórico de atualizações
 
+# BotLive 0.1.10
+
+## O que mudou
+
+A prévia de variáveis deixou de mostrar um resultado que a produção não entrega. O editor enviava sempre o mesmo evento de teste — `kind:'chat'`, nome "Ana" e ID "test-user" — e o núcleo o usava como estava, sem olhar o gatilho do fluxo. Um timer conferido na prévia mostrava `{{user}}` como Ana e `{{userId}}` como `test-user`, enquanto o disparo real monta `kind:'timer'`, remetente `BotLive`, papel `broadcaster`, ID vazio e mensagem vazia. Quem testava antes da live recebia exatamente o oposto do que seria publicado. O endpoint `variables.preview` agora passa o evento por `model::preview_event`, que entrega o que o gatilho produz: para **Timer periódico**, o mesmo construtor de `timers.rs`, incluindo `timerId` e `timerRevision` em `data`; para **Comando de voz**, a voz local do streamer (`local-streamer`); para **Comando de chat** e **Mensagem contém**, um evento de chat cuja mensagem começa pelo texto que dispara, para `{{command}}`, `{{rawInput}}` e `{{argN}}` calcularem sobre o comando de verdade; para os demais gatilhos, o tipo de evento escolhido, como `follow` ou `redemption`. Os campos de teste continuam valendo nos gatilhos em que a produção não os determina.
+
+O botão **Simular timer** refez o evento à mão em um terceiro lugar e ficava sem `timerRevision`; ele e a prévia agora usam a mesma construção, `timers::event`.
+
+Os campos de teste de mensagem, nome, ID e JSON deixaram de aparecer quando o gatilho é timer, porque aquele evento não tem esses valores: no lugar entra uma explicação do que a prévia está usando. Para isso, o diálogo de comando, o de timer e o editor visual passaram a mandar o fluxo aberto para o editor de mensagem — antes só o editor visual fazia isso. A prévia do editor simples calcula, portanto, as ações na ordem, as condições e as variáveis locais do fluxo, como o editor visual já fazia.
+
+Também entrou `{{randomViewer}}`, um marcador que sorteia um nome entre quem já falou no chat do perfil. Ele existe justamente para mensagens que não têm pessoa associada, como o timer que quer citar um espectador. A fonte é o mesmo cadastro que os comandos de pontos, fila e transferência já usam (`community.names`, gravado a cada mensagem recebida no SQLite e apagado junto com o perfil), exposto por `modules::random_chatter`. O sorteio acontece uma vez no início de cada execução, então todas as ações do mesmo disparo citam a mesma pessoa e o próximo disparo escolhe outra. Quando ninguém falou ainda, o marcador é variável ausente e interrompe a ação com a mensagem no Histórico, em vez de publicar um texto com um buraco no meio — é a regra já documentada para variáveis ausentes.
+
+## Como usar
+
+Para um timer que cita alguém, escreva na resposta `Minecraft — {{randomViewer|default:alguém}}, quer jogar com a gente? Nosso servidor funciona 24/7.` O `|default:alguém` cobre os primeiros minutos da live, quando ainda não há ninguém no cadastro; sem ele, a ação é interrompida e o motivo aparece no Histórico. O marcador está no catálogo, categoria **Pessoa**, com o rótulo **Nome sorteado no chat**. Em mensagens disparadas por uma pessoa, continue usando `{{user}}`, que é o nome de quem falou.
+
+Para conferir antes da live, abra o timer ou o comando, expanda **Inserir variável e testar mensagem**, abra **Testar como a mensagem vai ficar** e clique em **Conferir variáveis** no aplicativo desktop. Num timer não há campos de teste: o aviso explica que a prévia usa o evento do disparo real, e o resultado mostra `BotLive` em `{{user}}`, vazio em `{{userId}}` e `timer` em `{{eventType}}`. Num comando, a mensagem de teste passa a começar pelo comando do fluxo, e o resultado é apresentado como a lista de ações na ordem, igual ao editor visual.
+
+Os capítulos atualizados foram **Variáveis**, com o catálogo e a receita completa, **Timers e contadores**, com o comportamento do gatilho, e **Exemplos de uso**, com a linha pronta do timer Minecraft.
+
+## Validação
+
+Executado localmente: `npm run check` (TypeScript), `npm test` (11 testes Vitest), `npm run test:updates` (7 testes), `npx playwright test` (10 testes), `cargo test --locked --lib -j 1` (54 testes Rust), `npm run build` e `npm run docs` (manual de 21 capítulos), com o Playwright reexecutado depois da geração do manual. `npm run update:check` confere as versões e os registros antes do commit.
+
+Três testes novos cobrem a correção. No Rust, `model::tests::preview_event_follows_the_trigger` verifica o evento de timer (BotLive, sem ID, mensagem vazia, `simulated` preservado), de comando (`!minecraft` no lugar do `!oi` de teste), de contém, de voz e de seguidor. `integration_tests::timer_preview_delivers_the_real_event_and_sorts_a_chatter` verifica o fim a fim: com o cadastro vazio, `{{randomViewer}}` é ausente e `{{randomViewer|default:alguém}}` publica "alguém"; depois de uma mensagem recebida, o sorteio devolve "Ana"; e a prévia do fluxo com os dados de teste de chat devolve `BotLive||timer`. No Vitest, `variableCatalog.test.ts` confirma que `{{randomViewer}}` é rotulado no catálogo. No Playwright, `tests/ui/timers.spec.ts` abre a prévia de um timer e confere que a explicação do evento real está visível, que os campos de teste não existem e que **Conferir variáveis** continua desabilitado na versão web.
+
+## Limitações
+
+O cadastro é de quem **escreveu** no chat: quem só assiste sem mandar mensagem não entra nele, e mensagens simuladas também não entram. O sorteio é entre todos os nomes do cadastro do perfil, sem limite de idade nem peso — quem falou há três lives tem a mesma chance de quem falou agora — e não há garantia de não repetir a mesma pessoa em disparos consecutivos. Apagar o perfil apaga o cadastro junto, porque a tabela é apagada em cascata.
+
+O vazio de `{{userId}}` num timer continua não interrompendo a ação: a variável existe no contexto, só chega como string vazia, e é isso que a prévia agora mostra. Quem quiser falhar alto em mensagem automática deve usar `{{randomViewer}}`, que é ausente de verdade quando não há valor, ou informar `|default:`. Nenhuma mensagem real foi publicada em chat durante a validação: os testes de integração usam o motor com publicação desligada e a prévia não envia nada, e a conferência no aplicativo desktop não foi executada porque exige um perfil conectado.
+
+A prévia continua sendo cálculo, não execução: scripts e serviços externos não rodam, e o resultado depende do estado atual do cadastro, então o nome sorteado muda a cada conferência. O botão **Conferir variáveis** segue desabilitado fora do aplicativo desktop, e o teste automatizado cobre a interface nesse estado, não o cálculo do motor no navegador.
+
+---
+
 # BotLive 0.1.9
 
 ## O que mudou

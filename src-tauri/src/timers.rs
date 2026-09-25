@@ -15,6 +15,8 @@ impl Schedule{
 }
 pub fn active(rt:&Runtime,f:&Flow)->bool{f.enabled&&f.trigger.kind=="timer"&&rt.statuses.lock().unwrap().get(&f.profile_id).is_some_and(|s|s=="online")}
 pub fn revision(f:&Flow)->String{use sha2::Digest;format!("{:x}",sha2::Sha256::digest(serde_json::to_vec(f).unwrap()))}
+/// Evento entregue quando o intervalo vence: dispara sozinho, sem pessoa que tenha enviado mensagem.
+pub fn event(f:&Flow,simulated:bool)->Event{Event{id:uuid::Uuid::new_v4().to_string(),profile_id:f.profile_id.clone(),kind:"timer".into(),user:"BotLive".into(),user_id:String::new(),role:"broadcaster".into(),message:String::new(),data:json!({"timerId":f.id,"timerRevision":revision(f)}),simulated}}
 pub fn event_active(rt:&Runtime,e:&Event)->bool{rt.db.flows(&e.profile_id).unwrap_or_default().iter().any(|f|e.data["timerId"]==f.id&&e.data["timerRevision"]==revision(f)&&active(rt,f))}
 pub async fn run(rt:Arc<Runtime>){
  let mut schedule=Schedule::default();let mut tick=tokio::time::interval(Duration::from_secs(1));
@@ -22,8 +24,7 @@ pub async fn run(rt:Arc<Runtime>){
   let flows:Vec<_>=rt.db.profiles().unwrap_or_default().iter().flat_map(|p|rt.db.flows(&p.id).unwrap_or_default()).filter(|f|active(&rt,f)).collect();
   for f in schedule.due(&flows,Instant::now()){
    if !rt.timer_pending.lock().unwrap().insert(f.id.clone()){continue}
-   let event=Event{id:uuid::Uuid::new_v4().to_string(),profile_id:f.profile_id.clone(),kind:"timer".into(),user:"BotLive".into(),user_id:String::new(),role:"broadcaster".into(),message:String::new(),data:json!({"timerId":f.id,"timerRevision":revision(&f)}),simulated:false};
-   if rt.tx.try_send(event).is_err(){rt.timer_pending.lock().unwrap().remove(&f.id);rt.log(&f.profile_id,"timer","Fila ocupada; este disparo foi pulado. O próximo respeitará o intervalo.","info");}
+   if rt.tx.try_send(event(&f,false)).is_err(){rt.timer_pending.lock().unwrap().remove(&f.id);rt.log(&f.profile_id,"timer","Fila ocupada; este disparo foi pulado. O próximo respeitará o intervalo.","info");}
   }
  }
 }

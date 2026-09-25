@@ -26,6 +26,8 @@ A leitura com etiquetas serve para entender a composição; não é o resultado 
 
 Abra **Testar como a mensagem vai ficar**, informe mensagem e nome de teste e clique em **Conferir variáveis** no aplicativo desktop. O resultado mostra o texto calculado e os valores disponíveis. **Dados avançados do teste** reúne ID da pessoa e JSON do evento, para quem precisa desses detalhes. No editor visual, a prévia percorre a sequência conectada e calcula as ações de variável sem executar serviços ou gravar mudanças.
 
+Quando o fluxo tem gatilho, a prévia entrega o evento que aquele gatilho produz na prática e não os dados de teste: em um timer, remetente BotLive, papel de streamer, sem ID de pessoa e sem mensagem de chat, por isso os campos de teste não aparecem. Nos gatilhos de comando e mensagem contém, a mensagem de teste passa a começar pelo texto que dispara. Nos demais, os campos de teste continuam valendo.
+
 ## Sintaxe e compatibilidade
 
 O formato recomendado é `{{nome}}`. Os marcadores antigos `$user`, `$message` e `$channel` continuam funcionando. Também é possível usar `$userId`, `$arg0` e outros nomes simples disponíveis. O formato `%userName%` aceita nomes simples como alternativa familiar a quem usa Streamer.bot.
@@ -40,6 +42,7 @@ Para escrever marcadores literalmente, acrescente uma barra invertida: `\{{user}
 |---|---|
 | {{user}} / {{userName}} | Nome exibido de quem disparou |
 | {{userId}} | ID da pessoa informado pelo evento |
+| {{randomViewer}} | Nome sorteado entre quem já falou no chat; ausente se ninguém falou |
 | {{role}} | everyone, subscriber, moderator ou broadcaster |
 | {{isModerator}} | true para moderador ou streamer |
 | {{isBroadcaster}} | true para streamer |
@@ -62,6 +65,8 @@ Para escrever marcadores literalmente, acrescente uma barra invertida: `\{{user}
 | {{lf}} | Quebra de linha |
 
 Data e hora são capturadas no início de cada fluxo. Os argumentos são separados por espaços em branco: aspas não agrupam várias palavras. Para eventos sem texto, command/rawInput ficam vazios e argCount é zero. Nem todo evento possui usuário; um ID vazio impede gravar variáveis por pessoa.
+
+O gatilho define o que existe. Um timer dispara sozinho e entrega remetente BotLive, papel de streamer, `{{userId}}` vazio e `{{message}}` vazio; `{{user}}` mostra BotLive, não alguém do chat. Um comando de chat entrega a pessoa que digitou. A prévia monta exatamente esse evento, então o resultado mostrado é o que será publicado.
 
 ## Dados específicos do evento
 
@@ -146,6 +151,18 @@ Configure os intervalos para evitar repetições. Abra a prévia e informe sempr
 Crie um comando !saudar com resposta `Olá, {{arg0|default:comunidade|upper}}! Mensagem de {{user}} no canal {{channel}}.`. Para !saudar Ana, o primeiro argumento é Ana. Para !saudar sem argumentos, o padrão é comunidade.
 
 Para uma mensagem longa após o comando, use rawInput em vez de arg0. Exemplo: `Você sugeriu: {{rawInput|default:nenhuma sugestão}}`.
+
+## Receita: citar um espectador numa mensagem automática
+
+`{{randomViewer}}` sorteia um nome entre quem já falou no chat do perfil. Ele existe justamente para mensagens que não têm pessoa associada, como timers.
+
+1. Em **Timers → Novo timer**, nome Minecraft, repetir a cada 600 segundos.
+2. Na resposta, escreva: `Minecraft — {{randomViewer|default:alguém}}, quer jogar com a gente? Nosso servidor funciona 24/7.`
+3. Salve e confira em **Testar como a mensagem vai ficar**: a prévia usa o mesmo evento do disparo real.
+
+O cadastro de nomes é preenchido a cada mensagem recebida do chat e é apagado junto com o perfil. Sem ninguém no cadastro, `{{randomViewer}}` é variável ausente e interrompe a ação com a mensagem no Histórico, por isso o `|default:alguém` é recomendável em automações que rodam no começo da live. O nome é sorteado uma vez no início de cada execução: todas as ações do mesmo disparo citam a mesma pessoa e o próximo disparo escolhe outra. Mensagens simuladas não entram no cadastro.
+
+Em mensagens disparadas por uma pessoa, continue usando `{{user}}`, que é o nome de quem falou.
 
 ## Onde os modelos funcionam
 

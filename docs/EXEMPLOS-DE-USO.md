@@ -16,6 +16,7 @@ Cada exemplo mostra **onde configurar**, **o que usar** e **o resultado esperado
 | Cumprimentar quem pede | Comandos → Novo comando | !oi → Olá, {{user}}! Bem-vindo ao canal {{channel}}. | Ana escreve !oi e recebe uma saudação com seu nome |
 | Compartilhar redes | Comandos → Novo comando | !redes → Nossas redes: coloque aqui seus links públicos. | O chat recebe os links cadastrados |
 | Repetir um lembrete | Timers → Novo timer | Nome: Água; intervalo: 900; resposta: Hora de beber água! | Publica aproximadamente a cada 15 minutos, enquanto conectado |
+| Citar um espectador no lembrete | Timers → Novo timer | Nome: Minecraft; intervalo: 600; resposta: {{randomViewer\|default:alguém}}, quer jogar com a gente? | Sorteia um nome entre quem já falou no chat; sem ninguém, publica "alguém" |
 | Contar mortes | Novo comando → Contar usos deste comando | !mortes → Mortes registradas: {{commandCount}}. | Cada uso autorizado soma um ao total de !mortes |
 | Contar vitórias separadamente | Outro comando com contador | !vitorias → Vitórias: {{commandCount}}. | Usa um total independente de !mortes |
 | Corrigir o placar | Lista de comandos → número · Ajustar | Novo total: 7 | O próximo uso aceito mostra 8 |

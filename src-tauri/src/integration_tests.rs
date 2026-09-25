@@ -303,3 +303,22 @@ async fn variable_sequence_simulation_preview_and_permissions(){
  *rt.actor.lock().unwrap()="mod".into();assert!(dispatch(rt.clone(),"variables.list",json!({"profileId":other.id})).await.is_err());assert!(dispatch(rt.clone(),"variables.change",json!({"profileId":p.id,"target":"global.count","value":8})).await.is_ok());
  *rt.actor.lock().unwrap()="locked".into();assert!(dispatch(rt.clone(),"variables.preview",json!({"profileId":p.id})).await.is_err());
 }
+#[tokio::test]
+async fn timer_preview_delivers_the_real_event_and_sorts_a_chatter(){
+ let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();let p=profile("Prévia do timer");rt.db.save_profile(&p).unwrap();
+ let mut f=flow(&p);f.name="Minecraft".into();f.trigger.kind="timer".into();f.trigger.pattern.clear();f.trigger.cooldown=0;f.trigger.user_cooldown=0;f.actions=vec![Action{kind:"chat".into(),text:"{{user}}|{{userId}}|{{eventType}}".into(),target:String::new(),value:0,condition:String::new()}];
+ let ev=event(&p,"!minecraft Ana",true);
+ // Sem ninguém no cadastro o sorteio não existe: a ação interrompe e orienta o uso do padrão.
+ let ctx=variables::Context::new(&rt.db,&p,&ev,Some(&f)).unwrap();
+ assert!(ctx.render("{{randomViewer}}").is_err());
+ assert_eq!(ctx.render("{{randomViewer|default:alguém}}").unwrap(),"alguém");
+ // Quem fala no chat entra no cadastro e passa a ser sorteável.
+ engine::process(rt.clone(),event(&p,"Olá a todos",false)).await;
+ let ctx=variables::Context::new(&rt.db,&p,&ev,Some(&f)).unwrap();
+ assert_eq!(ctx.render("{{randomViewer}}").unwrap(),"Ana");
+ // A prévia entrega o disparo real do timer, e não os dados de teste do chat.
+ let preview=dispatch(rt.clone(),"variables.preview",json!({"profileId":p.id,"flow":f,"event":ev})).await.unwrap();
+ assert_eq!(preview["steps"][0]["text"],"BotLive||timer");
+ assert_eq!(preview["variables"]["user"],"BotLive");
+ assert_eq!(preview["variables"]["userId"],"");
+}

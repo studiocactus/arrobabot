@@ -16,4 +16,8 @@ describe('edição de mensagens com variáveis',()=>{
   expect(p.filter(v=>v.label).map(v=>v.label)).toEqual(['Nome da pessoa','Nome do canal','Nome da pessoa']);
   expect(p.map(v=>v.text).join('')).toBe('Olá, {{user|upper}}! $channel %userName% \\{{user}} $unknown');
  });
+ it('cataloga o nome sorteado para mensagens sem pessoa no evento',()=>{
+  const p=messageParts('Boa live, {{randomViewer}}!');
+  expect(p.filter(v=>v.label).map(v=>v.label)).toEqual(['Nome sorteado no chat']);
+ });
 });

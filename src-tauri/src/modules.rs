@@ -27,6 +27,12 @@ pub struct Community {
 #[derive(Default,Clone,Serialize,Deserialize)] pub struct Raffle {pub open:bool,pub keyword:String,pub price:i64,pub entries:BTreeMap<String,i64>,#[serde(default)] pub weights:BTreeMap<String,i64>,pub winner:String}
 #[derive(Default,Clone,Serialize,Deserialize)] pub struct Prediction {pub open:bool,pub title:String,pub options:Vec<String>,pub bets:BTreeMap<String,(usize,i64)>,pub result:Option<usize>}
 pub fn load(rt:&Runtime,p:&str)->Community {serde_json::from_value(rt.db.module(p,"community")).unwrap_or_default()}
+/// Sorteia um nome entre quem já falou no chat deste perfil. Sem ninguém no cadastro, não há valor.
+pub fn random_chatter(db:&crate::db::Db,p:&str)->Option<String>{
+ let state:Community=serde_json::from_value(db.module(p,"community")).unwrap_or_default();
+ let names:Vec<&String>=state.names.values().filter(|n|!n.trim().is_empty()).collect();
+ if names.is_empty(){None}else{Some(names[rand::thread_rng().gen_range(0..names.len())].clone())}
+}
 fn balance(s:&mut Community,u:&str,delta:i64)->Result<i64,String>{
  let v=s.balances.entry(u.into()).or_default();let next=v.checked_add(delta).filter(|n|*n>=0).ok_or("Saldo insuficiente ou valor inválido")?;*v=next;Ok(next)
 }

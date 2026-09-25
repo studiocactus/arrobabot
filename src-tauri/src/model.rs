@@ -92,6 +92,25 @@ pub fn matches(t:&Trigger,e:&Event)->bool {
  other=>other==e.kind,
  }
 }
+pub fn preview_event(f:&Flow,e:Event)->Event {
+ match f.trigger.kind.as_str() {
+ "timer"=>crate::timers::event(f,true),
+ "voice"=>Event{kind:"voice".into(),user:"streamer".into(),user_id:"local-streamer".into(),role:"broadcaster".into(),..e},
+ "command" if !f.trigger.pattern.is_empty()=>{
+  let words:Vec<&str>=e.message.split_whitespace().collect();
+  let rest:&[&str]=if words.first().is_some_and(|w|w.starts_with('!')){&words[1..]}else{&words[..]};
+  let message=std::iter::once(f.trigger.pattern.as_str()).chain(rest.iter().copied()).collect::<Vec<_>>().join(" ");
+  Event{kind:"chat".into(),message,..e}
+ },
+ "contains" if !f.trigger.pattern.is_empty()=>{
+  let message=if e.message.to_lowercase().contains(&f.trigger.pattern.to_lowercase()){e.message}
+   else if e.message.trim().is_empty(){f.trigger.pattern.clone()}
+   else{format!("{} {}",e.message.trim(),f.trigger.pattern)};
+  Event{kind:"chat".into(),message,..e}
+ },
+ kind=>Event{kind:kind.into(),..e},
+ }
+}
 pub fn validate_flow(f:&Flow)->Result<(),String> {
  if f.trigger.kind=="timer"&&!(30..=86400).contains(&f.timer_seconds){return Err("Timer: escolha de 30 segundos a 24 horas".into())}
  if f.counter&&f.trigger.kind!="command"{return Err("O contador individual é exclusivo de comandos".into())}
@@ -117,5 +136,20 @@ pub fn validate_flow(f:&Flow)->Result<(),String> {
  assert!(matches(&t,&e()));t.pattern="!o".into();assert!(!matches(&t,&e()));
  t.pattern="!oi".into();t.permission="moderator".into();assert!(!matches(&t,&e()));
  assert!(permitted("moderator","broadcaster"));assert!(!permitted("broadcaster","moderator"));
+ }
+ #[test] fn preview_event_follows_the_trigger() {
+  let mut f=Flow{counter:false,timer_seconds:300,id:"f".into(),profile_id:"p".into(),name:"Minecraft".into(),enabled:true,trigger:Trigger{kind:"timer".into(),pattern:String::new(),permission:"everyone".into(),cooldown:0,user_cooldown:0},actions:vec![],layout:Value::Null};
+  let t=preview_event(&f,e());
+  assert_eq!((t.kind.as_str(),t.user.as_str(),t.user_id.as_str(),t.message.as_str(),t.simulated),("timer","BotLive","","",true));
+  f.trigger.kind="command".into();f.trigger.pattern="!minecraft".into();
+  let t=preview_event(&f,e());
+  assert_eq!((t.kind.as_str(),t.message.as_str()),("chat","!minecraft tudo bem"));
+  f.trigger.kind="contains".into();f.trigger.pattern="minecraft".into();
+  assert_eq!(preview_event(&f,e()).message,"!oi tudo bem minecraft");
+  f.trigger.kind="voice".into();f.trigger.pattern.clear();
+  let t=preview_event(&f,e());
+  assert_eq!((t.kind.as_str(),t.user_id.as_str(),t.message.as_str()),("voice","local-streamer","!oi tudo bem"));
+  f.trigger.kind="follow".into();
+  assert_eq!(preview_event(&f,e()).kind,"follow");
  }
 }

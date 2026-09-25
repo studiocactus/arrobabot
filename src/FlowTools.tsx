@@ -38,7 +38,7 @@ export function FlowDialog({flow,mode,profile,notify,onSaved,onClose}:{flow:Flow
    <Field label="Nome"><input required value={editing.name} onChange={e=>setEditing({...editing,name:e.target.value})}/></Field>
    {mode!=='timer'&&<Field label="Comando"><input required pattern="![^\s]+" value={editing.trigger.pattern} onChange={e=>setEditing({...editing,trigger:{...editing.trigger,pattern:e.target.value}})}/></Field>}
   </div>
-  <MessageEditor profileId={profile.id} label="Resposta" required value={editing.actions[0].text} onChange={text=>setEditing({...editing,actions:[{...editing.actions[0],text}]})}/>
+  <MessageEditor profileId={profile.id} label="Resposta" required flow={editing} value={editing.actions[0].text} onChange={text=>setEditing({...editing,actions:[{...editing.actions[0],text}]})}/>
   <CommandOptions timer={mode==='timer'} seconds={editing.timerSeconds??300} counter={!!editing.counter} onSeconds={timerSeconds=>setEditing({...editing,timerSeconds})} onCounter={counter=>setEditing({...editing,counter})}/>
   {editing.counter&&<button type="button" onClick={()=>setEditing({...editing,actions:[{...editing.actions[0],text:editing.actions[0].text+'{{commandCount}}'}]})}>+ Contagem do comando</button>}
   {mode!=='timer'&&<div className="form-grid">
