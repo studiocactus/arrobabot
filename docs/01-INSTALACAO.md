@@ -49,6 +49,8 @@ Antes de trocar a versão, feche o aplicativo e faça [backup](07-OPERACAO-E-BAC
 
 A verificação interna de atualizações depende de um endereço de manifesto e de uma chave pública fornecidos pelo distribuidor. Não existe um feed público pronto nesta entrega.
 
+Para atualizar pelo instalador, rode o `.exe` da versão nova por cima da versão instalada. A opção padrão é **não desinstalar**: o executável é substituído no lugar, os atalhos existentes apenas têm o alvo atualizado e o BotLive continua fixado na barra de tarefas. Quando já existe uma instalação, o instalador mostra uma página com as duas escolhas; **desinstalar antes de instalar** apaga também os atalhos e a fixação na barra de tarefas e deve ser usada só quando você quiser começar do zero.
+
 Para desinstalar, use o recurso de aplicativos instalados do Windows. A remoção do programa e a exclusão dos dados são operações diferentes; confira a pasta de dados se quiser conservar ou remover seu espaço.
 
 ## Estado dos pacotes

@@ -11,6 +11,8 @@ test('painel TXT e sons permite configurar regras e espectadores com limites cla
  await expect(page.getByRole('switch',{name:'Ativar sons por espectador',exact:true})).toHaveAttribute('aria-checked','true');
  await expect(page.getByRole('button',{name:'Salvar respostas e sons',exact:true})).toBeDisabled();
  await page.screenshot({path:'artifacts/txt-and-viewer-sounds.png',fullPage:true});
+ await page.getByRole('button',{name:'Recolher todos',exact:true}).first().click();await expect(page.getByLabel('Palavra ou expressão',{exact:true})).toHaveCount(1);await expect(page.locator('.item-toggle').first()).toHaveAttribute('aria-expanded','false');await expect(page.locator('.item-body').first()).toHaveAttribute('inert');await expect.poll(async()=>page.locator('.item').first().evaluate(el=>el.offsetHeight)).toBeLessThan(120);
+ await page.getByRole('button',{name:'Expandir todos',exact:true}).first().click();await expect(page.locator('.item-toggle').first()).toHaveAttribute('aria-expanded','true');await expect(page.locator('.item-body').first()).not.toHaveAttribute('inert');await expect(page.getByLabel('Palavra ou expressão',{exact:true})).toBeVisible();await expect.poll(async()=>page.locator('.item').first().evaluate(el=>el.offsetHeight)).toBeGreaterThan(300);
  await page.getByRole('button',{name:'Remover pessoa',exact:true}).click();await expect(page.getByLabel('Nome no chat',{exact:true})).toHaveCount(0);
 });
 test('resenha com IA cria geração antes do envio e variável por nome',async({page})=>{

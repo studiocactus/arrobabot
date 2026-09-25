@@ -62,6 +62,8 @@ No ambiente preparado desta entrega, node .tools/run.cjs run package configura o
 
 No Windows, os caminhos padrão são src-tauri/target/release/botlive.exe e src-tauri/target/release/bundle. A configuração atual gera MSI e NSIS.
 
+O NSIS usa um template próprio, `src-tauri/installer.nsi`, apontado por `bundle.windows.nsi.template`, e um arquivo de hooks, `src-tauri/installer-hooks.nsh`, apontado por `bundle.windows.nsi.installerHooks`. O template é uma cópia da `installer.nsi` da tauri-bundler 2.11.5 com o patch marcado como "BotLive patch": durante uma atualização a opção padrão da página de reinstalação passou a ser não desinstalar, porque a desinstalação apaga o executável, remove os atalhos e chama `UnpinShortcut` (`IStartMenuPinnedList::RemoveFromList`), o que tira o aplicativo da barra de tarefas do Windows. Ao atualizar o `@tauri-apps/cli`, baixe a `installer.nsi` da tag correspondente, reaplique cada trecho marcado e compile com `npm run tauri build -- --bundles nsis`. Os hooks são inseridos depois da página de reinstalação e não conseguem impedir a desinstalação: a correção está no template, e o hook existe só para regenerar o cache de ícones com `ie4uinit.exe -show`.
+
 A configuração usa um job para reduzir consumo de memória. Limitações de paginação já afetaram builds paralelos neste computador; uma primeira compilação nativa pode levar bastante tempo.
 
 ## Cuidados ao alterar o núcleo

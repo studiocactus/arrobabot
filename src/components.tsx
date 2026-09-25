@@ -1,5 +1,5 @@
 import {useEffect,useRef,type ReactNode} from 'react';
-import {X,ArrowUpRight,Inbox,LoaderCircle} from 'lucide-react';
+import {X,ArrowUpRight,Inbox,LoaderCircle,ChevronDown} from 'lucide-react';
 export function Modal({title,children,onClose,wide=false}:{title:string;children:ReactNode;onClose:()=>void;wide?:boolean}){const ref=useRef<HTMLElement>(null);useEffect(()=>{const previous=document.activeElement as HTMLElement|null;const element=ref.current;const first=element?.querySelector<HTMLElement>('input,textarea,select,button');first?.focus();const trap=(event:KeyboardEvent)=>{if(event.key!=='Tab')return;const elements=Array.from(element?.querySelectorAll<HTMLElement>('button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex="0"]')||[]).filter(e=>e.getClientRects().length);const first=elements[0],last=elements.at(-1);if(event.shiftKey&&document.activeElement===first){event.preventDefault();last?.focus()}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first?.focus()}};element?.addEventListener('keydown',trap);return()=>{element?.removeEventListener('keydown',trap);previous?.focus()}},[]);return <div className="modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)onClose()}}><section ref={ref} role="dialog" aria-modal="true" aria-label={title} className={'modal '+(wide?'wide':'')} onKeyDown={e=>{if(e.key==='Escape')onClose()}}><header><h2>{title}</h2><button className="icon-button" onClick={onClose} aria-label="Fechar"><X size={20}/></button></header>{children}</section></div>}
 export function Field({label,children,hint}:{label:string;children:ReactNode;hint?:string}){return <div className="field"><label><span>{label}</span>{children}</label>{hint&&<small>{hint}</small>}</div>}
 export function Empty({title,children,action}:{title:string;children:ReactNode;action?:ReactNode}){return <div className="empty"><span className="empty-icon"><Inbox size={28}/></span><h3>{title}</h3><p>{children}</p>{action}</div>}
@@ -8,3 +8,31 @@ export function Toggle({checked,onChange,label}:{checked:boolean;onChange:(v:boo
 export function Busy({children,busy}:{children:ReactNode;busy:boolean}){return <>{busy&&<LoaderCircle className="spin" size={16}/>} {children}</>}
 export function Tag({children,color='green'}:{children:ReactNode;color?:string}){return <span className={'tag '+color}>{children}</span>}
 export function Jump({children,onClick}:{children:ReactNode;onClick:()=>void}){return <button className="text-button" onClick={onClick}>{children}<ArrowUpRight size={15}/></button>}
+export function ItemStack({children}:{children:ReactNode}){return <div className="item-stack">{children}</div>}
+export function AccordionItem({id,open,enabled,enabledLabel,title,meta,onToggle,onEnabled,children}:{id:string;open:boolean;enabled:boolean;enabledLabel:string;title:string;meta:string[];onToggle:()=>void;onEnabled:(v:boolean)=>void;children:ReactNode}){
+ const body='item-body-'+id;
+ return <section className={'item'+(open?' open':'')+(enabled?' on':' off')}>
+  <div className="item-head">
+   <button type="button" className="item-toggle" aria-expanded={open} aria-controls={body} onClick={onToggle}>
+    <span className="item-dot" aria-hidden="true"/>
+    <span className="item-title">{title}</span>
+    <span className="item-meta">{meta.filter(Boolean).map((m,k)=><span key={k}>{m}</span>)}</span>
+    <ChevronDown size={16} className="item-chevron" aria-hidden="true"/>
+   </button>
+   <Toggle checked={enabled} onChange={onEnabled} label={enabledLabel}/>
+  </div>
+  <div className="item-body" id={body} inert={!open}>
+   <div className="item-inner"><div className="item-pad">{children}</div></div>
+  </div>
+ </section>;
+}
+export function ListTools({count,total,shown,search,onSearch,searchLabel,onExpandAll,onCollapseAll}:{count:string;total:number;shown:number;search:string;onSearch:(v:string)=>void;searchLabel:string;onExpandAll:()=>void;onCollapseAll:()=>void}){
+ return <div className="list-tools">
+  <span className="list-count">{count}</span>
+  {total>5&&<input className="grow" type="search" value={search} placeholder="Filtrar" aria-label={searchLabel} onChange={e=>onSearch(e.target.value)}/>}
+  <span className="spacer"/>
+  <button type="button" onClick={onExpandAll}>Expandir todos</button>
+  <button type="button" onClick={onCollapseAll}>Recolher todos</button>
+  {!!search&&shown===0&&<span className="list-count">nenhum resultado</span>}
+ </div>;
+}

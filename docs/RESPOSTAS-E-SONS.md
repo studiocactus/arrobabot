@@ -2,6 +2,8 @@
 
 Abra **Respostas e sons** no menu lateral ou o botão **Respostas TXT e sons** em **Comunidade**. Escolha o perfil correto. As alterações entram em vigor ao clicar em **Salvar respostas e sons**. Somente o proprietário pode vincular arquivos, salvar configurações e reiniciar a sessão; moderadores autorizados podem consultar e testar arquivos já cadastrados. O navegador mostra os controles, mas os arquivos e a execução dependem do aplicativo desktop.
 
+Cada regra e cada pessoa aparecem como uma linha compacta com um ponto de situação, o nome do cadastro, os resumos em pastilhas, o controle de ativar e uma seta. Clique no título da linha para abrir ou fechar o formulário; **Expandir todos** e **Recolher todos** fazem o mesmo com a lista inteira, e o contador ao lado informa quantos cadastros existem. Com mais de cinco itens, o campo **Filtrar** localiza um cadastro pelo nome, pela palavra-chave ou pelo arquivo. Uma regra ou pessoa recém-adicionada já abre sozinha, e o conteúdo fechado sai da ordem de tabulação do teclado. Quando a lista está vazia, use o botão **Adicionar resposta TXT** ou **Adicionar pessoa** logo abaixo da explicação.
+
 ## Responder a uma palavra usando um TXT
 
 1. Clique em **Adicionar resposta TXT** e escreva a palavra ou expressão, por exemplo `café`.
