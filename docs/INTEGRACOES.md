@@ -39,6 +39,8 @@ A autorização de uma conta não autoriza a outra. É possível usar uma conta 
 
 O código tem conectores para chat, follow, inscrição, bits, raid e resgates. As permissões concedidas e as condições da plataforma determinam quais assinaturas de eventos são aceitas. Avisos, timeout e banimento usam a autorização da conta do canal.
 
+As autorizações também concedem as permissões usadas por **Anúncio**, **Mensagem fixada** e **Destaque de canal** em comandos, timers e automações. Perfis autorizados antes destas permissões precisam ser autorizados novamente; enquanto isso, o **Histórico** informa a recusa e o que fazer. O bot precisa ser moderador do canal para essas três formas de envio.
+
 Referências oficiais: [registro e aplicativos](https://dev.twitch.tv/docs/authentication/register-app/), [fluxos OAuth](https://dev.twitch.tv/docs/authentication/getting-tokens-oauth/) e [EventSub WebSocket](https://dev.twitch.tv/docs/eventsub/handling-websocket-events/).
 
 ## YouTube — preparação e autorização

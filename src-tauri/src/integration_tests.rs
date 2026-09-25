@@ -24,6 +24,31 @@ async fn timer_target_offline_preview_and_external_rejection(){
  a.timer_seconds=0;assert!(rt.db.save_flow(&a).is_err());a.timer_seconds=30;a.counter=true;assert!(rt.db.save_flow(&a).is_err());
 }
 #[tokio::test]
+async fn flow_audio_and_twitch_delivery_type(){
+ let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().join("app")).unwrap();let p=profile("Áudio e envio");rt.db.save_profile(&p).unwrap();
+ let file=dir.path().join("jingle.wav");std::fs::write(&file,b"RIFF0000WAVEfmt ").unwrap();
+ let asset=dispatch(rt.clone(),"chatExtras.import",json!({"profileId":p.id,"kind":"sound","path":file})).await.unwrap();
+ let mut f=flow(&p);f.name="ifood".into();f.audio=asset["id"].as_str().unwrap().into();f.audio_volume=0.6;f.send_type="announce".into();f.send_color="purple".into();
+ let mut sem_arquivo=f.clone();sem_arquivo.audio=uuid::Uuid::new_v4().to_string();
+ assert!(dispatch(rt.clone(),"flow.save",json!({"profileId":p.id,"flow":sem_arquivo})).await.is_err());
+ let mut cor=f.clone();cor.send_color="vermelho".into();
+ assert!(dispatch(rt.clone(),"flow.save",json!({"profileId":p.id,"flow":cor})).await.is_err());
+ assert!(dispatch(rt.clone(),"flow.save",json!({"profileId":p.id,"flow":f.clone()})).await.is_ok());
+ let mut rx=rt.broadcast.subscribe();
+ engine::process(rt.clone(),event(&p,"!oi",false)).await;
+ let sounds:Vec<_>=std::iter::from_fn(||rx.try_recv().ok()).filter(|v|v["type"]=="viewer-sound").collect();
+ assert_eq!(sounds.len(),1);assert_eq!(sounds[0]["payload"]["asset"].as_str().unwrap(),asset["id"].as_str().unwrap());assert_eq!(sounds[0]["payload"]["volume"].as_f64().unwrap(),0.6);
+ // Sem autorização a ação falha com aviso no histórico, sem interromper o processo.
+ let logs=rt.db.logs(&p.id).unwrap();
+ assert!(logs.iter().any(|l|l.status=="error"&&l.message.starts_with("ifood · ")));
+ // A simulação registra o plano: sem som e com o tipo de envio escolhido.
+ engine::process(rt.clone(),event(&p,"!oi",true)).await;
+ assert!(!std::iter::from_fn(||rx.try_recv().ok()).any(|v|v["type"]=="viewer-sound"));
+ let logs=rt.db.logs(&p.id).unwrap();
+ assert!(logs.iter().any(|l|l.message.contains("Tocaria o áudio do fluxo")));
+ assert!(logs.iter().any(|l|l.message.starts_with("[Simulação] [Anúncio]")));
+}
+#[tokio::test]
 async fn txt_engine_simulation_and_file_configuration_permissions(){
  let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().join("app")).unwrap();let mut p=profile("TXT");p.editors=vec!["mod".into()];rt.db.save_profile(&p).unwrap();
  let file=dir.path().join("frases.txt");std::fs::write(&file,"Olá {{user}}: {{message}}").unwrap();
@@ -102,7 +127,7 @@ async fn contextual_preview_calls_provider_without_chat_or_memory_writes(){
 }
 fn profile(name:&str)->Profile{Profile{id:uuid::Uuid::new_v4().to_string(),name:name.into(),platform:"twitch".into(),channel:name.into(),channel_id:"123".into(),bot_id:"456".into(),client_id:"client".into(),blocklist:vec!["proibido".into()],topics:vec![],editors:vec![],ai:AiConfig::default(),modules:json!({"points":true,"raffles":true,"predictions":true,"queue":true})}}
 fn event(p:&Profile,text:&str,simulated:bool)->Event{Event{id:uuid::Uuid::new_v4().to_string(),profile_id:p.id.clone(),kind:"chat".into(),user:"Ana".into(),user_id:"ana".into(),role:"everyone".into(),message:text.into(),data:Value::Null,simulated}}
-fn flow(p:&Profile)->Flow{Flow{counter:false,timer_seconds:300,id:uuid::Uuid::new_v4().to_string(),profile_id:p.id.clone(),name:"Teste".into(),enabled:true,trigger:Trigger{kind:"command".into(),pattern:"!oi".into(),permission:"everyone".into(),cooldown:5,user_cooldown:5},actions:vec!["Um $user","Dois","Três"].into_iter().map(|s|Action{kind:"chat".into(),text:s.into(),target:"".into(),value:0,condition:"".into()}).collect(),layout:Value::Null}}
+fn flow(p:&Profile)->Flow{Flow{counter:false,timer_seconds:300,audio:String::new(),audio_volume:1.0,send_type:"chat".into(),send_color:"primary".into(),id:uuid::Uuid::new_v4().to_string(),profile_id:p.id.clone(),name:"Teste".into(),enabled:true,trigger:Trigger{kind:"command".into(),pattern:"!oi".into(),permission:"everyone".into(),cooldown:5,user_cooldown:5},actions:vec!["Um $user","Dois","Três"].into_iter().map(|s|Action{kind:"chat".into(),text:s.into(),target:"".into(),value:0,condition:"".into()}).collect(),layout:Value::Null}}
 #[tokio::test]
 async fn ordered_execution_cooldown_filter_and_isolation(){
  let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();let p=profile("Canal A");let b=profile("Canal B");rt.db.save_profile(&p).unwrap();rt.db.save_profile(&b).unwrap();

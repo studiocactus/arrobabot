@@ -3,11 +3,87 @@ use serde_json::{json,Value};
 use std::{sync::Arc,time::Duration};
 use futures_util::{StreamExt,SinkExt};
 use tokio_tungstenite::{connect_async,tungstenite::Message};
-pub async fn send(rt:&Runtime,p:&Profile,text:&str)->Result<(),String>{
- let token=oauth::token(&rt.http,p,"bot").await?;
+pub async fn send(rt:&Runtime,p:&Profile,text:&str)->Result<(),String>{send_as(rt,p,text,"chat","primary").await}
+/// Publica no chat. Em Twitch aceita chat, announce (anúncio), pin (mensagem fixada) e shoutout (destaque de canal).
+pub async fn send_as(rt:&Runtime,p:&Profile,text:&str,kind:&str,color:&str)->Result<(),String>{
+ let kind=if SEND_TYPES.contains(&kind){kind}else{"chat"};
+ let color=if SEND_COLORS.contains(&color){color}else{"primary"};
  let text:String=text.chars().take(450).collect();
+ if p.platform!="twitch"{return plain(rt,p,&text).await}
+ match kind {
+  "announce"=>announce(rt,p,&text,color).await,
+  "pin"=>{let token=oauth::token(&rt.http,p,"bot").await?;chat_message(rt,p,&token,&text,true).await},
+  "shoutout"=>shoutout(rt,p,&text).await,
+  _=>{let token=oauth::token(&rt.http,p,"bot").await?;chat_message(rt,p,&token,&text,false).await}
+ }
+}
+fn refused(kind:&str,status:u16)->String{
+ match status {
+  401=>format!("{kind} recusado. Autorize novamente as contas do bot e do canal em Perfis para conceder as permissões novas."),
+  403=>format!("{kind} recusado: a conta precisa ser moderadora do canal."),
+  429=>format!("{kind} recusado: a Twitch limitou os envios neste momento. Tente em instantes."),
+  _=>format!("{kind} recusado: HTTP {status}. Confira autorização e permissões.")
+ }
+}
+async fn chat_message(rt:&Runtime,p:&Profile,token:&str,text:&str,pin:bool)->Result<(),String>{
+ let mut body=json!({"broadcaster_id":p.channel_id,"sender_id":p.bot_id,"message":text});
+ if pin {body["pin"]=json!(true);}
+ let res=rt.http.post("https://api.twitch.tv/helix/chat/messages").header("Client-Id",&p.client_id).bearer_auth(token).json(&body).send().await.map_err(|_|"Não foi possível enviar a mensagem")?;
+ if !res.status().is_success(){
+  let status=res.status().as_u16();
+  if pin&&status==401{return Err(refused("Mensagem fixada",status))}
+  return Err(if pin&&status==403{"Mensagem fixada recusada: marque o bot como moderador do canal e autorize novamente a conta".into()}else{format!("Envio recusado: HTTP {status}. Confira autorização e permissões.")})
+ }
+ let v:Value=res.json().await.map_err(|_|"Resposta de envio inválida")?;
+ if v["data"][0]["is_sent"]!=true{return Err("A Twitch não publicou a mensagem (limite ou restrição do canal)".into())}
+ Ok(())
+}
+async fn announce(rt:&Runtime,p:&Profile,text:&str,color:&str)->Result<(),String>{
+ if p.channel_id.is_empty(){return Err("Autorize a conta do canal no perfil para enviar anúncios".into())}
+ let mut status=0u16;let mut token_err:Option<String>=None;
+ for account in ["bot","channel"] {
+  let moderator=if account=="channel"{p.channel_id.as_str()}else{p.bot_id.as_str()};
+  if moderator.is_empty(){continue}
+  let token=match oauth::token(&rt.http,p,account).await {Ok(t)=>t,Err(err)=>{token_err=Some(err);continue}};
+  let res=rt.http.post("https://api.twitch.tv/helix/chat/announcements")
+   .query(&[("broadcaster_id",p.channel_id.as_str()),("moderator_id",moderator)])
+   .header("Client-Id",&p.client_id).bearer_auth(token)
+   .json(&json!({"message":text,"color":color})).send().await.map_err(|_|"Não foi possível enviar o anúncio")?;
+  if res.status().is_success(){return Ok(())}
+  status=res.status().as_u16();
+  if status!=401&&status!=403 {break}
+ }
+ if status==0 {return Err(token_err.unwrap_or_else(||"Autorize a conta do bot ou a conta do canal no perfil para enviar anúncios".into()))}
+ Err(refused("Anúncio",status))
+}
+async fn shoutout(rt:&Runtime,p:&Profile,text:&str)->Result<(),String>{
+ let login=text.trim().trim_start_matches('@').to_ascii_lowercase();
+ if login.is_empty(){return Err("No destaque de canal, escreva na mensagem o canal de destino, como outrocanal".into())}
+ if login.len()>25||!login.chars().all(|c|c.is_ascii_alphanumeric()||c=='_'){return Err("No destaque de canal, a mensagem deve ser apenas o nome do canal de destino, sem espaços".into())}
+ if p.channel_id.is_empty(){return Err("Autorize a conta do canal no perfil para enviar destaques".into())}
+ let token=match oauth::token(&rt.http,p,"bot").await {Ok(t)=>t,Err(err)=>oauth::token(&rt.http,p,"channel").await.map_err(|_|err)?};
+ let res=rt.http.get("https://api.twitch.tv/helix/users").query(&[("login",login.as_str())]).header("Client-Id",&p.client_id).bearer_auth(token).send().await.map_err(|_|"Não foi possível consultar o canal de destino")?;
+ if !res.status().is_success(){return Err(refused("Destaque",res.status().as_u16()))}
+ let v:Value=res.json().await.map_err(|_|"Resposta de canal inválida")?;
+ let target=v["data"][0]["id"].as_str().ok_or(format!("Canal de destino não encontrado: {login}"))?.to_owned();
+ let mut status=0u16;let mut token_err:Option<String>=None;
+ for account in ["bot","channel"] {
+  let moderator=if account=="channel"{p.channel_id.as_str()}else{p.bot_id.as_str()};
+  if moderator.is_empty(){continue}
+  let token=match oauth::token(&rt.http,p,account).await {Ok(t)=>t,Err(err)=>{token_err=Some(err);continue}};
+  let res=rt.http.post("https://api.twitch.tv/helix/chat/shoutouts")
+   .query(&[("from_broadcaster_id",p.channel_id.as_str()),("to_broadcaster_id",target.as_str()),("moderator_id",moderator)])
+   .header("Client-Id",&p.client_id).bearer_auth(token).send().await.map_err(|_|"Não foi possível enviar o destaque")?;
+  if res.status().is_success(){return Ok(())}
+  status=res.status().as_u16();
+  if status!=401&&status!=403 {break}
+ }
+ if status==0 {return Err(token_err.unwrap_or_else(||"Autorize a conta do bot ou a conta do canal no perfil para enviar destaques".into()))}
+ Err(refused("Destaque",status))
+}
+async fn plain(rt:&Runtime,p:&Profile,text:&str)->Result<(),String>{
+ let token=oauth::token(&rt.http,p,"bot").await?;
  let req=match p.platform.as_str(){
- "twitch"=>rt.http.post("https://api.twitch.tv/helix/chat/messages").header("Client-Id",&p.client_id).bearer_auth(token).json(&json!({"broadcaster_id":p.channel_id,"sender_id":p.bot_id,"message":text})),
  "youtube"=>{
  let chat=rt.db.module(&p.id,"youtube_chat");let id=chat.as_str().ok_or("Conecte uma transmissão ativa do YouTube")?;
  rt.http.post("https://www.googleapis.com/youtube/v3/liveChat/messages").query(&[("part","snippet")]).bearer_auth(token).json(&json!({"snippet":{"liveChatId":id,"type":"textMessageEvent","textMessageDetails":{"messageText":text}}}))
@@ -17,10 +93,6 @@ pub async fn send(rt:&Runtime,p:&Profile,text:&str)->Result<(),String>{
  };
  let res=req.send().await.map_err(|_|"Não foi possível enviar a mensagem")?;
  if !res.status().is_success(){return Err(format!("Envio recusado: HTTP {}. Confira autorização e permissões.",res.status().as_u16()))}
- if p.platform=="twitch" {
- let v:Value=res.json().await.map_err(|_|"Resposta de envio inválida")?;
- if v["data"][0]["is_sent"]!=true{return Err("A Twitch não publicou a mensagem (limite ou restrição do canal)".into())}
- }
  Ok(())
 }
 pub async fn twitch(rt:Arc<Runtime>,p:Profile)->Result<(),String>{

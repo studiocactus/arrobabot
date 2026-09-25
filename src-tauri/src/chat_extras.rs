@@ -22,7 +22,7 @@ pub struct Asset {pub id:String,pub kind:String,pub name:String,pub path:String}
 pub struct State {last:HashMap<String,Instant>,seen:HashSet<String>,index:HashMap<String,usize>}
 pub fn config(rt:&Runtime,p:&str)->Config {serde_json::from_value(rt.db.module(p,"chatExtras")).unwrap_or_default()}
 fn assets(rt:&Runtime,p:&str)->Vec<Asset>{serde_json::from_value(rt.db.module(p,"chatAssets")).unwrap_or_default()}
-fn asset(rt:&Runtime,p:&str,id:&str,kind:&str)->R<Asset>{assets(rt,p).into_iter().find(|a|a.id==id&&a.kind==kind).ok_or("Selecione um arquivo deste perfil".into())}
+pub fn asset(rt:&Runtime,p:&str,id:&str,kind:&str)->R<Asset>{assets(rt,p).into_iter().find(|a|a.id==id&&a.kind==kind).ok_or("Selecione um arquivo deste perfil".into())}
 fn read_file(path:&Path,max:u64)->R<Vec<u8>>{
  let f=std::fs::File::open(path).map_err(|_|"Arquivo não encontrado ou sem permissão")?;
  let meta=f.metadata().map_err(|_|"Não foi possível ler o arquivo")?;
@@ -157,6 +157,16 @@ pub fn sound(rt:&Runtime,p:&Profile,e:&Event){
  s.seen.insert(key.clone());s.last.insert(key,Instant::now());s.last.insert(global,Instant::now());drop(s);
  rt.emit("viewer-sound",json!({"profileId":p.id,"asset":person.asset,"nickname":person.nickname,"volume":person.volume,"deviceId":c.audio_device_id}));
  rt.log(&p.id,"sound",&format!("Som solicitado para {}",person.nickname),"info");
+}
+/// Toca o áudio escolhido no comando, timer ou automação assim que ele dispara.
+pub fn play_flow(rt:&Runtime,p:&Profile,f:&Flow,e:&Event){
+ if f.audio.is_empty(){return}
+ if e.simulated{rt.log(&p.id,"sound","[Simulação] Tocaria o áudio do fluxo","info");return}
+ if asset(rt,&p.id,&f.audio,"sound").is_err(){rt.log(&p.id,"sound","O áudio deste fluxo não existe mais; escolha outro em Respostas e sons","error");return}
+ let c=config(rt,&p.id);
+ let volume=if f.audio_volume.is_finite(){f.audio_volume.clamp(0.0,1.0)}else{1.0};
+ rt.emit("viewer-sound",json!({"profileId":p.id,"asset":f.audio,"volume":volume,"deviceId":c.audio_device_id}));
+ rt.log(&p.id,"sound",&format!("Áudio solicitado: {}",f.name),"info");
 }
 pub fn response(rt:&Runtime,p:&Profile,e:&Event)->R<Option<String>>{
  if e.kind!="chat"{return Ok(None)}let c=config(rt,&p.id);if !c.replies_enabled{return Ok(None)}

@@ -8,7 +8,7 @@ Para responder a palavras usando linhas de um arquivo externo, abra **Respostas 
 
 Posicione o cursor na resposta e clique em **+ Nome da pessoa**, **+ Nome do canal** ou **+ Texto do pedido**. O aplicativo insere o marcador para você; um texto selecionado é substituído. A leitura abaixo da mensagem mostra etiquetas com os nomes das informações.
 
-Para mais opções, abra **Inserir variável e testar mensagem**. Escolha a informação pelo nome, configure uma alternativa e a forma de apresentação e clique em **Inserir na mensagem**. Códigos técnicos são opcionais no catálogo. Consulte o [guia completo de variáveis](VARIAVEIS.md), incluindo contadores e variáveis por pessoa.
+Para mais opções, abra **Inserir variável e testar mensagem**. Clique na ficha da informação para inserir na hora; em **Opções**, na mesma ficha, configure uma alternativa e a forma de apresentação e clique em **Inserir na mensagem**. Códigos técnicos são opcionais no catálogo. Consulte o [guia completo de variáveis](VARIAVEIS.md), incluindo contadores e variáveis por pessoa.
 
 ## Escolha o editor adequado
 
@@ -36,6 +36,34 @@ Exemplo de resposta: Olá, $user! Você está no canal $channel.
 
 A lista permite buscar, editar, ativar/desativar, apagar e salvar um comando como preset. Desativar conserva a configuração. Apagar exige confirmação e não oferece lixeira.
 
+## Como enviar na Twitch
+
+Em comandos, timers e automações, **Como enviar na Twitch** escolhe a forma da mensagem publicada. A escolha vale para todas as mensagens enviadas por aquele fluxo.
+
+| Opção | O que aparece no chat |
+|---|---|
+| Mensagem normal | Mensagem comum do bot, igual a qualquer outra |
+| Anúncio | Banner colorido no chat; **Cor do anúncio** aceita a cor do canal, azul, verde, laranja ou roxo |
+| Mensagem fixada | Comunicado fixado no topo do chat por cerca de 20 minutos |
+| Destaque de canal | A Twitch destaca outro canal; a mensagem é apenas o nome do destino, como `outrocanal` ou `$user` |
+
+As três últimas opções existem só na Twitch. Nas demais plataformas a mensagem sai como mensagem comum e o **Histórico** registra um aviso com essa explicação.
+
+Anúncio, mensagem fixada e destaque exigem bot moderador do canal. Autorizações feitas antes desta versão não têm essas permissões: clique em **Autorizar conta do bot** e **Autorizar conta do canal** novamente e salve o perfil. Quando a Twitch recusa, o aviso aparece no **Histórico** dizendo o que corrigir, e a cadeia de ações pára naquele ponto. Destaque de canal só funciona com o canal ao vivo e respeita os limites da Twitch para destaques.
+
+A prévia registra a forma escolhida no **Histórico**, por exemplo `[Simulação] [Anúncio] O ifood já passou a milhão na rua 3 vezes!`, para conferir sem publicar nada.
+
+## Tocar áudio ao disparar
+
+**Tocar áudio ao disparar** escolhe um som da biblioteca de **Respostas e sons** para tocar quando o comando, o timer ou a automação executar. O som sai na saída de áudio do BotLive: capture essa saída no OBS para a live ouvir. Use **Escolher som** para importar um arquivo novo, **Testar som** para ouvir antes de salvar e **Volume** para ajustar a intensidade.
+
+O áudio é solicitado antes das ações, na mesma execução da contagem do comando. Com **Contar usos deste comando** ativado, a resposta `O ifood já passou a milhão na rua {{commandCount}} vezes!` sai com o número certo enquanto o som toca.
+
+- **Nenhum áudio** é o padrão: nada é tocado e a execução é igual à de antes.
+- A simulação nunca toca som; o **Histórico** mostra `[Simulação] Tocaria o áudio do fluxo`.
+- Se o arquivo for apagado de **Respostas e sons**, o fluxo continua sem som e o **Histórico** pede para escolher outro.
+- O áudio do fluxo não depende de **Ativar sons por espectador** e não usa os intervalos daqueles sons.
+
 ## Permissão e intervalos
 
 | Permissão do gatilho | Quem pode disparar |
@@ -53,7 +81,7 @@ O intervalo global vale para o fluxo, independentemente de quem o usou. O interv
 
 1. Abra **Automações → Novo fluxo**.
 2. Preencha **Nome do fluxo**.
-3. Clique no bloco inicial e escolha Evento, texto, permissão e intervalos.
+3. Clique no bloco inicial e escolha Evento, texto, permissão, intervalos, a forma de envio na Twitch e o áudio do disparo.
 4. Clique no bloco de ação e selecione **Tipo de ação** no painel lateral.
 5. Preencha conteúdo e os campos específicos.
 6. Clique em **Adicionar ação** para cada etapa adicional.

@@ -22,6 +22,8 @@ Cada exemplo mostra **onde configurar**, **o que usar** e **o resultado esperado
 | Corrigir o placar | Lista de comandos → número · Ajustar | Novo total: 7 | O próximo uso aceito mostra 8 |
 | Evitar spam | Editar comando → intervalos | Global: 10; por pessoa: 60 | No máximo uma execução a cada dez segundos, e uma por minuto para a mesma pessoa |
 | Limitar quem altera um contador | Editar comando → Quem pode usar | Moderadores | Só moderadores e streamer disparam o comando |
+| Somar a contagem com um som de caixa | Novo comando → Contar usos + Tocar áudio ao disparar | !ifood → O ifood já passou a milhão na rua {{commandCount}} vezes! | Cada uso aceito soma 1 e toca o som escolhido na saída do BotLive |
+| Publicar como anúncio colorido | Editar comando → Como enviar na Twitch → Anúncio | Cor do anúncio: Laranja | A mensagem sai como anúncio da Twitch em vez de mensagem comum |
 
 Siga os passos completos em [Comandos e automações](03-COMANDOS-E-AUTOMACOES.md) e [Timers e contadores](TIMERS-E-CONTADORES.md).
 

@@ -47,8 +47,9 @@ Diretriz solicitada: ampliar as funções do BotLive usando seleção visual, no
 | Arquivos e HTTP | Vault e POST de webhook; leitura genérica e consulta com captura de resposta pendentes | Proposto: seleção de arquivo e requisição guiada |
 | OBS | Overlay local implementado; controle de cenas e fontes pendente | Proposto: escolher cena/fonte pelo nome |
 | Temporizadores e atalhos | Trivia automática e atalhos do painel; disparadores gerais pendentes | Proposto: frequência ou combinação de teclas |
-| Som e voz | TTS do sistema e Whisper; player de sons genérico pendente | Proposto: selecionar áudio ou voz |
+| Som e voz | TTS do sistema, Whisper e áudio selecionável no disparo de comandos, timers e automações | Proposto: fila e agendamento de sons |
 | Plataformas de live | Adaptadores parciais; não cobrem todas as ações e eventos da referência | Proposto: seletores específicos após conectar a conta |
+| Mensagens, anúncios e destaques | Twitch com mensagem comum, anúncio colorido, mensagem fixada e destaque de canal; as demais plataformas seguem mensagem comum | Forma simples adotada: um campo por fluxo, cor do anúncio e aviso de permissão quando falta autorização |
 | Scripts e integrações de terceiros | Rhai limitado; sem C# ou cobertura geral de plugins | Proposto: receitas visuais para tarefas frequentes |
 
 Ordem proposta das próximas ampliações: condições por variável; chamadas entre automações e filas; temporizadores; OBS; mais ações e eventos das plataformas; arquivos/HTTP; integrações adicionais. Cada entrega deve trazer interface simples, exemplo no manual e validação própria. Os itens pendentes não foram implementados nesta revisão de usabilidade das variáveis.

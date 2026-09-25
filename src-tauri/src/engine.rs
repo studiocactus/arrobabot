@@ -69,11 +69,14 @@ impl Runtime {
  self.connections.lock().unwrap().insert(key,task);Ok(())
  }
  pub fn disconnect(&self,id:&str){if let Some(h)=self.connections.lock().unwrap().remove(id){h.abort();}self.status(id,"offline");}
- pub async fn send(&self,p:&Profile,e:&Event,text:&str)->Result<(),String>{
+ pub async fn send(&self,p:&Profile,e:&Event,text:&str)->Result<(),String>{self.send_with(p,e,text,None).await}
+ pub async fn send_with(&self,p:&Profile,e:&Event,text:&str,f:Option<&Flow>)->Result<(),String>{
  let current=self.db.profile(&p.id)?;let p=&current;
+ let (kind,color)=f.map(|f|(f.send_type.as_str(),f.send_color.as_str())).unwrap_or(("chat","primary"));
+ let label=if kind=="announce"{"Anúncio"}else if kind=="pin"{"Mensagem fixada"}else if kind=="shoutout"{"Destaque"}else{"Mensagem"};
  if text.trim().is_empty(){return Ok(())}
  if blocked(text,p){return Err("Mensagem bloqueada pelas restrições do perfil".into())}
- if e.simulated {self.log(&p.id,"chat",&format!("[Simulação] {text}"),"success");return Ok(())}
+ if e.simulated {let tag=if kind=="chat" {String::new()}else{format!(" [{label}]")};self.log(&p.id,"chat",&format!("[Simulação]{tag} {text}"),"success");return Ok(())}
  let limiter={self.send_locks.lock().unwrap().entry(p.id.clone()).or_insert_with(||Arc::new(tokio::sync::Mutex::new(Instant::now()-Duration::from_secs(60)))).clone()};
  let mut last=limiter.lock().await;
  let interval=Duration::from_millis(1600);
@@ -82,12 +85,15 @@ impl Runtime {
  if e.kind=="timer"&&e.data["timerId"].is_string()&&!e.simulated&&!crate::timers::event_active(self,e){return Err("Timer pausado ou perfil desconectado".into())}
  if blocked(text,&fresh){return Err("Mensagem bloqueada pelas restrições atuais do perfil".into())}
  // A reply always goes back to the channel the question came from.
+ let note=if kind=="chat" {None}else{Some("Anúncio, fixação e destaque valem só para o chat da Twitch: publicado como mensagem comum.")};
  if let Some(channel)=crate::discord::from_discord(e){
   if crate::discord::config(self,&fresh.id)["enabled"]!=true{return Err("O bot do Discord está desativado".into())}
   if channel.is_empty(){return Err("O Discord não informou o canal de origem".into())}
   crate::discord::post(self,&fresh,&channel,text).await?;
+  if let Some(note)=note{self.log(&p.id,"discord",note,"info");}
  }else{
-  platforms::send(self,&fresh,text).await?;
+  platforms::send_as(self,&fresh,text,kind,color).await?;
+  if kind!="chat"&&fresh.platform!="twitch"{if let Some(note)=note{self.log(&p.id,"chat",note,"info");}}
  }
  *last=Instant::now();
  self.conversation.lock().unwrap().sent(&p.id,text);
@@ -139,10 +145,11 @@ pub async fn process(rt:Arc<Runtime>,e:Event){
  if let Some(n)=count{if !e.simulated{rt.emit("command-counter",json!({"profileId":p.id,"id":f.id,"value":n}));}}
  let mut variables=match crate::variables::Context::new(&rt.db,&p,&e,Some(&f)){Ok(v)=>v,Err(err)=>{rt.log(&p.id,"variables",&err,"error");continue}};
  if let Some(n)=count{variables.set_command_count(n);}
+ crate::chat_extras::play_flow(&rt,&p,&f,&e);
  for a in &f.actions {
  if e.kind=="timer"&&!e.simulated&&!crate::timers::event_active(&rt,&e){break}
  if !a.condition.is_empty()&&!e.message.to_lowercase().contains(&a.condition.to_lowercase()){continue}
- let result=tokio::time::timeout(Duration::from_secs(65),action(&rt,&p,&e,a,&mut variables,&history)).await;
+ let result=tokio::time::timeout(Duration::from_secs(65),action(&rt,&p,&e,a,&mut variables,&history,&f)).await;
  match result{
  Ok(Ok(()))=>rt.log(&p.id,"action",&format!("{} · {}",f.name,a.kind),"success"),
  Ok(Err(err))=>{rt.log(&p.id,"action",&format!("{} · {err}",f.name),"error");break},
@@ -151,21 +158,21 @@ pub async fn process(rt:Arc<Runtime>,e:Event){
  }
  }
 }
-async fn action(rt:&Arc<Runtime>,p:&Profile,e:&Event,a:&Action,variables:&mut crate::variables::Context,history:&[Value])->Result<(),String>{
+async fn action(rt:&Arc<Runtime>,p:&Profile,e:&Event,a:&Action,variables:&mut crate::variables::Context,history:&[Value],f:&Flow)->Result<(),String>{
  let text=if a.kind=="variable.delete"{String::new()}else if a.kind=="script"{a.text.clone()}else{variables.render(&a.text)?};
  if a.kind.starts_with("variable."){variables.change(&rt.db,p,e,&a.target,a.kind.trim_start_matches("variable."),crate::variables::typed(&text))?;return Ok(())}
  if blocked(&text,p)&&matches!(a.kind.as_str(),"chat"|"tts"|"overlay"|"discord"){return Err("Conteúdo bloqueado".into())}
  // Simulations never perform external effects or change persistent module/vault state.
  if e.simulated && a.kind!="chat" {if matches!(a.kind.as_str(),"ai"|"ai.generate"){crate::ai::save_response(variables,rt,p,e,a,"[Prévia: resposta contextual da IA]",false)?;}rt.log(&p.id,"simulation",&format!("Executaria {}: {}",a.kind,text.chars().take(200).collect::<String>()),"success");return Ok(())}
  match a.kind.as_str(){
- "chat"=>rt.send(p,e,&text).await,
+ "chat"=>rt.send_with(p,e,&text,Some(f)).await,
  "ai"|"ai.generate"=>{
  let (output,success)=match ai::conversation(&rt.http,&rt.base,p,e,&text,history).await{
  Ok(answer)=>(answer,true),Err(err)=>{rt.log(&p.id,"ai",&err,"error");(p.ai.fallback.clone(),false)}
  };
  if blocked(&output,p){return Err("Resposta alternativa bloqueada pelas restrições do perfil".into())}
  ai::save_response(variables,rt,p,e,a,&output,success)?;
- if a.kind=="ai"{rt.send(p,e,&output).await?;}
+ if a.kind=="ai"{rt.send_with(p,e,&output,Some(f)).await?;}
  if p.ai.remember {let _lock=rt.vault_lock.lock().unwrap();rt.db.profile(&p.id)?;let name=format!("usuarios/{}.md",safe_name(&e.user_id));vault::write(&rt.base,&p.id,&name,&format!("{} disse: {}",e.user,e.message),true)?;}
  Ok(())
  },
@@ -185,7 +192,7 @@ async fn action(rt:&Arc<Runtime>,p:&Profile,e:&Event,a:&Action,variables:&mut cr
  let mut engine=rhai::Engine::new();engine.set_max_operations(10000);engine.set_max_expr_depths(32,16);engine.set_max_string_size(16000);engine.set_max_array_size(1000);engine.set_max_map_size(100);
  let mut scope=rhai::Scope::new();scope.push_constant("user",e.user.clone());scope.push_constant("message",e.message.clone());scope.push_constant("channel",p.channel.clone());
  let reply=engine.eval_with_scope::<String>(&mut scope,&a.text).map_err(|_|"O script falhou ou ultrapassou os limites")?;
- rt.send(p,e,&reply).await
+ rt.send_with(p,e,&reply,Some(f)).await
  },
  _=>Err("Ação desconhecida".into())
  }

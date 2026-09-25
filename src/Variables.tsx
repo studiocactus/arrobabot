@@ -2,33 +2,54 @@ import {useEffect,useState,useRef} from 'react';
 import {api,desktop,errorText} from './api';
 import {Field,Modal} from './components';
 import type {Flow} from './types';
-import {variableCatalog,scopeNames,makeVariableToken,type VariableChoice} from './variableCatalog';
+import {variableCatalog,scopeNames,makeVariableToken,messageParts,type VariableChoice} from './variableCatalog';
 
 type Preview={text:string;steps:{kind:string;text:string}[];variables:Record<string,unknown>};
 export function VariableHelp({profileId,text,onInsert,flow}:{profileId:string;text:string;onInsert:(value:string)=>void;flow?:Flow}){
  const [query,setQuery]=useState('');const [message,setMessage]=useState('!oi Ana 10');const [user,setUser]=useState('Ana');const [userId,setUserId]=useState('test-user');const [data,setData]=useState('{}');
  const [result,setResult]=useState<Preview|null>(null);const [error,setError]=useState('');const [busy,setBusy]=useState(false);
  const previewRequest=useRef(0);
- const [open,setOpen]=useState(false);const [group,setGroup]=useState('Todas');const [codes,setCodes]=useState(false);const [chosen,setChosen]=useState<VariableChoice|null>(null);const [fallback,setFallback]=useState('');const [format,setFormat]=useState('');const [saved,setSaved]=useState<VariableChoice[]>([]);const [loadError,setLoadError]=useState('');const [revision,setRevision]=useState(0);const [customScope,setCustomScope]=useState('local');const [customName,setCustomName]=useState('');
+ const [open,setOpen]=useState(false);const [group,setGroup]=useState('Todas');const [codes,setCodes]=useState(false);const [chosen,setChosen]=useState<VariableChoice|null>(null);const [fallback,setFallback]=useState('');const [format,setFormat]=useState('');const [saved,setSaved]=useState<VariableChoice[]>([]);const [loadError,setLoadError]=useState('');const [revision,setRevision]=useState(0);const [customScope,setCustomScope]=useState('local');const [customName,setCustomName]=useState('');const [done,setDone]=useState('');
+ const catalogRef=useRef<HTMLDivElement>(null);const optionsRef=useRef<HTMLElement>(null);
  useEffect(()=>{let active=true;setSaved([]);setLoadError('');if(open&&desktop)void api<Row[]>('variables.list',{profileId,userId}).then(rows=>{if(active)setSaved(rows.map(r=>({key:r.scope+'.'+r.name,label:r.name,group:'Minhas variáveis',example:scopeNames[r.scope]})))}).catch(e=>{if(active)setLoadError(errorText(e))});return()=>{active=false}},[open,profileId,userId,revision]);
  const available=new Map(variableCatalog.map(v=>[v.key,v]));for(const v of saved)available.set(v.key,v);
  for(const a of flow?.actions||[])if((a.kind==='variable.set'||a.kind==='variable.increment'||a.kind==='ai.generate')&&/^(local|global|user|session|sessionUser)\.[A-Za-z_][A-Za-z0-9_]*$/.test(a.target))available.set(a.target,{key:a.target,label:a.target.split('.').slice(1).join('.'),group:'Neste fluxo',example:'Disponível depois da ação que define o valor'});
  const choices=Array.from(available.values());const normalize=(s:string)=>s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
  const shown=choices.filter(v=>(group==='Todas'||group===v.group)&&normalize(v.key+' '+v.label).includes(normalize(query)));
- function choose(v:VariableChoice){setChosen(v);setFallback('');setFormat('');setError('')}
- function insert(){if(!chosen)return;try{onInsert(makeVariableToken(chosen.key,fallback,format));setError('');setChosen(null)}catch(e){setError(errorText(e))}}
+ function choose(v:VariableChoice){setChosen(v);setFallback('');setFormat('');setError('');setDone('');requestAnimationFrame(()=>{catalogRef.current?.scrollIntoView({block:'nearest'});optionsRef.current?.focus()})}
+ const parts=messageParts(text);
+ function place(token:string){onInsert(token);setChosen(null);setError('');setDone(token)}
+ function insert(){if(!chosen)return;try{place(makeVariableToken(chosen.key,fallback,format))}catch(e){setError(errorText(e))}}
+ function quick(v:VariableChoice){try{place(makeVariableToken(v.key,'',''))}catch(e){setError(errorText(e))}}
  useEffect(()=>{previewRequest.current++;setResult(null);setError('');setBusy(false)},[profileId,text,message,user,userId,data,flow]);
  async function preview(){const request=++previewRequest.current;setBusy(true);setError('');setResult(null);try{const payload=JSON.parse(data);const next=await api<Preview>('variables.preview',{profileId,text:flow?'':text,flow,event:{id:'preview',profileId,kind:'chat',user,userId,role:'everyone',message,data:payload,simulated:true}});if(request===previewRequest.current)setResult(next)}catch(e){if(request===previewRequest.current)setError(errorText(e))}finally{if(request===previewRequest.current)setBusy(false)}}
- return <details className="variable-help" onToggle={e=>setOpen(e.currentTarget.open)}><summary>Inserir variável e testar mensagem</summary><p className="help">Escolha a informação pelo nome. Ela será inserida onde você deixou o cursor, substituindo o trecho selecionado.</p>
+ return <details className="variable-help" onToggle={e=>{setOpen(e.currentTarget.open);if(!e.currentTarget.open)setDone('')}}><summary>Inserir variável e testar mensagem</summary><p className="help">Clique numa ficha para inserir na mensagem, no lugar do cursor. Para texto alternativo ou formato, use <strong>Opções</strong>.</p>
+ <div className="variable-result"><small>Como será enviado ao chat</small>{text.trim()?<p>{parts.map((p,i)=><span key={i}>{p.label?<span className="variable-chip" title={p.text}>{p.label}</span>:p.text}</span>)}</p>:<p className="help">A mensagem ainda está vazia.</p>}</div>
+ <div className="variable-filters">
  <Field label="Buscar informação"><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Pessoa, canal, pedido, horário…"/></Field>
  <Field label="Categoria"><select value={group} onChange={e=>setGroup(e.target.value)}>{['Todas','Pessoa','Mensagem','Canal','Data e hora','Execução','IA','Minhas variáveis','Neste fluxo'].map(g=><option key={g}>{g}</option>)}</select></Field>
+ </div>
+ <div className="variable-toolbar">
  <label className="variable-code-toggle"><input type="checkbox" checked={codes} onChange={e=>setCodes(e.target.checked)}/>Mostrar códigos técnicos</label>
- <div className="variable-catalog">{shown.map(v=><button type="button" key={v.key} onClick={()=>choose(v)}><strong>{v.label}</strong><small>{v.example?`${v.group} · ${v.example}`:v.group}</small>{codes&&<code>{'{{'+v.key+'}}'}</code>}</button>)}</div>
+ {desktop&&<button type="button" className="text-button" onClick={()=>setRevision(v=>v+1)}>Atualizar minhas variáveis</button>}
+ </div>
+ {loadError&&<p role="alert">{loadError}</p>}
+ <div className="variable-catalog" ref={catalogRef}>
+ {chosen&&<section className="variable-options" aria-label="Opções da informação" tabIndex={-1} ref={optionsRef}><div className="variable-options-head"><strong>{chosen.label}</strong><code>{'{{'+chosen.key+'}}'}</code><button type="button" className="text-button variable-options-close" onClick={()=>setChosen(null)}>Cancelar escolha</button></div>
+ <div className="variable-options-fields">
+ <Field label="Se não houver valor, mostrar" hint="Opcional. Por exemplo: amigo, nenhum ou 0."><input value={fallback} onChange={e=>setFallback(e.target.value)} placeholder="Manter sem alternativa"/></Field>
+ <Field label="Como mostrar"><select value={format} onChange={e=>setFormat(e.target.value)}><option value="">Como está</option><option value="upper">MAIÚSCULAS</option><option value="lower">minúsculas</option><option value="trim">Sem espaços nas pontas</option><option value="number:0">Número inteiro</option><option value="number:2">Número com duas casas</option><option value="length">Quantidade de caracteres ou itens</option></select></Field>
+ </div>
+ <div className="row"><button type="button" className="primary" onClick={insert}>Inserir na mensagem</button></div></section>}
+ {shown.map(v=><div className="variable-card" key={v.key}>
+ <button type="button" className="variable-card-btn variable-card-main" title={v.example?`${v.label} · ${v.example}`:v.label} onClick={()=>quick(v)}><strong>{v.label}</strong><span className="variable-card-example">{v.example||''}</span>{codes&&<code>{'{{'+v.key+'}}'}</code>}</button>
+ <div className="variable-card-foot"><span className="variable-card-group" title={v.group}>{v.group}</span><button type="button" className="variable-card-btn variable-card-more" onClick={()=>choose(v)}>Opções</button></div>
+ </div>)}
+ </div>
  {!shown.length&&<p className="help">Nenhuma informação nesta busca. Tente outra palavra ou categoria. As variáveis salvas são carregadas no desktop.</p>}
- {desktop&&<button type="button" onClick={()=>setRevision(v=>v+1)}>Atualizar minhas variáveis</button>}{loadError&&<p role="alert">{loadError}</p>}
- <details><summary>Usar uma variável personalizada</summary><p className="help">Escolha onde o valor está guardado e seu nome. O valor precisa existir antes de ser usado ou ter um texto alternativo.</p><Field label="Onde está o valor"><select value={customScope} onChange={e=>setCustomScope(e.target.value)}>{Object.entries(scopeNames).map(([key,label])=><option value={key} key={key}>{label}</option>)}</select></Field><Field label="Nome ou caminho do valor"><input value={customName} onChange={e=>setCustomName(e.target.value)} placeholder={customScope==='data'?'reward.title':'contador'}/></Field><button type="button" disabled={!customName} onClick={()=>choose({key:customScope+'.'+customName,label:customName,group:scopeNames[customScope]})}>Escolher este valor</button></details>
- {chosen&&<section className="variable-options" aria-label="Opções da informação"><h4>{chosen.label}</h4><Field label="Se não houver valor, mostrar" hint="Opcional. Por exemplo: amigo, nenhum ou 0."><input value={fallback} onChange={e=>setFallback(e.target.value)} placeholder="Manter sem alternativa"/></Field><Field label="Como mostrar"><select value={format} onChange={e=>setFormat(e.target.value)}><option value="">Como está</option><option value="upper">MAIÚSCULAS</option><option value="lower">minúsculas</option><option value="trim">Sem espaços nas pontas</option><option value="number:0">Número inteiro</option><option value="number:2">Número com duas casas</option><option value="length">Quantidade de caracteres ou itens</option></select></Field><div className="row"><button type="button" className="primary" onClick={insert}>Inserir na mensagem</button><button type="button" onClick={()=>setChosen(null)}>Cancelar escolha</button></div></section>}
+ {done&&<p className="variable-done" role="status">Inserido <code>{done}</code>. Confira no quadro <strong>Como será enviado ao chat</strong>.</p>}
  {error&&<p role="alert" className="inline-error">{error}</p>}
+ <details><summary>Usar uma variável personalizada</summary><p className="help">Escolha onde o valor está guardado e seu nome. O valor precisa existir antes de ser usado ou ter um texto alternativo.</p><Field label="Onde está o valor"><select value={customScope} onChange={e=>setCustomScope(e.target.value)}>{Object.entries(scopeNames).map(([key,label])=><option value={key} key={key}>{label}</option>)}</select></Field><Field label="Nome ou caminho do valor"><input value={customName} onChange={e=>setCustomName(e.target.value)} placeholder={customScope==='data'?'reward.title':'contador'}/></Field><button type="button" disabled={!customName} onClick={()=>choose({key:customScope+'.'+customName,label:customName,group:scopeNames[customScope]})}>Escolher este valor</button></details>
  <details className="variable-test"><summary>Testar como a mensagem vai ficar</summary>
  <h4>Conferir sem executar ações</h4><p className="help">{flow?'Calcula as ações de variável e os textos na ordem do fluxo.':'Resolve o conteúdo com os dados de teste.'} A prévia não envia mensagens nem grava variáveis. Scripts e serviços externos não são executados.</p>
  {flow?.trigger.kind==='timer'

@@ -48,6 +48,7 @@ Não precisa apagar o perfil para testar uma configuração. Excluir pode destru
 | !pontos personalizado não executa | O módulo de pontos trata seu comando pronto antes dos fluxos |
 | Espera inválida | O campo é em milissegundos; máximo 30000 |
 | Resposta bloqueada | Revise a blocklist; a comparação encontra trechos dentro de palavras maiores |
+| Anúncio, mensagem fixada ou destaque recusado | Autorize de novo as contas do bot e do canal, marque o bot como moderador do canal e leia o aviso no Histórico, que diz qual permissão falta |
 
 ## IA e memória
 
@@ -82,6 +83,7 @@ Erros HTTP são indícios, não diagnósticos completos. Verifique também o pai
 | Trivia automática não publica | Módulo e opção ativos, perguntas válidas, canal conectado, atividade anterior, intervalo cumprido e nenhuma pergunta aberta |
 | Bingo não reconhece um emote | A detecção compara termos textuais; representação da plataforma pode ser diferente |
 | TTS sem som | Teste a voz local, confira áudio do app, voz instalada, limite e filtro |
+| Áudio do disparo não toca | Som escolhido em **Tocar áudio ao disparar**, arquivo ainda presente em **Respostas e sons**, volume acima de zero, saída de áudio capturada no OBS e aviso no Histórico; a simulação nunca toca som |
 | Voz não reconhece | Confira microfone autorizado, servidor Whisper local e rota /inference |
 | Overlay aguarda BotLive | Confira instância aberta, porta e token da sessão atual |
 | Overlay de outro perfil | Preencha o UUID correto no parâmetro profile |

@@ -74,7 +74,7 @@ pub async fn dispatch(rt:Arc<Runtime>,op:&str,args:Value)->R<Value>{
  let text=context.render(args["text"].as_str().unwrap_or(""))?;
  Ok(json!({"text":text,"steps":steps,"variables":context.inspect()}))
  },
- "flow.save"=>{let f:Flow=serde_json::from_value(args["flow"].clone()).map_err(|_|"Fluxo inválido")?;rt.db.save_flow(&f)?;Ok(json!(f))},
+ "flow.save"=>{let f:Flow=serde_json::from_value(args["flow"].clone()).map_err(|_|"Fluxo inválido")?;if !f.audio.is_empty(){chat_extras::asset(&rt,&f.profile_id,&f.audio,"sound")?;}rt.db.save_flow(&f)?;Ok(json!(f))},
  "flow.delete"=>{rt.db.delete_flow(&p,args["id"].as_str().ok_or("Fluxo inválido")?)?;Ok(Value::Null)},
  "logs"=>Ok(json!(rt.db.logs(&p)?)),
  "stats"=>stats::read(&rt,&p),

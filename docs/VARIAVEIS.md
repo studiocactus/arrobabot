@@ -14,11 +14,12 @@ Você não precisa digitar os marcadores. Os botões **+ Nome da pessoa**, **+ N
 4. Confira a leitura logo abaixo: o nome técnico aparece como uma etiqueta **Nome da pessoa**, dentro da mensagem.
 5. Para outras informações, abra **Inserir variável e testar mensagem**.
 6. Busque por uma descrição ou escolha uma categoria: Pessoa, Mensagem, Canal, Data e hora, Execução, Minhas variáveis ou Neste fluxo.
-7. Clique na informação desejada. Em **Se não houver valor, mostrar**, informe uma alternativa opcional, como amigo.
-8. Em **Como mostrar**, escolha texto normal, maiúsculas, minúsculas, número ou outra opção disponível.
-9. Clique em **Inserir na mensagem**. O aplicativo monta a sintaxe automaticamente e devolve o cursor ao texto.
+7. Clique na ficha da informação. Ela entra na mensagem na hora, no lugar do cursor, e a confirmação traz o código que foi inserido.
+8. O quadro **Como será enviado ao chat** mostra a mensagem com etiquetas; os nomes técnicos continuam no campo de edição e são trocados pelos valores no envio.
+9. Se precisar de um texto quando o valor faltar, ou de outro formato, clique em **Opções** na mesma ficha. Em **Se não houver valor, mostrar**, informe a alternativa, como amigo, e em **Como mostrar** escolha texto normal, maiúsculas, minúsculas, número ou outra opção disponível.
+10. Clique em **Inserir na mensagem**. O aplicativo monta a sintaxe automaticamente e devolve o cursor ao texto.
 
-A leitura com etiquetas serve para entender a composição; não é o resultado de uma execução. O campo de edição conserva os marcadores para manter a compatibilidade e permitir ajustes manuais. No catálogo, **Mostrar códigos técnicos** é opcional e começa desmarcado.
+A leitura com etiquetas serve para entender a composição; não é o resultado de uma execução. O campo de edição conserva os marcadores para manter a compatibilidade e permitir ajustes manuais. No catálogo, **Mostrar códigos técnicos** é opcional e começa desmarcado. Todas as fichas têm o mesmo tamanho e o texto que não couber é cortado com reticências; passe o mouse para ver o texto completo.
 
 **Minhas variáveis** carrega os valores cadastrados no perfil no aplicativo desktop. **Atualizar minhas variáveis** refaz a consulta. Os nomes por pessoa correspondem ao ID informado nos dados avançados do teste. **Neste fluxo** mostra os destinos definidos ou incrementados pelas ações; a definição deve ocorrer antes do uso. Para um nome ainda não listado, abra **Usar uma variável personalizada**, escolha onde o valor está guardado e informe apenas seu nome. Campos de eventos usam Dados do evento e um caminho como reward.title.
 

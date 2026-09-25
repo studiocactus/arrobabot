@@ -29,11 +29,22 @@ impl Default for AiConfig {
 pub struct Flow {
  #[serde(default)] pub counter:bool,
  #[serde(default="timer_default")] pub timer_seconds:u64,
+ #[serde(default)] pub audio:String,
+ #[serde(default="full_volume")] pub audio_volume:f64,
+ #[serde(default="send_chat")] pub send_type:String,
+ #[serde(default="send_primary")] pub send_color:String,
  pub id:String, pub profile_id:String, pub name:String, pub enabled:bool,
  pub trigger:Trigger, pub actions:Vec<Action>,
  #[serde(default)] pub layout:Value,
 }
 fn timer_default()->u64{300}
+fn full_volume()->f64{1.0}
+fn send_chat()->String{"chat".into()}
+fn send_primary()->String{"primary".into()}
+pub const SEND_TYPES:[&str;4]=["chat","announce","pin","shoutout"];
+pub const SEND_COLORS:[&str;5]=["primary","blue","green","orange","purple"];
+/// True when the flow needs a message-sending action to make this delivery useful.
+pub fn needs_message(f:&Flow)->bool{f.actions.iter().any(|a|matches!(a.kind.as_str(),"chat"|"ai"|"script"))}
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all="camelCase")]
 pub struct Trigger {
@@ -119,6 +130,11 @@ pub fn validate_flow(f:&Flow)->Result<(),String> {
  if !["everyone","subscriber","moderator","broadcaster"].contains(&f.trigger.permission.as_str()) {return Err("Permissão inválida".into())}
  if f.trigger.cooldown>86400||f.trigger.user_cooldown>86400{return Err("Cooldown máximo: 24 horas".into())}
  if f.trigger.kind=="command" && (!f.trigger.pattern.starts_with('!')||f.trigger.pattern.contains(char::is_whitespace)) {return Err("O comando deve começar com ! e não conter espaços".into())}
+ if !SEND_TYPES.contains(&f.send_type.as_str()){return Err("Forma de envio inválida".into())}
+ if !SEND_COLORS.contains(&f.send_color.as_str()){return Err("Cor do anúncio inválida".into())}
+ if f.send_type=="shoutout"&&!needs_message(f){return Err("O destaque de canal usa o texto de uma ação que envia mensagem: escreva ali o canal de destino".into())}
+ if !f.audio.is_empty()&&(f.audio.len()>64||f.audio.contains(char::is_whitespace)){return Err("Áudio inválido: escolha um som da biblioteca".into())}
+ if !f.audio_volume.is_finite()||!(0.0..=1.0).contains(&f.audio_volume){return Err("Volume do áudio: escolha de 0% a 100%".into())}
  for a in &f.actions {
  if !["chat","ai","ai.generate","memory","webhook","discord","overlay","delay","script","points","tts","variable.set","variable.increment","variable.delete"].contains(&a.kind.as_str()) {return Err("Tipo de ação inválido".into())}
  if a.kind=="ai.generate" {let (scope,name)=crate::variables::target(crate::ai::response_target(a))?;if scope!="local"||name=="aiSuccess"{return Err("Guarde a resposta da IA numa variável local de texto".into())}}
@@ -138,7 +154,7 @@ pub fn validate_flow(f:&Flow)->Result<(),String> {
  assert!(permitted("moderator","broadcaster"));assert!(!permitted("broadcaster","moderator"));
  }
  #[test] fn preview_event_follows_the_trigger() {
-  let mut f=Flow{counter:false,timer_seconds:300,id:"f".into(),profile_id:"p".into(),name:"Minecraft".into(),enabled:true,trigger:Trigger{kind:"timer".into(),pattern:String::new(),permission:"everyone".into(),cooldown:0,user_cooldown:0},actions:vec![],layout:Value::Null};
+  let mut f=Flow{counter:false,timer_seconds:300,audio:String::new(),audio_volume:1.0,send_type:"chat".into(),send_color:"primary".into(),id:"f".into(),profile_id:"p".into(),name:"Minecraft".into(),enabled:true,trigger:Trigger{kind:"timer".into(),pattern:String::new(),permission:"everyone".into(),cooldown:0,user_cooldown:0},actions:vec![],layout:Value::Null};
   let t=preview_event(&f,e());
   assert_eq!((t.kind.as_str(),t.user.as_str(),t.user_id.as_str(),t.message.as_str(),t.simulated),("timer","BotLive","","",true));
   f.trigger.kind="command".into();f.trigger.pattern="!minecraft".into();
@@ -151,5 +167,19 @@ pub fn validate_flow(f:&Flow)->Result<(),String> {
   assert_eq!((t.kind.as_str(),t.user_id.as_str(),t.message.as_str()),("voice","local-streamer","!oi tudo bem"));
   f.trigger.kind="follow".into();
   assert_eq!(preview_event(&f,e()).kind,"follow");
+ }
+ #[test] fn delivery_type_color_and_flow_audio_rules() {
+  let mut f=Flow{counter:false,timer_seconds:300,audio:String::new(),audio_volume:1.0,send_type:"chat".into(),send_color:"primary".into(),id:uuid::Uuid::new_v4().to_string(),profile_id:uuid::Uuid::new_v4().to_string(),name:"ifood".into(),enabled:true,trigger:Trigger{kind:"command".into(),pattern:"!ifood".into(),permission:"everyone".into(),cooldown:0,user_cooldown:0},actions:vec![Action{kind:"chat".into(),text:"Bora".into(),target:String::new(),value:0,condition:String::new()}],layout:Value::Null};
+  assert!(validate_flow(&f).is_ok());
+  f.send_type="announce".into();f.send_color="purple".into();assert!(validate_flow(&f).is_ok());
+  f.send_type="letras".into();assert!(validate_flow(&f).is_err());
+  f.send_type="pin".into();f.send_color="vermelho".into();assert!(validate_flow(&f).is_err());
+  f.send_color="primary".into();f.audio="audio com espaco".into();assert!(validate_flow(&f).is_err());
+  f.audio=uuid::Uuid::new_v4().to_string();f.audio_volume=1.5;assert!(validate_flow(&f).is_err());
+  f.audio_volume=0.8;assert!(validate_flow(&f).is_ok());
+  f.send_type="shoutout".into();f.actions.clear();assert!(validate_flow(&f).is_err());
+  f.actions.push(Action{kind:"chat".into(),text:"outrocanal".into(),target:String::new(),value:0,condition:String::new()});
+  assert!(validate_flow(&f).is_ok());
+  assert_eq!(SEND_TYPES,["chat","announce","pin","shoutout"]);
  }
 }

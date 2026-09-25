@@ -121,7 +121,18 @@ test('catálogo de variáveis insere marcador e informa limite da prévia web',a
  await page.getByText('Inserir variável e testar mensagem',{exact:true}).click();
  await page.getByRole('combobox',{name:'Categoria',exact:true}).selectOption('Mensagem');
  await page.getByLabel('Buscar informação',{exact:true}).fill('primeira');
- await page.locator('.variable-catalog button').click();
+ await expect(page.locator('.variable-card')).toHaveCount(1);
+ await page.locator('.variable-card-main').click();
+ await expect(response).toHaveValue('Olá, {{arg0}}');
+ await expect(page.locator('.variable-done')).toContainText('{{arg0}}');
+ await response.fill('Olá, ');
+ await page.locator('.variable-card-more').click();
+ const options=page.locator('.variable-options');
+ await expect(options).toBeVisible();
+ await expect(options).toBeInViewport();
+ await page.waitForTimeout(200);
+ const seen=await options.evaluate(el=>{const box=el.closest('.variable-catalog')!.getBoundingClientRect(),own=el.getBoundingClientRect();return own.top>=box.top-1&&own.bottom<=box.bottom+1});
+ expect(seen).toBe(true);
  await page.getByLabel('Se não houver valor, mostrar',{exact:true}).fill('amigo');
  await page.getByRole('combobox',{name:'Como mostrar',exact:true}).selectOption('upper');
  await page.getByRole('button',{name:'Inserir na mensagem',exact:true}).click();
@@ -135,4 +146,85 @@ test('catálogo de variáveis insere marcador e informa limite da prévia web',a
  await expect(page.getByRole('button',{name:'Salvar variável',exact:true})).toBeDisabled();
  await page.setViewportSize({width:720,height:800});
  const size=await page.evaluate(()=>({width:innerWidth,scroll:document.documentElement.scrollWidth}));expect(size.scroll).toBeLessThanOrEqual(size.width);
+});
+
+test('fichas do catálogo têm tamanho padrão, nada vaza da caixa e o clique insere na hora',async({page})=>{
+ await page.goto('/');
+ await page.getByRole('button',{name:'Criar primeiro bot',exact:true}).click();
+ await page.getByLabel('Nome do perfil',{exact:true}).fill('Catálogo');
+ await page.getByRole('button',{name:'Salvar perfil',exact:true}).click();
+ await page.getByRole('dialog').getByRole('button',{name:'Fechar',exact:true}).click();
+ await page.getByRole('button',{name:'Comandos',exact:true}).click();
+ await page.getByRole('button',{name:'Novo comando',exact:true}).click();
+ const response=page.getByRole('textbox',{name:'Resposta',exact:true});
+ await response.fill('Boa live, ');
+ await page.getByText('Inserir variável e testar mensagem',{exact:true}).click();
+ const cards=page.locator('.variable-card');
+ expect(await cards.count()).toBeGreaterThan(25);
+ const boxes=await cards.evaluateAll(els=>els.map(card=>{
+  const clamped=(el:Element)=>{const css=getComputedStyle(el);return css.textOverflow==='ellipsis'&&css.overflow==='hidden'};
+  return {
+   height:Math.round(card.getBoundingClientRect().height),
+   outside:card.scrollWidth-card.clientWidth,
+   spilling:Math.max(0,...Array.from(card.querySelectorAll('*')).filter(el=>!clamped(el)).map(el=>el.scrollWidth-el.clientWidth))
+  };
+ }));
+ expect(Math.max(...boxes.map(b=>b.outside))).toBeLessThanOrEqual(0);
+ expect(Math.max(...boxes.map(b=>b.spilling))).toBeLessThanOrEqual(0);
+ expect(Math.max(...boxes.map(b=>b.height))-Math.min(...boxes.map(b=>b.height))).toBeLessThanOrEqual(1);
+ const grid=await page.locator('.variable-catalog').evaluate(el=>({scroll:el.scrollWidth,client:el.clientWidth}));
+ expect(grid.scroll).toBeLessThanOrEqual(grid.client+1);
+ await cards.filter({hasText:'Nome sorteado no chat'}).locator('.variable-card-main').click();
+ await expect(response).toHaveValue('Boa live, {{randomViewer}}');
+ await expect(page.locator('.variable-result')).toContainText('Nome sorteado no chat');
+ await page.locator('.variable-catalog').scrollIntoViewIfNeeded();
+ await page.waitForTimeout(200);
+ await page.locator('.variable-catalog').screenshot({path:'artifacts/variables-grid.png'});
+ await cards.filter({hasText:'Nome sorteado no chat'}).locator('.variable-card-more').click();
+ await expect(page.locator('.variable-options')).toBeInViewport();
+ await page.waitForTimeout(250);
+ await page.locator('.variable-catalog').screenshot({path:'artifacts/variables-options.png'});
+});
+
+test('comando escolhe como enviar na Twitch e oferece o áudio do disparo',async({page})=>{
+ const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.goto('/');
+ await page.getByRole('button',{name:'Criar primeiro bot',exact:true}).click();
+ await page.getByLabel('Nome do perfil',{exact:true}).fill('Envio e áudio');
+ await page.getByRole('button',{name:'Salvar perfil',exact:true}).click();
+ await page.getByRole('dialog').getByRole('button',{name:'Fechar',exact:true}).click();
+ await page.getByRole('button',{name:'Comandos',exact:true}).click();
+ await page.getByRole('button',{name:'Novo comando',exact:true}).click();
+ await page.getByLabel('Nome',{exact:true}).fill('ifood');
+ await page.getByLabel('Comando',{exact:true}).fill('!ifood');
+ await page.getByRole('textbox',{name:'Resposta',exact:true}).fill('O ifood já passou a milhão na rua 12 vezes!');
+ const send=page.getByRole('combobox',{name:'Como enviar na Twitch',exact:true});
+ await expect(send).toBeVisible();
+ await expect(send).toHaveValue('chat');
+ await send.selectOption('announce');
+ const color=page.getByRole('combobox',{name:'Cor do anúncio',exact:true});
+ await expect(color).toBeVisible();await color.selectOption('purple');
+ await expect(page.getByText('Envio escolhido: Anúncio.',{exact:false})).toBeVisible();
+ const audio=page.getByRole('combobox',{name:'Tocar áudio ao disparar',exact:true});
+ await expect(audio).toBeVisible();await expect(audio).toHaveValue('');
+ await expect(page.getByRole('button',{name:'Testar som',exact:true})).toBeDisabled();
+ await expect(page.getByRole('button',{name:'Escolher som',exact:true})).toBeDisabled();
+ await page.locator('.modal').screenshot({path:'artifacts/command-send-audio.png'});
+ await page.getByRole('button',{name:'Salvar comando',exact:true}).scrollIntoViewIfNeeded();
+ await expect(page.getByRole('button',{name:'Salvar comando',exact:true})).toBeInViewport();
+ await page.setViewportSize({width:720,height:800});
+ const size=await page.evaluate(()=>({width:document.documentElement.clientWidth,scroll:document.documentElement.scrollWidth}));
+ expect(size.scroll).toBeLessThanOrEqual(size.width);
+ await page.setViewportSize({width:1280,height:900});
+ await page.getByRole('button',{name:'Salvar comando',exact:true}).click();
+ await expect(page.getByRole('cell',{name:'!ifood ifood'})).toBeVisible();
+ await page.getByRole('button',{name:'Automações',exact:true}).click();
+ await page.getByRole('button',{name:'Editar ifood'}).click();
+ await expect(page.getByRole('combobox',{name:'Como enviar na Twitch',exact:true})).toHaveValue('announce');
+ await expect(page.getByRole('combobox',{name:'Cor do anúncio',exact:true})).toHaveValue('purple');
+ await expect(page.getByRole('combobox',{name:'Tocar áudio ao disparar',exact:true})).toHaveValue('');
+ await page.screenshot({path:'artifacts/flow-send-audio.png',fullPage:true});
+ await page.getByRole('button',{name:'Salvar fluxo',exact:true}).click();
+ await expect(page.getByText('Automação salva.',{exact:true})).toBeVisible();
+ expect(errors).toEqual([]);
 });

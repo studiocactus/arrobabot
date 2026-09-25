@@ -44,6 +44,10 @@ Clique em **Adicionar pessoa** e preencha:
 
 Ative a pessoa e **Ativar sons por espectador**, depois clique em **Salvar respostas e sons**. Para suspender, desligue o controle geral ou o individual e salve. Remover uma pessoa também exige salvar. Mudanças valem para novos eventos; áudio já em reprodução ou na fila termina normalmente.
 
+### Usar um som em um comando, timer ou automação
+
+Os sons importados aqui também ficam disponíveis em **Comandos**, **Timers** e **Automações**: no campo **Tocar áudio ao disparar**, escolha **Escolher som** para importar ou selecione um som já cadastrado, ajuste o **Volume** e use **Testar som**. O som toca quando o fluxo executa, independentemente de **Ativar sons por espectador**. Veja o passo a passo em [Comandos e automações](03-COMANDOS-E-AUTOMACOES.md).
+
 ### Entrada silenciosa na Twitch
 
 1. Ative **Monitorar entradas silenciosas na Twitch** e escolha **Quando entrar, mesmo sem falar** ou **Ao entrar ou enviar mensagem** para a pessoa.

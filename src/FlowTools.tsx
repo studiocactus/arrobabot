@@ -5,6 +5,7 @@ import {type Flow,type Profile,type Preset} from './types';
 import {Modal,Field,Toggle} from './components';
 import FlowEditor from './FlowEditor';
 import MessageEditor from './MessageEditor';
+import {SendPicker,AudioPicker} from './FlowOptions';
 import CommandOptions from './CommandOptions';
 
 export type FlowMode='command'|'timer'|'flow';
@@ -33,12 +34,14 @@ export function FlowDialog({flow,mode,profile,notify,onSaved,onClose}:{flow:Flow
   onClose();
  }
  return <Modal wide={editor} title={title} onClose={onClose}>
- {editor?<FlowEditor flow={editing} onSave={save}/>:<form className="form-pad" onSubmit={e=>{e.preventDefault();save(editing).catch(err=>notify(errorText(err)))}}>
+ {editor?<FlowEditor flow={editing} platform={profile.platform} onSave={save}/>:<form className="form-pad" onSubmit={e=>{e.preventDefault();save(editing).catch(err=>notify(errorText(err)))}}>
   <div className="form-grid">
    <Field label="Nome"><input required value={editing.name} onChange={e=>setEditing({...editing,name:e.target.value})}/></Field>
    {mode!=='timer'&&<Field label="Comando"><input required pattern="![^\s]+" value={editing.trigger.pattern} onChange={e=>setEditing({...editing,trigger:{...editing.trigger,pattern:e.target.value}})}/></Field>}
   </div>
   <MessageEditor profileId={profile.id} label="Resposta" required flow={editing} value={editing.actions[0].text} onChange={text=>setEditing({...editing,actions:[{...editing.actions[0],text}]})}/>
+  <SendPicker platform={profile.platform} value={editing.sendType||'chat'} color={editing.sendColor||'primary'} onChange={sendType=>setEditing({...editing,sendType})} onColor={sendColor=>setEditing({...editing,sendColor})}/>
+  <AudioPicker profileId={profile.id} value={editing.audio||''} volume={editing.audioVolume??1} onChange={audio=>setEditing({...editing,audio})} onVolume={audioVolume=>setEditing({...editing,audioVolume})}/>
   <CommandOptions timer={mode==='timer'} seconds={editing.timerSeconds??300} counter={!!editing.counter} onSeconds={timerSeconds=>setEditing({...editing,timerSeconds})} onCounter={counter=>setEditing({...editing,counter})}/>
   {editing.counter&&<button type="button" onClick={()=>setEditing({...editing,actions:[{...editing.actions[0],text:editing.actions[0].text+'{{commandCount}}'}]})}>+ Contagem do comando</button>}
   {mode!=='timer'&&<div className="form-grid">

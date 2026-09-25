@@ -1,5 +1,89 @@
 # Histórico de atualizações
 
+# BotLive 0.1.12
+
+## O que mudou
+
+Duas funções novas, disponíveis em comandos, timers e automações: anexar um áudio já carregado na plataforma e escolher a forma como a mensagem sai na Twitch.
+
+**Tocar áudio ao disparar.** O campo abre a biblioteca de **Respostas e sons**: escolha um som já importado ou use **Escolher som** para importar WAV, MP3 ou OGG, ajuste **Volume** e ouça com **Testar som**. O som é solicitado antes das ações, na mesma execução da contagem do comando, então um comando `!ifood` com contador publica a mensagem com o número certo enquanto a vinheta toca. O áudio sai na saída do aplicativo, a mesma que o OBS captura. A simulação não toca nada e escreve `[Simulação] Tocaria o áudio do fluxo` no Histórico; se o arquivo for apagado da biblioteca, o fluxo continua sem som e o Histórico pede para escolher outro. O áudio do fluxo não depende de **Ativar sons por espectador** e não usa os intervalos daqueles sons. Ao importar preset, um áudio inexistente no perfil de destino é descartado em vez de quebrar o fluxo.
+
+**Como enviar na Twitch.** Um campo por fluxo escolhe a forma das mensagens daquele fluxo: **Mensagem normal**, **Anúncio** com **Cor do anúncio** (cor do canal, azul, verde, laranja ou roxo), **Mensagem fixada** (comunicado no topo do chat por cerca de 20 minutos) e **Destaque de canal** (a mensagem é o nome do canal de destino, como `outrocanal` ou `$user`). As três formas novas usam as rotas oficiais da API da Twitch — anúncio, envio com fixação e shoutout —, com o bot como remetente e a conta do canal como alternativa quando o bot não puder. Nas demais plataformas a mensagem sai como mensagem comum e o Histórico avisa. A prévia registra a forma escolhida, por exemplo `[Simulação] [Anúncio] ...`, antes de publicar.
+
+Nenhuma função antiga mudou de nome nem de comportamento: permissões, intervalos, contador, variáveis, prévia, editor visual, presets e simulação continuam iguais, e um fluxo salvo antes desta versão continua válido com os padrões **Mensagem normal** e nenhum áudio.
+
+**Permissões novas.** **Autorizar conta do bot** e **Autorizar conta do canal** agora pedem também `moderator:manage:announcements`, `moderator:manage:chat_messages` e `moderator:manage:shoutouts`. Autorizações antigas não têm esses escopos: as três formas novas só funcionam depois de autorizar de novo e salvar o perfil. **Mensagem normal** não foi afetada.
+
+## Como usar
+
+1. Abra **Comandos → Novo comando**, **Timers → Novo timer** ou **Automações → Editar**.
+2. Em **Tocar áudio ao disparar**, escolha **Escolher som** e importe o arquivo, ou selecione um som já cadastrado em **Respostas e sons**. Ajuste o volume e clique em **Testar som**.
+3. Em **Como enviar na Twitch**, escolha a forma. Em **Anúncio**, escolha também a **Cor do anúncio**. Em **Destaque de canal**, escreva na resposta apenas o nome do canal de destino.
+4. Salve, rode a simulação e confira no **Histórico** as linhas `[Simulação] [Anúncio] ...` e `[Simulação] Tocaria o áudio do fluxo`.
+5. Para publicar de verdade, autorize as duas contas novamente, confira que o bot é moderador do canal e conecte o perfil.
+
+Receita do exemplo: comando **!ifood** com **Contar usos deste comando** ativo, resposta `O ifood já passou a milhão na rua {{commandCount}} vezes!`, um som de caixa em **Tocar áudio ao disparar** e **Como enviar na Twitch** em **Anúncio**.
+
+Capítulos atualizados: **Comandos e automações** (as duas seções novas), **Timers e contadores**, **Respostas e sons**, **Perfis, contas e conexões**, **Solução de problemas**, **Exemplos práticos** e **Matriz de aceite**.
+
+## Validação
+
+Executado localmente, antes e depois da preparação desta versão: `npm run check` (TypeScript), `npm test` (11 testes Vitest), `npm run test:updates` (7 testes), `npx playwright test` (12 testes), `cargo test --locked --lib -j 1` (56 testes Rust), `npm run build` e `npm run docs` (manual de 21 capítulos). `npm run update:check` confere as versões e os registros.
+
+Dois testes novos cobrem as funções. No Rust, `model::tests::delivery_type_color_and_flow_audio_rules` valida as quatro formas de envio, as cinco cores, o volume entre 0% e 100%, o áudio com espaços rejeitado e a exigência de uma ação de mensagem para o destaque. `integration_tests::flow_audio_and_twitch_delivery_type` confere que o salvamento recusa áudio fora da biblioteca e cor inválida, que o evento `viewer-sound` sai com o áudio e o volume escolhidos, que a ação sem autorização registra o erro no Histórico sem derrubar o processo, que a simulação não emite áudio e que a prévia registra `[Simulação] [Anúncio]`.
+
+Em Playwright, o teste **comando escolhe como enviar na Twitch e oferece o áudio do disparo** cria um comando, troca a forma para Anúncio, escolhe a cor, confirma os controles de áudio com **Testar som** e **Escolher som** indisponíveis fora do desktop, verifica ausência de rolagem horizontal em 720x800, salva, reabre o fluxo no editor com as escolhas preservadas e salva o fluxo. A interface foi revisada nas capturas `artifacts/command-send-audio.png` e `artifacts/flow-send-audio.png`.
+
+## Limitações
+
+Anúncio, mensagem fixada e destaque existem só na Twitch. Nas demais plataformas a mensagem sai como mensagem comum, com aviso no Histórico, e o campo fica desabilitado para não criar expectativa.
+
+As três formas novas dependem de permissões que autorizações antigas não têm. O bot precisa ser moderador do canal: sem isso a Twitch responde 403 e o Histórico traduz como "a conta precisa ser moderadora do canal". Mensagem fixada usa a conta do bot como remetente, sem alternativa; se o bot não for moderador, o envio falha com esse mesmo aviso.
+
+Destaque de canal só funciona com o canal ao vivo, pede um login válido como destino e respeita os limites de horários da Twitch. Nesse modo a mensagem não é publicada, porque o próprio destaque é a ação.
+
+O áudio sai pela saída do aplicativo: sem capturar essa saída no OBS a live não ouve o som. A prévia web mostra a escolha, mas importar e testar arquivos fica no aplicativo desktop. A validação visual foi feita em capturas 1440x1000 e 720x800, sem rolagem horizontal; a conferência manual no aplicativo desktop não foi executada.
+
+---
+
+# BotLive 0.1.11
+
+## O que mudou
+
+O painel **Inserir variável e testar mensagem** foi reconstruído. Três defeitos o tornavam imprestável: o texto vazava das fichas, clicar não parecia fazer nada e o painel não deixava claro o que ia parar no chat.
+
+O transbordamento tinha uma causa única e escondida. A regra global de botões aplica `height: var(--h-md)` e `white-space: nowrap` a qualquer botão fora de uma lista de exceções, e a especificidade dessa regra (nove classes) é maior do que a do catálogo, que pedia `white-space: normal`. Toda ficha ficava presa a uma linha só: rótulos e exemplos longos atravessavam a caixa vizinha e o catálogo ganhava uma barra de rolagem horizontal. As fichas agora se chamam `.variable-card`, com um botão principal e um rodapé, e `.variable-card-btn` entrou na lista de exceções da regra global. Dentro da caixa, o nome é cortado em duas linhas e o exemplo em uma, ambos com reticências; o texto completo aparece ao passar o mouse. Todas as fichas têm a mesma altura, com a linha de exemplo reservada mesmo quando não há exemplo.
+
+O clique que não fazia nada era um problema de posicionamento, não de função. A ficha apenas registrava a escolha e o formulário com **Se não houver valor, mostrar**, **Como mostrar** e **Inserir na mensagem** era renderizado depois do catálogo e do bloco **Usar uma variável personalizada**, fora da área visível do diálogo. O clique na ficha agora insere o marcador na hora, no cursor, e uma confirmação logo abaixo do catálogo mostra o código que entrou. As opções passaram a ser abertas pelo botão **Opções** do rodapé da ficha e aparecem dentro do catálogo, fixas no topo, com a rolagem da página e o foco do teclado movidos automaticamente — inclusive quando vêm de **Escolher este valor**, na variável personalizada.
+
+O painel também ficou mais curto e legível: busca e categoria em duas colunas na mesma linha, **Mostrar códigos técnicos** e **Atualizar minhas variáveis** na mesma barra, e o quadro **Como será enviado ao chat** mostra a mensagem com etiquetas logo ao abrir, antes de qualquer clique, respondendo na tela o que a ferramenta vai publicar. Cada ficha passou a ter um formato só: nome, exemplo, a categoria em etiqueta e o botão **Opções**.
+
+Nenhuma função foi removida: busca, filtro por categoria, códigos técnicos, variáveis salvas com a atualização, variável personalizada, texto alternativo, todos os formatos, a seção **Testar como a mensagem vai ficar** com o aviso de timer, a exibição de erros e a inserção no cursor ou no trecho selecionado continuam com os mesmos rótulos, então os fluxos já cobertos por teste continuam valendo.
+
+## Como usar
+
+Abra **Inserir variável e testar mensagem** e clique na ficha da informação: o marcador entra na mensagem na hora e a confirmação traz o código inserido, por exemplo `{{arg0}}`. O quadro **Como será enviado ao chat**, no topo do painel, acompanha a mensagem enquanto você trabalha; os nomes das informações viram etiquetas e os valores reais só entram no envio.
+
+Quando o valor puder faltar, ou precisar de outro formato, clique em **Opções** no rodapé da mesma ficha. Preencha **Se não houver valor, mostrar** com o texto de reserva, escolha **Como mostrar** e clique em **Inserir na mensagem**. O painel de opções fica fixo no topo do catálogo, então nunca aparece fora da tela. Em **Mostrar códigos técnicos**, cada ficha mostra o marcador completo, como `{{local.aiResponse}}`.
+
+Os capítulos atualizados foram **Variáveis**, com os passos do clique direto, do **Opções** e o corte de texto das fichas, e **Comandos e automações**, com o mesmo caminho resumido.
+
+## Validação
+
+Executado localmente: `npm run check` (TypeScript), `npm test` (11 testes Vitest), `npm run test:updates` (7 testes), `npx playwright test` (11 testes), `cargo test --locked --lib -j 1` (54 testes Rust), `npm run build` e `npm run docs` (manual de 21 capítulos), com o Playwright reexecutado depois da geração do manual. `npm run update:check` confere as versões e os registros antes do commit.
+
+Dois testes de `tests/ui/app.spec.ts` cobrem a reconstrução. O teste **catálogo de variáveis insere marcador e informa limite da prévia web** agora verifica o clique direto (entra `{{arg0}}` e a confirmação aparece) e o caminho de opções, com asserções de que o painel está visível na janela e contido na caixa do catálogo, antes de conferir `{{arg0|default:amigo|upper}}`. O teste novo **fichas do catálogo têm tamanho padrão, nada vaza da caixa e o clique insere na hora** abre o catálogo inteiro, com mais de 25 fichas, e verifica que nenhuma ficha e nenhum filho estoura a caixa (exceto os elementos cortados por reticências, que são cortados de propósito), que a altura de todas as fichas varia no máximo um pixel, que o catálogo não tem rolagem horizontal e que o clique insere `{{randomViewer}}` com a leitura atualizada no quadro de envio.
+
+## Limitações
+
+O texto que não cabe é cortado com reticências e o completo só aparece ao passar o mouse; não há abertura da ficha para leitura integral, o que pesa em leitores de tela que não disparam `title`.
+
+O quadro **Como será enviado ao chat** é leitura com etiquetas, não execução: ele mostra a composição da mensagem, e os valores resolvidos continuam vindo de **Conferir variáveis** dentro de **Testar como a mensagem vai ficar**, botão que segue desabilitado fora do aplicativo desktop. A validação de interface foi feita pela captura automatizada em 1440x1000 e pela janela estreita de 720x800, sem rolagem horizontal; a conferência manual no aplicativo desktop não foi executada.
+
+A confirmação de inserção fica até o painel ser fechado ou outra ficha ser escolhida: se a mensagem for editada à mão logo depois, o aviso continua mostrando o código anterior, sem acompanhar a edição.
+
+---
+
 # BotLive 0.1.10
 
 ## O que mudou

@@ -2,7 +2,7 @@ export type AIConfig={provider:'ollama'|'openai'|'anthropic';endpoint:string;mod
 export type Profile={id:string;name:string;platform:'twitch'|'youtube'|'kick';channel:string;channelId:string;botId:string;clientId:string;blocklist:string[];topics:string[];editors:string[];ai:AIConfig;modules:Record<string,boolean>};
 export type Trigger={kind:string;pattern:string;permission:string;cooldown:number;userCooldown:number};
 export type Action={kind:string;text:string;target:string;value:number;condition:string};
-export type Flow={counter?:boolean;timerSeconds?:number;id:string;profileId:string;name:string;enabled:boolean;trigger:Trigger;actions:Action[];layout?:unknown};
+export type Flow={counter?:boolean;timerSeconds?:number;audio?:string;audioVolume?:number;sendType?:string;sendColor?:string;id:string;profileId:string;name:string;enabled:boolean;trigger:Trigger;actions:Action[];layout?:unknown};
 export type Activity={id:number;profileId:string;timestamp:string;kind:string;message:string;status:string};
 export type Note={path:string;content:string};
 export type Preset={id:string;format:string;version:number;name:string;kind:string;tags:string[];data:Record<string,unknown>};
@@ -10,9 +10,11 @@ export type Snapshot={profiles:Profile[];logs:Activity[];statuses:Record<string,
 export type Community={balances:Record<string,number>;names:Record<string,string>;queue:string[];songs:{user:string;url:string}[];raffle:{open:boolean;keyword:string;price:number;entries:Record<string,number>;winner:string};prediction:{open:boolean;title:string;options:string[];bets:Record<string,[number,number]>;result:number|null};shop:{id:string;name:string;cost:number;stock:number}[];redemptions:{user:string;item:string;at:number}[];trivia:{open?:boolean;question?:string}};
 export const newProfile=():Profile=>({id:crypto.randomUUID(),name:'',platform:'twitch',channel:'',channelId:'',botId:'',clientId:'',blocklist:[],topics:[],editors:[],ai:{provider:'ollama',endpoint:'http://localhost:11434',model:'',personality:'Você é um bot amigável de uma comunidade de live. Responda em português, brevemente e com respeito.',temperature:0.7,fallback:'Não consegui responder agora. Tente novamente em instantes.',remember:false},modules:{}});
 export const newAction=(kind='chat'):Action=>({kind,text:kind==='chat'?'Olá, $user! Bem-vindo ao canal.':'',target:kind==='memory'?'usuarios/$user.md':'',value:kind==='delay'?1000:0,condition:''});
-export const newFlow=(profileId:string):Flow=>({id:crypto.randomUUID(),profileId,name:'Boas-vindas',enabled:true,trigger:{kind:'command',pattern:'!oi',permission:'everyone',cooldown:5,userCooldown:15},actions:[newAction()]});
+export const newFlow=(profileId:string):Flow=>({id:crypto.randomUUID(),profileId,name:'Boas-vindas',enabled:true,audio:'',audioVolume:1,sendType:'chat',sendColor:'primary',trigger:{kind:'command',pattern:'!oi',permission:'everyone',cooldown:5,userCooldown:15},actions:[newAction()]});
 export const platforms={twitch:'Twitch',youtube:'YouTube',kick:'Kick'};
 export const actions:Record<string,string>={chat:'Enviar mensagem',ai:'Responder com IA','ai.generate':'Gerar resposta da IA (variável)',memory:'Registrar memória',delay:'Esperar',overlay:'Atualizar overlay',webhook:'Chamar webhook',discord:'Enviar ao Discord',tts:'Ler em voz alta',points:'Ajustar pontos',script:'Executar script Rhai','variable.set':'Definir variável','variable.increment':'Incrementar variável','variable.delete':'Apagar variável'};
 export const triggers:Record<string,string>={timer:'Timer periódico',command:'Comando de chat',contains:'Mensagem contém',chat:'Toda mensagem',follow:'Novo seguidor',subscription:'Nova inscrição',cheer:'Bits / Super Chat',raid:'Raid',redemption:'Resgate de pontos',custom:'Evento externo',voice:'Comando de voz'};
+export const sendTypes:Record<string,string>={chat:'Mensagem normal',announce:'Anúncio',pin:'Mensagem fixada',shoutout:'Destaque de canal'};
+export const sendColors:Record<string,string>={primary:'Cor do canal',blue:'Azul',green:'Verde',orange:'Laranja',purple:'Roxo'};
 
 export const newTimer=(profileId:string):Flow=>({...newFlow(profileId),name:'Lembrete',timerSeconds:600,counter:false,trigger:{kind:'timer',pattern:'',permission:'everyone',cooldown:0,userCooldown:0},actions:[{...newAction(),text:'Participe da nossa comunidade!'}]});

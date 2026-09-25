@@ -5,7 +5,7 @@ use sha2::{Sha256,Digest};
 use tokio::{net::TcpListener,io::{AsyncReadExt,AsyncWriteExt}};
 pub async fn device_start(client:&reqwest::Client,p:&Profile,account:&str)->Result<Value,String> {
  if p.client_id.is_empty(){return Err("Informe o Client ID do aplicativo Twitch nas opções avançadas do perfil".into())}
- let scopes=if account=="channel" {"moderator:read:followers channel:read:subscriptions bits:read channel:read:redemptions moderator:manage:banned_users moderator:manage:warnings"}else{"user:read:chat user:write:chat chat:read"};
+ let scopes=if account=="channel" {"moderator:read:followers channel:read:subscriptions bits:read channel:read:redemptions moderator:manage:banned_users moderator:manage:warnings moderator:manage:announcements moderator:manage:chat_messages moderator:manage:shoutouts"}else{"user:read:chat user:write:chat chat:read moderator:manage:announcements moderator:manage:chat_messages moderator:manage:shoutouts"};
  let res=client.post("https://id.twitch.tv/oauth2/device").form(&[("client_id",p.client_id.as_str()),("scopes",scopes)]).send().await.map_err(|_|"Falha ao iniciar autorização Twitch")?;
  if !res.status().is_success(){return Err("Twitch recusou o Client ID. Cadastre o aplicativo como cliente público.".into())}
  res.json().await.map_err(|_|"Resposta OAuth inválida".into())

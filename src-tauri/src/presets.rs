@@ -48,6 +48,8 @@ pub fn apply(rt:&Runtime,p:&str,v:&Value,policy:&str)->Result<(),String>{
  let conflict=existing.iter().find(|e|e.name==f.name||(f.trigger.kind=="command"&&e.trigger.pattern==f.trigger.pattern));
  if conflict.is_some()&&policy=="skip"{continue}
  f.id=conflict.map(|e|e.id.clone()).unwrap_or_else(||uuid::Uuid::new_v4().to_string());f.profile_id=p.into();
+ // O áudio pertence à biblioteca do perfil de destino; sem ele o fluxo segue sem som.
+ if !f.audio.is_empty()&&crate::chat_extras::asset(rt,p,&f.audio,"sound").is_err(){f.audio.clear();}
  // Imported automation always requires deliberate enabling after inspection.
  f.enabled=false;validate_flow(&f)?;changes.push(f);
  }
