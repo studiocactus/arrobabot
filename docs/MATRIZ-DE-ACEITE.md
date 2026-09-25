@@ -11,6 +11,7 @@ Esta matriz acompanha as fases dos documentos originais em ../documentação. "I
 | 5 | Interface | Dashboard, roteiro de configuração, modo simples, editor de nós, temas claro/escuro, atalhos e adaptação à janela | Teste de primeiro uso com pessoa externa e acessibilidade completa com leitor de tela |
 | 6 | Presets | JSON versionado, biblioteca, filtros, prévia, conflitos, dados de perfil sem contas, configurações de módulos, tema claro/escuro e cor personalizada | Importação entre dois computadores |
 | 7 | Distribuição | Configuração Tauri, pipeline Windows/macOS/Linux, atualizador com verificação de assinatura | Executável e instaladores Windows gerados; faltam teste em máquina limpa, builds macOS/Linux, certificados e feed publicado |
+| 8 | Discord nativo | Gateway v10 e API REST sem terceiros; token no cofre; servidor, canais e cargos; entrada, saída, autorole e contador de membros; espelho de chat; notificações da Twitch; auto-moderação com as regras da Twitch; auditoria única com desfazer e exportação; sorteios, XP, aniversários, vínculo de identidade e comandos slash | Conectar um bot real a um servidor Discord, conferir intents privilegiadas, permissões de cargo e limites de requisição |
 
 ## Módulos adicionais
 
@@ -19,7 +20,7 @@ Esta matriz acompanha as fases dos documentos originais em ../documentação. "I
 - Palpites com divisão proporcional e devolução sem vencedores.
 - Fila de músicas, limites configuráveis, consulta e remoção; overlay OBS mostra seleção atual e próximas URLs. Reprodução, metadados e controle dos players não integrados.
 - Roleta, duelo aleatório, bingo de emotes e trivia manual ou automática por inatividade. Duelo por votação não implementado.
-- TTS do sistema, voz local via Whisper, Discord por webhook e convite, moderação Twitch, fila de interação e estatísticas locais. Motores TTS remotos e ações nativas de moderação fora da Twitch não implementados.
+- TTS do sistema, voz local via Whisper, Discord por webhook e convite, moderação Twitch, fila de interação e estatísticas locais. Motores TTS remotos não implementados. A moderação nativa do Discord (aviso, timeout, expulsão, banimento, apagar mensagem, cargo, modo lento e auto-moderação) está implementada pela tela **Discord**; a moderação nativa de Kick e YouTube continua pendente.
 
 ## Dependências externas
 

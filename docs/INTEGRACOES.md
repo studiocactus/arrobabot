@@ -68,6 +68,14 @@ Uma implementação de ponte deve validar as assinaturas oficiais antes de encam
 
 Referências oficiais: [documentação Kick](https://docs.kick.com/) e [segurança de webhooks](https://github.com/KickEngineering/KickDevDocs/blob/main/events/webhook-security.md).
 
+## Discord — bot no servidor
+
+O Discord não usa OAuth de perfil: ele é conectado com o token de um bot criado no portal do desenvolvedor. Salve o token em **Discord → Token do bot**, informe o servidor e ative **Ativar o bot do Discord**. O token fica no cofre do sistema e não é exportado com as configurações.
+
+Ative **Server Members Intent** e **Message Content Intent** na página do aplicativo antes de conectar; sem elas o bot não conta entradas nem lê o texto. Depois de conectar, use **Descobrir servidor e canais** para preencher as listas de canais e cargos.
+
+A tela **Discord** cobre entrada e saída, contador de membros, espelho de chat, notificações, auto-moderação, auditoria, sorteios, XP, aniversários, vínculo de identidade e comandos slash. O passo a passo completo está no capítulo [Discord](09-DISCORD.md).
+
 ## Estados e reconexão
 
 | Estado | Interpretação |

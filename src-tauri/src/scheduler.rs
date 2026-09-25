@@ -6,6 +6,7 @@ pub async fn run(rt:Arc<Runtime>){
  loop{
  tick.tick().await;
  for p in rt.db.profiles().unwrap_or_default(){
+ if crate::discord::online(&rt,&p.id){crate::discord_engage::tick(&rt,&p).await}
  if p.modules["games"]!=true||rt.statuses.lock().unwrap().get(&p.id).map(String::as_str)!=Some("online"){continue}
  let config=rt.db.module(&p.id,"games");
  if config["autoTrivia"]!=true{continue}

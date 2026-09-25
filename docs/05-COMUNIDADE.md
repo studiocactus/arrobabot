@@ -152,6 +152,8 @@ Ative Discord, informe o webhook do canal e clique em **Guardar webhook**. Crie 
 
 Em Avançado, informe um convite HTTPS oficial de discord.gg ou discord.com para o comando !discord. Convite e webhook são diferentes: o convite permite entrar no servidor; o webhook publica mensagens.
 
+Essa tela usa um webhook e continua independente. Para administrar um servidor inteiro com um bot próprio — entrada e saída, auto-moderação, espelho de chat, sorteios, XP e comandos slash — abra **Discord** em **SEU ESPAÇO** e leia o capítulo [Discord](09-DISCORD.md).
+
 ## Moderação
 
 Ative Moderação, escolha a ação e salve:

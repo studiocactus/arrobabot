@@ -159,6 +159,18 @@ A moderação de links pode impedir pedidos de música antes de chegarem ao mód
 
 **Moderação:** configure termos proibidos no perfil e comece com **Só ignorar e registrar**. Uma mensagem de participante comum com termo bloqueado é registrada e não segue para comandos. Isso não apaga a mensagem da plataforma. Para timeout Twitch, escolha essa ação, configure a duração e autorize a conta do canal. Teste com cuidado em um canal de teste: sanções reais alteram a participação da pessoa.
 
+## Discord — bot no servidor
+
+**Conectar o bot:** abra **Discord** em **SEU ESPAÇO**, salve o token do bot, clique em **Descobrir servidor e canais**, escolha o servidor, ligue **Ativar o bot do Discord** e salve. Depois clique em **Conectar**. **Resultado esperado:** o rótulo mostra **Conectado** e os canais e cargos já estão disponíveis nos campos.
+
+**Boas-vindas e contador:** escolha um canal de boas-vindas, escreva Bem-vindo(a) ao servidor, {user}! e ative **Boas-vindas**; informe o ID de um canal criado só para o contador. **Resultado esperado:** quem entra recebe a mensagem e o nome do canal do contador passa a mostrar o total, como membros-1284.
+
+**Moderação em dupla:** ative **Auto-moderação do Discord**, deixe o canal de logs escolhido e peça para alguém escrever um termo da lista bloqueada. **Resultado esperado:** a mensagem é apagada, a ocorrência entra na auditoria com a plataforma `discord` e o botão **Desfazer** aparece quando a operação é reversível.
+
+**Sorteio com reação:** ative **Sorteios liberados**, escolha o canal, preencha prêmio e minutos e clique em **Criar sorteio**. **Resultado esperado:** a mensagem do sorteio aparece no canal e reagir com 🎉 inscreve a pessoa; **Encerrar** sorteia os vencedores.
+
+A tela **Discord** completa os passos, os comandos slash e as limitações estão no capítulo [Discord](09-DISCORD.md).
+
 ## Ações avançadas, overlay e integrações
 
 | Ação | Exemplo de configuração | O que observar |

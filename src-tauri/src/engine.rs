@@ -9,6 +9,9 @@ pub struct Runtime {
  pub app:Mutex<Option<tauri::AppHandle>>,
  pub connections:Mutex<HashMap<String,tokio::task::JoinHandle<()>>>,
  pub statuses:Mutex<HashMap<String,String>>,
+ pub discord_tasks:Mutex<HashMap<String,tokio::task::JoinHandle<()>>>,
+ pub discord_status:Mutex<HashMap<String,String>>,
+ pub discord_cache:Mutex<HashMap<String,crate::discord::Cache>>,
  pub timer_pending:Mutex<std::collections::HashSet<String>>,
  pub cooldowns:Mutex<HashMap<String,Instant>>,
  pub conversation:Mutex<crate::conversation::History>,
@@ -24,7 +27,7 @@ impl Runtime {
  let (tx,rx)=mpsc::channel(512);let (broadcast,_)=broadcast::channel(512);
  let http=reqwest::Client::builder().timeout(Duration::from_secs(30)).redirect(reqwest::redirect::Policy::none()).build().map_err(|e|e.to_string())?;
  let actor=if db.get("accessEnabled")==true{"locked"}else{"owner"}.to_owned();
- let rt=Arc::new(Self{actor:Mutex::new(actor),db,base,http,tx,broadcast,app:Mutex::new(None),connections:Mutex::new(HashMap::new()),statuses:Mutex::new(HashMap::new()),timer_pending:Mutex::new(std::collections::HashSet::new()),cooldowns:Mutex::new(HashMap::new()),conversation:Mutex::new(crate::conversation::History::default()),chat_extras:Mutex::new(crate::chat_extras::State::default()),seen:Mutex::new(HashMap::new()),module_lock:Mutex::new(()),vault_lock:Mutex::new(()),send_locks:Mutex::new(HashMap::new()),api_token:format!("{}{}",uuid::Uuid::new_v4().simple(),uuid::Uuid::new_v4().simple()),api_port:Mutex::new(0)});
+ let rt=Arc::new(Self{actor:Mutex::new(actor),db,base,http,tx,broadcast,app:Mutex::new(None),connections:Mutex::new(HashMap::new()),statuses:Mutex::new(HashMap::new()),discord_tasks:Mutex::new(HashMap::new()),discord_status:Mutex::new(HashMap::new()),discord_cache:Mutex::new(HashMap::new()),timer_pending:Mutex::new(std::collections::HashSet::new()),cooldowns:Mutex::new(HashMap::new()),conversation:Mutex::new(crate::conversation::History::default()),chat_extras:Mutex::new(crate::chat_extras::State::default()),seen:Mutex::new(HashMap::new()),module_lock:Mutex::new(()),vault_lock:Mutex::new(()),send_locks:Mutex::new(HashMap::new()),api_token:format!("{}{}",uuid::Uuid::new_v4().simple(),uuid::Uuid::new_v4().simple()),api_port:Mutex::new(0)});
  tokio::spawn(worker(rt.clone(),rx));Ok(rt)
  }
  pub fn emit(&self,kind:&str,payload:Value){
@@ -78,7 +81,15 @@ impl Runtime {
  let fresh=self.db.profile(&p.id)?;
  if e.kind=="timer"&&e.data["timerId"].is_string()&&!e.simulated&&!crate::timers::event_active(self,e){return Err("Timer pausado ou perfil desconectado".into())}
  if blocked(text,&fresh){return Err("Mensagem bloqueada pelas restrições atuais do perfil".into())}
- platforms::send(self,&fresh,text).await?;*last=Instant::now();
+ // A reply always goes back to the channel the question came from.
+ if let Some(channel)=crate::discord::from_discord(e){
+  if crate::discord::config(self,&fresh.id)["enabled"]!=true{return Err("O bot do Discord está desativado".into())}
+  if channel.is_empty(){return Err("O Discord não informou o canal de origem".into())}
+  crate::discord::post(self,&fresh,&channel,text).await?;
+ }else{
+  platforms::send(self,&fresh,text).await?;
+ }
+ *last=Instant::now();
  self.conversation.lock().unwrap().sent(&p.id,text);
  self.log(&p.id,"chat",text,"success");Ok(())
  }
@@ -100,7 +111,10 @@ pub async fn process(rt:Arc<Runtime>,e:Event){
  rt.emit("platform-event",serde_json::to_value(&e).unwrap());
  if e.kind=="chat" {
  if let Some(reason)=crate::moderation::detect(&rt,&p,&e){rt.log(&p.id,"moderation",reason,"info");if let Err(err)=crate::moderation::act(&rt,&p,&e,reason).await{rt.log(&p.id,"moderation",&err,"error");}return}
+ if let Some(reply)=crate::discord_engage::link_command(&rt,&p,&e){if let Err(err)=rt.send(&p,&e,&reply).await{rt.log(&p.id,"discord",&err,"error");}return}
+ crate::discord::mirror_chat(&rt,&p,&e);
  }
+ if matches!(e.kind.as_str(),"follow"|"subscription"|"cheer"|"raid"){crate::discord::notify(&rt,&p,&e.kind,&e);}
  let history=rt.conversation.lock().unwrap().receive(&e);
  crate::chat_extras::sound(&rt,&p,&e);
  match crate::chat_extras::response(&rt,&p,&e){Ok(Some(text))=>{if let Err(err)=rt.send(&p,&e,&text).await{rt.log(&p.id,"txt",&err,"error");}return},Err(err)=>{rt.log(&p.id,"txt",&err,"error");return},_=>{}}

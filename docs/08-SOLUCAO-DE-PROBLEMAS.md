@@ -85,8 +85,14 @@ Erros HTTP são indícios, não diagnósticos completos. Verifique também o pai
 | Voz não reconhece | Confira microfone autorizado, servidor Whisper local e rota /inference |
 | Overlay aguarda BotLive | Confira instância aberta, porta e token da sessão atual |
 | Overlay de outro perfil | Preencha o UUID correto no parâmetro profile |
-| Discord falha | Confira webhook salvo, módulo ativo, permissões do canal e erro HTTP |
+| Discord falha (webhook) | Confira webhook salvo, módulo ativo, permissões do canal e erro HTTP |
 | Convite !discord inválido | Use convite HTTPS de discord.gg ou discord.com |
+| Bot do Discord não conecta | Token de bot (não de aplicativo), servidor escolhido, **Ativar o bot do Discord** ligado e o motivo no Histórico |
+| Bot do Discord não lê as mensagens | Ative **Message Content Intent** na página do aplicativo do Discord |
+| Contador de membros não muda | Canal do contador preenchido, **Server Members Intent** ativa e rótulo só com letras, números e hífen |
+| Comando slash não aparece no servidor | Conecte e clique em **Registrar comandos slash**; a publicação usa o servidor escolhido |
+
+Motivos de conexão, intents e permissões do bot aparecem no **Histórico** com a categoria `discord`. O passo a passo e as limitações desta versão estão no capítulo [Discord](09-DISCORD.md).
 
 ## Acesso e backups
 

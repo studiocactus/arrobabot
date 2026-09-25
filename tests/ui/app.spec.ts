@@ -72,7 +72,7 @@ test('onboarding, comando, isolamento, memórias e navegação',async({page})=>{
  await expect(page.getByText('Sua primeira conversa começa aqui')).toBeVisible();
  await page.getByRole('button',{name:'Memórias',exact:true}).click();
  await expect(page.getByRole('button',{name:/ana.md/})).toHaveCount(0);
- for(const label of ['Inteligência artificial','Comunidade','Biblioteca de presets','Histórico','Estatísticas','Configurações']){await page.getByRole('button',{name:label,exact:true}).click();await expect(page.getByRole('heading',{name:label,exact:true})).toBeVisible()}
+ for(const label of ['Inteligência artificial','Comunidade','Discord','Biblioteca de presets','Histórico','Estatísticas','Configurações']){await page.locator('.sidebar').getByRole('button',{name:label,exact:true}).click();await expect(page.getByRole('heading',{name:label,exact:true})).toBeVisible()}
  await page.getByRole('button',{name:'Visão geral',exact:true}).click();
  await page.getByRole('button',{name:'Alternar tema'}).click();
  await page.screenshot({path:'artifacts/dashboard-light.png',fullPage:true});

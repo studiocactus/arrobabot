@@ -22,6 +22,9 @@ mod access;
 mod stats;
 mod scheduler;
 mod obsidian;
+mod discord;
+mod discord_admin;
+mod discord_engage;
 use engine::Runtime;
 use model::*;
 use serde_json::{json,Value};
@@ -38,6 +41,7 @@ pub async fn dispatch(rt:Arc<Runtime>,op:&str,args:Value)->R<Value>{
  if op.starts_with("access."){return access::operation(&rt,op,&args)}
  let p=args["profileId"].as_str().unwrap_or("").to_owned();
  if op.starts_with("chatExtras."){return chat_extras::operation(&rt,&p,op,&args)}
+ if op.starts_with("discord."){return discord_admin::operation(&rt,&p,op,&args).await}
  match op{
  "snapshot"=>Ok(json!({"profiles":rt.db.profiles()?.into_iter().filter(|p|access::allowed(&rt,p)).collect::<Vec<_>>(),"logs":rt.db.logs("")?.into_iter().filter(|l|access::current(&rt)=="owner"||rt.db.profile(&l.profile_id).is_ok_and(|p|access::allowed(&rt,&p))).collect::<Vec<_>>(),"statuses":*rt.statuses.lock().unwrap(),"theme":rt.db.get("theme"),"accent":rt.db.get("accent"),"apiPort":*rt.api_port.lock().unwrap(),"dataDir":rt.base.to_string_lossy()})),
  "profile.save"=>{let mut profile:Profile=serde_json::from_value(args["profile"].clone()).map_err(|_|"Perfil inválido")?;if let Ok(previous)=rt.db.profile(&profile.id){if previous.channel!=profile.channel||previous.channel_id!=profile.channel_id||previous.platform!=profile.platform{rt.conversation.lock().unwrap().clear(&profile.id);}if previous.platform!=profile.platform||previous.client_id!=profile.client_id{rt.disconnect(&profile.id);for key in ["bot_token","bot_refresh","channel_token","channel_refresh","bot_expires","channel_expires"]{let _=secrets::set(&profile.id,key,"");}}}profile.blocklist=profile.blocklist.into_iter().map(|s|s.trim().to_owned()).filter(|s|!s.is_empty()).collect();profile.editors=profile.editors.into_iter().map(|s|s.trim().to_lowercase()).filter(|s|!s.is_empty()).collect();profile.topics=profile.topics.into_iter().map(|s|s.trim().to_owned()).filter(|s|!s.is_empty()).collect();vault::root(&rt.base,&profile.id)?;rt.db.save_profile(&profile)?;Ok(json!(profile))},
@@ -49,7 +53,7 @@ pub async fn dispatch(rt:Arc<Runtime>,op:&str,args:Value)->R<Value>{
  let parent=rt.base.join("vaults").canonicalize().map_err(|e|e.to_string())?;
  if !canonical.starts_with(&parent)||canonical==parent{return Err("Caminho de vault inválido".into())}
  std::fs::remove_dir_all(&root).map_err(|e|e.to_string())?;
- rt.db.delete_profile(&p)?;rt.conversation.lock().unwrap().clear(&p);secrets::clear(&p);Ok(Value::Null)
+ rt.db.delete_profile(&p)?;rt.conversation.lock().unwrap().clear(&p);secrets::clear(&p);crate::discord_admin::stop(&rt,&p);crate::discord::clear_cache(&rt,&p);Ok(Value::Null)
  },
  "command.counters"=>command_counter::list(&rt.db,&p),
  "command.counter.set"=>{let id=args["id"].as_str().ok_or("Comando ausente")?;let value=args["value"].as_i64().ok_or("Informe um número inteiro")?;let count=command_counter::change(&rt.db,&p,id,Some(value))?;rt.emit("command-counter",json!({"profileId":p,"id":id,"value":count}));Ok(json!(count))},
@@ -76,7 +80,7 @@ pub async fn dispatch(rt:Arc<Runtime>,op:&str,args:Value)->R<Value>{
  "disconnect"=>{rt.disconnect(&p);Ok(Value::Null)},
  "simulate"=>{let mut e:Event=serde_json::from_value(args["event"].clone()).map_err(|_|"Evento inválido")?;e.simulated=true;e.id=uuid::Uuid::new_v4().to_string();rt.submit(e).await?;Ok(Value::Null)},
  "chat.send"=>{let profile=rt.db.profile(&p)?;let e=Event{id:uuid::Uuid::new_v4().to_string(),profile_id:p,kind:"manual".into(),user:"".into(),user_id:"".into(),role:"broadcaster".into(),message:"".into(),data:Value::Null,simulated:false};rt.send(&profile,&e,args["text"].as_str().ok_or("Escreva uma mensagem")?).await?;Ok(Value::Null)},
- "secret.save"=>{rt.db.profile(&p)?;let key=args["key"].as_str().ok_or("Chave inválida")?;if !["ai_key","client_secret","discord_webhook","obsidian_key"].contains(&key){return Err("Tipo de credencial não permitido".into())}secrets::set(&p,key,args["value"].as_str().ok_or("Credencial inválida")?)?;
+ "secret.save"=>{rt.db.profile(&p)?;let key=args["key"].as_str().ok_or("Chave inválida")?;if !["ai_key","client_secret","discord_webhook","discord_token","obsidian_key"].contains(&key){return Err("Tipo de credencial não permitido".into())}secrets::set(&p,key,args["value"].as_str().ok_or("Credencial inválida")?)?;
  if key=="ai_key"{let profile=rt.db.profile(&p)?;let origin=url::Url::parse(&profile.ai.endpoint).map_err(|_|"Endpoint inválido")?.origin().ascii_serialization();secrets::set(&p,"ai_origin",&origin)?;}
  Ok(Value::Null)},
  "secret.status"=>Ok(json!({"ai":secrets::get(&p,"ai_key").is_ok(),"bot":secrets::get(&p,"bot_token").is_ok(),"channel":secrets::get(&p,"channel_token").is_ok()})),
@@ -117,7 +121,7 @@ pub async fn dispatch(rt:Arc<Runtime>,op:&str,args:Value)->R<Value>{
  "voice.transcribe"=>voice::transcribe(&rt,&p,args["audio"].as_str().ok_or("Áudio ausente")?).await,
  "update.check"=>update::check(&rt,false).await,
  "update.install"=>update::check(&rt,true).await,
- "module.config"=>{rt.db.profile(&p)?;let key=args["key"].as_str().ok_or("Configuração ausente")?;if !["moderation","tts","voice","obsidian","points","songs","discord","games"].contains(&key){return Err("Configuração inválida".into())}if key=="moderation"&&!moderation::valid_config(&args["value"]){return Err("Ação inválida".into())}rt.db.set_module(&p,key,&args["value"])?;Ok(Value::Null)},
+ "module.config"=>{rt.db.profile(&p)?;let key=args["key"].as_str().ok_or("Configuração ausente")?;if !["moderation","tts","voice","obsidian","points","songs","discord","discordBot","games"].contains(&key){return Err("Configuração inválida".into())}if key=="moderation"&&!moderation::valid_config(&args["value"]){return Err("Ação inválida".into())}if key=="discordBot"&&!discord_admin::valid_config(&args["value"]){return Err("Configuração do Discord inválida. Confira o servidor e os canais informados.".into())}rt.db.set_module(&p,key,&args["value"])?;Ok(Value::Null)},
  "module.config.get"=>{rt.db.profile(&p)?;Ok(rt.db.module(&p,args["key"].as_str().ok_or("Configuração ausente")?))},
  "settings"=>{let key=args["key"].as_str().ok_or("Configuração inválida")?;if !["theme","accent","apiPort","updateEndpoint","updatePublicKey","autoUpdate"].contains(&key){return Err("Configuração não permitida".into())}if key=="accent"&&!args["value"].as_str().is_some_and(|v|v.is_empty()||(v.len()==7&&v.starts_with('#')&&v[1..].chars().all(|c|c.is_ascii_hexdigit()))){return Err("Cor inválida".into())}rt.db.set(key,&args["value"])?;Ok(Value::Null)},
  "settings.get"=>Ok(json!({"theme":rt.db.get("theme"),"apiPort":rt.db.get("apiPort"),"apiToken":rt.api_token,"updateEndpoint":update::endpoint(&rt),"updatePublicKey":update::public_key(&rt),"autoUpdate":rt.db.get("autoUpdate")})),
