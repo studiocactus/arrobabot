@@ -22,6 +22,8 @@ mod local_api;
 mod update;
 mod moderation;
 mod voice;
+mod listen;
+mod speech;
 mod access;
 mod stats;
 mod scheduler;
@@ -66,7 +68,7 @@ pub async fn dispatch(rt:Arc<Runtime>,op:&str,args:Value)->R<Value>{
  if let (Ok(kroot),Ok(kparent))=(knowledge::root(&rt.base,&p),rt.base.join("knowledge").canonicalize()) {
   if let Ok(k)=kroot.canonicalize() {if k.starts_with(&kparent)&&k!=kparent {let _=std::fs::remove_dir_all(&k);}}
  }
- rt.db.delete_profile(&p)?;rt.conversation.lock().unwrap().clear(&p);rt.live.clear(&p);secrets::clear(&p);crate::discord_admin::stop(&rt,&p);crate::discord::clear_cache(&rt,&p);Ok(Value::Null)
+ rt.db.delete_profile(&p)?;rt.conversation.lock().unwrap().clear(&p);rt.live.clear(&p);rt.listen.reset(&p);secrets::clear(&p);crate::discord_admin::stop(&rt,&p);crate::discord::clear_cache(&rt,&p);Ok(Value::Null)
  },
  "command.counters"=>command_counter::list(&rt.db,&p),
  "command.counter.set"=>{let id=args["id"].as_str().ok_or("Comando ausente")?;let value=args["value"].as_i64().ok_or("Informe um número inteiro")?;let count=command_counter::change(&rt.db,&p,id,Some(value))?;rt.emit("command-counter",json!({"profileId":p,"id":id,"value":count}));Ok(json!(count))},
@@ -117,7 +119,7 @@ pub async fn dispatch(rt:Arc<Runtime>,op:&str,args:Value)->R<Value>{
  let e=Event{id:"ai-preview".into(),profile_id:p,kind:"chat".into(),user:"Espectador de teste".into(),user_id:"test-user".into(),role:"everyone".into(),message:message.into(),data:Value::Null,simulated:true};
  let c=variables::Context::new(&rt.db,&profile,&e,None)?;
  let history:Vec<Value>=recent.lines().filter(|s|!s.trim().is_empty()).rev().take(12).collect::<Vec<_>>().into_iter().rev().map(|s|json!({"message":s.chars().take(500).collect::<String>()})).collect();
- let opts=ai::Options{knowledge:crate::knowledge::context(&rt.base,&profile,Some(&e),message),live:rt.live.summary(&profile.id),emotes:crate::emotes::list(&rt.db,&profile.id),..ai::Options::defaults(&profile)};
+ let opts=ai::Options{knowledge:crate::knowledge::context(&rt.base,&profile,Some(&e),message),live:rt.live.summary(&profile.id),speech:crate::speech::summary(&rt.db,&profile.id),emotes:crate::emotes::list(&rt.db,&profile.id),..ai::Options::defaults(&profile)};
  Ok(json!(ai::conversation(&rt.http,&rt.base,&profile,&e,&c.render(instruction)?,&history,&opts).await?))
  },
  "ai.test"=>{let profile=rt.db.profile(&p)?;Ok(json!(ai::generate(&rt.http,&rt.base,&profile,args["user"].as_str().unwrap_or("streamer"),args["prompt"].as_str().unwrap_or("Olá! Apresente-se brevemente.")).await?))},
@@ -140,9 +142,11 @@ pub async fn dispatch(rt:Arc<Runtime>,op:&str,args:Value)->R<Value>{
  "file.import"=>{let path=args["path"].as_str().ok_or("Escolha um arquivo")?;let meta=std::fs::metadata(path).map_err(|_|"Arquivo não encontrado")?;if meta.len()>2_000_000{return Err("Preset muito grande".into())}let text=std::fs::read_to_string(path).map_err(|_|"Não foi possível ler o preset")?;let v:Value=serde_json::from_str(&text).map_err(|_|"JSON inválido")?;presets::validate(&v)?;Ok(v)},
  "obsidian.sync"=>obsidian::sync(&rt,&p,args["path"].as_str().ok_or("Selecione uma nota")?).await,
  "voice.transcribe"=>voice::transcribe(&rt,&p,args["audio"].as_str().ok_or("Áudio ausente")?).await,
+ "voice.frame"=>listen::frame(&rt,&p,args["pcm"].as_str().ok_or("Áudio ausente")?),
+ "voice.status"=>Ok(listen::status(&rt,&p)),
  "update.check"=>update::check(&rt,false).await,
  "update.install"=>update::check(&rt,true).await,
- "module.config"=>{rt.db.profile(&p)?;let key=args["key"].as_str().ok_or("Configuração ausente")?;if !["moderation","tts","voice","obsidian","points","songs","discord","discordBot","games"].contains(&key){return Err("Configuração inválida".into())}if key=="moderation"&&!moderation::valid_config(&args["value"]){return Err("Ação inválida".into())}if key=="discordBot"&&!discord_admin::valid_config(&args["value"]){return Err("Configuração do Discord inválida. Confira o servidor e os canais informados.".into())}rt.db.set_module(&p,key,&args["value"])?;Ok(Value::Null)},
+ "module.config"=>{rt.db.profile(&p)?;let key=args["key"].as_str().ok_or("Configuração ausente")?;if !["moderation","tts","voice","obsidian","points","songs","discord","discordBot","games"].contains(&key){return Err("Configuração inválida".into())}if key=="moderation"&&!moderation::valid_config(&args["value"]){return Err("Ação inválida".into())}if key=="voice"&&!listen::valid_config(&args["value"]){return Err("Configuração de voz inválida: o servidor de transcrição precisa ser local (127.0.0.1) e os limites do painel têm faixas fixas".into())}if key=="discordBot"&&!discord_admin::valid_config(&args["value"]){return Err("Configuração do Discord inválida. Confira o servidor e os canais informados.".into())}rt.db.set_module(&p,key,&args["value"])?;Ok(Value::Null)},
  "module.config.get"=>{rt.db.profile(&p)?;Ok(rt.db.module(&p,args["key"].as_str().ok_or("Configuração ausente")?))},
  "settings"=>{let key=args["key"].as_str().ok_or("Configuração inválida")?;if !["theme","accent","apiPort","updateEndpoint","updatePublicKey","autoUpdate"].contains(&key){return Err("Configuração não permitida".into())}if key=="accent"&&!args["value"].as_str().is_some_and(|v|v.is_empty()||(v.len()==7&&v.starts_with('#')&&v[1..].chars().all(|c|c.is_ascii_hexdigit()))){return Err("Cor inválida".into())}rt.db.set(key,&args["value"])?;Ok(Value::Null)},
  "settings.get"=>Ok(json!({"theme":rt.db.get("theme"),"apiPort":rt.db.get("apiPort"),"apiToken":rt.api_token,"updateEndpoint":update::endpoint(&rt),"updatePublicKey":update::public_key(&rt),"autoUpdate":rt.db.get("autoUpdate")})),

@@ -116,6 +116,7 @@ Formato geral:
 | connection | profileId e status da conexão |
 | platform-event | Evento normalizado pelo motor |
 | overlay | profileId e text |
+| captions | profileId e text (fala finalizada da escuta contínua) |
 | tts | profileId, text, voice e rate |
 | community | profileId; aviso de atualização, sem todo o estado |
 | songs | profileId e queue, com itens user e url |

@@ -126,6 +126,11 @@ impl Context {
         values.insert("command".into(),json!(command)); values.insert("rawInput".into(),json!(raw)); values.insert("args".into(),json!(args)); values.insert("argCount".into(),json!(args.len()));
         for (i,arg) in args.iter().enumerate() { values.insert(format!("arg{i}"),json!(arg)); }
         if let Some(f)=flow { values.insert("commandCount".into(),json!(crate::command_counter::get(db,&p.id,&f.id)?)); values.insert("actionId".into(),json!(f.id)); values.insert("actionName".into(),json!(f.name)); }
+        // O que o microfone acabou de ouvir. Sem fala ainda as duas existem vazias:
+        // uma automação que usa {{lastSpeech}} não pode quebrar por o streamer estar calado.
+        let spoken=crate::speech::recent(db,&p.id);
+        values.insert("lastSpeech".into(),json!(spoken.last().cloned().unwrap_or_default()));
+        values.insert("liveSpeech".into(),json!(spoken.join(" | ")));
         let uid=if e.user_id.is_empty(){String::new()}else{format!("{}:{}",p.platform,e.user_id)};
         for item in list(db,&p.id,&uid)?.as_array().unwrap() { values.insert(format!("{}.{}",item["scope"].as_str().unwrap(),item["name"].as_str().unwrap()),item["value"].clone()); }
         Ok(Self{values,data:e.data.clone(),simulated:e.simulated})

@@ -501,3 +501,134 @@ async fn backup_is_owner_only_and_command_count_turns_on_when_it_is_used(){
  let estranho=dir.path().join("estranho.botlivebak");std::fs::write(&estranho,"{\"format\":\"de outra coisa\"}").unwrap();
  assert!(dispatch(rt.clone(),"backup.restore",json!({"path":estranho.to_string_lossy().to_string()})).await.is_err());
 }
+/// Servidor local de transcrição: devolve o primeiro cabeçalho recebido e o tamanho do áudio.
+async fn mock_transcribe(text:&str)->(String,tokio::task::JoinHandle<Value>){
+ use tokio::io::{AsyncReadExt,AsyncWriteExt};
+ let listener=tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();let address=listener.local_addr().unwrap();let text=text.to_owned();
+ let task=tokio::spawn(async move{
+  let(mut socket,_)=listener.accept().await.unwrap();let mut bytes=vec![];
+  let request=loop{
+   let mut part=[0u8;4096];let n=socket.read(&mut part).await.unwrap();assert!(n>0);bytes.extend_from_slice(&part[..n]);assert!(bytes.len()<2000000);
+   if let Some(end)=bytes.windows(4).position(|w|w==b"\r\n\r\n"){
+    let headers=String::from_utf8_lossy(&bytes[..end]).to_lowercase();
+    let len:usize=headers.lines().find_map(|l|l.strip_prefix("content-length:")).unwrap().trim().parse().unwrap();
+    if bytes.len()>=end+4+len{break json!({"request":String::from_utf8_lossy(&bytes[..end]).lines().next().unwrap_or("").to_owned(),"body":len})}
+   }
+  };
+  let body=json!({"text":text}).to_string();
+  socket.write_all(format!("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",body.len()).as_bytes()).await.unwrap();
+  request
+ });
+ (format!("http://{address}/transcribe-pcm16"),task)
+}
+/// 16 kHz mono em PCM16: 16 amostras por milissegundo.
+fn speech_pcm(ms:u64,amplitude:f64)->Vec<u8>{
+ let samples=(16*ms) as usize;
+ (0..samples).flat_map(|i|{let wave=(i as f64*0.4).sin()*amplitude;((wave*32767.0) as i16).to_le_bytes()}).collect()
+}
+fn speech_b64(bytes:&[u8])->String{use base64::Engine;base64::engine::general_purpose::STANDARD.encode(bytes)}
+async fn send_audio(rt:&Arc<Runtime>,profile:&str,ms:u64,amplitude:f64)->Result<Value,String>{
+ dispatch(rt.clone(),"voice.frame",json!({"profileId":profile,"pcm":speech_b64(&speech_pcm(ms,amplitude))})).await
+}
+/// Espera um evento do overlay chegar dentro do prazo.
+async fn heard<F:Fn(&Value)->bool>(rx:&mut tokio::sync::broadcast::Receiver<Value>,ms:u64,ok:F)->bool{
+ let deadline=std::time::Instant::now()+std::time::Duration::from_millis(ms);
+ loop{
+  while let Ok(value)=rx.try_recv(){if ok(&value){return true}}
+  if std::time::Instant::now()>=deadline{return false}
+  tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+ }
+}
+/// Fala de 400 ms seguida dos 200 ms de silêncio que a encerram (silenceMs do painel).
+async fn speaking(rt:&Arc<Runtime>,profile:&str){
+ for _ in 0..4{send_audio(rt,profile,100,0.5).await.unwrap();}
+ tokio::time::sleep(std::time::Duration::from_millis(220)).await;
+ send_audio(rt,profile,100,0.0).await.unwrap();
+}
+#[tokio::test]
+async fn continuous_listening_transcribes_calls_the_bot_and_feeds_context(){
+ let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();
+ let mut p=profile("Escuta");p.modules=json!({"voice":true});rt.db.save_profile(&p).unwrap();
+ let(endpoint,answered)=mock_transcribe("arroba, vamos de ranked agora").await;
+ dispatch(rt.clone(),"module.config",json!({"profileId":p.id,"key":"voice","value":json!({"listen":true,"listenEndpoint":endpoint,"language":"pt","activation":"arroba","captions":true,"silenceMs":200,"threshold":0.02})})).await.unwrap();
+ let mut f=flow(&p);f.name="Chamada por voz".into();f.trigger.kind="voice".into();f.trigger.pattern="arroba".into();f.trigger.cooldown=0;f.trigger.user_cooldown=0;
+ f.actions=vec![Action{kind:"overlay".into(),text:"{{lastSpeech}}".into(),target:String::new(),value:0,condition:String::new(),..Default::default()}];
+ rt.db.save_flow(&f).unwrap();
+ let mut rx=rt.broadcast.subscribe();
+ speaking(&rt,&p.id).await;
+ let request=answered.await.unwrap();
+ assert!(request["request"].as_str().unwrap().starts_with("POST /transcribe-pcm16"),"o áudio vai para o caminho do RealtimeSTT: {}",request["request"]);
+ assert!(request["request"].as_str().unwrap().contains("language=pt"),"o idioma escolhido vai junto: {}",request["request"]);
+ assert_eq!(request["body"].as_u64(),Some(16000),"500 ms de PCM16 mono é 16000 bytes, sem cabeçalho WAV");
+ assert!(heard(&mut rx,5000,|v|v["type"]=="captions").await,"a fala vira legenda para o overlay");
+ assert_eq!(speech::recent(&rt.db,&p.id),vec!["arroba, vamos de ranked agora"]);
+ assert!(heard(&mut rx,5000,|v|v["type"]=="overlay"&&v["payload"]["text"]=="arroba, vamos de ranked agora").await,"chamada pelo nome dispara o fluxo com {{lastSpeech}} pronto");
+ assert!(rt.db.logs(&p.id).unwrap().iter().any(|l|l.kind=="voice"&&l.message.contains("streamer: arroba")),"a fala aparece no Histórico");
+ let status=dispatch(rt.clone(),"voice.status",json!({"profileId":p.id})).await.unwrap();
+ assert_eq!(status["heard"].as_u64(),Some(1),"o painel conta uma fala reconhecida");
+ assert!(status["listening"]==true,"o painel enxerga a escuta em andamento");
+ assert!(speech::summary(&rt.db,&p.id).contains("Últimas falas do streamer"));
+}
+#[tokio::test]
+async fn without_the_activation_words_a_speech_is_only_recorded(){
+ let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();
+ let mut p=profile("Resenha");p.modules=json!({"voice":true});rt.db.save_profile(&p).unwrap();
+ let(endpoint,answered)=mock_transcribe("vou pegar água").await;
+ dispatch(rt.clone(),"module.config",json!({"profileId":p.id,"key":"voice","value":json!({"listen":true,"listenEndpoint":endpoint,"activation":"arroba","silenceMs":200})})).await.unwrap();
+ let mut f=flow(&p);f.name="Chamada por voz".into();f.trigger.kind="voice".into();f.trigger.pattern="arroba".into();f.trigger.cooldown=0;f.trigger.user_cooldown=0;
+ f.actions=vec![Action{kind:"overlay".into(),text:"não pode rodar".into(),target:String::new(),value:0,condition:String::new(),..Default::default()}];
+ rt.db.save_flow(&f).unwrap();
+ let mut rx=rt.broadcast.subscribe();
+ speaking(&rt,&p.id).await;
+ answered.await.unwrap();
+ assert!(heard(&mut rx,5000,|v|v["type"]=="captions").await,"sem ser chamada a fala ainda vira legenda e contexto");
+ assert_eq!(speech::recent(&rt.db,&p.id),vec!["vou pegar água"]);
+ tokio::time::sleep(std::time::Duration::from_millis(400)).await;
+ assert!(!std::iter::from_fn(||rx.try_recv().ok()).any(|v|v["type"]=="overlay"),"sem a palavra de ativação nenhum fluxo roda");
+ assert!(rt.db.logs(&p.id).unwrap().iter().any(|l|l.kind=="voice"&&l.message=="Transcrição: vou pegar água"),"o que foi dito fica no Histórico mesmo sem disparar");
+ let status=dispatch(rt.clone(),"voice.status",json!({"profileId":p.id})).await.unwrap();
+ assert_eq!(status["heard"].as_u64(),Some(1));
+}
+#[tokio::test]
+async fn the_ear_stays_local_and_respects_module_and_switch(){
+ let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();
+ let mut off=profile("Sem módulo");off.modules=json!({});rt.db.save_profile(&off).unwrap();
+ let err=dispatch(rt.clone(),"voice.frame",json!({"profileId":off.id,"pcm":speech_b64(&speech_pcm(100,0.5))})).await.unwrap_err();
+ assert!(err.contains("Ative o Controle por voz"),"módulo desligado não escuta: {err}");
+ let mut p=profile("Voz");p.modules=json!({"voice":true});rt.db.save_profile(&p).unwrap();
+ let err=dispatch(rt.clone(),"voice.frame",json!({"profileId":p.id,"pcm":speech_b64(&speech_pcm(100,0.5))})).await.unwrap_err();
+ assert!(err.contains("desligada"),"interruptor desligado não escuta: {err}");
+ let remoto=dispatch(rt.clone(),"module.config",json!({"profileId":p.id,"key":"voice","value":json!({"listen":true,"listenEndpoint":"http://192.168.0.10:8010/transcribe-pcm16"})})).await.unwrap_err();
+ assert!(remoto.contains("local"),"o painel recusa servidor fora da máquina: {remoto}");
+ rt.db.set_module(&p.id,"voice",&json!({"listen":true,"listenEndpoint":"http://192.168.0.10:8010/transcribe-pcm16"})).unwrap();
+ let err=dispatch(rt.clone(),"voice.frame",json!({"profileId":p.id,"pcm":speech_b64(&speech_pcm(100,0.5))})).await.unwrap_err();
+ assert!(err.contains("localmente"),"registro gravado fora do painel também não manda áudio: {err}");
+ rt.db.set_module(&p.id,"voice",&json!({"listen":true})).unwrap();
+ let err=dispatch(rt.clone(),"voice.frame",json!({"profileId":p.id,"pcm":"não é base64!"})).await.unwrap_err();
+ assert!(err.contains("inválido"),"áudio corrompido não passa: {err}");
+ let err=dispatch(rt.clone(),"voice.frame",json!({"profileId":p.id,"pcm":speech_b64(&vec![0u8;70000])})).await.unwrap_err();
+ assert!(err.contains("grande"),"lote grande é recusado: {err}");
+ let status=dispatch(rt.clone(),"voice.frame",json!({"profileId":p.id,"pcm":speech_b64(&speech_pcm(100,0.0))})).await.unwrap();
+ assert_eq!(status["frames"].as_u64(),Some(1),"o lote aceito é contado");
+ assert!(status["enabled"]==true&&status["listening"]==true);
+ assert_eq!(status["heard"].as_u64(),Some(0),"silêncio não vira fala");
+ assert!(status["error"].as_str().unwrap_or("").is_empty());
+ *rt.actor.lock().unwrap()="intruso".into();
+ assert!(dispatch(rt,"voice.status",json!({"profileId":p.id})).await.is_err(),"quem não edita o perfil não enxerga a escuta");
+}
+#[tokio::test]
+async fn the_ai_sees_what_the_streamer_just_said_on_the_mic(){
+ let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();
+ let mut p=profile("Resenha ao vivo");p.modules=json!({});p.ai.model="test".into();
+ let(endpoint,request)=mock_ai("Bora!").await;p.ai.endpoint=endpoint;rt.db.save_profile(&p).unwrap();
+ speech::push(&rt.db,&p.id,"vamos de ranked sem stress").unwrap();
+ let mut f=flow(&p);f.actions=vec![Action{kind:"ai.generate".into(),text:"Responda".into(),target:String::new(),value:0,condition:String::new(),..Default::default()}];rt.db.save_flow(&f).unwrap();
+ engine::process(rt.clone(),event(&p,"!oi",false)).await;
+ let request=request.await.unwrap();
+ let system=request["messages"][0]["content"].as_str().unwrap();
+ assert!(system.contains("[Últimas falas do streamer na live: vamos de ranked sem stress]"),"a IA lê o microfone: {system}");
+ let(preview_endpoint,preview_request)=mock_ai("Beleza, estamos ao vivo").await;p.ai.endpoint=preview_endpoint;rt.db.save_profile(&p).unwrap();
+ dispatch(rt.clone(),"ai.preview",json!({"profileId":p.id,"message":"e aí"})).await.unwrap();
+ let preview_request=preview_request.await.unwrap();
+ assert!(preview_request["messages"][0]["content"].as_str().unwrap().contains("vamos de ranked sem stress"),"a prévia do painel da IA também lê o microfone");
+}

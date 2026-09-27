@@ -32,6 +32,8 @@ export const variableCatalog:VariableChoice[]=[
  {key:'actionId',label:'Identificador da automação',group:'Execução'},
  {key:'simulated',label:'É uma simulação?',group:'Execução'},
  {key:'lf',label:'Quebra de linha',group:'Mensagem'},
+ {key:'lastSpeech',label:'Última fala no microfone',group:'Voz',example:'bora de ranked'},
+ {key:'liveSpeech',label:'Falas da escuta nesta sessão',group:'Voz',example:'bora de ranked | vamos ganhar hoje'},
 ];
 export const scopeNames:Record<string,string>={local:'Só nesta execução',global:'Salva no perfil',user:'Salva por pessoa',session:'Perfil, até fechar o app',sessionUser:'Pessoa, até fechar o app',data:'Dados do evento'};
 // `random:min,max` traz a faixa dentro do próprio código, por isso não é um nome de variável.

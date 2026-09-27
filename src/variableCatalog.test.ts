@@ -21,6 +21,13 @@ describe('edição de mensagens com variáveis',()=>{
   const p=messageParts('Boa live, {{randomViewer}}!');
   expect(p.filter(v=>v.label).map(v=>v.label)).toEqual(['Nome sorteado no chat']);
  });
+ it('cataloga as falas da escuta contínua para as mensagens usarem',()=>{
+  expect(variableLabel('lastSpeech')).toBe('Última fala no microfone');
+  expect(variableLabel('liveSpeech')).toBe('Falas da escuta nesta sessão');
+  const p=messageParts('Você disse {{lastSpeech}} e antes {{liveSpeech}}');
+  expect(p.filter(v=>v.label).map(v=>v.label)).toEqual(['Última fala no microfone','Falas da escuta nesta sessão']);
+  expect(p.map(v=>v.text).join('')).toBe('Você disse {{lastSpeech}} e antes {{liveSpeech}}');
+ });
  it('aceita a faixa do número sorteado e rotula ela como número',()=>{
   expect(makeVariableToken('random:1,50','','')).toBe('{{random:1,50}}');
   expect(makeVariableToken('random:1,50.00','','')).toBe('{{random:1,50.00}}');

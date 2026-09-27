@@ -1,6 +1,7 @@
 import {version} from '../package.json';
 import {playViewerSound,type ViewerSound} from './viewerSound';
 import {applyAccent} from './appearance';
+import {restoreListen} from './listen';
 import {useState,useEffect,useCallback} from 'react';
 import {listen} from '@tauri-apps/api/event';
 import {LayoutDashboard,Bot,Terminal,Clock,Hash,Workflow,Sparkles,BookOpen,Package,Settings as SettingsIcon,Users,Activity,BarChart3,Plus,ArrowUpRight,ArrowRight,Radio,Zap,Check,ChevronDown,Search,Command,Sun,Moon,Power,Trash2,X,Menu,ShieldCheck,MessageSquare,ExternalLink,MessagesSquare} from 'lucide-react';
@@ -30,6 +31,7 @@ export default function App(){
  const profile=snapshot.profiles.find(p=>p.id===profileId);
  const refreshFlows=useCallback(()=>{if(profileId)api<Flow[]>('flows',{profileId}).then(setFlows).catch(e=>notify(errorText(e)));else setFlows([])},[profileId,notify]);
  useEffect(()=>{void refresh()},[refresh]);useEffect(refreshFlows,[refreshFlows]);
+ useEffect(()=>{if(desktop&&profileId)void restoreListen(profileId)},[profileId]);
  useEffect(()=>{document.documentElement.dataset.theme=theme},[theme]);
  useEffect(()=>{if(!toast)return;const t=setTimeout(()=>setToast(''),7000);return()=>clearTimeout(t)},[toast]);
  useEffect(()=>{

@@ -99,7 +99,12 @@ Erros HTTP são indícios, não diagnósticos completos. Verifique também o pai
 | Bingo não reconhece um emote | A detecção compara termos textuais; representação da plataforma pode ser diferente |
 | TTS sem som | Teste a voz local, confira áudio do app, voz instalada, limite e filtro |
 | Áudio do disparo não toca | Som escolhido em **Tocar áudio ao disparar**, arquivo ainda presente em **Respostas e sons**, volume acima de zero, saída de áudio capturada no OBS e aviso no Histórico; a simulação nunca toca som |
-| Voz não reconhece | Confira microfone autorizado, servidor Whisper local e rota /inference |
+| Voz não reconhece (captura por botão) | Confira microfone autorizado, servidor Whisper local e rota /inference |
+| Escuta contínua não liga | Abra o aplicativo desktop (a prévia do navegador não captura microfone); confira se o RealtimeSTT responde HTTP 200 em `/health`; no painel veja a linha "Escuta interrompida" e o botão **Salvar configuração** |
+| Escuta contínua para sozinha | O servidor RealtimeSTT pode ter ficado sem memória GPU (use `--compute-type int8` ou modelo menor); confira se o processo `stt-server-production` ainda roda e reinicie se necessário |
+| Transcrição errada ou vazia | Ruído de fundo alto — aumente **Sensibilidade do microfone** no painel; fala muito curta — aumente **Silêncio que encerra a frase**; idioma diferente do configurado — use `auto` ou troque o idioma; modelo `small` tem precisão limitada — troque por `medium` ou `large-v3` no servidor |
+| Legenda não aparece no overlay | Confira se a opção **Legenda no overlay** está ligada no painel e se o overlay usa o `examples/overlay.html` atualizado com o parâmetro `view` omitido |
+| Palavra de ativação não dispara | A palavra deve aparecer **exata** (sem pontuação) na transcrição; confira **Histórico** para ver o texto reconhecido; sem palavra cadastrada, toda fala dispara (pode gerar muitos gatilhos) |
 | Overlay aguarda BotLive | Confira instância aberta, porta e token da sessão atual |
 | Overlay de outro perfil | Preencha o UUID correto no parâmetro profile |
 | Discord falha (webhook) | Confira webhook salvo, módulo ativo, permissões do canal e erro HTTP |

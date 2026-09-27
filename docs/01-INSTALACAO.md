@@ -18,7 +18,7 @@ Escolha um instalador; não é necessário instalar o NSIS e o MSI. O executáve
 - Acesso à internet para conectar plataformas, usar IA remota e consultar atualizações.
 - Contas e permissões da plataforma desejada.
 - Para IA local, Ollama funcionando e um modelo já instalado.
-- Para voz local, um servidor compatível com Whisper; ele não acompanha o instalador.
+- Para voz local (escuta contínua), o RealtimeSTT na mesma máquina. Ele não acompanha o instalador; veja a seção **Servidor de voz (RealtimeSTT)** abaixo.
 
 O uso do aplicativo compilado não exige Node.js, Rust ou Visual Studio. Essas ferramentas são necessárias apenas para desenvolver ou compilar o código.
 
@@ -42,6 +42,46 @@ Abra **Configurações → Pasta de dados** e copie o caminho exibido. Ele é a 
 Dentro da pasta de dados ficam o banco botlive.sqlite e o diretório vaults, com uma subpasta por perfil. Credenciais ficam no cofre do sistema operacional, separado desses arquivos.
 
 Duas cópias do aplicativo executadas pelo mesmo usuário podem acessar os mesmos dados e disputar a mesma porta local. Use uma instância por vez.
+
+## Servidor de voz (RealtimeSTT)
+
+A **escuta contínua** precisa do RealtimeSTT rodando na mesma máquina, acessível em `http://127.0.0.1:8010/transcribe-pcm16`. O instalador do BotLive **não** instala o RealtimeSTT — você deve instalá-lo à parte.
+
+Requisitos do RealtimeSTT:
+- Python 3.12
+- GPU NVIDIA com driver atualizado (o CUDA 12 é preferido; CPU também funciona, mas mais lento)
+- Modelos `faster-whisper` baixados na primeira execução (o modelo `small` é o padrão usado pelo painel)
+
+Passos rápidos (PowerShell como administrador):
+
+```powershell
+# 1) Instala Python 3.12 se ainda não tiver
+winget install --id Python.Python.3.12 -e --accept-package-agreements --accept-source-agreements --disable-interactivity
+
+# 2) Atualiza pip e instala o RealtimeSTT com suporte a servidor e faster-whisper
+python -m pip install --upgrade pip
+python -m pip install "RealtimeSTT[server,faster-whisper]"
+```
+
+Rode o servidor (mantendo a janela aberta ou como serviço):
+
+```powershell
+stt-server-production --host 127.0.0.1 --port 8010 --engine faster_whisper --model small --device cuda --compute-type float16 --language pt
+```
+
+Opções importantes:
+- `--device cuda` exige torch com CUDA (o `pip install torch` padrão traz a versão CPU e o servidor falha). Para CUDA 12, use `pip install torch==2.14.0+cu130 --index-url https://download.pytorch.org/whl/cu130` (ajuste a versão ao seu driver).
+- `--compute-type float16` só funciona em GPU; em CPU use `int8` ou remova a opção.
+- `--language pt` fixa o idioma; remova para detecção automática.
+- O modelo `small` é leve e rápido; `medium` ou `large-v3` dão mais precisão, mas exigem mais VRAM e latência.
+
+Para usar só CPU (sem GPU NVIDIA):
+
+```powershell
+stt-server-production --host 127.0.0.1 --port 8010 --engine faster_whisper --model small --device cpu --compute-type int8 --language pt
+```
+
+Com o servidor rodando, abra o BotLive, ative o módulo **Controle por voz** e clique em **Abrir Controle por voz** → o campo **Servidor de transcrição** já vem preenchido com `http://127.0.0.1:8010/transcribe-pcm16`. Ligue **Escuta contínua** e autorize o microfone.
 
 ## Atualizar, reinstalar e desinstalar
 

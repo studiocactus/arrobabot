@@ -27,7 +27,7 @@ export function VariableHelp({profileId,text,onInsert,flow}:{profileId:string;te
  <div className="variable-result"><small>Como será enviado ao chat</small>{text.trim()?<p>{parts.map((p,i)=><span key={i}>{p.label?<span className="variable-chip" title={p.text}>{p.label}</span>:p.text}</span>)}</p>:<p className="help">A mensagem ainda está vazia.</p>}</div>
  <div className="variable-filters">
  <Field label="Buscar informação"><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Pessoa, canal, pedido, horário…"/></Field>
- <Field label="Categoria"><select value={group} onChange={e=>setGroup(e.target.value)}>{['Todas','Pessoa','Mensagem','Canal','Data e hora','Execução','IA','Minhas variáveis','Neste fluxo'].map(g=><option key={g}>{g}</option>)}</select></Field>
+ <Field label="Categoria"><select value={group} onChange={e=>setGroup(e.target.value)}>{['Todas','Pessoa','Mensagem','Canal','Data e hora','Execução','IA','Voz','Minhas variáveis','Neste fluxo'].map(g=><option key={g}>{g}</option>)}</select></Field>
  </div>
  <div className="variable-toolbar">
  <label className="variable-code-toggle"><input type="checkbox" checked={codes} onChange={e=>setCodes(e.target.checked)}/>Mostrar códigos técnicos</label>

@@ -138,13 +138,38 @@ A lista depende das vozes instaladas. Não há download automático de voz nem p
 
 ## Controle por voz
 
+O módulo tem dois caminhos: a escuta contínua e a captura por botão. Os dois usam um servidor de reconhecimento instalado à parte, e o áudio nunca sai do seu computador.
+
+### Escuta contínua
+
+1. Instale e rode o RealtimeSTT na mesma máquina, na porta 8010 (o passo a passo está em [Instalação](01-INSTALACAO.md)).
+2. Ative **Controle por voz** no cartão do módulo e clique em **Abrir Controle por voz**.
+3. Confirme o campo **Servidor de transcrição (RealtimeSTT)**: o padrão é `http://127.0.0.1:8010/transcribe-pcm16`.
+4. Escolha o **Idioma falado**. Para disparar automações só quando você chamar o bot, escreva as **Palavras de ativação** separadas por vírgula, por exemplo `arroba, botlive`.
+5. Ligue o interruptor **Escuta contínua** e autorize o microfone quando o navegador pedir.
+
+Com a escuta ligada, o BotLive mantém o microfone aberto enquanto a janela está aberta: separa fala de silêncio no próprio computador, manda lotes de 100 milissegundos em PCM16 de 16 kHz para o servidor local e publica cada frase reconhecida. A fala entra no **Histórico**, alimenta a IA e as variáveis `{{lastSpeech}}` e `{{liveSpeech}}`, aparece como legenda no overlay e dispara as automações de **Comando de voz** cujo trecho casar com o texto.
+
+Sem **Palavras de ativação**, toda fala reconhecida pode disparar os fluxos; com o campo preenchido, só as falas que contêm alguma palavra chegam aos fluxos. Mesmo quando nenhuma automação dispara, a fala continua indo para o Histórico, para a IA e para a legenda.
+
+**Ajuste fino do microfone**, dentro do painel:
+
+- **Silêncio que encerra a frase**: de 200 a 3000 ms, padrão 600. Aumente se o bot corta sua frase no meio.
+- **Sensibilidade do microfone**: de 0,002 a 0,5, padrão 0,02. Aumente se o bot não escuta; diminua se ele considera ruído de fundo como fala.
+
+**Legenda no overlay**: mantenha a opção ligada e use o exemplo `examples/overlay.html`; a fala finalizada aparece em uma linha própria, abaixo do texto, e some depois de alguns segundos.
+
+A captura depende da janela do aplicativo aberta: fechar o BotLive encerra a escuta, e ao abrir de novo o interruptor ligado no perfil volta a ouvir sozinho. O endereço precisa ser local — o painel aceita apenas `127.0.0.1`, `localhost` ou `[::1]` em HTTP.
+
+### Gravar comando (captura por botão)
+
 Ative Controle por voz e informe um endpoint local compatível com whisper-server, inicialmente http://127.0.0.1:8080/inference.
 
 Clique em **Gravar comando**, autorize o microfone quando solicitado e fale. A captura dura até oito segundos; **Parar e reconhecer** encerra antes. O servidor local recebe o áudio e devolve texto, que dispara os fluxos de Comando de voz.
 
 Exemplo: configure um gatilho de voz com Texto que dispara igual a boas-vindas e uma ação de chat. A detecção usa um trecho do texto reconhecido; não exige transcrição idêntica da frase toda.
 
-É captura por botão, não escuta contínua nem palavra de ativação. O servidor Whisper é externo ao instalador. O destino do reconhecimento deve ser local.
+O servidor de reconhecimento é externo ao instalador e o destino do reconhecimento deve ser local. A captura por botão continua independente da escuta contínua: usar uma não desliga a outra.
 
 ## Discord
 

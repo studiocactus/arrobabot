@@ -157,7 +157,9 @@ A moderação de links pode impedir pedidos de música antes de chegarem ao mód
 
 **Texto para voz:** ative o módulo, escolha voz e velocidade e use **Testar voz local**. Crie um comando !fala com ação **Ler em voz alta**, conteúdo **{{rawInput}}**. A mensagem **!fala Boa noite, chat!** solicita essa leitura. Configure limites e permissões; capture o áudio no OBS. A seleção de saída dos sons por espectador não muda o TTS.
 
-**Controle por voz:** configure o servidor local de reconhecimento, ative o módulo e crie um fluxo de **Comando de voz**, trecho **boas-vindas**, ação de chat **Sejam bem-vindos!**. Clique em **Gravar comando**, fale a frase e encerre a captura. O reconhecimento recebido dispara o fluxo. Não há escuta contínua.
+**Controle por voz (escuta contínua):** instale o RealtimeSTT ([Instalação](01-INSTALACAO.md#servidor-de-voz-realtimestt)) e rode `stt-server-production --host 127.0.0.1 --port 8010 --engine faster_whisper --model small --device cuda --compute-type float16 --language pt`. No BotLive, ative **Controle por voz**, abra o painel, confira **Servidor de transcrição** (`http://127.0.0.1:8010/transcribe-pcm16`), escreva **Palavras de ativação** `arroba, botlive` e ligue **Escuta contínua**. Crie um fluxo **Comando de voz**, trecho `boas-vindas`, ação de chat **Sejam bem-vindos!**. Diga "arroba, boas-vindas" no microfone: a fala entra no Histórico, vira `{{lastSpeech}}`, e dispara a ação. Sem palavra de ativação, toda fala dispara.
+
+**Controle por voz (captura por botão):** configure o servidor local de reconhecimento, ative o módulo e crie um fluxo de **Comando de voz**, trecho **boas-vindas**, ação de chat **Sejam bem-vindos!**. Clique em **Gravar comando**, fale a frase e encerre a captura. O reconhecimento recebido dispara o fluxo. A captura por botão continua independente da escuta contínua.
 
 **Discord:** guarde o webhook no módulo e use **Enviar ao Discord** numa automação para publicar nesse canal. Para compartilhar um convite no chat, configure o convite no Avançado e use **!discord**. Convite e webhook são campos com funções diferentes.
 

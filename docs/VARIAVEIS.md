@@ -13,7 +13,7 @@ Você não precisa digitar os marcadores. Os botões **+ Nome da pessoa**, **+ N
 3. Clique em **+ Nome da pessoa**.
 4. Confira a leitura logo abaixo: o nome técnico aparece como uma etiqueta **Nome da pessoa**, dentro da mensagem.
 5. Para outras informações, abra **Inserir variável e testar mensagem**.
-6. Busque por uma descrição ou escolha uma categoria: Pessoa, Mensagem, Canal, Data e hora, Execução, Minhas variáveis ou Neste fluxo.
+6. Busque por uma descrição ou escolha uma categoria: Pessoa, Mensagem, Canal, Data e hora, Execução, **Voz**, Minhas variáveis ou Neste fluxo.
 7. Clique na ficha da informação. Ela entra na mensagem na hora, no lugar do cursor, e a confirmação traz o código que foi inserido.
 8. O quadro **Como será enviado ao chat** mostra a mensagem com etiquetas; os nomes técnicos continuam no campo de edição e são trocados pelos valores no envio.
 9. Se precisar de um texto quando o valor faltar, ou de outro formato, clique em **Opções** na mesma ficha. Em **Se não houver valor, mostrar**, informe a alternativa, como amigo, e em **Como mostrar** escolha texto normal, maiúsculas, minúsculas, número ou outra opção disponível.
@@ -67,6 +67,8 @@ Para escrever marcadores literalmente, acrescente uma barra invertida: `\{{user}
 | {{time}} | Hora local HH:MM:SS |
 | {{unixtime}} | Instante Unix em segundos |
 | {{lf}} | Quebra de linha |
+| {{lastSpeech}} | Última fala reconhecida na escuta contínua (vazia se nenhuma) |
+| {{liveSpeech}} | Todas as falas da sessão de escuta, separadas por ` | ` |
 
 Data e hora são capturadas no início de cada fluxo. Os argumentos são separados por espaços em branco: aspas não agrupam várias palavras. Para eventos sem texto, command/rawInput ficam vazios e argCount é zero. Nem todo evento possui usuário; um ID vazio impede gravar variáveis por pessoa.
 

@@ -165,7 +165,7 @@ fn command_any(pattern:&str,first:&str)->bool {
 /// "Chamada pelo nome do bot": dispara quando um dos nomes da lista aparece como
 /// palavra inteira. Sem a barreira de palavra, "arromba" dispararia dentro de
 /// "arrombado"; com ela, "@Arroba", "ArrobaSrv," e "chama o arromba" continuam passando.
-fn mention_any(pattern:&str,message:&str)->bool {
+pub fn mention_any(pattern:&str,message:&str)->bool {
  if pattern.trim().is_empty() { return false; }
  let text=message.to_lowercase();
  pattern.split(',').map(str::trim).filter(|n|!n.is_empty()).any(|n| {

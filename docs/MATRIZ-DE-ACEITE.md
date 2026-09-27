@@ -20,11 +20,11 @@ Esta matriz acompanha as fases dos documentos originais em ../documentação. "I
 - Palpites com divisão proporcional e devolução sem vencedores.
 - Fila de músicas, limites configuráveis, consulta e remoção; overlay OBS mostra seleção atual e próximas URLs. Reprodução, metadados e controle dos players não integrados.
 - Roleta, duelo aleatório, bingo de emotes e trivia manual ou automática por inatividade. Duelo por votação não implementado.
-- TTS do sistema, voz local via Whisper, Discord por webhook e convite, moderação Twitch (blocklist e a ação **Punir na Twitch**, que silencia, bane ou avisa com alvo e duração configuráveis), fila de interação e estatísticas locais. Motores TTS remotos não implementados. A moderação nativa do Discord (aviso, timeout, expulsão, banimento, apagar mensagem, cargo, modo lento e auto-moderação) está implementada pela tela **Discord**; a moderação nativa de Kick e YouTube continua pendente.
+- TTS do sistema, voz local via RealtimeSTT (escuta contínua com VAD, palavras de ativação, `{{lastSpeech}}`/`{{liveSpeech}}`, legenda no overlay; captura por botão via whisper-server), Discord por webhook e convite, moderação Twitch (blocklist e a ação **Punir na Twitch**, que silencia, bane ou avisa com alvo e duração configuráveis), fila de interação e estatísticas locais. Motores TTS remotos não implementados. A moderação nativa do Discord (aviso, timeout, expulsão, banimento, apagar mensagem, cargo, modo lento e auto-moderação) está implementada pela tela **Discord**; a moderação nativa de Kick e YouTube continua pendente.
 
 ## Dependências externas
 
-Kick precisa de ponte pública de webhooks; ela não é hospedada pelo aplicativo. Twitch e YouTube precisam de aplicativos OAuth registrados. IA remota requer chave e modelo. A voz local depende de servidor Whisper. Atualizações públicas exigem hospedagem e assinatura próprias.
+Kick precisa de ponte pública de webhooks; ela não é hospedada pelo aplicativo. Twitch e YouTube precisam de aplicativos OAuth registrados. IA remota requer chave e modelo. A voz local (escuta contínua) depende do RealtimeSTT rodando na mesma máquina (Python 3.12, modelo faster-whisper, GPU NVIDIA opcional); a captura por botão usa whisper-server. Atualizações públicas exigem hospedagem e assinatura próprias.
 
 Não considerar a especificação inteira homologada enquanto os itens pendentes desta matriz não forem resolvidos.
 
