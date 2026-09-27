@@ -14,7 +14,7 @@ Abra **Perfis de bot → Novo perfil** ou **Configurar** em um cartão existente
 |---|---|
 | Nome do perfil | Nome interno, como Canal principal |
 | Plataforma | Twitch, YouTube ou Kick |
-| Nome do canal | Nome usado na interface e na variável $channel |
+| Nome do canal | Nome usado na interface e na variável {{channel}} |
 | Client ID do aplicativo | Identificador obtido ao registrar um aplicativo na plataforma |
 | Client secret | Segredo OAuth, quando exigido; use Salvar segredo no cofre |
 | ID do canal | Twitch/Kick: identificador numérico do canal/proprietário |

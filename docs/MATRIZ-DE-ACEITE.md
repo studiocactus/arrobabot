@@ -6,7 +6,7 @@ Esta matriz acompanha as fases dos documentos originais em ../documentação. "I
 |---|---|---|---|
 | 1 | Motor de eventos | Fila assíncrona, gatilhos, permissões, sequência de ações, variáveis, cooldowns, histórico, simulação e API WebSocket | Receber todos os eventos em canal Twitch real e testar carga prolongada |
 | 2 | Perfis e contas | Dados e memória isolados; OAuth bot/canal; credenciais no cofre; proprietário e moderadores locais | Autorizar contas reais, revogar tokens e validar renovação e permissões nas plataformas |
-| 3 | IA | Ollama, Chat Completions e Anthropic; personalidade; fallback; filtros e busca de memória | Homologar os modelos escolhidos e o desempenho na máquina de uso |
+| 3 | IA | Ollama, Chat Completions e Anthropic; personalidade; fallback; filtros e busca de memória; base de conhecimento importada para os dados do perfil; estado da live em memória; ancoragem, tamanho, repetição e tom por ação | Homologar os modelos escolhidos e o desempenho na máquina de uso; exercitar a base com arquivos reais da comunidade e conferir o custo por resposta |
 | 4 | Memória | Editor Markdown, pastas por perfil, busca lexical e sincronização manual para Obsidian | Testar com o plugin e vault reais; busca semântica vetorial não implementada |
 | 5 | Interface | Dashboard, roteiro de configuração, modo simples, editor de nós, temas claro/escuro, atalhos e adaptação à janela | Teste de primeiro uso com pessoa externa e acessibilidade completa com leitor de tela |
 | 6 | Presets | JSON versionado, biblioteca, filtros, prévia, conflitos, dados de perfil sem contas, configurações de módulos, tema claro/escuro e cor personalizada | Importação entre dois computadores |

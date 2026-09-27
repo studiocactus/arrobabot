@@ -28,11 +28,13 @@ Um comando como !oi casa com o primeiro termo da mensagem: !oi tudo bem dispara;
 
 | Variável | Conteúdo |
 |---|---|
-| $user | Nome de quem disparou o evento |
-| $message | Mensagem completa recebida, incluindo o comando |
-| $channel | Nome do canal cadastrado no perfil |
+| {{user}} | Nome de quem disparou o evento |
+| {{message}} | Mensagem completa recebida, incluindo o comando |
+| {{channel}} | Nome do canal cadastrado no perfil |
 
-Exemplo de resposta: Olá, $user! Você está no canal $channel.
+Exemplo de resposta: Olá, {{user}}! Você está no canal {{channel}}.
+
+Marcadores antigos escritos com cifrão, como `$user`, são convertidos sozinhos para `{{user}}` quando você salva o comando. O [capítulo de variáveis](VARIAVEIS.md) traz a lista completa.
 
 A lista permite buscar, editar, ativar/desativar, apagar e salvar um comando como preset. Desativar conserva a configuração. Apagar exige confirmação e não oferece lixeira.
 
@@ -45,7 +47,7 @@ Em comandos, timers e automações, **Como enviar na Twitch** escolhe a forma da
 | Mensagem normal | Mensagem comum do bot, igual a qualquer outra |
 | Anúncio | Banner colorido no chat; **Cor do anúncio** aceita a cor do canal, azul, verde, laranja ou roxo |
 | Mensagem fixada | Comunicado fixado no topo do chat por cerca de 20 minutos |
-| Destaque de canal | A Twitch destaca outro canal; a mensagem é apenas o nome do destino, como `outrocanal` ou `$user` |
+| Destaque de canal | A Twitch destaca outro canal; a mensagem é apenas o nome do destino, como `outrocanal` ou `{{user}}` |
 
 As três últimas opções existem só na Twitch. Nas demais plataformas a mensagem sai como mensagem comum e o **Histórico** registra um aviso com essa explicação.
 
@@ -83,7 +85,7 @@ O intervalo global vale para o fluxo, independentemente de quem o usou. O interv
 2. Preencha **Nome do fluxo**.
 3. Clique no bloco inicial e escolha Evento, texto, permissão, intervalos, a forma de envio na Twitch e o áudio do disparo.
 4. Clique no bloco de ação e selecione **Tipo de ação** no painel lateral.
-5. Preencha conteúdo e os campos específicos.
+5. Preencha conteúdo e os campos específicos. Em ações de IA, abra **Como esta ação responde** para escolher ancoragem, tamanho, base de conhecimento, repetição e tom daquele bloco; o que ficar em **Padrão do perfil** herda a tela de IA.
 6. Clique em **Adicionar ação** para cada etapa adicional.
 7. Arraste dos pontos de conexão para ligar as etapas em ordem.
 8. Confira uma única sequência: gatilho → ação 1 → ação 2 → ação 3.
@@ -116,8 +118,8 @@ A presença da opção no editor não garante que todas as plataformas emitam aq
 | Ação | O que configurar | Resultado |
 |---|---|---|
 | Enviar mensagem | Texto e variáveis | Publica no chat do perfil |
-| Responder com IA | Instrução, como Responda brevemente: $message | Consulta o provedor configurado e envia a resposta |
-| Gerar resposta da IA (variável) | Tom/orientação e nome local da resposta | Usa a conversa recente e guarda o texto para as próximas ações, sem publicar |
+| Responder com IA | Instrução, como Responda brevemente: {{message}}, e **Como esta ação responde** | Consulta o provedor configurado e envia a resposta |
+| Gerar resposta da IA (variável) | Tom/orientação, nome local da resposta e **Como esta ação responde** | Usa a conversa recente, o que a live está fazendo agora e a base de conhecimento, e guarda o texto para as próximas ações, sem publicar |
 | Registrar memória | Conteúdo e arquivo, como eventos/chegadas.md | Acrescenta uma entrada datada na nota |
 | Esperar | Milissegundos, até 30000 | Aguarda antes da próxima ação |
 | Atualizar overlay | Texto | Emite uma atualização para clientes locais |
@@ -144,9 +146,9 @@ Se a condição não casar, apenas aquela ação é pulada; as próximas continu
 
 Crie um comando !cheguei com estas ações:
 
-1. Enviar mensagem: Bem-vindo, $user!
+1. Enviar mensagem: Bem-vindo, {{user}}!
 2. Esperar: 1000 milissegundos.
-3. Atualizar overlay: $user chegou ao canal!
+3. Atualizar overlay: {{user}} chegou ao canal!
 
 Salve e simule !cheguei. O histórico comprova a sequência planejada; a espera e o overlay não são executados de verdade na simulação. Para conferir o overlay, conecte o exemplo de OBS e faça um disparo real autorizado.
 

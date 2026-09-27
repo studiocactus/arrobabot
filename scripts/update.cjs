@@ -38,7 +38,11 @@ function main(){const [command,...args]=process.argv.slice(2);
   if(args[0]==='--staged'){const files=git('diff','--cached','--name-only').split('\n');check(p=>git('show',':'+p),previousVersion('HEAD'),files);}
   else if(args[0]==='--range'){
    const refs=git('rev-list','--reverse',args[1]||'HEAD').split('\n').filter(Boolean);
-   for(const ref of refs){let parent=null;try{parent=git('rev-parse',ref+'^')}catch{};const changed=git('diff-tree','--root','--no-commit-id','--name-only','-r',ref).split('\n');check(p=>git('show',ref+':'+p),parent?previousVersion(parent):null,changed);}
+   for(const ref of refs){let parent=null;try{parent=git('rev-parse',ref+'^')}catch{};const heads=git('rev-list','--parents','-n','1',ref).split(' ');
+    // Pull request vira um commit de merge sintético e diff-tree não lista nada nele;
+    // compara com o primeiro pai para ver o que aquele merge trouxe.
+    const changed=(heads.length>2?git('diff','--name-only',heads[1],ref):git('diff-tree','--root','--no-commit-id','--name-only','-r',ref)).split('\n');
+    check(p=>git('show',ref+':'+p),parent?previousVersion(parent):null,changed);}
   }else check(read);
   console.log('Versões e registros de atualização válidos.');
  }else if(command==='metadata'){

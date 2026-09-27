@@ -15,6 +15,7 @@ pub struct Runtime {
  pub timer_pending:Mutex<std::collections::HashSet<String>>,
  pub cooldowns:Mutex<HashMap<String,Instant>>,
  pub conversation:Mutex<crate::conversation::History>,
+ pub live:crate::live_state::LiveStates,
  pub chat_extras:Mutex<crate::chat_extras::State>,
  pub seen:Mutex<HashMap<String,Instant>>,
  pub module_lock:Mutex<()>,pub vault_lock:Mutex<()>,pub send_locks:Mutex<HashMap<String,Arc<tokio::sync::Mutex<Instant>>>>,
@@ -27,7 +28,7 @@ impl Runtime {
  let (tx,rx)=mpsc::channel(512);let (broadcast,_)=broadcast::channel(512);
  let http=reqwest::Client::builder().timeout(Duration::from_secs(30)).redirect(reqwest::redirect::Policy::none()).build().map_err(|e|e.to_string())?;
  let actor=if db.get("accessEnabled")==true{"locked"}else{"owner"}.to_owned();
- let rt=Arc::new(Self{actor:Mutex::new(actor),db,base,http,tx,broadcast,app:Mutex::new(None),connections:Mutex::new(HashMap::new()),statuses:Mutex::new(HashMap::new()),discord_tasks:Mutex::new(HashMap::new()),discord_status:Mutex::new(HashMap::new()),discord_cache:Mutex::new(HashMap::new()),timer_pending:Mutex::new(std::collections::HashSet::new()),cooldowns:Mutex::new(HashMap::new()),conversation:Mutex::new(crate::conversation::History::default()),chat_extras:Mutex::new(crate::chat_extras::State::default()),seen:Mutex::new(HashMap::new()),module_lock:Mutex::new(()),vault_lock:Mutex::new(()),send_locks:Mutex::new(HashMap::new()),api_token:format!("{}{}",uuid::Uuid::new_v4().simple(),uuid::Uuid::new_v4().simple()),api_port:Mutex::new(0)});
+ let rt=Arc::new(Self{actor:Mutex::new(actor),db,base,http,tx,broadcast,app:Mutex::new(None),connections:Mutex::new(HashMap::new()),statuses:Mutex::new(HashMap::new()),discord_tasks:Mutex::new(HashMap::new()),discord_status:Mutex::new(HashMap::new()),discord_cache:Mutex::new(HashMap::new()),timer_pending:Mutex::new(std::collections::HashSet::new()),cooldowns:Mutex::new(HashMap::new()),conversation:Mutex::new(crate::conversation::History::default()),live:crate::live_state::LiveStates::default(),chat_extras:Mutex::new(crate::chat_extras::State::default()),seen:Mutex::new(HashMap::new()),module_lock:Mutex::new(()),vault_lock:Mutex::new(()),send_locks:Mutex::new(HashMap::new()),api_token:format!("{}{}",uuid::Uuid::new_v4().simple(),uuid::Uuid::new_v4().simple()),api_port:Mutex::new(0)});
  tokio::spawn(worker(rt.clone(),rx));Ok(rt)
  }
  pub fn emit(&self,kind:&str,payload:Value){
@@ -122,6 +123,7 @@ pub async fn process(rt:Arc<Runtime>,e:Event){
  }
  if matches!(e.kind.as_str(),"follow"|"subscription"|"cheer"|"raid"){crate::discord::notify(&rt,&p,&e.kind,&e);}
  let history=rt.conversation.lock().unwrap().receive(&e);
+ rt.live.record(&p.id,&e);
  crate::chat_extras::sound(&rt,&p,&e);
  match crate::chat_extras::response(&rt,&p,&e){Ok(Some(text))=>{if let Err(err)=rt.send(&p,&e,&text).await{rt.log(&p.id,"txt",&err,"error");}return},Err(err)=>{rt.log(&p.id,"txt",&err,"error");return},_=>{}}
  if e.kind=="chat" {
@@ -167,7 +169,13 @@ async fn action(rt:&Arc<Runtime>,p:&Profile,e:&Event,a:&Action,variables:&mut cr
  match a.kind.as_str(){
  "chat"=>rt.send_with(p,e,&text,Some(f)).await,
  "ai"|"ai.generate"=>{
- let (output,success)=match ai::conversation(&rt.http,&rt.base,p,e,&text,history).await{
+ let opts=crate::ai::Options{
+  knowledge:if a.knowledge(&p.ai){crate::knowledge::context(&rt.base,p,Some(e),&text)}else{String::new()},
+  live:rt.live.summary(&p.id),
+  anchor:a.anchor(&p.ai).to_owned(),length:a.length(&p.ai).to_owned(),
+  no_repeat:a.no_repeat(&p.ai),style:a.ai_style.clone(),
+ };
+ let (output,success)=match ai::conversation(&rt.http,&rt.base,p,e,&text,history,&opts).await{
  Ok(answer)=>(answer,true),Err(err)=>{rt.log(&p.id,"ai",&err,"error");(p.ai.fallback.clone(),false)}
  };
  if blocked(&output,p){return Err("Resposta alternativa bloqueada pelas restrições do perfil".into())}

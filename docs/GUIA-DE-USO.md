@@ -27,12 +27,12 @@ Você já pode criar e simular comandos sem autorizar uma conta. Para responder 
 2. Confira qual perfil está selecionado no topo.
 3. Clique em **Novo comando**.
 4. Use Nome: Boas-vindas; Comando: !oi.
-5. Em Resposta, escreva: Olá, $user! Bem-vindo ao canal $channel.
+5. Em Resposta, escreva: Olá, {{user}}! Bem-vindo ao canal {{channel}}.
 6. Escolha Todo mundo e mantenha os intervalos iniciais.
 7. Clique em **Salvar comando**.
 8. Confira se a chave **Ativo** está ligada.
 
-Digite apenas o comando no campo Comando, sem espaços. As variáveis $user e $channel são substituídas pelo nome da pessoa e pelo nome do canal.
+Digite apenas o comando no campo Comando, sem espaços. As variáveis {{user}} e {{channel}} são substituídas pelo nome da pessoa e pelo nome do canal.
 
 ## 4. Simule antes de publicar
 

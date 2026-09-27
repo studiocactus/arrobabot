@@ -60,6 +60,35 @@ fn add(a: Value, b: Value) -> R<Value> {
 pub fn typed(text: &str) -> Value { serde_json::from_str(text).unwrap_or_else(|_|json!(text)) }
 pub fn display(value: &Value) -> String { match value { Value::String(s)=>s.clone(), Value::Null=>String::new(), _=>value.to_string() } }
 
+/// Nomes simples que existiram com cifrão antes da unificação em `{{...}}`.
+const LEGACY:[&str;28]=["user","userName","userId","role","message","channel","channelId","platform","profileId","profileName","eventId","eventType","isModerator","isBroadcaster","isSubscriber","simulated","date","time","unixtime","lf","randomViewer","command","rawInput","args","argCount","commandCount","actionId","actionName"];
+fn legacy(name:&str) -> bool { LEGACY.contains(&name) || name.strip_prefix("arg").is_some_and(|n|!n.is_empty()&&n.bytes().all(|b|b.is_ascii_digit())) }
+/// Reescreve o marcador legado `$nome` como `{{nome}}`. Só nomes conhecidos viram modelo:
+/// `$5`, `R$100`, `$desconhecido` e o escape `\$user` ficam exatamente como estavam.
+pub fn migrate(text: &str) -> String {
+    if !text.contains('$') { return text.to_owned(); }
+    let b=text.as_bytes();let mut out=String::with_capacity(text.len());let mut i=0;
+    while i<b.len() {
+        if b[i]!=b'$' { let c=text[i..].chars().next().unwrap();out.push(c);i+=c.len_utf8();continue; }
+        if i>0&&b[i-1]==b'\\' { out.push('$');i+=1;continue; }
+        let mut end=i+1;while end<b.len()&&(b[end].is_ascii_alphanumeric()||b[end]==b'_') {end+=1;}
+        let name=&text[i+1..end];
+        if legacy(name) { out.push_str("{{");out.push_str(name);out.push_str("}}"); } else { out.push('$');out.push_str(name); }
+        i=end;
+    }
+    out
+}
+/// Converte modelos legados no conteúdo já gravado. Não toca em gatilho, condição
+/// nem script: esses textos são comparados ou executados, nunca interpretados como modelo.
+pub fn migrate_flow(f: &mut Flow) -> bool {
+    let mut changed=false;
+    for a in &mut f.actions {
+        if a.kind=="script" { continue; }
+        let text=migrate(&a.text);let target=migrate(&a.target);
+        changed|=text!=a.text||target!=a.target;a.text=text;a.target=target;
+    }
+    changed
+}
 pub struct Context { values: BTreeMap<String,Value>, data: Value, pub simulated: bool }
 impl Context {
     pub fn new(db: &Db, p: &Profile, e: &Event, flow: Option<&Flow>) -> R<Self> {
@@ -123,9 +152,6 @@ impl Context {
                 out.push_str(&self.expression(rest[2..end].trim())?);i+=end+2;
             } else if rest.starts_with('%') && rest[1..].find('%').is_some_and(|end|valid_name(&rest[1..end+1])) {
                 let end=rest[1..].find('%').unwrap()+1;out.push_str(&self.expression(&rest[1..end])?);i+=end+1;
-            } else if rest.starts_with('$') {
-                let end=rest[1..].find(|c:char|!c.is_ascii_alphanumeric()&&c!='_').map(|n|n+1).unwrap_or(rest.len());
-                if let Some(value)=self.lookup(&rest[1..end]) {out.push_str(&display(&value));i+=end;}else{out.push('$');i+=1;}
             } else {let c=rest.chars().next().unwrap();out.push(c);i+=c.len_utf8();}
             if out.len()>LIMIT {return Err("Resultado ultrapassa 64 KiB".into());}
         }

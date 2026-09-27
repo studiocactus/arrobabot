@@ -11,9 +11,10 @@ describe('edição de mensagens com variáveis',()=>{
   expect(()=>makeVariableToken('global.x}}','', '')).toThrow();
   expect(()=>makeVariableToken('arg0','x|upper','')).toThrow();
  });
- it('exibe rótulos sem executar marcadores e respeita escape e texto legado',()=>{
+ it('exibe rótulos sem executar marcadores, respeita escape e deixa o cifrão legado como texto',()=>{
   const p=messageParts('Olá, {{user|upper}}! $channel %userName% \\{{user}} $unknown');
-  expect(p.filter(v=>v.label).map(v=>v.label)).toEqual(['Nome da pessoa','Nome do canal','Nome da pessoa']);
+  expect(p.filter(v=>v.label).map(v=>v.label)).toEqual(['Nome da pessoa','Nome da pessoa']);
+  expect(p.some(v=>v.text.includes('$')&&v.label)).toBe(false);
   expect(p.map(v=>v.text).join('')).toBe('Olá, {{user|upper}}! $channel %userName% \\{{user}} $unknown');
  });
  it('cataloga o nome sorteado para mensagens sem pessoa no evento',()=>{

@@ -26,14 +26,14 @@
         "actions": [
           {
             "kind": "chat",
-            "text": "Olá, $user! Boas-vindas ao canal $channel.",
+            "text": "Olá, {{user}}! Boas-vindas ao canal {{channel}}.",
             "target": "",
             "value": 0,
             "condition": ""
           },
           {
             "kind": "overlay",
-            "text": "$user chegou à comunidade!",
+            "text": "{{user}} chegou à comunidade!",
             "target": "",
             "value": 0,
             "condition": ""

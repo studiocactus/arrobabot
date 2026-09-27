@@ -178,7 +178,7 @@ pub fn response(rt:&Runtime,p:&Profile,e:&Event)->R<Option<String>>{
  let index=if r.selection=="sequence"{previous.map_or(0,|i|(i+1)%rows.len())}else{
  let mut candidates:Vec<_>=(0..rows.len()).filter(|i|rows.len()==1||Some(*i)!=previous).collect();if candidates.is_empty(){candidates.push(0)}candidates[rand::thread_rng().gen_range(0..candidates.len())]
  };
- let text=variables::Context::new(&rt.db,p,e,None)?.render(&rows[index])?;
+ let text=variables::Context::new(&rt.db,p,e,None)?.render(&variables::migrate(&rows[index]))?;
  if blocked(&text,p){return Err("Resposta TXT bloqueada pelas restrições do perfil".into())}
  if text.trim().is_empty()||text.chars().count()>450{return Err("Resposta TXT expandida vazia ou maior que 450 caracteres".into())}
  if !e.simulated{s.last.insert(key.clone(),Instant::now());s.last.insert(user,Instant::now());s.index.insert(key,index);}

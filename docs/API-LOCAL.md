@@ -79,10 +79,10 @@ Token inválido encerra a conexão. O servidor admite até dezesseis clientes si
 | id | Obrigatório no formato; o servidor substitui por um novo UUID |
 | profileId | UUID de um perfil existente |
 | kind | Tipo do evento, por exemplo chat ou custom |
-| user | Nome visível para $user |
+| user | Nome visível para {{user}} |
 | userId | Identificador usado em intervalos e módulos |
 | role | Forçado a everyone pelo servidor |
-| message | Texto usado por gatilhos, condições e $message |
+| message | Texto usado por gatilhos, condições e {{message}} |
 | data | Dados JSON adicionais |
 | simulated | true evita efeitos externos e alterações de economia/memória |
 

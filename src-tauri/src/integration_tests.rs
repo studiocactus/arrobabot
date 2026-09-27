@@ -3,7 +3,7 @@ use serde_json::json;
 #[tokio::test]
 async fn command_counts_follow_permissions_cooldowns_and_simulations(){
  let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();let mut p=profile("Contadores");p.editors=vec!["mod".into()];rt.db.save_profile(&p).unwrap();let other=profile("Outro");rt.db.save_profile(&other).unwrap();
- let mut f=flow(&p);f.counter=true;f.trigger.permission="moderator".into();f.actions=vec![Action{kind:"overlay".into(),text:"{{commandCount}}".into(),target:String::new(),value:0,condition:String::new()}];rt.db.save_flow(&f).unwrap();
+ let mut f=flow(&p);f.counter=true;f.trigger.permission="moderator".into();f.actions=vec![Action{kind:"overlay".into(),text:"{{commandCount}}".into(),target:String::new(),value:0,condition:String::new(),..Default::default()}];rt.db.save_flow(&f).unwrap();
  engine::process(rt.clone(),event(&p,"!oi",false)).await;assert_eq!(command_counter::get(&rt.db,&p.id,&f.id).unwrap(),0);
  let mut e=event(&p,"!oi",false);e.role="moderator".into();let mut rx=rt.broadcast.subscribe();engine::process(rt.clone(),e.clone()).await;engine::process(rt.clone(),e.clone()).await;
  assert_eq!(command_counter::get(&rt.db,&p.id,&f.id).unwrap(),1);assert!(std::iter::from_fn(||rx.try_recv().ok()).any(|v|v["type"]=="overlay"&&v["payload"]["text"]=="1"));
@@ -15,7 +15,7 @@ async fn command_counts_follow_permissions_cooldowns_and_simulations(){
 }
 #[tokio::test]
 async fn timer_target_offline_preview_and_external_rejection(){
- let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();let p=profile("Timers");rt.db.save_profile(&p).unwrap();let mut a=flow(&p);a.trigger.kind="timer".into();a.trigger.cooldown=0;a.trigger.user_cooldown=0;a.actions=vec![Action{kind:"overlay".into(),text:"Timer A".into(),target:String::new(),value:0,condition:String::new()}];let mut b=a.clone();b.id=uuid::Uuid::new_v4().to_string();b.actions[0].text="Timer B".into();rt.db.save_flow(&a).unwrap();rt.db.save_flow(&b).unwrap();
+ let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();let p=profile("Timers");rt.db.save_profile(&p).unwrap();let mut a=flow(&p);a.trigger.kind="timer".into();a.trigger.cooldown=0;a.trigger.user_cooldown=0;a.actions=vec![Action{kind:"overlay".into(),text:"Timer A".into(),target:String::new(),value:0,condition:String::new(),..Default::default()}];let mut b=a.clone();b.id=uuid::Uuid::new_v4().to_string();b.actions[0].text="Timer B".into();rt.db.save_flow(&a).unwrap();rt.db.save_flow(&b).unwrap();
  let mut e=event(&p,"",false);e.kind="timer".into();e.data=json!({"timerId":a.id,"timerRevision":timers::revision(&a)});e.role="broadcaster".into();assert!(rt.submit(e.clone()).await.is_err());
  let mut rx=rt.broadcast.subscribe();engine::process(rt.clone(),e.clone()).await;assert!(!std::iter::from_fn(||rx.try_recv().ok()).any(|v|v["type"]=="overlay"));
  rt.status(&p.id,"online");rt.timer_pending.lock().unwrap().insert(a.id.clone());engine::process(rt.clone(),e.clone()).await;assert!(rt.timer_pending.lock().unwrap().is_empty());let values:Vec<_>=std::iter::from_fn(||rx.try_recv().ok()).filter(|v|v["type"]=="overlay").collect();assert_eq!(values.len(),1);assert_eq!(values[0]["payload"]["text"],"Timer A");
@@ -87,7 +87,7 @@ async fn contextual_ai_uses_chat_and_stores_single_pass_response_without_sending
  let mut echo=event(&p,"Mensagem do próprio bot",false);echo.user_id=p.bot_id.clone();engine::process(rt.clone(),echo).await;
  engine::process(rt.clone(),event(&other,"Não deve entrar no contexto",false)).await;
  engine::process(rt.clone(),event(&p,"Ontem estava errando os tiros",false)).await;
- let mut f=flow(&p);f.actions=vec![Action{kind:"ai.generate".into(),text:"Faça uma resenha leve".into(),target:"local.resenha".into(),value:0,condition:"".into()},Action{kind:"overlay".into(),text:"{{local.resenha}} / {{local.aiSuccess}}".into(),target:"".into(),value:0,condition:"".into()}];rt.db.save_flow(&f).unwrap();
+ let mut f=flow(&p);f.actions=vec![Action{kind:"ai.generate".into(),text:"Faça uma resenha leve".into(),target:"local.resenha".into(),value:0,condition:"".into(),..Default::default()},Action{kind:"overlay".into(),text:"{{local.resenha}} / {{local.aiSuccess}}".into(),target:"".into(),value:0,condition:"".into(),..Default::default()}];rt.db.save_flow(&f).unwrap();
  let mut receiver=rt.broadcast.subscribe();engine::process(rt.clone(),event(&p,"!oi Thenees hoje está amassando",false)).await;
  let request=request.await.unwrap();let prompt:Value=serde_json::from_str(request["messages"][1]["content"].as_str().unwrap()).unwrap();
  assert_eq!(prompt["conversation"]["currentMessage"]["message"],"!oi Thenees hoje está amassando");
@@ -101,7 +101,7 @@ async fn contextual_ai_uses_chat_and_stores_single_pass_response_without_sending
 #[tokio::test]
 async fn ai_simulation_preview_and_fallback_define_response(){
  let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();let mut p=profile("Simulação");p.ai.fallback="Volto já".into();rt.db.save_profile(&p).unwrap();
- let mut f=flow(&p);f.actions=vec![Action{kind:"ai.generate".into(),text:"Resenha".into(),target:"local.aiResponse".into(),value:0,condition:"".into()},Action{kind:"chat".into(),text:"{{local.aiResponse}} / {{local.aiSuccess}}".into(),target:"".into(),value:0,condition:"".into()}];rt.db.save_flow(&f).unwrap();
+ let mut f=flow(&p);f.actions=vec![Action{kind:"ai.generate".into(),text:"Resenha".into(),target:"local.aiResponse".into(),value:0,condition:"".into(),..Default::default()},Action{kind:"chat".into(),text:"{{local.aiResponse}} / {{local.aiSuccess}}".into(),target:"".into(),value:0,condition:"".into(),..Default::default()}];rt.db.save_flow(&f).unwrap();
  engine::process(rt.clone(),event(&p,"!oi",true)).await;
  assert!(rt.db.logs(&p.id).unwrap().iter().any(|l|l.message=="[Simulação] [Prévia: resposta contextual da IA] / false"));
  let preview=dispatch(rt.clone(),"variables.preview",json!({"profileId":p.id,"flow":f,"event":event(&p,"!oi",true)})).await.unwrap();
@@ -125,9 +125,49 @@ async fn contextual_preview_calls_provider_without_chat_or_memory_writes(){
  assert!(rt.conversation.lock().unwrap().receive(&event(&p,"nova",false)).is_empty());
  *rt.actor.lock().unwrap()="intruso".into();assert!(dispatch(rt,"ai.preview",json!({"profileId":p.id,"message":"oi"})).await.is_err());
 }
+#[tokio::test]
+async fn ai_answer_uses_live_state_base_and_per_action_controls(){
+ let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();
+ let mut p=profile("Ao vivo");p.ai.model="test".into();p.ai.personality="Fale como uma pessoa real.".into();
+ let (endpoint,request)=mock_ai("Boa, valeu!").await;p.ai.endpoint=endpoint;rt.db.save_profile(&p).unwrap();
+ let src=tempfile::tempdir().unwrap();let source=src.path().join("base");
+ std::fs::create_dir_all(source.join("tom-e-comportamento")).unwrap();
+ std::fs::write(source.join("tom-e-comportamento").join("anti.md"),"# Anti\nnunca diga olá mundo\n").unwrap();
+ dispatch(rt.clone(),"knowledge.import",json!({"profileId":p.id,"path":source.to_str().unwrap()})).await.unwrap();
+ for _ in 0..3 {engine::process(rt.clone(),event(&p,"bora demais",false)).await;}
+ rt.live.set_category(&p.id,"Counter-Strike 2");
+ let mut sub=event(&p,"",false);sub.kind="subscription".into();sub.user="Bia".into();sub.data=json!({"cumulative_months":3});
+ engine::process(rt.clone(),sub).await;
+ let mut f=flow(&p);
+ f.actions=vec![Action{kind:"ai.generate".into(),text:"Faça uma saudação".into(),ai_anchor:"message".into(),ai_length:"short".into(),ai_style:"gírias do chat".into(),ai_no_repeat:Some(true),..Default::default()},
+ Action{kind:"overlay".into(),text:"{{local.aiResponse}} / {{local.aiSuccess}}".into(),..Default::default()}];
+ rt.db.save_flow(&f).unwrap();
+ let mut receiver=rt.broadcast.subscribe();
+ engine::process(rt.clone(),event(&p,"!oi",false)).await;
+ let request=request.await.unwrap();
+ let system=request["messages"][0]["content"].as_str().unwrap();
+ assert!(system.contains("[Contexto agora:"),"o que a live está fazendo agora entra no pedido");
+ assert!(system.contains("jogando Counter-Strike 2"));
+ assert!(system.contains("sub de Bia"));
+ assert!(system.contains("calor alto"));
+ assert!(system.contains("<conhecimento>"),"a base entra porque a ação não a desliga");
+ assert!(system.contains("nunca diga olá mundo"));
+ assert!(system.contains("Foque em currentMessage"),"a ancoragem da ação vale");
+ assert!(system.contains("Tom deste bloco: gírias do chat"),"o estilo da ação vale");
+ assert!(system.contains("no máximo 120 caracteres"),"o tamanho da ação vale");
+ let prompt:Value=serde_json::from_str(request["messages"][1]["content"].as_str().unwrap()).unwrap();
+ assert_eq!(prompt["automationRequest"],"Faça uma saudação");
+ let mut found=false;while let Ok(e)=receiver.try_recv(){if e["type"]=="overlay"{assert_eq!(e["payload"]["text"],"Boa, valeu! / true");found=true}}assert!(found);
+ // Ação que desliga a base: o bloco some e a ancoragem volta ao padrão do perfil.
+ let mut p2=profile("Sem base");p2.ai.model="test".into();rt.db.save_profile(&p2).unwrap();
+ rt.live.clear(&p2.id);
+ assert!(crate::knowledge::context(&rt.base,&p2,None,"").is_empty());
+ let mut a=Action{kind:"ai".into(),text:"oi".into(),..Default::default()};a.ai_knowledge="off".into();
+ assert!(!a.knowledge(&p2.ai));
+}
 fn profile(name:&str)->Profile{Profile{id:uuid::Uuid::new_v4().to_string(),name:name.into(),platform:"twitch".into(),channel:name.into(),channel_id:"123".into(),bot_id:"456".into(),client_id:"client".into(),blocklist:vec!["proibido".into()],topics:vec![],editors:vec![],ai:AiConfig::default(),modules:json!({"points":true,"raffles":true,"predictions":true,"queue":true})}}
 fn event(p:&Profile,text:&str,simulated:bool)->Event{Event{id:uuid::Uuid::new_v4().to_string(),profile_id:p.id.clone(),kind:"chat".into(),user:"Ana".into(),user_id:"ana".into(),role:"everyone".into(),message:text.into(),data:Value::Null,simulated}}
-fn flow(p:&Profile)->Flow{Flow{counter:false,timer_seconds:300,audio:String::new(),audio_volume:1.0,send_type:"chat".into(),send_color:"primary".into(),id:uuid::Uuid::new_v4().to_string(),profile_id:p.id.clone(),name:"Teste".into(),enabled:true,trigger:Trigger{kind:"command".into(),pattern:"!oi".into(),permission:"everyone".into(),cooldown:5,user_cooldown:5},actions:vec!["Um $user","Dois","Três"].into_iter().map(|s|Action{kind:"chat".into(),text:s.into(),target:"".into(),value:0,condition:"".into()}).collect(),layout:Value::Null}}
+fn flow(p:&Profile)->Flow{Flow{counter:false,timer_seconds:300,audio:String::new(),audio_volume:1.0,send_type:"chat".into(),send_color:"primary".into(),id:uuid::Uuid::new_v4().to_string(),profile_id:p.id.clone(),name:"Teste".into(),enabled:true,trigger:Trigger{kind:"command".into(),pattern:"!oi".into(),permission:"everyone".into(),cooldown:5,user_cooldown:5},actions:vec!["Um $user","Dois","Três"].into_iter().map(|s|Action{kind:"chat".into(),text:s.into(),target:"".into(),value:0,condition:"".into(),..Default::default()}).collect(),layout:Value::Null}}
 #[tokio::test]
 async fn ordered_execution_cooldown_filter_and_isolation(){
  let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();let p=profile("Canal A");let b=profile("Canal B");rt.db.save_profile(&p).unwrap();rt.db.save_profile(&b).unwrap();
@@ -279,13 +319,34 @@ async fn variable_templates_are_single_pass_bounded_and_typed(){
  let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();let p=profile("P");rt.db.save_profile(&p).unwrap();
  let mut e=event(&p,"!oi  café  20",true);e.user="$channel {{global.secret}} %message%".into();e.data=json!({"reward":{"title":"Hidratar"},"items":[{"amount":4}],"user":"Intruso"});
  let c=variables::Context::new(&rt.db,&p,&e,Some(&flow(&p))).unwrap();
- assert_eq!(c.render("$user").unwrap(),e.user);assert_eq!(c.render("$userId $unknown $messageSuffix").unwrap(),"ana $unknown $messageSuffix");
+ assert_eq!(c.render("$user").unwrap(),"$user");
+ assert_eq!(variables::migrate("$userId $unknown $messageSuffix"),"{{userId}} $unknown $messageSuffix");
+ assert_eq!(variables::migrate(r"\$user $5 R$100 arg"),r"\$user $5 R$100 arg");
+ assert_eq!(c.render(&variables::migrate("$userId $unknown $messageSuffix")).unwrap(),"ana $unknown $messageSuffix");
  assert_eq!(c.render("{{arg0|upper}} / %arg1% / {{rawInput}} / {{argCount}}").unwrap(),"CAFÉ / 20 / café  20 / 2");
  assert_eq!(c.render("{{data.reward.title}} {{data.items.0.amount|add:2}} {{arg1|number:2}}").unwrap(),"Hidratar 6 20.00");
  assert_eq!(c.render("{{missing|default:amigo|upper}} {{arg0|length}}").unwrap(),"AMIGO 4");
  assert_eq!(c.render(r"\{{user}} \$user \%userName%").unwrap(),"{{user}} $user %userName%");
  assert!(c.render("{{missing}}").is_err());assert!(c.render("{{user|unsupported}}").is_err());assert!(c.render("{{user").is_err());assert!(c.render("{{arg1|number:7}}").is_err());
  assert!(c.render(&"x".repeat(65537)).is_err());
+}
+#[test]
+fn legacy_dollar_markers_migrate_when_saved_and_read(){
+ let dir=tempfile::tempdir().unwrap();let path=dir.path().join("vars.sqlite");let p=profile("P");
+ let mut f=flow(&p);
+ f.actions[0].text="Bem-vindo, $user! Chegou em $channel.".into();
+ f.actions.push(Action{kind:"memory".into(),text:"{{user}} entrou".into(),target:"usuarios/$user.md".into(),value:0,condition:"$user".into(),..Default::default()});
+ f.actions.push(Action{kind:"script".into(),text:"\"$user\"".into(),target:String::new(),value:0,condition:String::new(),..Default::default()});
+ {let db=db::Db::open(&path).unwrap();db.save_profile(&p).unwrap();db.save_flow(&f).unwrap();
+  let got=db.flows(&p.id).unwrap();
+  assert_eq!(got[0].actions[0].text,"Bem-vindo, {{user}}! Chegou em {{channel}}.");
+  assert_eq!(got[0].actions[3].target,"usuarios/{{user}}.md");
+  assert_eq!(got[0].actions[3].condition,"$user");
+  assert_eq!(got[0].actions[4].text,"\"$user\"");
+  assert!(db.logs(&p.id).unwrap().iter().any(|l|l.kind=="variables"));}
+ assert_eq!(variables::migrate("$user.arg0"),"{{user}}.arg0");
+ assert_eq!(variables::migrate("$arg12"),"{{arg12}}");
+ assert_eq!(variables::migrate("$argumento $arg"),"$argumento $arg");
 }
 #[test]
 fn variable_persistence_session_user_and_profile_isolation(){
@@ -315,7 +376,7 @@ fn variable_increments_are_atomic_and_invalid_changes_do_not_write(){
 async fn variable_sequence_simulation_preview_and_permissions(){
  let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();let mut p=profile("P");p.editors=vec!["mod".into()];rt.db.save_profile(&p).unwrap();let other=profile("other");rt.db.save_profile(&other).unwrap();
  variables::mutate(&rt.db,&p.id,"twitch","","global.count","set",json!(10)).unwrap();
- let mut f=flow(&p);f.actions=vec![Action{kind:"variable.increment".into(),text:"2".into(),target:"global.count".into(),value:0,condition:"".into()},Action{kind:"variable.set".into(),text:"{{user|upper}}".into(),target:"local.name".into(),value:0,condition:"".into()},Action{kind:"chat".into(),text:"{{local.name}}: {{global.count}}".into(),target:"".into(),value:0,condition:"".into()}];
+ let mut f=flow(&p);f.actions=vec![Action{kind:"variable.increment".into(),text:"2".into(),target:"global.count".into(),value:0,condition:"".into(),..Default::default()},Action{kind:"variable.set".into(),text:"{{user|upper}}".into(),target:"local.name".into(),value:0,condition:"".into(),..Default::default()},Action{kind:"chat".into(),text:"{{local.name}}: {{global.count}}".into(),target:"".into(),value:0,condition:"".into(),..Default::default()}];
  rt.db.save_flow(&f).unwrap();engine::process(rt.clone(),event(&p,"!oi",true)).await;
  assert!(rt.db.logs(&p.id).unwrap().iter().any(|l|l.message=="[Simulação] ANA: 12"));assert_eq!(variables::list(&rt.db,&p.id,"").unwrap()[0]["value"],10);
  let preview=dispatch(rt.clone(),"variables.preview",json!({"profileId":p.id,"flow":f,"event":event(&p,"!oi",false)})).await.unwrap();assert_eq!(preview["steps"][2]["text"],"ANA: 12");assert_eq!(variables::list(&rt.db,&p.id,"").unwrap()[0]["value"],10);
@@ -331,7 +392,7 @@ async fn variable_sequence_simulation_preview_and_permissions(){
 #[tokio::test]
 async fn timer_preview_delivers_the_real_event_and_sorts_a_chatter(){
  let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();let p=profile("Prévia do timer");rt.db.save_profile(&p).unwrap();
- let mut f=flow(&p);f.name="Minecraft".into();f.trigger.kind="timer".into();f.trigger.pattern.clear();f.trigger.cooldown=0;f.trigger.user_cooldown=0;f.actions=vec![Action{kind:"chat".into(),text:"{{user}}|{{userId}}|{{eventType}}".into(),target:String::new(),value:0,condition:String::new()}];
+ let mut f=flow(&p);f.name="Minecraft".into();f.trigger.kind="timer".into();f.trigger.pattern.clear();f.trigger.cooldown=0;f.trigger.user_cooldown=0;f.actions=vec![Action{kind:"chat".into(),text:"{{user}}|{{userId}}|{{eventType}}".into(),target:String::new(),value:0,condition:String::new(),..Default::default()}];
  let ev=event(&p,"!minecraft Ana",true);
  // Sem ninguém no cadastro o sorteio não existe: a ação interrompe e orienta o uso do padrão.
  let ctx=variables::Context::new(&rt.db,&p,&ev,Some(&f)).unwrap();

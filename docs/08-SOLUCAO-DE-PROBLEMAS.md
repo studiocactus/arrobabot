@@ -66,6 +66,11 @@ Não precisa apagar o perfil para testar uma configuração. Excluir pode destru
 | Caminho de nota recusado | Use .md, / e apenas as pastas aceitas do vault |
 | Mudança de caminho deixou duas notas | Salvar em outro caminho cria outro arquivo; não é renomeação |
 | Copiar para Obsidian está desativado | Selecione uma nota e salve as alterações |
+| Importar pasta é recusada | Confira se é pasta existente com arquivos .md em texto UTF-8, fora dos dados do aplicativo, com até 400 arquivos, 200 kB por arquivo e 12 MB no total |
+| A base não entra na resposta | Confira **Usar a base nas respostas** e o interruptor do arquivo; depois de mudar, clique em **Salvar personalidade** |
+| O nicho escolhido não aparece | O arquivo precisa ficar em `nichos/` com o mesmo nome do campo, sem a extensão .md, por exemplo `fps-competitivo` |
+| A resposta não cita a categoria da live | A categoria vem da conexão com o canal; confira o perfil conectado e a linha de categoria registrada no **Histórico** |
+| O contexto da live some | Esse estado fica só em memória e vale por 90 segundos; fechar o aplicativo, trocar de canal ou excluir o perfil zera |
 | Obsidian não responde | Confira instância aberta, plugin, endereço local, chave e certificado confiável quando usar HTTPS |
 
 Erros HTTP são indícios, não diagnósticos completos. Verifique também o painel do serviço. Nunca envie a chave da API junto com uma captura de erro.

@@ -20,6 +20,7 @@ export async function api<T=unknown>(op:string,args:Args={}):Promise<T>{
  case 'logs':result=[];break;
  case 'stats':result={messages:0,actions:0,followers:0,hours:[],commands:[]};break;
  case 'notes':result=s.notes[id]||[];break;
+  case 'knowledge.list':result=[{path:'tom-e-comportamento/anti-padroes.md',category:'tom-e-comportamento',file:'anti-padroes',title:'Anti-padrões',kind:'exemplo',size:1840},{path:'girias/girias-gerais-twitch-kick.md',category:'girias',file:'girias-gerais-twitch-kick',title:'Gírias gerais da Twitch e Kick',kind:'',size:8210},{path:'nichos/fps.md',category:'nichos',file:'fps',title:'FPS',kind:'',size:1420},{path:'eventos-de-live/reacao-a-sub-doacao.md',category:'eventos-de-live',file:'reacao-a-sub-doacao',title:'Reação a sub e doação',kind:'exemplo',size:960}];break;
  case 'note.save':{s.notes[id]=(s.notes[id]||[]).filter(n=>n.path!==args.path).concat({path:String(args.path),content:String(args.content)});break}
  case 'note.delete':s.notes[id]=(s.notes[id]||[]).filter(n=>n.path!==args.path);break;
  case 'presets':result=s.presets;break;

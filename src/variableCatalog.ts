@@ -50,12 +50,12 @@ export function makeVariableToken(key:string,fallback:string,format:string){
 }
 export function messageParts(text:string):{text:string;label?:string}[]{
  // Display only: this never evaluates templates or any user-provided value.
- const pattern=/\\(?:\{\{|[$%])|\{\{([^{}]+)\}\}|\$([A-Za-z_][A-Za-z0-9_]*)|%([A-Za-z_][A-Za-z0-9_]*)%/g;
+ const pattern=/\\(?:\{\{|[$%])|\{\{([^{}]+)\}\}|%([A-Za-z_][A-Za-z0-9_]*)%/g;
  const parts:{text:string;label?:string}[]=[];let last=0;
  for(const m of text.matchAll(pattern)){
   const at=m.index!;if(at>last)parts.push({text:text.slice(last,at)});
   if(m[0].startsWith('\\')||(m[2]&&!variableCatalog.some(v=>v.key===m[2])&&m[2]!=='userName'))parts.push({text:m[0]});
-  else {const key=(m[1]||m[2]||m[3]).split('|')[0].trim();parts.push({text:m[0],label:variableLabel(key)});}
+  else {const key=(m[1]||m[2]).split('|')[0].trim();parts.push({text:m[0],label:variableLabel(key)});}
   last=at+m[0].length;
  }
  if(last<text.length)parts.push({text:text.slice(last)});return parts;
