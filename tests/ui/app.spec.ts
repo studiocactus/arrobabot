@@ -47,6 +47,7 @@ test('onboarding, comando, isolamento, memórias e navegação',async({page})=>{
  await page.getByRole('button',{name:'Salvar perfil',exact:true}).click();
  await expect(page.getByText('Perfil salvo.',{exact:true})).toBeVisible();
  await page.getByRole('dialog').getByRole('button',{name:'Fechar',exact:true}).click();
+ await expect(page.locator('.sidebar .brand')).toContainText('BotLive');
  await page.getByRole('button',{name:'Comandos',exact:true}).click();
  await page.getByRole('button',{name:'Novo comando',exact:true}).click();
  await page.getByLabel('Nome',{exact:true}).fill('Saudação');

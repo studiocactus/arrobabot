@@ -41,6 +41,7 @@ Não precisa apagar o perfil para testar uma configuração. Excluir pode destru
 | Sintoma | O que verificar |
 |---|---|
 | Não dispara | Perfil, chave Ativo, nome exato, papel do usuário e intervalos |
+| Mensagem contém com várias palavras não dispara | Separe as opções com vírgula: basta uma delas aparecer na mensagem. Sem vírgula, o texto precisa aparecer inteiro; a prévia do editor usa a primeira opção |
 | Funciona em simulação, mas não publica | Autorização de envio, conexão de entrada e permissões da plataforma |
 | Fluxo importado não dispara | Fluxos importados começam desativados; revise e ative |
 | Só parte das ações executa | O primeiro erro interrompe as próximas; confira condições opcionais |
@@ -57,9 +58,11 @@ Não precisa apagar o perfil para testar uma configuração. Excluir pode destru
 | Ollama indisponível | Inicie o serviço e confira endereço/porta |
 | Ollama sem modelos | Instale um modelo no Ollama e repita Detectar modelos locais |
 | Escolha um modelo de IA | Preencha o identificador exato do modelo |
-| HTTP 401 ou 403 do provedor | Confira chave e permissões da conta |
-| HTTP 404 | Confira endereço base e nome do modelo |
+| HTTP 401 ou 403 do provedor | Confira chave e permissões da conta; o erro diz quando a chave recusada é o problema |
+| HTTP 404 | O caminho do endereço não existe para o provedor escolhido; o erro traz o endereço completo usado na chamada, confira o endereço e não o modelo |
 | HTTP 429 | Verifique limites e quota do serviço; aumente os intervalos do fluxo |
+| A IA publica uma análise em inglês em vez de resposta | Nada mais é enviado nesse caso: o erro no Histórico diz que veio análise em vez da frase pronta. Troque o modelo ou ajuste a personalidade para português |
+| O modelo gastou o limite de tokens raciocinando | Aumente o tamanho da resposta em **Como esta ação responde** ou escolha outro modelo |
 | O provedor mudou | Salve a chave novamente para autorizar a nova origem |
 | Resposta bloqueada pelo filtro de assuntos | Revise assuntos proibidos; a classificação adicional precisa responder no formato esperado |
 | A IA não lembra de uma nota | Confira perfil, salvamento e palavras relacionadas na nota; busca lexical não lê tudo |

@@ -10,7 +10,7 @@ Abra **Inteligência artificial** e confira o perfil selecionado.
 | API compatível | https://api.openai.com/v1 ou base do serviço compatível | Sim |
 | Anthropic | https://api.anthropic.com/v1 | Sim |
 
-O aplicativo acrescenta a rota de geração ao endereço base. Não coloque /chat/completions no campo quando usar o adaptador compatível, nem /api/chat no campo do Ollama.
+O caminho da chamada é montado pelo provedor escolhido. Sem caminho no endereço, entra o caminho do provedor: `/api/chat` no Ollama e `/v1/chat/completions` na API compatível. Um endereço que já traz o caminho é aproveitado como está e nunca recebe o caminho duas vezes; se o endereço vier de outro formato, como `/api/chat` do Ollama com a API compatível selecionada, o BotLive troca pelo caminho equivalente. Um caminho que não existe para o provedor responde com HTTP 404 e o erro mostra o endereço completo usado na chamada, para você conferir o endereço e não o modelo.
 
 Informe o nome exato de um modelo disponível. Nenhum modelo acompanha o aplicativo e não há seleção automática de um modelo pago. Disponibilidade e custos dependem do provedor e da sua conta.
 
@@ -49,6 +49,8 @@ Em **Opções avançadas**, ajuste criatividade e o registro de interações. No
 As palavras e os assuntos proibidos são configurados em **Perfis de bot → Configurar → Restrições de conteúdo**. Palavras são verificadas após a geração. Quando há assuntos proibidos, uma chamada adicional ao modelo classifica a resposta; isso aumenta latência e consumo.
 
 Se a geração falhar, a execução registra o erro no Histórico, limpa a variável de resposta, marca `local.aiSuccess` como `false` e interrompe as ações seguintes desse fluxo. Não publica mensagem alternativa, erro técnico, voz ou overlay. O campo antigo de fallback é ignorado, inclusive em perfis existentes. Nos testes, a falha aparece somente no painel. Ações anteriores à falha não são desfeitas.
+
+Dois casos que antes poluíam o chat agora também ficam em silêncio com erro no Histórico: quando o provedor devolve um texto de análise em vez da frase pronta, como uma leitura da mensagem em inglês, e quando o modelo gasta o orçamento de tokens raciocinando e não deixa resposta. O pedido já pede a frase final em português no texto enviado ao modelo, e a resposta final continua cortada em 120, 300 ou 450 caracteres; acima disso, o modelo recebe um orçamento de tokens maior para caber o raciocínio de modelos que pensam antes de escrever. Os erros de HTTP dizem qual é a ação certa: 404 aponta o endereço usado, 401 e 403 apontam a chave, 429 aponta limite ou quota e os 5xx pedem nova tentativa.
 
 Os filtros por classificação não garantem compreensão perfeita de todo assunto. Revise personalidade, termos e exemplos de resposta da sua comunidade. Respostas do adaptador são limitadas a 450 caracteres.
 

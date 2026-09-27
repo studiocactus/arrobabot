@@ -1,5 +1,19 @@
 # Registro de validação
 
+## Atualização 0.1.16
+
+Compilação TypeScript/Vite, 24 testes Vitest, 14 cenários Playwright, 77 testes Rust e oito testes dos scripts de atualização aprovados. A entrega corrige a IA das Automações: o caminho da chamada passa a ser montado pelo provedor para não duplicar o endereço, o erro passa a dizer qual é a ação (404 aponta o endereço usado, 401 e 403 a chave, 429 o limite), texto de análise é recusado antes de ir para o chat, o caso de modelo que gasta os tokens raciocinando ganha aviso próprio, o orçamento de tokens aumenta para os modelos que pensam antes de responder, o gatilho Mensagem contém aceita lista separada por vírgula e a marca no topo esquerdo passa a ser BotLive.
+
+Verificações desta versão:
+
+- Núcleo Rust: 77 testes aprovados, sendo 3 novos: composição do caminho por provedor com conversão de `/api/chat` e caminho completo reaproveitado, aberturas de análise em inglês e português barradas sem afetar resposta normal, e lista por vírgula no gatilho contém com a primeira opção na prévia.
+- Interface: 14 cenários Playwright aprovados, com as asserções novas da marca `BotLive` na barra lateral e da dica de lista por vírgula em **Texto que dispara** (ausente em Comando, visível em Mensagem contém); `npm run check` e 24 testes Vitest aprovados.
+- Sonda HTTP real sem chave: `POST https://ollama.com/api/chat/chat/completions` respondeu 404, que era o endereço montado antes da correção, e `POST https://ollama.com/v1/chat/completions` respondeu 401, confirmando que o caminho corrigido existe e pede chave.
+- Scripts de atualização: 8 testes aprovados, `npm run update:check` aprovado com as notas 0.1.16 e `npm run build` aprovado.
+- Diagnóstico dos sintomas relatados feito sobre o banco e o log locais do aplicativo, sem alterar dados de usuário.
+
+Sem chave de API nesta validação não houve geração real de um modelo pago: o caminho corrigido foi comprovado pela sonda HTTP e por teste unitário, o que não equivale à homologação de uma resposta do provedor. Modelos com raciocínio muito extenso ainda podem estourar o orçamento de tokens e, nesse caso, viram erro claro no Histórico em vez de resposta publicada. Os registros abaixo descrevem verificações históricas das versões anteriores.
+
 ## Atualização 0.1.15
 
 Compilação TypeScript/Vite, 24 testes Vitest, 14 cenários Playwright, 74 testes Rust e oito testes dos scripts de atualização aprovados. A entrega torna a tela de Automações mais amigável sem remover funções: seções recolhíveis no painel do bloco, ajuda longa em resumo recolhível, erros técnicos traduzidos para português com o texto original em "Detalhes técnicos", dica de que a ordem vem das conexões e aviso na troca do modo simples para o editor visual.
