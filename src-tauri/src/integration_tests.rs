@@ -430,3 +430,74 @@ async fn timer_preview_delivers_the_real_event_and_sorts_a_chatter(){
  assert_eq!(preview["variables"]["user"],"BotLive");
  assert_eq!(preview["variables"]["userId"],"");
 }
+#[tokio::test]
+async fn only_one_automation_publishes_when_several_match(){
+ let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();let p=profile("Uma resposta");rt.db.save_profile(&p).unwrap();
+ let mut comando=flow(&p);comando.name="Comando".into();comando.actions=vec![Action{kind:"overlay".into(),text:"efeito paralelo".into(),target:String::new(),value:0,condition:String::new(),..Default::default()},Action{kind:"chat".into(),text:"resposta do comando".into(),target:String::new(),value:0,condition:String::new(),..Default::default()}];
+ let mut contem=flow(&p);contem.name="Contém".into();contem.id=uuid::Uuid::new_v4().to_string();contem.trigger.kind="contains".into();contem.trigger.pattern="oi".into();contem.trigger.cooldown=0;contem.trigger.user_cooldown=0;
+ contem.actions=vec![Action{kind:"chat".into(),text:"resposta do contém".into(),target:String::new(),value:0,condition:String::new(),..Default::default()}];
+ rt.db.save_flow(&contem).unwrap();rt.db.save_flow(&comando).unwrap();
+ let mut rx=rt.broadcast.subscribe();
+ engine::process(rt.clone(),event(&p,"!oi tudo bem",false)).await;
+ let events:Vec<_>=std::iter::from_fn(||rx.try_recv().ok()).collect();
+ assert!(events.iter().any(|v|v["type"]=="overlay"&&v["payload"]["text"]=="efeito paralelo"),"o efeito paralelo roda nos dois lados");
+ let msgs:Vec<String>=rt.db.logs(&p.id).unwrap().into_iter().map(|l|l.message).collect();
+ assert!(msgs.iter().any(|m|m=="Iniciando Comando"),"o vencedor roda");
+ assert!(msgs.iter().any(|m|m=="Iniciando Contém"),"o outro fluxo também roda");
+ assert!(msgs.iter().any(|m|m.contains("Contém · Outra automação já respondeu esta mensagem")),"o Histórico registra o que ficou de fora");
+ assert!(msgs.iter().any(|m|m.starts_with("Comando · ")),"é o comando que tenta publicar");
+ assert!(msgs.iter().all(|m|!m.starts_with("Contém ·")||m.starts_with("Contém · Outra automação")),"a resposta do perdedor nunca é publicada");
+}
+#[tokio::test]
+async fn punish_action_is_previewed_validated_and_refused_without_a_twitch_account(){
+ let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();let p=profile("Punição");rt.db.save_profile(&p).unwrap();
+ let mut f=flow(&p);f.name="Silenciar".into();f.trigger.pattern="!silenciar".into();
+ f.actions=vec![Action{kind:"punish".into(),text:"Regras da live".into(),target:"sender".into(),value:60,condition:String::new(),punish:"timeout".into(),..Default::default()}];
+ dispatch(rt.clone(),"flow.save",json!({"profileId":p.id,"flow":f.clone()})).await.unwrap();
+ // A prévia mostra o plano e não pune ninguém.
+ engine::process(rt.clone(),event(&p,"!silenciar @alguem",true)).await;
+ assert!(rt.db.logs(&p.id).unwrap().iter().any(|l|l.message=="Executaria punish: Regras da live"&&l.status=="success"));
+ // Quem não tem conta da Twitch no evento é recusado antes de qualquer chamada externa.
+ engine::process(rt.clone(),event(&p,"!silenciar",false)).await;
+ assert!(rt.db.logs(&p.id).unwrap().iter().any(|l|l.status=="error"&&l.message.contains("não traz uma conta da Twitch")));
+ // Perfil fora da Twitch também é recusado.
+ let mut yt=profile("Outra plataforma");yt.platform="youtube".into();rt.db.save_profile(&yt).unwrap();
+ let mut g=f.clone();g.profile_id=yt.id.clone();g.id=uuid::Uuid::new_v4().to_string();rt.db.save_flow(&g).unwrap();
+ let mut ev=event(&yt,"!silenciar",false);ev.user_id="12345678".into();
+ engine::process(rt.clone(),ev).await;
+ assert!(rt.db.logs(&yt.id).unwrap().iter().any(|l|l.status=="error"&&l.message.contains("A punição usa a Twitch")));
+ // Entrada inválida não passa.
+ let mut modo=f.clone();modo.actions[0].punish="mute".into();
+ assert!(dispatch(rt.clone(),"flow.save",json!({"profileId":p.id,"flow":modo})).await.is_err());
+ let mut alvo=f.clone();alvo.actions[0].target="qualquer".into();
+ assert!(dispatch(rt.clone(),"flow.save",json!({"profileId":p.id,"flow":alvo})).await.is_err());
+ let mut duracao=f.clone();duracao.actions[0].value=0;
+ assert!(dispatch(rt.clone(),"flow.save",json!({"profileId":p.id,"flow":duracao})).await.is_err());
+ // Alvo pelo primeiro argumento e aviso sem duração passam.
+ let mut primeiro=f.clone();primeiro.actions[0].target="first".into();primeiro.actions[0].punish="warn".into();primeiro.actions[0].value=0;
+ assert!(dispatch(rt.clone(),"flow.save",json!({"profileId":p.id,"flow":primeiro})).await.is_ok());
+}
+#[tokio::test]
+async fn backup_is_owner_only_and_command_count_turns_on_when_it_is_used(){
+ let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().join("app")).unwrap();let p=profile("Backup");rt.db.save_profile(&p).unwrap();
+ let mut f=flow(&p);f.name="ifood".into();f.trigger.pattern="!ifood".into();f.counter=false;
+ f.actions=vec![Action{kind:"chat".into(),text:"{{commandCount}}º pedido".into(),target:String::new(),value:0,condition:String::new(),..Default::default()}];
+ dispatch(rt.clone(),"flow.save",json!({"profileId":p.id,"flow":f.clone()})).await.unwrap();
+ assert!(rt.db.flows(&p.id).unwrap().remove(0).counter,"quem usa o contador é ligado na gravação");
+ assert!(rt.db.logs(&p.id).unwrap().iter().any(|l|l.message.contains("Contagem ligada em \"ifood\"")));
+ assert!(dispatch(rt.clone(),"backup.save",json!({"config":json!({"days":0})})).await.is_err(),"retenção fora do intervalo não passa");
+ let bk=dir.path().join("backups");std::fs::create_dir_all(&bk).unwrap();
+ let folder=bk.to_string_lossy().into_owned();
+ dispatch(rt.clone(),"backup.save",json!({"config":json!({"folder":folder,"auto":true,"days":7,"weeks":4,"months":12})})).await.unwrap();
+ let feito=dispatch(rt.clone(),"backup.now",json!({})).await.unwrap();
+ assert!(std::path::Path::new(feito["path"].as_str().unwrap()).is_file());
+ assert_eq!(dispatch(rt.clone(),"backup.list",json!({})).await.unwrap().as_array().map(|v|v.len()),Some(1));
+ assert!(dispatch(rt.clone(),"backup.save",json!({"config":json!({"folder":""})})).await.is_err(),"automático exige pasta");
+ *rt.actor.lock().unwrap()="mod".into();
+ assert!(dispatch(rt.clone(),"backup.now",json!({})).await.is_err(),"só o proprietário faz backup");
+ assert!(dispatch(rt.clone(),"backup.get",json!({})).await.is_err());
+ assert!(dispatch(rt.clone(),"backup.restore",json!({"path":"qualquer"})).await.is_err());
+ *rt.actor.lock().unwrap()="owner".into();
+ let estranho=dir.path().join("estranho.botlivebak");std::fs::write(&estranho,"{\"format\":\"de outra coisa\"}").unwrap();
+ assert!(dispatch(rt.clone(),"backup.restore",json!({"path":estranho.to_string_lossy().to_string()})).await.is_err());
+}

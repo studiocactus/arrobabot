@@ -54,6 +54,24 @@ O backup conserva configurações, histórico retido, notas e estados da comunid
 
 Preserve também a pasta **media** para os sons por espectador. Arquivos TXT vinculados externamente precisam de backup separado. Ao mudar de computador ou pasta de dados, vincule os arquivos novamente. Veja os detalhes de [respostas e sons](RESPOSTAS-E-SONS.md).
 
+## Backup no aplicativo (.botlivebak)
+
+Além da cópia manual da pasta, o BotLive guarda sozinho um arquivo por dia na pasta que você escolher.
+
+1. Abra **Configurações → Backup do bot**.
+2. Clique em **Escolher pasta** e indique uma pasta sua, de preferência fora da pasta de dados.
+3. Ligue **Backup automático diário** se quiser um arquivo por dia.
+4. Ajuste **Guardar por dias** (1 a 365), **Semanas** (1 a 52) e **Meses** (1 a 60).
+5. Use **Fazer backup agora** antes de fechar antes de uma live, e **Importar backup…** para trazer as áreas de volta.
+
+Cada arquivo tem extensão `.botlivebak` e nome `botlive-AAAA-MM-DD.botlivebak`; quando já existe um na data, o novo entra com `-1`, `-2` e por diante, sem sobrescrever. O arquivo contém todas as áreas do bot: perfis, comandos, timers, automações, contadores, histórico, presets, ajustes, pontos, variáveis, memórias, base de conhecimento (`knowledge`), sons (`media`) e vaults (`vaults`).
+
+O automático roda enquanto o aplicativo está aberto, no máximo um arquivo por dia, e registra o resultado no **Histórico** com a categoria `backup`. Quando falha, tenta de novo em uma hora. A retenção apaga depois: as últimas cópias de cada dia do período, a mais recente de cada semana e a mais recente de cada mês. Só arquivos com o nome do BotLive na pasta escolhida são tocados; nenhum outro arquivo é apagado.
+
+As credenciais ficam no cofre do sistema e nunca entram no arquivo. Ao importar em outro computador, reautorize Twitch e Discord.
+
+Limitações desta versão: o automático só grava com o aplicativo aberto, não há envio para nuvem nem cópia em outro disco, o arquivo precisa caber em 256 MB, cada arquivo de conteúdo entra até 64 MB (maior que isso falha com aviso), até 5000 arquivos e até 500 mil linhas por arquivo, e a pasta precisa existir antes de ser escolhida.
+
 ## Restaurar no mesmo computador
 
 1. Feche o BotLive.
@@ -64,6 +82,18 @@ Preserve também a pasta **media** para os sons por espectador. Arquivos TXT vin
 6. Reautorize serviços se as credenciais não estiverem mais disponíveis.
 
 Não misture manualmente dois bancos e não copie somente tabelas entre versões sem um procedimento técnico de migração.
+
+### Importar um arquivo .botlivebak
+
+1. Abra **Configurações → Backup do bot**.
+2. Clique em **Importar backup…** e escolha o arquivo.
+3. Confirme o aviso: a importação substitui **todas** as áreas do bot pelas do arquivo; ela não soma nem mescla com o que está lá.
+4. Aguarde a tela recarregar.
+5. Reconecte os perfis e confira perfis, comandos, timers, contadores, histórico, pontos, memórias, base de conhecimento e sons.
+
+Antes de aplicar, o BotLive grava uma cópia de segurança `backup-antes-da-importacao-AAAA-MM-DD-hhmmss.botlivebak` na pasta de dados. Durante a troca os perfis são desconectados, as conversas e o estado da live são zerados e as tarefas do Discord são encerradas; reconecte em seguida. Arquivos que não são do BotLive, ou que vieram de outra versão do programa, são recusados sem alterar nada. O resultado aparece no Histórico, na categoria `backup`.
+
+Se a gravação dos arquivos falhar no meio da importação, as tabelas já trocadas permanecem; use a cópia de segurança gravada no passo anterior para voltar ao estado do momento.
 
 ## Levar para outro computador
 

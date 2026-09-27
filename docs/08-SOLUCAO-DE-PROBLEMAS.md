@@ -49,6 +49,10 @@ Não precisa apagar o perfil para testar uma configuração. Excluir pode destru
 | !pontos personalizado não executa | O módulo de pontos trata seu comando pronto antes dos fluxos |
 | Espera inválida | O campo é em milissegundos; máximo 30000 |
 | Resposta bloqueada | Revise a blocklist; a comparação encontra trechos dentro de palavras maiores |
+| O público erra o nome do comando e nada dispara | Cadastre variações separadas por vírgula no campo Comando, como `!whislist, !whishlist, !wishlist`. Cada uma começa com `!`, não tem espaço e vale como palavra inteira |
+| Vários fluxos respondem a mesma mensagem | Só um deles publica: vence o tipo do gatilho (comando, depois chamada pelo nome, depois contém, depois toda mensagem) e, entre iguais, o mais específico e o que aparece antes na lista de Automações. Os demais efeitos continuam e o Histórico registra **Outra automação já respondeu esta mensagem; os demais efeitos continuam** |
+| A punição não executa | Perfil da Twitch com a conta do canal autorizada, gatilho restrito a Moderadores ou Só o streamer e alvo válido. Prévia e simulação nunca punem; veja o plano no Histórico |
+| A punição avisa que o evento não tem conta da Twitch | O evento não trouxe um ID numérico; use um disparo real de chat, não a simulação |
 | Anúncio, mensagem fixada ou destaque recusado | Autorize de novo as contas do bot e do canal, marque o bot como moderador do canal e leia o aviso no Histórico, que diz qual permissão falta |
 
 ## IA e memória
@@ -77,6 +81,7 @@ Não precisa apagar o perfil para testar uma configuração. Excluir pode destru
 | Os emotes não parecem na resposta | É esperado: a regra pede no máximo um emote por resposta e deixa a maioria das respostas sem emote; o modelo decide onde cabe, e a escolha muda de uma resposta para outra |
 | O contexto da live some | Esse estado fica só em memória e vale por 90 segundos; fechar o aplicativo, trocar de canal ou excluir o perfil zera |
 | Obsidian não responde | Confira instância aberta, plugin, endereço local, chave e certificado confiável quando usar HTTPS |
+| Variável ausente: local.aiResponse | A mensagem cita uma resposta da IA que nenhuma ação do fluxo define. Acrescente **Gerar resposta da IA** antes de usar o valor, ou escreva `{{local.aiResponse\|default:sem resposta}}` no próprio marcador. O editor já mostra esse aviso sob o quadro da mensagem, e o caso clássico é um timer antigo, como o timer Donate, que citava o valor sem a ação de IA ao lado |
 
 Erros HTTP são indícios, não diagnósticos completos. Verifique também o painel do serviço. Nunca envie a chave da API junto com uma captura de erro.
 
@@ -116,6 +121,14 @@ Motivos de conexão, intents e permissões do bot aparecem no **Histórico** com
 
 **Backup restaurado pede senha desconhecida:** o banco guarda a ativação do login; as senhas ficam no cofre do sistema original. Preserve a cópia e busque manutenção técnica. Não há recuperação automática por e-mail.
 
+**Backup automático não grava nada:** confira se você está no aplicativo desktop (a prévia de navegador não grava arquivos), se a pasta foi escolhida e se ela ainda existe, e se **Backup automático diário** está ligado. O resultado de cada tentativa aparece no **Histórico** com a categoria `backup`; quando falha, a nova tentativa acontece em uma hora. O automático grava no máximo um arquivo por dia e só enquanto o aplicativo está aberto.
+
+**Há um arquivo grande demais para o backup:** um arquivo de `knowledge`, `media` ou `vaults` maior que 64 MB impede a gravação inteira. Mova o arquivo para fora da pasta de dados ou divida-o; o mesmo limite vale para o arquivo completo, de 256 MB.
+
+**Importar recusa o arquivo:** só entram arquivos `.botlivebak` feitos pelo BotLive, e um backup de outra versão do programa é recusado para você importar com a versão que o criou. Confirme também se a pasta de destino continua acessível.
+
+**Importação não carregou os dados esperados:** a importação substitui todas as áreas pelas do arquivo, sem mesclar. Os perfis ficam desconectados e as tarefas do Discord são encerradas; reconecte em seguida. A cópia `backup-antes-da-importacao-...botlivebak` fica na pasta de dados para voltar atrás.
+
 ## Ao solicitar ajuda técnica
 
 Informe versão, sistema operacional, tela/ação, perfil/plataforma afetados, horário, mensagem de erro e se aconteceu no desktop ou na prévia. Descreva o resultado esperado e os passos para reproduzir.
@@ -126,5 +139,7 @@ Retire tokens, chaves, webhooks privados e informações pessoais de qualquer ma
 
 - Timer: confirme perfil conectado, timer ativo, intervalo salvo e espera do período completo. Conexão online não exige transmissão ao vivo; pause ao terminar. Não há envios retroativos. No Kick com ponte externa, timers nativos não iniciam.
 - Contador: confirme Contar usos deste comando, papel autorizado e intervalos liberados. Moderação, respostas TXT e comandos de comunidade podem consumir a mensagem antes. Simular não muda o total real.
+- Contador sempre em zero com `{{commandCount}}` na resposta: escrever o marcador já liga **Contar usos deste comando** ao salvar, e comandos antigos tiveram o interruptor ligado na primeira abertura da nova versão. Se ainda ficar zerado, abra o comando e confira o interruptor.
+- Punição num timer não executa: a ação **Punir na Twitch** depende de uma pessoa na mensagem; num timer não há quem enviar. Use a punição em gatilhos de chat.
 - Contador aumentou, mas não respondeu: a contagem ocorre antes das ações; confira falha de envio no Histórico. Ajuste o total pela lista se necessário.
 - Exemplos completos: [Timers e contadores](TIMERS-E-CONTADORES.md) e [Receitas por função](EXEMPLOS-DE-USO.md).

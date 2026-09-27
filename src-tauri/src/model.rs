@@ -59,6 +59,9 @@ pub const SEND_TYPES:[&str;4]=["chat","announce","pin","shoutout"];
 pub const SEND_COLORS:[&str;5]=["primary","blue","green","orange","purple"];
 /// Ancoragem da resposta com IA e tamanho máximo dela.
 pub const ANCHORS:[&str;4]=["all","message","chat","fixed"];
+/// Modos aceitos pela ação de punição e os dois modos de escolher quem leva ela.
+pub const PUNISH_MODES:[&str;3]=["timeout","ban","warn"];
+pub const PUNISH_TARGETS:[&str;2]=["sender","first"];
 pub const LENGTHS:[&str;3]=["short","medium","free"];
 pub const KNOWLEDGE_DEPTHS:[&str;3]=["light","standard","full"];
 /// True when the flow needs a message-sending action to make this delivery useful.
@@ -77,6 +80,8 @@ pub struct Action {
  pub kind:String, #[serde(default)] pub text:String,
  #[serde(default)] pub target:String, #[serde(default)] pub value:i64,
  #[serde(default)] pub condition:String,
+ /// Modo da ação de punição: silenciar, banir ou avisar. Só é usado por "punish".
+ #[serde(default)] pub punish:String,
  /// Controles da resposta com IA. Vazio ou ausente herda o padrão do perfil.
  #[serde(default)] pub ai_anchor:String,
  #[serde(default)] pub ai_knowledge:String,
@@ -85,7 +90,7 @@ pub struct Action {
  #[serde(default)] pub ai_no_repeat:Option<bool>,
 }
 impl Default for Action {
- fn default()->Self { Self{kind:"chat".into(),text:String::new(),target:String::new(),value:0,condition:String::new(),ai_anchor:String::new(),ai_knowledge:String::new(),ai_length:String::new(),ai_style:String::new(),ai_no_repeat:None} }
+ fn default()->Self { Self{kind:"chat".into(),text:String::new(),target:String::new(),value:0,condition:String::new(),punish:String::new(),ai_anchor:String::new(),ai_knowledge:String::new(),ai_length:String::new(),ai_style:String::new(),ai_no_repeat:None} }
 }
 impl Action {
  pub fn anchor<'a>(&'a self,ai:&'a AiConfig)->&'a str { self.pick(&self.ai_anchor,&ai.anchor,"all") }
@@ -136,7 +141,7 @@ pub fn matches(t:&Trigger,e:&Event)->bool {
  if !permitted(&t.permission,&e.role) { return false; }
  match t.kind.as_str() {
  "timer"=>false, // Only the internal scheduler can execute periodic flows.
- "command"=>e.kind=="chat" && e.message.split_whitespace().next().is_some_and(|s| s.eq_ignore_ascii_case(&t.pattern)),
+ "command"=>e.kind=="chat" && e.message.split_whitespace().next().is_some_and(|s| command_any(&t.pattern,s)),
  "contains"=>e.kind=="chat" && contains_any(&t.pattern,&e.message),
  "mention"=>e.kind=="chat" && mention_any(&t.pattern,&e.message),
  "voice"=>e.kind=="voice" && (t.pattern.is_empty()||e.message.to_lowercase().contains(&t.pattern.to_lowercase())),
@@ -149,6 +154,13 @@ fn contains_any(pattern:&str,message:&str)->bool {
  if pattern.trim().is_empty() { return false; }
  let text=message.to_lowercase();
  pattern.split(',').map(str::trim).any(|alt|!alt.is_empty()&&text.contains(&alt.to_lowercase()))
+}
+/// "Comando de chat" aceita variações separadas por vírgula, como !whislist, !whishlist:
+/// qualquer uma delas como primeira palavra da mensagem dispara o fluxo. Sem vírgula o
+/// comportamento continua o de antes, um comando exato.
+fn command_any(pattern:&str,first:&str)->bool {
+ if pattern.trim().is_empty() { return false; }
+ pattern.split(',').map(str::trim).any(|alt|!alt.is_empty()&&first.eq_ignore_ascii_case(alt))
 }
 /// "Chamada pelo nome do bot": dispara quando um dos nomes da lista aparece como
 /// palavra inteira. Sem a barreira de palavra, "arromba" dispararia dentro de
@@ -180,7 +192,7 @@ pub fn preview_event(f:&Flow,e:Event)->Event {
  "command" if !f.trigger.pattern.is_empty()=>{
   let words:Vec<&str>=e.message.split_whitespace().collect();
   let rest:&[&str]=if words.first().is_some_and(|w|w.starts_with('!')){&words[1..]}else{&words[..]};
-  let message=std::iter::once(f.trigger.pattern.as_str()).chain(rest.iter().copied()).collect::<Vec<_>>().join(" ");
+  let message=std::iter::once(first_option(&f.trigger.pattern)).chain(rest.iter().copied()).collect::<Vec<_>>().join(" ");
   Event{kind:"chat".into(),message,..e}
  },
  "contains" if !f.trigger.pattern.is_empty()=>{
@@ -208,7 +220,7 @@ pub fn validate_flow(f:&Flow)->Result<(),String> {
  if f.name.trim().is_empty()||f.actions.is_empty()||f.actions.len()>64 {return Err("Dê um nome e adicione entre 1 e 64 ações".into())}
  if !["everyone","subscriber","moderator","broadcaster"].contains(&f.trigger.permission.as_str()) {return Err("Permissão inválida".into())}
  if f.trigger.cooldown>86400||f.trigger.user_cooldown>86400{return Err("Cooldown máximo: 24 horas".into())}
- if f.trigger.kind=="command" && (!f.trigger.pattern.starts_with('!')||f.trigger.pattern.contains(char::is_whitespace)) {return Err("O comando deve começar com ! e não conter espaços".into())}
+ if f.trigger.kind=="command" {let alts:Vec<&str>=f.trigger.pattern.split(',').map(str::trim).filter(|s|!s.is_empty()).collect();if alts.is_empty()||alts.iter().any(|c|!c.starts_with('!')||c.contains(char::is_whitespace)){return Err("Cada comando começa com ! e não tem espaço. Separe variações com vírgula, como !whislist, !whishlist".into())}}
  if f.trigger.kind=="mention" && f.trigger.pattern.trim().is_empty() {return Err("Informe pelo menos um nome do bot, separados por vírgula".into())}
  if !SEND_TYPES.contains(&f.send_type.as_str()){return Err("Forma de envio inválida".into())}
  if !SEND_COLORS.contains(&f.send_color.as_str()){return Err("Cor do anúncio inválida".into())}
@@ -216,11 +228,17 @@ pub fn validate_flow(f:&Flow)->Result<(),String> {
  if !f.audio.is_empty()&&(f.audio.len()>64||f.audio.contains(char::is_whitespace)){return Err("Áudio inválido: escolha um som da biblioteca".into())}
  if !f.audio_volume.is_finite()||!(0.0..=1.0).contains(&f.audio_volume){return Err("Volume do áudio: escolha de 0% a 100%".into())}
  for a in &f.actions {
- if !["chat","ai","ai.generate","memory","webhook","discord","overlay","delay","script","points","tts","variable.set","variable.increment","variable.delete"].contains(&a.kind.as_str()) {return Err("Tipo de ação inválido".into())}
+ if !["chat","ai","ai.generate","memory","webhook","discord","overlay","delay","script","points","tts","variable.set","variable.increment","variable.delete","punish"].contains(&a.kind.as_str()) {return Err("Tipo de ação inválido".into())}
  if a.kind=="ai.generate" {let (scope,name)=crate::variables::target(crate::ai::response_target(a))?;if scope!="local"||name=="aiSuccess"{return Err("Guarde a resposta da IA numa variável local de texto".into())}}
  if a.kind.starts_with("variable."){crate::variables::target(&a.target)?;}
  if a.text.len()>32768 {return Err("Ação muito longa".into())}
  if a.kind=="delay" && !(0..=30000).contains(&a.value) {return Err("Espera máxima: 30 segundos".into())}
+ if a.kind=="punish" {
+  if !PUNISH_MODES.contains(&a.punish.as_str()){return Err("Punição: escolha silenciar, banir ou avisar".into())}
+  if !PUNISH_TARGETS.contains(&a.target.as_str()){return Err("Punição: escolha quem leva a ação, quem enviou ou o primeiro argumento".into())}
+  if a.punish=="timeout"&&!(1..=1209600).contains(&a.value){return Err("Punição: duração de 1 segundo a 14 dias".into())}
+  if a.text.len()>500{return Err("Punição: o motivo pode ter até 500 caracteres".into())}
+ }
  if !a.ai_anchor.is_empty()&&!ANCHORS.contains(&a.ai_anchor.as_str()){return Err("Ancoragem da IA inválida".into())}
  if !a.ai_length.is_empty()&&!LENGTHS.contains(&a.ai_length.as_str()){return Err("Tamanho da resposta da IA inválido".into())}
  if !a.ai_knowledge.is_empty()&&!["on","off"].contains(&a.ai_knowledge.as_str()){return Err("Base de conhecimento inválida".into())}
@@ -311,5 +329,43 @@ pub fn validate_flow(f:&Flow)->Result<(),String> {
   assert_eq!(ANCHORS,["all","message","chat","fixed"]);
   assert_eq!(LENGTHS,["short","medium","free"]);
   assert_eq!(KNOWLEDGE_DEPTHS,["light","standard","full"]);
+ }
+ #[test] fn command_trigger_accepts_variations_separated_by_commas() {
+  let mut t=Trigger{kind:"command".into(),pattern:"!whislist, !whishlist, !wishlist".into(),permission:"everyone".into(),cooldown:0,user_cooldown:0};
+  let mut m=e();
+  m.message="!whislist por favor".into();assert!(matches(&t,&m));
+  m.message="!WHISHLIST".into();assert!(matches(&t,&m),"maiúsculas não atrapalham");
+  m.message="!whishlist oloco".into();assert!(matches(&t,&m),"quem erra também dispara");
+  m.message="!wishlist".into();assert!(matches(&t,&m));
+  m.message="whishlist sem exclamação".into();assert!(!matches(&t,&m),"precisa ser a primeira palavra");
+  m.message="!whisli".into();assert!(!matches(&t,&m),"trecho do comando não vale");
+  m.kind="follow".into();assert!(!matches(&t,&m),"só mensagem de chat");
+  t.pattern.clear();m.kind="chat".into();assert!(!matches(&t,&m),"lista vazia não dispara nada");
+  t.pattern="!whislist, , !wishlist".into();m.message="!whislist".into();assert!(matches(&t,&m),"opção vazia no meio é ignorada");
+ }
+ #[test] fn command_variations_and_punish_rules_are_validated() {
+  let mut f=Flow{counter:false,timer_seconds:300,audio:String::new(),audio_volume:1.0,send_type:"chat".into(),send_color:"primary".into(),reply_to:false,id:uuid::Uuid::new_v4().to_string(),profile_id:uuid::Uuid::new_v4().to_string(),name:"Lista".into(),enabled:true,trigger:Trigger{kind:"command".into(),pattern:"!whislist, !whishlist".into(),permission:"everyone".into(),cooldown:0,user_cooldown:0},actions:vec![Action{kind:"chat".into(),text:"Pronto".into(),target:String::new(),value:0,condition:String::new(),..Default::default()}],layout:Value::Null};
+  assert!(validate_flow(&f).is_ok());
+  f.trigger.pattern="!whislist, whishlist".into();
+  assert!(validate_flow(&f).is_err(),"cada opção começa com !");
+  f.trigger.pattern="!whis list".into();
+  assert!(validate_flow(&f).is_err(),"nenhuma opção tem espaço");
+  f.trigger.pattern="whislist".into();
+  assert!(validate_flow(&f).is_err(),"sem exclamação não é comando");
+  f.trigger.pattern="!whislist, !whishlist".into();
+  f.actions=vec![Action{kind:"punish".into(),text:"Regras da comunidade".into(),target:"sender".into(),value:60,condition:String::new(),punish:"timeout".into(),..Default::default()}];
+  assert!(validate_flow(&f).is_ok());
+  f.actions[0].punish="mute".into();assert_eq!(validate_flow(&f).unwrap_err(),"Punição: escolha silenciar, banir ou avisar");
+  f.actions[0].punish="timeout".into();f.actions[0].value=0;assert_eq!(validate_flow(&f).unwrap_err(),"Punição: duração de 1 segundo a 14 dias");
+  f.actions[0].value=1209601;assert!(validate_flow(&f).is_err());
+  f.actions[0].value=1209600;assert!(validate_flow(&f).is_ok(),"14 dias cabe");
+  f.actions[0].target="qualquer".into();assert_eq!(validate_flow(&f).unwrap_err(),"Punição: escolha quem leva a ação, quem enviou ou o primeiro argumento");
+  f.actions[0].target="first".into();f.actions[0].punish="ban".into();f.actions[0].value=0;
+  assert!(validate_flow(&f).is_ok(),"ban e aviso não usam duração");
+  assert_eq!(PUNISH_MODES,["timeout","ban","warn"]);
+  assert_eq!(PUNISH_TARGETS,["sender","first"]);
+  // Ações salvas antes da punição existir continuam recebendo o campo vazio.
+  let mut saved=serde_json::to_value(&f.actions[0]).unwrap();saved.as_object_mut().unwrap().remove("punish");
+  let back:Action=serde_json::from_value(saved).unwrap();assert_eq!(back.punish,"");
  }
 }

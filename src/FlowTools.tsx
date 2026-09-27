@@ -28,7 +28,7 @@ export function FlowDialog({flow,mode,profile,notify,onSaved,onClose}:{flow:Flow
  const [editing,setEditing]=useState<Flow>(flow);
  const [forceVisual,setForceVisual]=useState(false);
  const kind=mode==='timer'?'timer':'comando';
- const editor=mode==='flow'||editing.actions.length>1||forceVisual;
+ const editor=mode==='flow'||editing.actions.length>1||forceVisual||editing.actions.some(a=>!['chat','ai'].includes(a.kind));
  const intro=mode!=='flow'&&(forceVisual||editing.actions.length>1)?'Trocou para o editor visual: a ordem das ações é a das conexões entre os blocos, não pela posição deles na tela. Ao salvar, este '+kind+' mantém o mesmo nome, gatilho e ativação.':'';
  const title=mode==='flow'?'Editor de automação':mode==='timer'?'Configurar timer':'Configurar comando';
  async function save(next:Flow){
@@ -41,7 +41,7 @@ export function FlowDialog({flow,mode,profile,notify,onSaved,onClose}:{flow:Flow
  {editor?<FlowEditor flow={editing} platform={profile.platform} ai={profile.ai} onSave={save} intro={intro}/>:<form className="form-pad" onSubmit={e=>{e.preventDefault();save(editing).catch(err=>notify(friendlyMessage(err)))}}>
   <div className="form-grid">
    <Field label="Nome"><input required value={editing.name} onChange={e=>setEditing({...editing,name:e.target.value})}/></Field>
-   {mode!=='timer'&&<Field label="Comando"><input required pattern="![^\s]+" value={editing.trigger.pattern} onChange={e=>setEditing({...editing,trigger:{...editing.trigger,pattern:e.target.value}})}/></Field>}
+   {mode!=='timer'&&<Field label="Comando" hint="Variações com vírgula valem aqui: !whislist, !whishlist — quem erra o comando também dispara."><input required pattern="!\S+(\s*,\s*!\S+)*" title="Comece com ! e separe variações com vírgula, sem espaços dentro de cada um." value={editing.trigger.pattern} onChange={e=>setEditing({...editing,trigger:{...editing.trigger,pattern:e.target.value}})}/></Field>}
   </div>
   <MessageEditor profileId={profile.id} label="Resposta" required flow={editing} value={editing.actions[0].text} onChange={text=>setEditing({...editing,actions:[{...editing.actions[0],text}]})}/>
   <SendPicker platform={profile.platform} value={editing.sendType||'chat'} color={editing.sendColor||'primary'} reply={!!editing.replyTo} onChange={sendType=>setEditing({...editing,sendType})} onColor={sendColor=>setEditing({...editing,sendColor})} onReply={replyTo=>setEditing({...editing,replyTo})}/>

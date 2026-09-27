@@ -20,7 +20,7 @@ Esta matriz acompanha as fases dos documentos originais em ../documentação. "I
 - Palpites com divisão proporcional e devolução sem vencedores.
 - Fila de músicas, limites configuráveis, consulta e remoção; overlay OBS mostra seleção atual e próximas URLs. Reprodução, metadados e controle dos players não integrados.
 - Roleta, duelo aleatório, bingo de emotes e trivia manual ou automática por inatividade. Duelo por votação não implementado.
-- TTS do sistema, voz local via Whisper, Discord por webhook e convite, moderação Twitch, fila de interação e estatísticas locais. Motores TTS remotos não implementados. A moderação nativa do Discord (aviso, timeout, expulsão, banimento, apagar mensagem, cargo, modo lento e auto-moderação) está implementada pela tela **Discord**; a moderação nativa de Kick e YouTube continua pendente.
+- TTS do sistema, voz local via Whisper, Discord por webhook e convite, moderação Twitch (blocklist e a ação **Punir na Twitch**, que silencia, bane ou avisa com alvo e duração configuráveis), fila de interação e estatísticas locais. Motores TTS remotos não implementados. A moderação nativa do Discord (aviso, timeout, expulsão, banimento, apagar mensagem, cargo, modo lento e auto-moderação) está implementada pela tela **Discord**; a moderação nativa de Kick e YouTube continua pendente.
 
 ## Dependências externas
 

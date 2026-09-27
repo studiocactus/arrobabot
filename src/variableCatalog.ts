@@ -52,6 +52,28 @@ export function makeVariableToken(key:string,fallback:string,format:string){
  if(!['','upper','lower','trim','number:0','number:2','length'].includes(format))throw Error('Formato inválido.');
  return '{{'+key+(fallback?'|default:'+fallback:'')+(format?'|'+format:'')+'}}';
 }
+/**
+ * Variáveis locais usadas no texto que nenhuma ação deste fluxo define.
+ * Sem isto a ação para no Histórico com "Variável ausente" e a mensagem não sai,
+ * que era o caso de um timer citando {{local.aiResponse}} sem nenhuma ação de IA.
+ * Um texto alternativo no próprio código (|default:) resolve e tira o aviso.
+ */
+export function missingLocals(text:string,actions:{kind:string;target:string}[]):string[]{
+ const defined=new Set<string>();
+ for(const a of actions){
+  if(a.kind==='ai'||a.kind==='ai.generate'){defined.add('local.aiResponse');defined.add('local.aiSuccess')}
+  if(a.kind==='ai.generate'&&a.target.startsWith('local.'))defined.add(a.target);
+  if((a.kind==='variable.set'||a.kind==='variable.increment')&&a.target.startsWith('local.'))defined.add(a.target);
+ }
+ const used=new Set<string>();
+ for(const m of text.matchAll(/\{\{([^{}]+)\}\}/g)){
+  const parts=m[1].split('|');const key=(parts[0]||'').trim();
+  if(!key.startsWith('local.'))continue;
+  if(parts.slice(1).some(p=>p.startsWith('default:')))continue;
+  used.add(key);
+ }
+ return [...used].filter(k=>!defined.has(k)).sort();
+}
 export function messageParts(text:string):{text:string;label?:string}[]{
  // Display only: this never evaluates templates or any user-provided value.
  const pattern=/\\(?:\{\{|[$%])|\{\{([^{}]+)\}\}|%([A-Za-z_][A-Za-z0-9_]*)%/g;

@@ -1,5 +1,5 @@
 import {describe,it,expect} from 'vitest';
-import {insertVariable,makeVariableToken,messageParts,variableLabel} from './variableCatalog';
+import {insertVariable,makeVariableToken,messageParts,missingLocals,variableLabel} from './variableCatalog';
 describe('edição de mensagens com variáveis',()=>{
  it('substitui só a seleção e preserva o restante da mensagem',()=>{
   expect(insertVariable('Olá, convidado!','{{user}}',5,14)).toEqual({text:'Olá, {{user}}!',caret:13});
@@ -28,5 +28,29 @@ describe('edição de mensagens com variáveis',()=>{
   expect(messageParts('doou R$ {{random:1,50.00}}!').find(v=>v.label)?.label).toBe('Número sorteado');
   expect(()=>makeVariableToken('random:1','','')).toThrow('variável válida');
   expect(()=>makeVariableToken('random:x,y','','')).toThrow();
+ });
+});
+describe('aviso de variável local sem origem no fluxo',()=>{
+ const chat={kind:'chat',text:'',target:''};
+ const gerada={kind:'ai.generate',target:'local.aiResponse'};
+ const ia={kind:'ai',target:''};
+ it('aponta o local que nenhuma ação do fluxo define',()=>{
+  expect(missingLocals('A resposta é {{local.aiResponse}}',[chat])).toEqual(['local.aiResponse']);
+  expect(missingLocals('{{local.a}} e depois {{local.b}}',[chat])).toEqual(['local.a','local.b']);
+ });
+ it('some quando alguma ação gera o valor',()=>{
+  expect(missingLocals('A resposta é {{local.aiResponse}}',[chat,gerada])).toEqual([]);
+  expect(missingLocals('{{local.aiResponse}} / {{local.aiSuccess}}',[ia])).toEqual([]);
+  expect(missingLocals('{{local.pontos}}',[chat,{kind:'variable.set',target:'local.pontos'}])).toEqual([]);
+ });
+ it('respeita o texto alternativo e ignora o que não é local',()=>{
+  expect(missingLocals('{{local.aiResponse|default:0}}',[chat])).toEqual([]);
+  expect(missingLocals('{{local.aiResponse|default:s/n}}',[chat])).toEqual([]);
+  expect(missingLocals('{{user}} com {{commandCount}} e {{local.x}}',[chat])).toEqual(['local.x']);
+  expect(missingLocals('{{global.x}} e {{local.y}}',[chat])).toEqual(['local.y']);
+ });
+ it('apagar ou somar o valor não é origem',()=>{
+  expect(missingLocals('{{local.aiResponse}}',[{kind:'variable.delete',target:'local.aiResponse'}])).toEqual(['local.aiResponse']);
+  expect(missingLocals('{{local.x}}',[{kind:'variable.increment',target:'local.x'}])).toEqual([]);
  });
 });

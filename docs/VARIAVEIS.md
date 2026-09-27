@@ -120,6 +120,8 @@ Texto numérico entre aspas é texto e não pode ser incrementado. Resultados fo
 
 O conteúdo é gerado a partir da mensagem atual, conversa recente do perfil, personalidade, orientação da ação e memórias recuperadas. Cada execução tem sua própria resposta. Um nome personalizado como `resenha` cria também `{{local.resenha}}`. A geração deve acontecer antes de usar o valor; inserir o marcador sozinho não chama a IA. Marcadores dentro da resposta gerada são texto literal, sem segunda interpretação.
 
+O editor mostra um aviso sob o quadro **Como será enviado ao chat** quando a mensagem usa um `{{local...}}` que nenhuma ação do fluxo define. Ele cita o nome da variável e explica o que acontece: a ação para com **Variável ausente** no Histórico e a mensagem não sai. Corrija de um dos dois jeitos — acrescente a ação que gera o valor (por exemplo **Gerar resposta da IA**) ou escreva um texto alternativo como `{{local.aiResponse|default:sem resposta}}`. Com o alternativo no lugar, o aviso some. O aviso vale também para um timer ou comando antigo que já citava `{{local.aiResponse}}` sem a ação de IA ao lado, como o timer Donate que falhava com `Variável ausente: local.aiResponse`.
+
 Na falha do provedor, a variável fica vazia, aiSuccess fica false e o fluxo é interrompido antes das ações seguintes. Nenhuma resposta de erro é publicada no chat. Na prévia e simulação, nenhum provedor é chamado: o texto **[Prévia: resposta contextual da IA]** ocupa o valor e aiSuccess fica false. Para avaliar uma resposta real sem publicar, use **Testar resposta contextual**. Consulte a receita **Resenha com IA** no [capítulo de inteligência artificial](04-IA-E-MEMORIA.md).
 
 ## Filtros
@@ -210,3 +212,5 @@ A direção do projeto é oferecer funções equivalentes por controles simples,
 ## Contagem individual de um comando
 
 Ative **Contar usos deste comando** na tela **Comandos** e insira **Contagem do comando** pelo catálogo, ou use {{commandCount}}. O marcador mostra o total deste fluxo, independente dos outros comandos. Uma execução aceita soma um antes das ações; simular mostra o próximo total sem gravar. A prévia de variáveis mostra o total atual. Os totais ficam em **Contadores**; ajuste ou zere por lá ou pela coluna Contador da lista de comandos. Veja [Timers e contadores](TIMERS-E-CONTADORES.md) para receitas e limites.
+
+Escrever `{{commandCount}}` numa resposta de comando liga **Contar usos deste comando** sozinho na mesma gravação. Comandos antigos que já usavam o marcador tiveram o interruptor ligado automaticamente na primeira abertura da nova versão, porque o total ficava preso em zero sem isso. Comandos de timer não recebem contador: o gatilho precisa ser Comando de chat.

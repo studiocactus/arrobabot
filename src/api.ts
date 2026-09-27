@@ -14,6 +14,8 @@ export async function api<T=unknown>(op:string,args:Args={}):Promise<T>{
  case 'profile.save':{const p=args.profile as Profile;if(!p.name.trim())throw Error('Dê um nome ao perfil.');s.profiles=s.profiles.filter(x=>x.id!==p.id).concat(p);result=p;break}
  case 'profile.delete':s.profiles=s.profiles.filter(p=>p.id!==id);s.flows=s.flows.filter(f=>f.profileId!==id);delete s.notes[id];break;
  case 'command.counters':result={};break;
+  case 'backup.get':result={folder:'',auto:false,days:7,weeks:4,months:12,lastSuccess:0};break;
+  case 'backup.list':result=[];break;
  case 'flows':result=s.flows.filter(f=>f.profileId===id);break;
  case 'flow.save':{const f=args.flow as Flow;s.flows=s.flows.filter(x=>x.id!==f.id).concat(f);result=f;break}
  case 'flow.delete':s.flows=s.flows.filter(f=>f.id!==args.id||f.profileId!==id);break;

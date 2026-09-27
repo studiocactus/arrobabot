@@ -142,7 +142,9 @@ pub async fn process(rt:Arc<Runtime>,e:Event){
  Err(err)=>{rt.log(&p.id,"module",&err,"error");return},_=>{}
  }
  }
- for f in rt.db.flows(&p.id).unwrap_or_default().into_iter().filter(|f|f.enabled&&(matches(&f.trigger,&e)||(e.kind=="timer"&&f.trigger.kind=="timer"&&e.data["timerId"]==f.id))){
+ let matched:Vec<Flow>=rt.db.flows(&p.id).unwrap_or_default().into_iter().filter(|f|f.enabled&&(matches(&f.trigger,&e)||(e.kind=="timer"&&f.trigger.kind=="timer"&&e.data["timerId"]==f.id))).collect();
+ let mut ready:Vec<Flow>=Vec::new();
+ for f in matched {
  if e.kind=="timer"&&!e.simulated&&!crate::timers::event_active(&rt,&e){continue}
  let allowed={
  let mut cd=rt.cooldowns.lock().unwrap();
@@ -152,13 +154,20 @@ pub async fn process(rt:Arc<Runtime>,e:Event){
  if !blocked{cd.insert(global,Instant::now());cd.insert(user,Instant::now());} !blocked
  };
  if !allowed{rt.log(&p.id,"cooldown",&format!("{} está em intervalo",f.name),"info");continue}
- rt.log(&p.id,"flow",&format!("Iniciando {}",f.name),"info");
+ ready.push(f);
+ }
+ let publisher=responder(&ready);
+ for f in ready {
+  let answers=publisher.as_ref().is_none_or(|id|id==&f.id);
+  rt.log(&p.id,"flow",&format!("Iniciando {}",f.name),"info");
+  if !answers&&replies(&f){rt.log(&p.id,"action",&format!("{} · Outra automação já respondeu esta mensagem; os demais efeitos continuam",f.name),"info")}
  let count=if f.counter{match if e.simulated{crate::command_counter::get(&rt.db,&p.id,&f.id).and_then(|n|n.checked_add(1).ok_or("Contador excedeu o limite".into()))}else{crate::command_counter::change(&rt.db,&p.id,&f.id,None)}{Ok(n)=>Some(n),Err(err)=>{rt.log(&p.id,"counter",&err,"error");continue}}}else{None};
  if let Some(n)=count{if !e.simulated{rt.emit("command-counter",json!({"profileId":p.id,"id":f.id,"value":n}));}}
  let mut variables=match crate::variables::Context::new(&rt.db,&p,&e,Some(&f)){Ok(v)=>v,Err(err)=>{rt.log(&p.id,"variables",&err,"error");continue}};
  if let Some(n)=count{variables.set_command_count(n);}
  crate::chat_extras::play_flow(&rt,&p,&f,&e);
  for a in &f.actions {
+  if !answers&&matches!(a.kind.as_str(),"chat"|"ai"|"ai.generate"){continue}
  if e.kind=="timer"&&!e.simulated&&!crate::timers::event_active(&rt,&e){break}
  if !a.condition.is_empty()&&!e.message.to_lowercase().contains(&a.condition.to_lowercase()){continue}
  let result=tokio::time::timeout(Duration::from_secs(65),action(&rt,&p,&e,a,&mut variables,&history,&f)).await;
@@ -170,6 +179,25 @@ pub async fn process(rt:Arc<Runtime>,e:Event){
  }
  }
 }
+/// Ações que publicam a resposta no chat ou produzem o texto que a ação de chat envia.
+const REPLY:&[&str]=&["chat","ai","ai.generate"];
+/// True quando a automação tem alguma ação de resposta no chat.
+fn replies(f:&Flow)->bool{f.actions.iter().any(|a|REPLY.contains(&a.kind.as_str()))}
+/// Escolhe qual automação publica a resposta quando várias casam na mesma mensagem.
+/// A ordem é a do tipo do gatilho (comando, chamada pelo nome, contém, mensagem e os
+/// demais), depois o gatilho mais específico (menos opções e texto mais longo) e, no
+/// empate, a posição na lista do perfil. Sem concorrência devolve None e todos respondem.
+fn responder(flows:&[Flow])->Option<String>{
+ if flows.len()<2{return None}
+ let rank=|kind:&str|match kind{"command"=>0,"mention"=>1,"contains"=>2,"voice"=>3,"chat"=>4,_=>5};
+ let mut best:Option<((usize,usize,usize),usize)>=None;
+ for (i,f) in flows.iter().enumerate(){
+  let options=f.trigger.pattern.split(',').map(str::trim).filter(|s|!s.is_empty()).count().max(1);
+  let candidate=((rank(&f.trigger.kind),options,usize::MAX-f.trigger.pattern.len()),i);
+  if best.is_none_or(|b|candidate<b){best=Some(candidate)}
+ }
+ best.map(|(_,i)|flows[i].id.clone())
+}
 async fn action(rt:&Arc<Runtime>,p:&Profile,e:&Event,a:&Action,variables:&mut crate::variables::Context,history:&[Value],f:&Flow)->Result<(),String>{
  let text=if a.kind=="variable.delete"{String::new()}else if a.kind=="script"{a.text.clone()}else{variables.render(&a.text)?};
  if a.kind.starts_with("variable."){variables.change(&rt.db,p,e,&a.target,a.kind.trim_start_matches("variable."),crate::variables::typed(&text))?;return Ok(())}
@@ -177,6 +205,7 @@ async fn action(rt:&Arc<Runtime>,p:&Profile,e:&Event,a:&Action,variables:&mut cr
  // Simulations never perform external effects or change persistent module/vault state.
  if e.simulated && a.kind!="chat" {if matches!(a.kind.as_str(),"ai"|"ai.generate"){crate::ai::save_response(variables,rt,p,e,a,"[Prévia: resposta contextual da IA]",false)?;}rt.log(&p.id,"simulation",&format!("Executaria {}: {}",a.kind,text.chars().take(200).collect::<String>()),"success");return Ok(())}
  match a.kind.as_str(){
+ "punish"=>crate::moderation::punish(rt,p,e,a,&text).await,
  "chat"=>rt.send_with(p,e,&text,Some(f)).await,
  "ai"|"ai.generate"=>{
  let opts=crate::ai::Options{
@@ -214,5 +243,35 @@ async fn action(rt:&Arc<Runtime>,p:&Profile,e:&Event,a:&Action,variables:&mut cr
  rt.send_with(p,e,&reply,Some(f)).await
  },
  _=>Err("Ação desconhecida".into())
+ }
+}
+#[cfg(test)] mod tests {
+ use super::*;
+ fn f(name:&str,kind:&str,pattern:&str,actions:&[&str])->Flow {
+  serde_json::from_value(json!({"id":uuid::Uuid::new_v4(),"profileId":uuid::Uuid::new_v4(),"name":name,"enabled":true,
+  "trigger":{"kind":kind,"pattern":pattern},
+  "actions":actions.iter().map(|k|json!({"kind":k,"text":"Oi"})).collect::<Vec<Value>>()})).unwrap()
+ }
+ #[test] fn only_the_most_specific_trigger_publishes_when_several_match() {
+  let comando=f("Comando","command","!oi",&["chat"]);
+  let contem=f("Contém","contains","oi, ola",&["overlay","chat"]);
+  let chamada=f("Chamada","mention","bot",&["chat"]);
+  let unico=f("Único","command","!oi",&["chat"]);
+  assert!(responder(std::slice::from_ref(&unico)).is_none(),"sem concorrência todo mundo responde");
+  assert_eq!(responder(&[contem.clone(),comando.clone(),chamada.clone()]).unwrap(),comando.id,"comando vence por tipo do gatilho");
+  let mais=f("Detalhado","command","!oi tudo",&["chat"]);
+  assert_eq!(responder(&[comando.clone(),mais.clone()]).unwrap(),mais.id,"o gatilho mais específico vence");
+  assert_eq!(responder(&[mais.clone(),comando.clone()]).unwrap(),mais.id,"a posição na lista não inverte a especificidade");
+  let primeiro=f("Primeiro","command","!oi",&["chat"]);
+  let segundo=f("Segundo","command","!oi",&["chat"]);
+  assert_eq!(responder(&[primeiro.clone(),segundo.clone()]).unwrap(),primeiro.id,"no empate vale a ordem da lista");
+  let varias=f("Variações","command","!oi, !ola, !eai",&["chat"]);
+  assert_eq!(responder(&[varias.clone(),comando.clone()]).unwrap(),comando.id,"uma opção é mais específica que três");
+ }
+ #[test] fn only_reply_actions_are_held_back_from_the_losing_flow() {
+  assert!(replies(&f("A","command","!a",&["chat"])));
+  assert!(replies(&f("B","command","!b",&["overlay","ai"])));
+  assert!(replies(&f("C","command","!c",&["ai.generate"])));
+  assert!(!replies(&f("D","command","!d",&["overlay","points","punish"])),"efeitos paralelos não são resposta");
  }
 }

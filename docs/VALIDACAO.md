@@ -1,5 +1,21 @@
 # Registro de validação
 
+## Atualização 0.1.18
+
+Compilação TypeScript/Vite, 29 testes Vitest, 22 cenários Playwright, 98 testes Rust e oito testes dos scripts de atualização aprovados. A entrega tem seis partes independentes: uma única resposta quando vários fluxos casam na mesma mensagem, contador `{{commandCount}}` ligado sozinho ao gravar (com migração dos comandos antigos), backup diário em pasta escolhida com retenção de dia/semana/mês e extensão `.botlivebak`, ação **Punir na Twitch** com alvo configurável, aviso de variável local sem origem no editor (corrige o timer Donate) e variações de comando separadas por vírgula.
+
+Verificações desta versão:
+
+- Núcleo Rust: 98 testes aprovados, sendo 12 novos: variações do comando e regras da punição em `model.rs` (`command_trigger_accepts_variations_separated_by_commas`, `command_variations_and_punish_rules_are_validated`), vencedor único e retenção só das ações de resposta em `engine.rs` (`only_the_most_specific_trigger_publishes_when_several_match`, `only_reply_actions_are_held_back_from_the_losing_flow`), ligação e migração do contador em `command_counter.rs`, caminhos relativos, ida e volta do arquivo e retenção com datas fixadas em `backup.rs`, e três de integração para deduplicação, punição e operações de backup do proprietário.
+- Interface: 22 cenários Playwright aprovados, sendo 4 novos em `tests/ui/punish-and-backup.spec.ts` (painel da punição com modo, duração, alvo e avisos; variações de comando aceitas com dica nos dois editores; aviso de variável local que some com `|default:`; e o cartão de backup com pasta, retenção, botão bloqueado sem pasta e recusa fora do desktop).
+- `npm run check` (TypeScript) e `npm run test`: 29 testes Vitest aprovados, sendo 4 novos de `missingLocals` em `src/variableCatalog.test.ts`.
+- Scripts de atualização: 8 testes aprovados e `npm run update:check` aprovado com as notas 0.1.18.
+- `npm run build` (tsc + Vite) e `npm run docs` aprovados; manual HTML regerado com os capítulos 03, 04, 07 e 08, além de `docs/VARIAVEIS.md` e `docs/MATRIZ-DE-ACEITE.md`.
+- Na primeira execução da suíte completa o cenário antigo `updates.spec.ts` falhou porque o cartão novo de backup tratava a resposta nula da prévia de navegador como lista e derrubava a tela de Configurações. O componente foi endurecido, o cenário passou isolado e a suíte completa voltou a aprovar os 22 cenários, sem alteração de código entre essas duas execuções.
+- Em uma das cinco execuções da suíte completa o cenário antigo `app.spec.ts:105` falhou uma vez com texto duplicado na resposta do catálogo de variáveis; ele passou nas outras quatro execuções completas e em três isoladas. O caminho de inserção não foi alterado nesta versão e a falha, intermitente, não foi reproduzida nem corrigida.
+
+Sem contas OAuth nesta validação não houve punição real na Twitch nem envio de chat: o caminho foi comprovado pela recusa de eventos sem conta da Twitch, pela prévia que não pune e pelas validações de entrada, o que não equivale à homologação de um timeout, ban ou aviso em canal ao vivo. O backup foi exercitado em pasta temporária do próprio disco, com verificação de que as chaves não aparecem no arquivo; não houve teste em rede, em disco cheio nem em pasta removida durante a gravação. Os registros abaixo descrevem verificações históricas das versões anteriores.
+
 ## Atualização 0.1.17
 
 Compilação TypeScript/Vite, 25 testes Vitest, 18 cenários Playwright, 86 testes Rust e oito testes dos scripts de atualização aprovados. A entrega é composta por quatro funções independentes: a variável `{{random:min,max}}`, a opção **Responder a quem enviou**, o gatilho **Chamada pelo nome do bot** com campo de lista por vírgula e área que cresce com o texto, e os emotes da Twitch nas respostas da IA.
