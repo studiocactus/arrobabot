@@ -44,7 +44,7 @@ Não precisa apagar o perfil para testar uma configuração. Excluir pode destru
 | Funciona em simulação, mas não publica | Autorização de envio, conexão de entrada e permissões da plataforma |
 | Fluxo importado não dispara | Fluxos importados começam desativados; revise e ative |
 | Só parte das ações executa | O primeiro erro interrompe as próximas; confira condições opcionais |
-| Editor recusa salvar | Conecte todos os blocos em uma única sequência, sem ciclos ou ramificações |
+| Editor recusa salvar | Conecte todos os blocos em uma única sequência, sem ciclos ou ramificações; o motivo aparece em português no topo do editor e o texto original fica em **Detalhes técnicos** |
 | !pontos personalizado não executa | O módulo de pontos trata seu comando pronto antes dos fluxos |
 | Espera inválida | O campo é em milissegundos; máximo 30000 |
 | Resposta bloqueada | Revise a blocklist; a comparação encontra trechos dentro de palavras maiores |

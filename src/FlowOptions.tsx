@@ -1,6 +1,7 @@
 import {useEffect,useState} from 'react';
 import {open} from '@tauri-apps/plugin-dialog';
-import {api,errorText,desktop} from './api';
+import {api,desktop} from './api';
+import {friendlyMessage} from './errors';
 import {Field} from './components';
 import {playViewerSound} from './viewerSound';
 import {sendTypes,sendColors} from './types';
@@ -35,9 +36,9 @@ export function AudioPicker({profileId,value,volume,onChange,onVolume}:{profileI
  const [error,setError]=useState('');
  const [busy,setBusy]=useState(false);
  useEffect(()=>{let live=true;if(!desktop){setAssets([]);return}
-  api<Extras>('chatExtras.get',{profileId}).then(v=>{if(live){setAssets(v.assets.filter(a=>a.kind==='sound'));setDevice(v.config.audioDeviceId||'')}}).catch(e=>{if(live)setError(errorText(e))});
+  api<Extras>('chatExtras.get',{profileId}).then(v=>{if(live){setAssets(v.assets.filter(a=>a.kind==='sound'));setDevice(v.config.audioDeviceId||'')}}).catch(e=>{if(live)setError(friendlyMessage(e))});
   return()=>{live=false}},[profileId]);
- async function run(fn:()=>Promise<void>){setBusy(true);setError('');try{await fn()}catch(e){setError(errorText(e))}finally{setBusy(false)}}
+ async function run(fn:()=>Promise<void>){setBusy(true);setError('');try{await fn()}catch(e){setError(friendlyMessage(e))}finally{setBusy(false)}}
  const choose=()=>run(async()=>{
   const path=await open({multiple:false,filters:[{name:'Áudio',extensions:['wav','mp3','ogg']}]});
   if(typeof path!=='string')return;

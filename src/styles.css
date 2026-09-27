@@ -41,3 +41,13 @@
 .card .empty{padding:var(--s6) var(--s4);margin:0}
 @media(max-width:680px){.item-meta{display:none}.list-tools .grow{flex-basis:100%;max-width:none}}
 @media(prefers-reduced-motion:reduce){.item-body,.item-chevron,.item-head{transition:none}}
+.flow-intro{margin:16px 20px 0}
+.node-inspector>details{margin:12px 0;padding:11px 13px}
+.node-inspector>details>summary{font-size:11px;font-weight:650;color:var(--text)}
+.node-inspector>details[open]>summary{margin-bottom:2px}
+.node-inspector>details .field{margin:12px 0}
+.node-inspector details details{margin:10px 0;padding:10px 11px}
+.node-inspector .ai-help summary{font-size:11px}
+.inline-error details{margin:8px 0 0;padding:7px 10px;border-color:#ef999d33;background:#0003}
+.inline-error summary{font-size:11px;color:var(--muted)}
+.inline-error code{display:block;margin-top:6px;font-size:10px;color:var(--muted);white-space:pre-wrap;word-break:break-all}
