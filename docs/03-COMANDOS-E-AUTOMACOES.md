@@ -26,7 +26,9 @@ Para responder ao assunto da conversa com humor, use **Resenha com IA**. Escolha
 
 Abra **Comandos** e clique em **Novo comando**. Preencha nome, comando, resposta, permissão e intervalos. Salve e confira se está ativo.
 
-Um comando como !oi casa com o primeiro termo da mensagem: !oi tudo bem dispara; !oie não dispara. Letras maiúsculas e minúsculas não alteram esse reconhecimento. O nome interno pode conter espaços; o campo Comando não.
+Um comando como !oi casa com o primeiro termo da mensagem: !oi tudo bem dispara; !oie não dispara. Letras maiúsculas e minúsculas não alteram esse reconhecimento.
+
+Quem costuma errar o nome pode cadastrar variações no mesmo campo, separadas por vírgula: `!whislist, !whishlist, !wishlist`. Qualquer uma delas dispara o mesmo comando e cada uma é comparada como palavra inteira, então `!whisli` não dispara. Não deixe espaço dentro de uma mesma variação. O nome interno pode conter espaços; o campo Comando não.
 
 | Variável | Conteúdo |
 |---|---|
@@ -65,7 +67,7 @@ O fio vale para a forma escolhida em **Como enviar na Twitch**; se você trocar 
 
 **Tocar áudio ao disparar** escolhe um som da biblioteca de **Respostas e sons** para tocar quando o comando, o timer ou a automação executar. O som sai na saída de áudio do BotLive: capture essa saída no OBS para a live ouvir. Use **Escolher som** para importar um arquivo novo, **Testar som** para ouvir antes de salvar e **Volume** para ajustar a intensidade.
 
-O áudio é solicitado antes das ações, na mesma execução da contagem do comando. Com **Contar usos deste comando** ativado, a resposta `O ifood já passou a milhão na rua {{commandCount}} vezes!` sai com o número certo enquanto o som toca.
+O áudio é solicitado antes das ações, na mesma execução da contagem do comando. Com **Contar usos deste comando** ativado, a resposta `O ifood já passou a milhão na rua {{commandCount}} vezes!` sai com o número certo enquanto o som toca. Escrever `{{commandCount}}` na resposta já liga **Contar usos deste comando** sozinho quando você salva: não é preciso lembrar do interruptor.
 
 - **Nenhum áudio** é o padrão: nada é tocado e a execução é igual à de antes.
 - A simulação nunca toca som; o **Histórico** mostra `[Simulação] Tocaria o áudio do fluxo`.
@@ -108,7 +110,7 @@ Para reorganizar, remova as conexões antigas e conecte a sequência desejada. N
 | Opção | Uso |
 |---|---|
 | Timer periódico | Intervalo próprio entre execuções enquanto conectado |
-| Comando de chat | Primeiro termo igual ao comando cadastrado |
+| Comando de chat | Primeiro termo igual a uma das variações cadastradas; separe as variações com vírgula |
 | Mensagem contém | Trecho presente em uma mensagem de chat; separe várias palavras ou frases com vírgula e basta uma delas aparecer |
 | Chamada pelo nome do bot | O bot é chamado pelo nome na mensagem; separe os nomes com vírgula e o gatilho passa quando um deles aparece como palavra inteira |
 | Toda mensagem | Qualquer mensagem de chat que chegue ao processamento |
@@ -123,6 +125,8 @@ Para reorganizar, remova as conexões antigas e conecte a sequência desejada. N
 A presença da opção no editor não garante que todas as plataformas emitam aquele evento. Consulte as capacidades do adaptador e confirme com o Histórico.
 
 **Chamada pelo nome do bot** existe para o caso em que o espectador escreve o nome do bot sem marcar com `@`, como "Arroba, vem aqui". A lista é de nomes separados por vírgula, e a comparação é por palavra inteira: com `Arroba, ArrobaSrv`, a mensagem "ArrobaSrv mandou" não dispara o gatilho pelo nome curto, porque `ArrobaSrv` é uma palavra só, não `Arroba`. O gatilho considera só mensagens de chat e respeita os mesmos intervalos por fluxo e por pessoa dos demais gatilhos.
+
+**Comando de chat** também aceita variações separadas por vírgula, como `!whislist, !whishlist, !wishlist`. Cada variação começa com `!`, não contém espaço e é comparada como palavra inteira. Use esse recurso para o erro de digitação mais comum do seu público: quem escreveu errado dispara o mesmo comando e recebe a mesma resposta. A prévia usa a primeira variação da lista.
 
 ## Referência das ações
 
@@ -141,11 +145,14 @@ A presença da opção no editor não garante que todas as plataformas emitam aq
 | Definir variável | Destino como global.meta e valor 10 | Guarda um valor para uso posterior |
 | Incrementar variável | Destino e valor numérico | Soma ao valor atual |
 | Apagar variável | Destino | Remove a variável |
+| Punir na Twitch | O que aplicar (silenciar por um tempo, banir ou avisar), duração quando for silêncio, quem leva a punição (quem enviou a mensagem ou primeiro argumento do comando) e motivo | Aplica a punição na conta indicada; só em perfil Twitch e só com a conta do canal autorizada |
 | Executar script Rhai | Código que devolve texto | Executa com limites e envia o texto resultante |
 
 Use HTTPS para serviços externos; HTTP é permitido somente no próprio computador. Um webhook pode produzir efeitos reais no destino. Não use a simulação como comprovação de que ele foi recebido.
 
 Scripts Rhai recebem as variáveis user, message e channel, sem o prefixo $. Um exemplo de expressão que retorna texto é: "Olá, " + user + "!". Não são scripts JavaScript nem comandos do Windows.
+
+Na ação **Punir na Twitch**, **Quem leva a punição** escolhe entre quem enviou a mensagem e o primeiro argumento do comando. No segundo caso, escreva o alvo depois do comando, como `!silenciar @alvo`; o nome é convertido em ID da Twitch antes da ação. O motivo fica registrado na Twitch e no Histórico. Restrinja o gatilho em **Quem pode usar** para Moderadores ou Só o streamer, senão qualquer pessoa do chat pode punir. A duração vai de 1 segundo a 14 dias e vale só para o modo silenciar. A prévia e a simulação não pune ninguém: mostram apenas o plano no Histórico. Perfis fora da Twitch recusam a ação com aviso.
 
 ## Condição opcional
 
@@ -168,6 +175,8 @@ Você também pode importar examples/boas-vindas.botlivepreset, que contém mens
 ## Histórico e comportamento em caso de erro
 
 As ações de um fluxo executam em ordem. Se uma falha ou ultrapassa o limite de execução, as ações seguintes daquele fluxo não são executadas. Efeitos anteriores não são desfeitos: uma mensagem já enviada continua publicada.
+
+Quando várias automações casam na mesma mensagem, apenas uma publica a resposta. A ordem de decisão é o tipo do gatilho — comando, depois chamada pelo nome, depois contém, depois toda mensagem — e, entre gatilhos do mesmo tipo, vence o mais específico: primeiro o de menos variações e mais letras, depois o que aparece antes na lista de Automações. Os demais fluxos continuam rodando normalmente: contagem, pontos, memórias, áudio, webhook e as demais ações paralelas seguem; só a publicação de resposta fica de fora. O Histórico registra **Outra automação já respondeu esta mensagem; os demais efeitos continuam** para mostrar o que foi retido.
 
 Outros eventos podem ser processados em paralelo. A ordem é garantida dentro da cadeia, não como exclusividade de toda a transmissão. As saídas de chat são espaçadas por perfil.
 

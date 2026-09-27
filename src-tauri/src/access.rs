@@ -9,6 +9,7 @@ pub fn guard(rt:&Runtime,op:&str,args:&Value)->Result<(),String>{
  if actor=="owner"{return Ok(())}
  if ["snapshot","presets"].contains(&op){return Ok(())}
  if matches!(op,"knowledge.import"){return Err("Somente o proprietário importa a base de conhecimento".into())}
+ if ["backup.get","backup.save","backup.now","backup.list","backup.restore"].contains(&op){return Err("Somente o proprietário faz ou importa backup".into())}
  if matches!(op,"chatExtras.import"|"chatExtras.save"|"chatExtras.reset"){return Err("Somente o proprietário configura arquivos e sons".into())}
  if ["settings","settings.get","update.check","update.install","profile.delete","secret.save","oauth.start","oauth.finish"].contains(&op){return Err("Somente o proprietário pode realizar esta operação".into())}
  let id=args["profileId"].as_str().or(args["profile"]["id"].as_str()).or(args["flow"]["profileId"].as_str()).ok_or("Selecione um perfil autorizado")?;

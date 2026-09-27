@@ -3,7 +3,7 @@ import {useState,useCallback,type ReactNode} from 'react';
 import {ReactFlow,Background,Controls,MiniMap,addEdge,useNodesState,useEdgesState,type Connection,type Node,type Edge} from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import {Plus,Save,Trash2,Zap} from 'lucide-react';
-import {actions,triggers,newAction,type Flow,type Action,type AIConfig} from './types';
+import {actions,triggers,newAction,punishModes,punishTargets,type Flow,type Action,type AIConfig} from './types';
 import {orderedActions} from './flow';
 import {Field} from './components';
 import {VariableTarget} from './Variables';
@@ -28,6 +28,10 @@ export default function FlowEditor({flow,platform='twitch',ai,onSave,intro}:{flo
  const node=nodes.find(n=>n.id===selected);const action=node?.data.action;
  const connect=useCallback((c:Connection)=>setEdges(e=>addEdge({...c,animated:true},e)),[setEdges]);
  function update(a:Action){setNodes(ns=>ns.map(n=>n.id===selected?{...n,data:{label:actions[a.kind],action:a}}:n))}
+ function switchKind(current:Action,next:string){const base:Action={...current,kind:next};
+  if(next==='ai.generate'&&!base.target.startsWith('local.'))base.target='local.aiResponse';
+  if(next==='punish'){if(!['sender','first'].includes(base.target))base.target='sender';if(!base.punish)base.punish='timeout';if(base.value<1)base.value=60}
+  update(base)}
  async function save(){try{setBusy(true);setError(null);const ordered=orderedActions(nodes,edges);await onSave({...flow,name,trigger:trigger.kind==='timer'?{...trigger,permission:'everyone',cooldown:0,userCooldown:0,pattern:''}:trigger,counter:trigger.kind==='command'&&counter,timerSeconds,sendType,sendColor,replyTo,audio,audioVolume,actions:ordered,layout:{nodes,edges}})}catch(e){setError(friendlyError(e))}finally{setBusy(false)}}
  return <div className="flow-editor">
  {intro&&<p className="notice flow-intro">{intro}</p>}
@@ -47,7 +51,7 @@ export default function FlowEditor({flow,platform='twitch',ai,onSave,intro}:{flo
  <Field label="Evento">
  <select value={trigger.kind} onChange={e=>setTrigger({...trigger,kind:e.target.value})}>{Object.entries(triggers).filter(([k])=>flow.trigger.kind==='timer'?k==='timer':k!=='timer').map(([k,n])=>
  <option key={k} value={k}>{n}</option>)}</select>
- </Field>{['command','contains','voice','mention'].includes(trigger.kind)&&<Field label="Texto que dispara" hint={trigger.kind==='mention'?'Separe os nomes do bot com vírgula: o gatilho passa quando um deles aparece na mensagem, como palavra inteira. Ex.: Arroba, ArrobaSrv, arromba.':trigger.kind==='contains'?'Separe várias palavras ou frases com vírgula: o gatilho passa quando uma delas aparece na mensagem.':undefined}>
+ </Field>{['command','contains','voice','mention'].includes(trigger.kind)&&<Field label="Texto que dispara" hint={trigger.kind==='mention'?'Separe os nomes do bot com vírgula: o gatilho passa quando um deles aparece na mensagem, como palavra inteira. Ex.: Arroba, ArrobaSrv, arromba.':trigger.kind==='contains'?'Separe várias palavras ou frases com vírgula: o gatilho passa quando uma delas aparece na mensagem.':trigger.kind==='command'?'Separe variações com vírgula quando o povo erra o comando: !whislist, !whishlist, !wishlist. Qualquer uma delas dispara.':undefined}>
  <input value={trigger.pattern} onChange={e=>setTrigger({...trigger,pattern:e.target.value})}/>
  </Field>}{trigger.kind!=='timer'&&<>
  <Field label="Quem pode usar">
@@ -73,17 +77,29 @@ export default function FlowEditor({flow,platform='twitch',ai,onSave,intro}:{flo
  </Section>}</>:action?<>
  <Section title="Como sai" open>
  <Field label="Tipo de ação">
- <select value={action.kind} onChange={e=>update({...action,kind:e.target.value,target:e.target.value==='ai.generate'?'local.aiResponse':action.target})}>{Object.entries(actions).map(([k,n])=>
+ <select value={action.kind} onChange={e=>switchKind(action,e.target.value)}>{Object.entries(actions).map(([k,n])=>
  <option key={k} value={k}>{n}</option>)}</select>
  </Field>{action.kind==='script'?<Field label="Script Rhai (retorna texto)">
  <textarea rows={5} value={action.text} onChange={e=>update({...action,text:e.target.value})}/>
- </Field>:action.kind==='variable.delete'?<p className="help">Escolha o valor que será apagado.</p>:<MessageEditor key={selected} profileId={flow.profileId} label={action.kind.startsWith('ai')?'Como a IA deve responder':action.kind==='variable.increment'?'Quanto somar':'Mensagem / conteúdo'} value={action.text} onChange={text=>update({...action,text})} flow={{...flow,name,trigger,actions:(()=>{try{return orderedActions(nodes,edges)}catch{return []}})()}}/>}{action.kind.startsWith('ai')&&<details className="ai-help"><summary>Como a IA monta a resposta</summary><p className="help">A mensagem atual, até 12 falas recentes dos últimos 5 minutos e as memórias entram automaticamente. Defina o tom aqui. {action.kind==='ai.generate'?'Esta ação só guarda a resposta. Conecte Enviar mensagem e clique em + Resposta da IA.':'Esta ação já envia ao chat e guarda a resposta para os próximos blocos.'}</p></details>}{ai&&<AIActionOptions action={action} ai={ai} onChange={update}/>}{action.kind==='ai.generate'&&<Field label="Nome da resposta" hint="Disponível somente nesta execução; evita misturar respostas entre pessoas.">
+ </Field>:action.kind==='variable.delete'?<p className="help">Escolha o valor que será apagado.</p>:<MessageEditor key={selected} profileId={flow.profileId} label={action.kind.startsWith('ai')?'Como a IA deve responder':action.kind==='variable.increment'?'Quanto somar':action.kind==='punish'?'Motivo (vai para a Twitch e para o Histórico)':'Mensagem / conteúdo'} value={action.text} onChange={text=>update({...action,text})} flow={{...flow,name,trigger,actions:(()=>{try{return orderedActions(nodes,edges)}catch{return []}})()}}/>}{action.kind.startsWith('ai')&&<details className="ai-help"><summary>Como a IA monta a resposta</summary><p className="help">A mensagem atual, até 12 falas recentes dos últimos 5 minutos e as memórias entram automaticamente. Defina o tom aqui. {action.kind==='ai.generate'?'Esta ação só guarda a resposta. Conecte Enviar mensagem e clique em + Resposta da IA.':'Esta ação já envia ao chat e guarda a resposta para os próximos blocos.'}</p></details>}{ai&&<AIActionOptions action={action} ai={ai} onChange={update}/>}{action.kind==='ai.generate'&&<Field label="Nome da resposta" hint="Disponível somente nesta execução; evita misturar respostas entre pessoas.">
  <input value={(action.target||'local.aiResponse').replace(/^local\./,'')} onChange={e=>update({...action,target:'local.'+e.target.value})}/>
  </Field>}{action.kind.startsWith('ai')&&<AIResponseTest key={selected} profileId={flow.profileId} instruction={action.text}/>}{action.kind.startsWith('variable.')&&<VariableTarget value={action.target} onChange={target=>update({...action,target})}/>}{['memory','webhook'].includes(action.kind)&&<Field label={action.kind==='memory'?'Arquivo no vault':'Endereço HTTPS'}>
  <input value={action.target} onChange={e=>update({...action,target:e.target.value})}/>
  </Field>}{['delay','points'].includes(action.kind)&&<Field label={action.kind==='delay'?'Espera em milissegundos (máx. 30000)':'Quantidade de pontos'}>
  <input type="number" value={action.value} onChange={e=>update({...action,value:+e.target.value})}/>
- </Field>}</Section>
+ </Field>}{action.kind==='punish'&&<>
+ <Field label="O que aplicar">
+ <select value={action.punish||'timeout'} onChange={e=>update({...action,punish:e.target.value})}>{Object.entries(punishModes).map(([k,n])=><option key={k} value={k}>{n}</option>)}</select>
+ </Field>
+ {(action.punish||'timeout')==='timeout'&&<Field label="Duração do silêncio (segundos)" hint="De 1 segundo a 14 dias.">
+ <input type="number" min="1" max="1209600" value={action.value} onChange={e=>update({...action,value:+e.target.value})}/>
+ </Field>}
+ <Field label="Quem leva a punição">
+ <select value={action.target} onChange={e=>update({...action,target:e.target.value})}>{Object.entries(punishTargets).map(([k,n])=><option key={k} value={k}>{n}</option>)}</select>
+ </Field>
+ <p className="help">{action.target==='first'?'Escreva o alvo depois do comando, como !silenciar @alvo. O nome é convertido em ID na Twitch antes da ação.':'A ação pune quem disparou o gatilho. Em comando de todo mundo, restrinja em Quem pode usar para Moderadores ou Só o streamer.'}</p>
+ <p className="help">Só executa em perfil Twitch com a conta do canal autorizada. A prévia não pune ninguém e o Histórico registra o resultado.</p>
+ </>}</Section>
  <Section title="Comportamento">
  <Field label="Executar só se a mensagem contiver">
  <input value={action.condition} onChange={e=>update({...action,condition:e.target.value})}/>

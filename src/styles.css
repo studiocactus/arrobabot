@@ -53,3 +53,6 @@
 .inline-error details{margin:8px 0 0;padding:7px 10px;border-color:#ef999d33;background:#0003}
 .inline-error summary{font-size:11px;color:var(--muted)}
 .inline-error code{display:block;margin-top:6px;font-size:10px;color:var(--muted);white-space:pre-wrap;word-break:break-all}
+/* Aviso de conteúdo: o texto cita informação que nenhuma ação do fluxo define. */
+.inline-warning{margin-top:8px;padding:9px 11px;border:1px solid #e0b76a55;border-left:3px solid #e0b76a;border-radius:var(--r-md);background:#e0b76a14;font-size:12px}
+.inline-warning code{color:var(--muted)}

@@ -37,6 +37,49 @@ pub async fn twitch_punish(rt:&Runtime,p:&Profile,action:&str,user_id:&str,reaso
  if !res.status().is_success(){return Err(format!("Moderação recusada pela Twitch: HTTP {}",res.status().as_u16()))}
  Ok(())
 }
+/// Primeiro alvo escrito na mensagem: quando o gatilho é comando, o salto pula o "!comando".
+fn first_login(message:&str)->Result<String,String>{
+ let mut words=message.split_whitespace().map(|w|w.trim_start_matches('@')).filter(|w|!w.is_empty());
+ let first=words.next().unwrap_or("");
+ let login=if first.starts_with('!'){words.next().unwrap_or("")}else{first};
+ if login.is_empty(){return Err("Escreva quem leva a ação depois do comando, como !silenciar @alvo".into())}
+ Ok(login.to_lowercase())
+}
+/// Converte nome de usuário no ID da Twitch, o identificador que a API de moderação usa.
+pub async fn twitch_user_id(rt:&Runtime,p:&Profile,login:&str)->Result<String,String>{
+ let login=login.trim_start_matches('@').to_lowercase();
+ if login.is_empty()||login.len()>40||!login.chars().all(|c|c.is_ascii_alphanumeric()||c=='_'||c=='-'){return Err("Informe um nome de usuário válido da Twitch".into())}
+ let token=oauth::token(&rt.http,p,"channel").await?;
+ let res=rt.http.get("https://api.twitch.tv/helix/users").query(&[("login",login.as_str())]).header("Client-Id",&p.client_id).bearer_auth(token).send().await.map_err(|_|"Não foi possível consultar o usuário na Twitch".to_string())?;
+ if !res.status().is_success(){return Err(format!("Consulta de usuário recusada pela Twitch: HTTP {}",res.status().as_u16()))}
+ let v:Value=res.json().await.map_err(|_|"Resposta inválida da Twitch".to_string())?;
+ let id=v["data"][0]["id"].as_str().unwrap_or("").to_owned();
+ if id.is_empty(){return Err(format!("A Twitch não encontrou o usuário {login}"))}
+ Ok(id)
+}
+/// Punição pedida por uma automação: silencia, bane ou avisa na Twitch.
+/// A prévia nunca executa aqui e mensagens vindas do Discord ficam de fora: o alvo é da Twitch.
+pub async fn punish(rt:&Runtime,p:&Profile,e:&Event,a:&Action,reason:&str)->Result<(),String>{
+ if e.simulated{return Ok(())}
+ if crate::discord::from_discord(e).is_some(){return Err("Esta ação pune na Twitch e não vale em mensagens vindas do Discord".into())}
+ if p.platform!="twitch"||p.channel_id.is_empty(){return Err("A punição usa a Twitch: autorize a conta do canal no perfil".into())}
+ if !PUNISH_MODES.contains(&a.punish.as_str()){return Err("Escolha silenciar, banir ou avisar".into())}
+ if !PUNISH_TARGETS.contains(&a.target.as_str()){return Err("Escolha quem leva a ação: quem enviou ou o primeiro argumento".into())}
+ let login;
+ let user_id=match a.target.as_str() {
+  "first"=>{login=first_login(&e.message)?;twitch_user_id(rt,p,&login).await?},
+  _=>{
+   if e.user_id.is_empty()||!e.user_id.chars().all(|c|c.is_ascii_digit()){return Err("Este evento não traz uma conta da Twitch para punir".into())}
+   login=e.user.to_lowercase();e.user_id.clone()
+  }
+ };
+ if user_id==p.channel_id||login.eq_ignore_ascii_case(&p.channel){return Err("O próprio streamer não pode levar esta punição".into())}
+ let reason=if reason.trim().is_empty(){"Regras da comunidade".to_string()}else{reason.chars().take(500).collect::<String>()};
+ let seconds=if a.punish=="timeout"{a.value.clamp(1,1209600) as u64}else{0};
+ twitch_punish(rt,p,&a.punish,&user_id,&reason,seconds).await?;
+ rt.log(&p.id,"moderation",&format!("{} aplicado a @{login} pela automação: {reason}",a.punish.as_str()),"success");
+ Ok(())
+}
 pub async fn act(rt:&Runtime,p:&Profile,e:&Event,reason:&str)->Result<(),String>{
  let config=rt.db.module(&p.id,"moderation");
  let action=config["action"].as_str().unwrap_or("ignore");

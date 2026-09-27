@@ -1,4 +1,5 @@
 mod command_counter;
+mod backup;
 mod timers;
 mod presence;
 mod model;
@@ -88,7 +89,7 @@ pub async fn dispatch(rt:Arc<Runtime>,op:&str,args:Value)->R<Value>{
  let text=context.render(&variables::migrate(args["text"].as_str().unwrap_or("")))?;
  Ok(json!({"text":text,"steps":steps,"variables":context.inspect()}))
  },
- "flow.save"=>{let mut f:Flow=serde_json::from_value(args["flow"].clone()).map_err(|_|"Fluxo inválido")?;if !f.audio.is_empty(){chat_extras::asset(&rt,&f.profile_id,&f.audio,"sound")?;}rt.db.save_flow(&f)?;variables::migrate_flow(&mut f);Ok(json!(f))},
+ "flow.save"=>{let mut f:Flow=serde_json::from_value(args["flow"].clone()).map_err(|_|"Fluxo inválido")?;if !f.audio.is_empty(){chat_extras::asset(&rt,&f.profile_id,&f.audio,"sound")?;}if command_counter::auto_enable(&mut f){rt.log(&f.profile_id,"counter",&format!("Contagem ligada em \"{}\": a resposta usa {{{{commandCount}}}}",f.name),"info");}rt.db.save_flow(&f)?;variables::migrate_flow(&mut f);Ok(json!(f))},
  "flow.delete"=>{rt.db.delete_flow(&p,args["id"].as_str().ok_or("Fluxo inválido")?)?;Ok(Value::Null)},
  "logs"=>Ok(json!(rt.db.logs(&p)?)),
  "stats"=>stats::read(&rt,&p),
@@ -145,6 +146,11 @@ pub async fn dispatch(rt:Arc<Runtime>,op:&str,args:Value)->R<Value>{
  "module.config.get"=>{rt.db.profile(&p)?;Ok(rt.db.module(&p,args["key"].as_str().ok_or("Configuração ausente")?))},
  "settings"=>{let key=args["key"].as_str().ok_or("Configuração inválida")?;if !["theme","accent","apiPort","updateEndpoint","updatePublicKey","autoUpdate"].contains(&key){return Err("Configuração não permitida".into())}if key=="accent"&&!args["value"].as_str().is_some_and(|v|v.is_empty()||(v.len()==7&&v.starts_with('#')&&v[1..].chars().all(|c|c.is_ascii_hexdigit()))){return Err("Cor inválida".into())}rt.db.set(key,&args["value"])?;Ok(Value::Null)},
  "settings.get"=>Ok(json!({"theme":rt.db.get("theme"),"apiPort":rt.db.get("apiPort"),"apiToken":rt.api_token,"updateEndpoint":update::endpoint(&rt),"updatePublicKey":update::public_key(&rt),"autoUpdate":rt.db.get("autoUpdate")})),
+ "backup.get"=>Ok(backup::config(&rt.db)),
+ "backup.save"=>backup::save_config(&rt.db,&args["config"]),
+ "backup.list"=>backup::list(&rt.db),
+ "backup.now"=>{let folder=args["folder"].as_str().map(str::to_owned).unwrap_or_else(||backup::config(&rt.db)["folder"].as_str().unwrap_or("").to_owned());backup::create(&rt,&folder)},
+ "backup.restore"=>{let result=backup::restore(&rt,args["path"].as_str().ok_or("Escolha um arquivo de backup")?);if result.is_ok(){rt.log("","backup","Importação concluída. Reconecte os perfis para usar os dados recebidos.","success")}result},
  _=>Err("Operação desconhecida".into())
  }
 }
@@ -153,6 +159,7 @@ pub fn run(){
  .setup(|app|{
  let base=app.path().app_data_dir()?;
  let rt=tauri::async_runtime::block_on(async{Runtime::new(base)})?;
+ for name in command_counter::migrate_counters(&rt.db){rt.log("","counter",&format!("Contagem ligada em \"{name}\": a resposta usa {{commandCount}}"),"info");}
  *rt.app.lock().unwrap()=Some(app.handle().clone());app.manage(rt.clone());
  let timer_rt=rt.clone();tauri::async_runtime::spawn(timers::run(timer_rt));
  let scheduler_rt=rt.clone();tauri::async_runtime::spawn(scheduler::run(scheduler_rt));

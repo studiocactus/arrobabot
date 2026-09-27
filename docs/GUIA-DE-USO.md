@@ -72,6 +72,8 @@ Os adaptadores ignoram mensagens da própria conta do bot para evitar respostas 
 | Respostas geradas por um modelo | Inteligência artificial |
 | Registrar o jogo, as regras e fatos da comunidade | Memórias |
 | Pontos, sorteios, música e jogos | Comunidade |
+| Silenciar, banir ou avisar alguém | Automações → ação Punir na Twitch |
+| Backup automático em um arquivo só | Configurações → Backup do bot |
 | Reutilizar uma configuração | Biblioteca de presets |
 | Entender um erro | Histórico |
 | Ver atividade acumulada | Estatísticas |
@@ -83,7 +85,7 @@ Antes de começar: abra o desktop, escolha o perfil, conecte o canal, confira o 
 
 Durante a live: acompanhe erros, cuide das filas e finalize sorteios e previsões pelo painel.
 
-Ao terminar: resolva ou cancele apostas e sorteios abertos, desconecte os canais e feche o aplicativo. Faça backup regularmente com o BotLive fechado.
+Ao terminar: resolva ou cancele apostas e sorteios abertos, desconecte os canais e feche o aplicativo. Confira no Histórico se o backup automático do dia saiu em **Backup do bot** e faça a cópia manual da pasta de dados com o BotLive fechado quando for trocar de computador.
 
 ## Atalhos
 

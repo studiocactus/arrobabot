@@ -23,6 +23,7 @@ Cada exemplo mostra **onde configurar**, **o que usar** e **o resultado esperado
 | Evitar spam | Editar comando → intervalos | Global: 10; por pessoa: 60 | No máximo uma execução a cada dez segundos, e uma por minuto para a mesma pessoa |
 | Limitar quem altera um contador | Editar comando → Quem pode usar | Moderadores | Só moderadores e streamer disparam o comando |
 | Somar a contagem com um som de caixa | Novo comando → Contar usos + Tocar áudio ao disparar | !ifood → O ifood já passou a milhão na rua {{commandCount}} vezes! | Cada uso aceito soma 1 e toca o som escolhido na saída do BotLive |
+| Aceitar o erro de digitação do comando | Novo comando → campo Comando | !whislist, !whishlist, !wishlist → Lista atualizada! | As três grafias disparam a mesma resposta, comparadas como palavra inteira |
 | Publicar como anúncio colorido | Editar comando → Como enviar na Twitch → Anúncio | Cor do anúncio: Laranja | A mensagem sai como anúncio da Twitch em vez de mensagem comum |
 
 Siga os passos completos em [Comandos e automações](03-COMANDOS-E-AUTOMACOES.md) e [Timers e contadores](TIMERS-E-CONTADORES.md).
@@ -162,6 +163,8 @@ A moderação de links pode impedir pedidos de música antes de chegarem ao mód
 
 **Moderação:** configure termos proibidos no perfil e comece com **Só ignorar e registrar**. Uma mensagem de participante comum com termo bloqueado é registrada e não segue para comandos. Isso não apaga a mensagem da plataforma. Para timeout Twitch, escolha essa ação, configure a duração e autorize a conta do canal. Teste com cuidado em um canal de teste: sanções reais alteram a participação da pessoa.
 
+**Punição por comando:** para punir alguém quando o chat pedir, crie um fluxo com a ação **Punir na Twitch**: escolha silenciar, banir ou avisar, a duração quando for silêncio, quem leva a punição (quem enviou a mensagem ou o primeiro argumento do comando) e o motivo, e restrinja **Quem pode usar** para Moderadores ou Só o streamer. Exemplo: `!silenciar @alvo` com alvo **Primeiro argumento** e duração 300. A diferença para a **Moderação** do perfil: aquela age sozinha nas expressões proibidas; esta ação executa quando o fluxo é disparado. A prévia nunca pune, e a ação vale só em perfil da Twitch.
+
 ## Discord — bot no servidor
 
 **Conectar o bot:** abra **Discord** em **SEU ESPAÇO**, salve o token do bot, clique em **Descobrir servidor e canais**, escolha o servidor, ligue **Ativar o bot do Discord** e salve. Depois clique em **Conectar**. **Resultado esperado:** o rótulo mostra **Conectado** e os canais e cargos já estão disponíveis nos campos.
@@ -201,6 +204,8 @@ Para overlay, siga [OBS e API local](API-LOCAL.md): fonte, porta e chave da sess
 | Proteger o painel | Configurações → crie primeiro a senha de owner → Bloquear painel | A tela pede login; automações conectadas continuam no motor |
 | Permitir edição por moderador | Cadastre acesso local e inclua esse nome nos editores do perfil | O moderador local só acessa perfis autorizados |
 | Fazer backup | Feche o BotLive e copie pasta de dados, memórias e arquivos TXT externos | A cópia inclui banco e pasta media; credenciais do cofre exigem cuidado separado |
+| Backup automático em arquivo único | Configurações → Backup do bot → Escolher pasta → ligar Backup automático diário | Arquivo `botlive-AAAA-MM-DD.botlivebak` na pasta; retenção por dia, semana e mês e resultado no Histórico |
+| Importar um backup | Configurações → Backup do bot → Importar backup… → confirme | Todas as áreas trocadas pelas do arquivo; cópia `backup-antes-da-importacao-...botlivebak` fica nos dados |
 | Atualizar | Configurações → Verificar atualização → leia notas → Instalar | Após concluir e reabrir, confira a versão completa na lateral |
 | Investigar falha | Histórico → busque nome do comando ou erro | Diferencie início, intervalo, erro e envio confirmado |
 | Acompanhar atividade | Estatísticas no perfil correto | Dados registrados pelo bot; não representam audiência total da plataforma |
