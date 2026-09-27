@@ -1,5 +1,20 @@
 # Registro de validação
 
+## Atualização 0.1.15
+
+Compilação TypeScript/Vite, 24 testes Vitest, 14 cenários Playwright, 74 testes Rust e oito testes dos scripts de atualização aprovados. A entrega torna a tela de Automações mais amigável sem remover funções: seções recolhíveis no painel do bloco, ajuda longa em resumo recolhível, erros técnicos traduzidos para português com o texto original em "Detalhes técnicos", dica de que a ordem vem das conexões e aviso na troca do modo simples para o editor visual.
+
+Verificações desta versão:
+
+- TypeScript: `npm run check` aprovado após as mudanças no editor de fluxos e no tradutor de erros.
+- Tradutor de erros: 7 testes Vitest novos em `src/errors.test.ts` aprovados; mensagens já escritas em português são preservadas e textos técnicos ganham frase em português, mantendo o original no detalhe.
+- Interface: 14 cenários Playwright aprovados, incluindo o novo `tests/ui/flow-inspector.spec.ts` (seções abertas e recolhidas, estado recolhido que sobrevive à edição de campos, dica de ordem por conexão, recusa de salvar com mensagem em português sem detalhe técnico, aviso da troca simples → visual e retorno ao modo simples após salvar no visual). Os 13 cenários existentes passaram sem alteração.
+- Núcleo Rust: 74 testes aprovados; nesta entrega não houve alteração de backend.
+- Scripts de atualização: 8 testes aprovados e `npm run update:check` aprovado com as notas 0.1.15.
+- Inspeção visual do editor em 1440 px e 720 px: seções alinhadas, sem texto vazando das caixas e sem rolagem horizontal do documento.
+
+Os erros técnicos foram exercitados por teste unitário do tradutor; não houve falha real de rede, de disco ou de permissão observada na tela. Sem contas OAuth configuradas não houve envio real de chat nem homologação de eventos nas plataformas. Os registros abaixo descrevem verificações históricas das versões anteriores.
+
 ## Atualização 0.1.14
 
 Compilação TypeScript/Vite, 17 testes Vitest, 13 cenários Playwright, 74 testes Rust e oito testes dos scripts de atualização aprovados. Regressões cobrem silêncio em erros HTTP 401/429/500, isolamento e limites de memórias, seleção do corpus de knowledge, limpeza de texto e separação de timers. Os erros de API foram simulados localmente; não representam homologação de um provedor pago ou do servidor Discord do usuário. Não houve medição de latência em produção. As restrições locais de subprocessos exigiram nova execução autorizada de parte dos comandos. Os registros abaixo descrevem verificações históricas das versões anteriores.

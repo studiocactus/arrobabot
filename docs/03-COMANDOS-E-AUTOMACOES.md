@@ -14,6 +14,8 @@ Para mais opções, abra **Inserir variável e testar mensagem**. Clique na fich
 
 **Comandos** é o caminho rápido para uma resposta textual. **Automações** abre o editor visual e permite combinar ações. São duas visualizações dos mesmos fluxos: um comando criado no modo simples também aparece em Automações.
 
+No modo simples, **Abrir no editor visual** troca a tela na hora e mostra um aviso: a ordem das ações passa a valer pelas conexões entre os blocos, não pela posição deles. Ao salvar, o comando continua o mesmo, com o mesmo nome, gatilho e ativação, e volta a abrir pelo modo simples enquanto tiver uma só ação. Com mais de uma ação, ele já abre no editor visual.
+
 ![Editor visual de automação na prévia da interface](images/flow-editor.png)
 
 A imagem mostra a interface de teste. Nomes e conteúdos são exemplos.
@@ -83,15 +85,17 @@ O intervalo global vale para o fluxo, independentemente de quem o usou. O interv
 
 1. Abra **Automações → Novo fluxo**.
 2. Preencha **Nome do fluxo**.
-3. Clique no bloco inicial e escolha Evento, texto, permissão, intervalos, a forma de envio na Twitch e o áudio do disparo.
-4. Clique no bloco de ação e selecione **Tipo de ação** no painel lateral.
-5. Preencha conteúdo e os campos específicos. Em ações de IA, abra **Como esta ação responde** para escolher ancoragem, tamanho, base de conhecimento, repetição e tom daquele bloco; o que ficar em **Padrão do perfil** herda a tela de IA.
+3. Clique no bloco inicial: o painel lateral se abre em seções. **Quando** reúne Evento, texto que dispara, quem pode usar e intervalos; **Como sai** traz a forma de envio na Twitch e o áudio do disparo; **Comportamento**, recolhido, guarda a contagem de usos e o intervalo do timer.
+4. Clique no bloco de ação e selecione **Tipo de ação** na seção **Como sai** do painel lateral.
+5. Preencha conteúdo e os campos específicos. Em ações de IA, abra **Como esta ação responde** para escolher ancoragem, tamanho, base de conhecimento, repetição e tom daquele bloco; o que ficar em **Padrão do perfil** herda a tela de IA. **Como a IA monta a resposta** explica o que entra nessa geração, e a seção **Comportamento** fica com a condição opcional.
 6. Clique em **Adicionar ação** para cada etapa adicional.
 7. Arraste dos pontos de conexão para ligar as etapas em ordem.
 8. Confira uma única sequência: gatilho → ação 1 → ação 2 → ação 3.
 9. Clique em **Salvar fluxo** e confira a chave de ativação.
 
-A posição do bloco no desenho não define a execução; as conexões definem. Blocos novos precisam ser conectados. O editor rejeita ciclos, ramificações e blocos soltos. É possível arrastar os blocos, usar zoom e selecionar uma conexão para removê-la.
+A posição do bloco no desenho não define a execução; as conexões definem. O fim do painel lateral repete essa regra sempre que um bloco está selecionado. Blocos novos precisam ser conectados. O editor rejeita ciclos, ramificações e blocos soltos. É possível arrastar os blocos, usar zoom e selecionar uma conexão para removê-la.
+
+Quando o salvamento é recusado, o motivo aparece em português no topo do editor. Se o texto original for técnico, ele continua disponível em **Detalhes técnicos**, dentro do próprio aviso de erro.
 
 Para reorganizar, remova as conexões antigas e conecte a sequência desejada. Não apague o gatilho. São permitidas de 1 a 64 ações.
 
@@ -138,7 +142,7 @@ Scripts Rhai recebem as variáveis user, message e channel, sem o prefixo $. Um 
 
 ## Condição opcional
 
-Em uma ação, abra **Condição opcional** e preencha **Executar só se a mensagem contiver**. A ação só roda quando o texto recebido contém esse trecho, sem diferenciar maiúsculas e minúsculas.
+Em uma ação, abra a seção **Comportamento** do painel lateral e preencha **Executar só se a mensagem contiver**. A ação só roda quando o texto recebido contém esse trecho, sem diferenciar maiúsculas e minúsculas.
 
 Se a condição não casar, apenas aquela ação é pulada; as próximas continuam. Não há bloco de alternativa “senão” nem ramificação visual nesta versão.
 
