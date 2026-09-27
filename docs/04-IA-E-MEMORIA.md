@@ -52,6 +52,38 @@ Se a geração falhar, a execução real de uma ação de IA registra o erro e t
 
 Os filtros por classificação não garantem compreensão perfeita de todo assunto. Revise personalidade, termos e exemplos de resposta da sua comunidade. Respostas do adaptador são limitadas a 450 caracteres.
 
+## Base de conhecimento
+
+A base de conhecimento é uma pasta de arquivos `.md` que a IA lê antes de responder. Em **Inteligência artificial**, no cartão **Base de conhecimento**, clique em **Importar pasta** e escolha a pasta `documentação\knowledge` que acompanha o aplicativo, ou outra pasta que você já tenha montado.
+
+A pasta é copiada para os dados do perfil na importação: a partir daí o aplicativo é autônomo, mover ou apagar a pasta original não quebra nada. Importar de novo substitui a base anterior. **Atualizar da pasta original** repete a importação do último caminho escolhido e recalcula a lista na hora. Limite da importação: até 400 arquivos `.md` de texto UTF-8, 200 kB por arquivo, 12 MB no total e três níveis de subpasta; atalhos e pastas dentro dos dados do aplicativo são recusados.
+
+No mesmo cartão:
+
+- **Usar a base nas respostas** liga ou desliga o bloco inteiro deste perfil.
+- **Nicho do canal** escolhe qual arquivo de `nichos/` entra primeiro, por exemplo `fps-competitivo` para `nichos/fps-competitivo.md`. A lista dos nichos importados aparece ao digitar.
+- **Profundidade** limita quanto texto cabe em cada resposta: **Leve** ~5 mil caracteres, **Padrão** ~13 mil, **Completa** ~20 mil.
+- Cada arquivo da lista tem um interruptor para **desligar sem apagar** (o perfil guarda o caminho e nada daquele arquivo entra no pedido) e uma lixeira para **remover** da base.
+
+As escolhas deste cartão entram em vigor ao clicar em **Salvar personalidade**. A importação em si já grava na hora.
+
+A ordem de leitura é fixa e segue esta prioridade: `tom-e-comportamento`, o nicho escolhido, o arquivo do evento da hora (`eventos-de-live/reacao-a-sub-doacao.md`, `reacao-a-clip-highlight.md` ou `reacao-a-troca-de-jogo.md`), `girias`, `canais/<seu-canal>` e, por fim, até quatro dos demais arquivos mais parecidos com a pergunta. Os arquivos escolhidos entram inteiros: se o orçamento acabar, o restante fica de fora e a próxima resposta tenta de novo.
+
+Arquivos com `tipo: documento_de_logica` no frontmatter nunca entram no pedido, mesmo estando na pasta: servem de referência para quem escreve a base. Os arquivos são dados, não instruções: a personalidade e as restrições do perfil continuam mandando, e um texto escrito dentro da base não muda sozinho o comportamento do bot.
+
+## O que a live está fazendo agora
+
+A resposta da IA recebe, além da conversa, um resumo curto do momento da transmissão, montado em memória durante a execução:
+
+- **Categoria atual** — lida da Twitch na conexão com o canal e atualizada quando o canal troca de jogo.
+- **Eventos dos últimos 90 segundos** — assinatura, bits, resgate por pontos, presente, doação, clipe e troca de categoria, com quem fez.
+- **Calor do chat** — quantas falas chegaram na janela: baixo, médio ou alto.
+- As falas recentes continuam entrando pelo contexto de conversa normal.
+
+Esse estado existe só em RAM: é descartado ao fechar o aplicativo e limpo quando o perfil é excluído ou troca de canal. Simulação e prévia nunca alteram esse estado, e eles também não enviam nada ao provedor. Quando não há nada registrado, o pedido à IA simplesmente sai sem esse bloco de contexto.
+
+Ao usar um provedor remoto, esse resumo é enviado a ele quando uma ação de IA roda de verdade.
+
 ## Colocar a IA em um comando
 
 ### Resenha contextual em poucos cliques
@@ -72,13 +104,29 @@ O campo **Nome da resposta** permite guardar respostas diferentes, por exemplo `
 
 **Responder com IA** continua enviando diretamente ao chat e agora também usa contexto. Evite adicionar outro Enviar mensagem com a mesma resposta se não quiser publicá-la duas vezes. A simulação e a prévia de variáveis não chamam a IA: usam o marcador explícito **[Prévia: resposta contextual da IA]** e sucesso `false` para conferir a sequência.
 
+### Como esta ação responde
+
+Nos blocos **Responder com IA** e **Gerar resposta da IA (variável)**, o painel lateral traz **Como esta ação responde**. A linha **Hoje vale** mostra o resultado depois das escolhas, e cada campo em **Padrão do perfil** herda a configuração da tela de IA; um valor escolhido ali sobrescreve só este bloco.
+
+| Campo | Opções |
+|---|---|
+| Onde a resposta se ancora | Padrão do perfil, Mensagem atual e chat, Só a mensagem atual, Só o assunto do chat, Só a instrução fixa |
+| Tamanho | Padrão do perfil, Uma frase, Até 300 caracteres, Até 450 caracteres |
+| Base de conhecimento | Padrão do perfil, Usar, Não usar |
+| Evitar repetição | Padrão do perfil, Evitar repetição, Pode repetir |
+| Tom deste bloco | Texto livre, até 600 caracteres, entra depois da personalidade |
+
+Ancoragem e tamanho também decidem o quanto o modelo pode escrever: **Uma frase** pede cerca de 120 caracteres finais, **Até 300** cerca de 300 e **Até 450** cerca de 450. **Só a instrução fixa** serve quando a instrução do bloco é o assunto inteiro e a mensagem do chat é apenas contexto; **Só a mensagem atual** é o que você quer num comando que responde ponto a ponto.
+
+Salvar o fluxo grava estas escolhas por bloco. A simulação continua não chamando o modelo.
+
 ### Configuração manual de um comando
 
 1. Configure e teste o provedor.
 2. Abra Automações e crie um fluxo.
 3. Use gatilho Comando de chat e texto !bot.
 4. Selecione a ação **Responder com IA**.
-5. Use: Responda de forma breve à mensagem: $message.
+5. Use: Responda de forma breve à mensagem: {{message}}.
 6. Defina intervalos adequados ao tempo do modelo.
 7. Salve e ative.
 8. Teste no canal com outra conta.

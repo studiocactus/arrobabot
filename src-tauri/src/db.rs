@@ -47,14 +47,18 @@ impl Db {
  pub fn flows(&self,id:&str)->R<Vec<Flow>> {
  let c=self.0.lock().unwrap(); let mut s=c.prepare("SELECT data FROM flows WHERE profile_id=? ORDER BY rowid").map_err(|e|e.to_string())?;
  let rows=s.query_map([id],|r|r.get::<_,String>(0)).map_err(|e|e.to_string())?;
- rows.map(|r|serde_json::from_str(&r.map_err(|e|e.to_string())?).map_err(|e|e.to_string())).collect()
+ rows.map(|r|{let mut f:Flow=serde_json::from_str(&r.map_err(|e|e.to_string())?).map_err(|e|e.to_string())?;crate::variables::migrate_flow(&mut f);Ok(f)}).collect()
  }
  pub fn save_flow(&self,f:&Flow)->R<()> {
  validate_flow(f)?;
+ let mut f=f.clone();let legacy=crate::variables::migrate_flow(&mut f);
  let c=self.0.lock().unwrap();
  let owner:Option<String>=c.query_row("SELECT profile_id FROM flows WHERE id=?",[&f.id],|r|r.get(0)).ok();
  if owner.is_some_and(|x| x!=f.profile_id) {return Err("Este fluxo pertence a outro perfil".into())}
- c.execute("INSERT INTO flows VALUES(?1,?2,?3) ON CONFLICT(id) DO UPDATE SET data=excluded.data",params![f.id,f.profile_id,serde_json::to_string(f).unwrap()]).map_err(|e|e.to_string())?;Ok(())
+ c.execute("INSERT INTO flows VALUES(?1,?2,?3) ON CONFLICT(id) DO UPDATE SET data=excluded.data",params![f.id,f.profile_id,serde_json::to_string(&f).unwrap()]).map_err(|e|e.to_string())?;
+ drop(c);
+ if legacy { let _=self.log(&f.profile_id,"variables","Marcadores antigos com cifrão convertidos para {{...}} neste fluxo; guarde de novo para confirmar.","info"); }
+ Ok(())
  }
  pub fn delete_flow(&self,profile:&str,id:&str)->R<()> {self.0.lock().unwrap().execute("DELETE FROM flows WHERE id=? AND profile_id=?",params![id,profile]).map_err(|e|e.to_string())?;Ok(())}
  pub fn log(&self,p:&str,kind:&str,message:&str,status:&str)->Log {

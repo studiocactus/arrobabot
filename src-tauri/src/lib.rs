@@ -5,6 +5,8 @@ mod model;
 mod variables;
 mod db;
 mod vault;
+mod knowledge;
+mod live_state;
 mod secrets;
 mod ai;
 mod conversation;
@@ -44,7 +46,12 @@ pub async fn dispatch(rt:Arc<Runtime>,op:&str,args:Value)->R<Value>{
  if op.starts_with("discord."){return discord_admin::operation(&rt,&p,op,&args).await}
  match op{
  "snapshot"=>Ok(json!({"profiles":rt.db.profiles()?.into_iter().filter(|p|access::allowed(&rt,p)).collect::<Vec<_>>(),"logs":rt.db.logs("")?.into_iter().filter(|l|access::current(&rt)=="owner"||rt.db.profile(&l.profile_id).is_ok_and(|p|access::allowed(&rt,&p))).collect::<Vec<_>>(),"statuses":*rt.statuses.lock().unwrap(),"theme":rt.db.get("theme"),"accent":rt.db.get("accent"),"apiPort":*rt.api_port.lock().unwrap(),"dataDir":rt.base.to_string_lossy()})),
- "profile.save"=>{let mut profile:Profile=serde_json::from_value(args["profile"].clone()).map_err(|_|"Perfil inválido")?;if let Ok(previous)=rt.db.profile(&profile.id){if previous.channel!=profile.channel||previous.channel_id!=profile.channel_id||previous.platform!=profile.platform{rt.conversation.lock().unwrap().clear(&profile.id);}if previous.platform!=profile.platform||previous.client_id!=profile.client_id{rt.disconnect(&profile.id);for key in ["bot_token","bot_refresh","channel_token","channel_refresh","bot_expires","channel_expires"]{let _=secrets::set(&profile.id,key,"");}}}profile.blocklist=profile.blocklist.into_iter().map(|s|s.trim().to_owned()).filter(|s|!s.is_empty()).collect();profile.editors=profile.editors.into_iter().map(|s|s.trim().to_lowercase()).filter(|s|!s.is_empty()).collect();profile.topics=profile.topics.into_iter().map(|s|s.trim().to_owned()).filter(|s|!s.is_empty()).collect();vault::root(&rt.base,&profile.id)?;rt.db.save_profile(&profile)?;Ok(json!(profile))},
+ "profile.save"=>{let mut profile:Profile=serde_json::from_value(args["profile"].clone()).map_err(|_|"Perfil inválido")?;
+ if !profile.ai.anchor.is_empty()&&!ANCHORS.contains(&profile.ai.anchor.as_str()){return Err("Ancoragem da IA inválida".into())}
+ if !profile.ai.answer_length.is_empty()&&!LENGTHS.contains(&profile.ai.answer_length.as_str()){return Err("Tamanho padrão da resposta da IA inválido".into())}
+ if !KNOWLEDGE_DEPTHS.contains(&profile.ai.knowledge_depth.as_str()){return Err("Profundidade da base de conhecimento inválida".into())}
+ if profile.ai.knowledge_off.len()>500||profile.ai.knowledge_off.iter().any(|o|o.len()>260){return Err("Lista da base de conhecimento inválida".into())}
+ if let Ok(previous)=rt.db.profile(&profile.id){if previous.channel!=profile.channel||previous.channel_id!=profile.channel_id||previous.platform!=profile.platform{rt.conversation.lock().unwrap().clear(&profile.id);rt.live.clear(&profile.id);}if previous.platform!=profile.platform||previous.client_id!=profile.client_id{rt.disconnect(&profile.id);for key in ["bot_token","bot_refresh","channel_token","channel_refresh","bot_expires","channel_expires"]{let _=secrets::set(&profile.id,key,"");}}}profile.blocklist=profile.blocklist.into_iter().map(|s|s.trim().to_owned()).filter(|s|!s.is_empty()).collect();profile.editors=profile.editors.into_iter().map(|s|s.trim().to_lowercase()).filter(|s|!s.is_empty()).collect();profile.topics=profile.topics.into_iter().map(|s|s.trim().to_owned()).filter(|s|!s.is_empty()).collect();vault::root(&rt.base,&profile.id)?;rt.db.save_profile(&profile)?;Ok(json!(profile))},
  "profile.delete"=>{
  let _lock=rt.vault_lock.lock().unwrap();rt.db.profile(&p)?;rt.disconnect(&p);
  // Refuse paths that escape the app-data vault through junctions or symlinks.
@@ -53,7 +60,11 @@ pub async fn dispatch(rt:Arc<Runtime>,op:&str,args:Value)->R<Value>{
  let parent=rt.base.join("vaults").canonicalize().map_err(|e|e.to_string())?;
  if !canonical.starts_with(&parent)||canonical==parent{return Err("Caminho de vault inválido".into())}
  std::fs::remove_dir_all(&root).map_err(|e|e.to_string())?;
- rt.db.delete_profile(&p)?;rt.conversation.lock().unwrap().clear(&p);secrets::clear(&p);crate::discord_admin::stop(&rt,&p);crate::discord::clear_cache(&rt,&p);Ok(Value::Null)
+ // A base de conhecimento acompanha o perfil; falha aqui não impede o apagamento.
+ if let (Ok(kroot),Ok(kparent))=(knowledge::root(&rt.base,&p),rt.base.join("knowledge").canonicalize()) {
+  if let Ok(k)=kroot.canonicalize() {if k.starts_with(&kparent)&&k!=kparent {let _=std::fs::remove_dir_all(&k);}}
+ }
+ rt.db.delete_profile(&p)?;rt.conversation.lock().unwrap().clear(&p);rt.live.clear(&p);secrets::clear(&p);crate::discord_admin::stop(&rt,&p);crate::discord::clear_cache(&rt,&p);Ok(Value::Null)
  },
  "command.counters"=>command_counter::list(&rt.db,&p),
  "command.counter.set"=>{let id=args["id"].as_str().ok_or("Comando ausente")?;let value=args["value"].as_i64().ok_or("Informe um número inteiro")?;let count=command_counter::change(&rt.db,&p,id,Some(value))?;rt.emit("command-counter",json!({"profileId":p,"id":id,"value":count}));Ok(json!(count))},
@@ -66,15 +77,17 @@ pub async fn dispatch(rt:Arc<Runtime>,op:&str,args:Value)->R<Value>{
  let mut e:Event=serde_json::from_value(args["event"].clone()).map_err(|_|"Evento inválido")?;
  e.profile_id=p.clone();e.simulated=true;
  let flow:Option<Flow>=args.get("flow").filter(|v|!v.is_null()).map(|v|serde_json::from_value(v.clone())).transpose().map_err(|_|"Fluxo inválido")?;
+ // A prévia trata conteúdo legado com cifrão exatamente como o salvamento vai tratar.
+ let mut flow=flow;if let Some(f)=flow.as_mut(){variables::migrate_flow(f);}
  // A prévia entrega o evento que o gatilho produz na prática, não o dado de teste.
  if let Some(f)=flow.as_ref(){e=model::preview_event(f,e);}
  let mut context=variables::Context::new(&rt.db,&profile,&e,flow.as_ref())?;
  let mut steps=vec![];
  if let Some(f)=flow {validate_flow(&f)?;for a in &f.actions {if !a.condition.is_empty()&&!e.message.to_lowercase().contains(&a.condition.to_lowercase()){continue}if a.kind=="script"{steps.push(json!({"kind":"script","text":"Script não executado na prévia"}));continue}let text=if a.kind=="variable.delete"{String::new()}else{context.render(&a.text)?};if a.kind.starts_with("variable."){context.change(&rt.db,&profile,&e,&a.target,a.kind.trim_start_matches("variable."),variables::typed(&text))?;}if matches!(a.kind.as_str(),"ai"|"ai.generate"){ai::save_response(&mut context,&rt,&profile,&e,a,"[Prévia: resposta contextual da IA]",false)?;}steps.push(json!({"kind":a.kind,"text":text}));}}
- let text=context.render(args["text"].as_str().unwrap_or(""))?;
+ let text=context.render(&variables::migrate(args["text"].as_str().unwrap_or("")))?;
  Ok(json!({"text":text,"steps":steps,"variables":context.inspect()}))
  },
- "flow.save"=>{let f:Flow=serde_json::from_value(args["flow"].clone()).map_err(|_|"Fluxo inválido")?;if !f.audio.is_empty(){chat_extras::asset(&rt,&f.profile_id,&f.audio,"sound")?;}rt.db.save_flow(&f)?;Ok(json!(f))},
+ "flow.save"=>{let mut f:Flow=serde_json::from_value(args["flow"].clone()).map_err(|_|"Fluxo inválido")?;if !f.audio.is_empty(){chat_extras::asset(&rt,&f.profile_id,&f.audio,"sound")?;}rt.db.save_flow(&f)?;variables::migrate_flow(&mut f);Ok(json!(f))},
  "flow.delete"=>{rt.db.delete_flow(&p,args["id"].as_str().ok_or("Fluxo inválido")?)?;Ok(Value::Null)},
  "logs"=>Ok(json!(rt.db.logs(&p)?)),
  "stats"=>stats::read(&rt,&p),
@@ -102,7 +115,8 @@ pub async fn dispatch(rt:Arc<Runtime>,op:&str,args:Value)->R<Value>{
  let e=Event{id:"ai-preview".into(),profile_id:p,kind:"chat".into(),user:"Espectador de teste".into(),user_id:"test-user".into(),role:"everyone".into(),message:message.into(),data:Value::Null,simulated:true};
  let c=variables::Context::new(&rt.db,&profile,&e,None)?;
  let history:Vec<Value>=recent.lines().filter(|s|!s.trim().is_empty()).rev().take(12).collect::<Vec<_>>().into_iter().rev().map(|s|json!({"message":s.chars().take(500).collect::<String>()})).collect();
- Ok(json!(ai::conversation(&rt.http,&rt.base,&profile,&e,&c.render(instruction)?,&history).await?))
+ let opts=ai::Options{knowledge:crate::knowledge::context(&rt.base,&profile,Some(&e),message),live:rt.live.summary(&profile.id),..ai::Options::defaults(&profile)};
+ Ok(json!(ai::conversation(&rt.http,&rt.base,&profile,&e,&c.render(instruction)?,&history,&opts).await?))
  },
  "ai.test"=>{let profile=rt.db.profile(&p)?;Ok(json!(ai::generate(&rt.http,&rt.base,&profile,args["user"].as_str().unwrap_or("streamer"),args["prompt"].as_str().unwrap_or("Olá! Apresente-se brevemente.")).await?))},
  "ollama"=>{let profile=rt.db.profile(&p)?;ai::validate_url(&profile.ai.endpoint)?;let res=rt.http.get(format!("{}/api/tags",profile.ai.endpoint.trim_end_matches('/'))).send().await.map_err(|_|"Ollama não está disponível. Inicie o Ollama e tente novamente.")?;res.json().await.map_err(|_|"Resposta Ollama inválida".into())},
@@ -110,6 +124,9 @@ pub async fn dispatch(rt:Arc<Runtime>,op:&str,args:Value)->R<Value>{
  "note.save"=>{let _lock=rt.vault_lock.lock().unwrap();rt.db.profile(&p)?;vault::write(&rt.base,&p,args["path"].as_str().ok_or("Caminho ausente")?,args["content"].as_str().ok_or("Conteúdo ausente")?,false)?;Ok(Value::Null)},
  "note.delete"=>{let _lock=rt.vault_lock.lock().unwrap();rt.db.profile(&p)?;vault::delete(&rt.base,&p,args["path"].as_str().ok_or("Caminho ausente")?)?;Ok(Value::Null)},
  "vault.open"=>{rt.db.profile(&p)?;open::that(vault::root(&rt.base,&p)?).map_err(|_|"Não foi possível abrir a pasta")?;Ok(Value::Null)},
+ "knowledge.list"=>{rt.db.profile(&p)?;Ok(json!(knowledge::list(&rt.base,&p)?.into_iter().map(|e|json!({"path":e.path,"category":e.category,"file":e.file,"title":e.title,"kind":e.kind,"size":e.size})).collect::<Vec<_>>()))},
+ "knowledge.import"=>{let mut profile=rt.db.profile(&p)?;let source=args["path"].as_str().ok_or("Escolha uma pasta")?.to_owned();let made=knowledge::import(&rt.base,&p,&source)?;profile.ai.knowledge_source=source;rt.db.save_profile(&profile)?;Ok(made)},
+ "knowledge.remove"=>{rt.db.profile(&p)?;knowledge::remove(&rt.base,&p,args["path"].as_str().ok_or("Arquivo ausente")?)?;Ok(Value::Null)},
  "community"=>{rt.db.profile(&p)?;Ok(json!(modules::load(&rt,&p)))},
  "community.action"=>modules::admin(&rt,&p,args["action"].as_str().ok_or("Ação ausente")?,args["data"].clone()),
  "preset.create"=>presets::export(&rt,&p,args["kind"].as_str().unwrap_or("profile"),args["name"].as_str().unwrap_or("Meu preset"),serde_json::from_value(args["ids"].clone()).unwrap_or_default()),

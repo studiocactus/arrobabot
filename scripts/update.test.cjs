@@ -6,3 +6,11 @@ function fixture(){const dir=fs.mkdtempSync(path.join(os.tmpdir(),'botlive-updat
 test('preparação sincroniza todas as versões e preserva notas detalhadas',()=>{const {dir,run}=fixture();let r=run('prepare','1.0.1','notes.md');assert.equal(r.status,0,r.stderr);assert.equal(run('check').status,0);assert.equal(JSON.parse(fs.readFileSync(path.join(dir,'package-lock.json'))).packages[''].version,'1.0.1');assert.match(fs.readFileSync(path.join(dir,'CHANGELOG.md'),'utf8'),/Como usar/);assert.notEqual(run('prepare','1.0.1','notes.md').status,0)});
 test('notas incompletas e downgrade são rejeitados antes de alterar versão',()=>{const {dir,put,run}=fixture();put('bad.md','Correção pequena');assert.notEqual(run('prepare','1.0.1','bad.md').status,0);assert.notEqual(run('prepare','0.9.0','notes.md').status,0);assert.equal(JSON.parse(fs.readFileSync(path.join(dir,'package.json'))).version,'1.0.0')});
 test('verificação detecta manifesto divergente e changelog ausente',()=>{const {put,run}=fixture();assert.equal(run('prepare','1.0.1','notes.md').status,0);put('src-tauri/tauri.conf.json',{version:'1.0.2'});assert.notEqual(run('check').status,0);put('src-tauri/tauri.conf.json',{version:'1.0.1'});put('CHANGELOG.md','Sem descrição');assert.notEqual(run('check').status,0)});
+test('verificação por intervalo aceita o merge sintético de um pull request',()=>{const {dir,put,run}=fixture();
+ const git=(...args)=>{const r=cp.spawnSync('git',args,{cwd:dir,encoding:'utf8'});assert.equal(r.status,0,String(r.stderr||r.stdout));return String(r.stdout).trim()};
+ git('init','-b','main');git('config','user.email','teste@example.com');git('config','user.name','teste');git('config','commit.gpgsign','false');
+ put('README.md','base');git('add','-A');git('commit','-m','base');const base=git('rev-parse','HEAD');
+ git('checkout','-b','feature');assert.equal(run('prepare','1.0.1','notes.md').status,0);put('README.md','feature');git('add','-A');git('commit','-m','1.0.1 na branch');
+ git('checkout','main');git('merge','--no-ff','feature','-m','Merge pull request #1');
+ // É o mesmo formato que a CI vê ao validar um pull request.
+ const r=run('check','--range',base+'..HEAD');assert.equal(r.status,0,r.stderr||r.stdout)});

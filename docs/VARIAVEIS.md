@@ -31,11 +31,13 @@ Quando o fluxo tem gatilho, a prévia entrega o evento que aquele gatilho produz
 
 ## Sintaxe e compatibilidade
 
-O formato recomendado é `{{nome}}`. Os marcadores antigos `$user`, `$message` e `$channel` continuam funcionando. Também é possível usar `$userId`, `$arg0` e outros nomes simples disponíveis. O formato `%userName%` aceita nomes simples como alternativa familiar a quem usa Streamer.bot.
+Existe uma única linguagem de marcadores: `{{nome}}`. O formato `%userName%` aceita nomes simples como alternativa familiar a quem usa Streamer.bot.
 
-Nomes diferenciam maiúsculas e minúsculas: `userId` não é `userid`. `$userId` é um marcador inteiro, nunca uma substituição parcial de `$user`. Variáveis ausentes em `{{...}}` e `%...%` interrompem a ação com uma mensagem no Histórico; use `{{arg0|default:amigo}}` para valores opcionais. Um `$nome` desconhecido é mantido literalmente para preservar textos antigos.
+O marcador antigo com cifrão (`$user`, `$message`, `$channel`, `$userId`, `$arg0`) deixou de ser interpretado pelo motor e é convertido automaticamente para `{{...}}` quando o fluxo é carregado, salvo, importado, testado na prévia ou quando uma resposta TXT é lida. A conversão só atinge nomes que existem: `$5`, `R$100` e `$qualquercoisa` ficam exatamente como foram escritos, e o Histórico registra uma linha quando algo foi convertido. Gatilho, condição e script não são convertidos, porque esses textos são comparados ou executados, nunca interpretados como modelo.
 
-Para escrever marcadores literalmente, acrescente uma barra invertida: `\{{user}}`, `\$user` ou `\%userName%`. O valor recebido do chat nunca é interpretado novamente como um modelo: se alguém enviar `{{global.contador}}`, o uso de `{{message}}` mostrará aquele texto, sem ler a variável interna.
+Nomes diferenciam maiúsculas e minúsculas: `userId` não é `userid`. Variáveis ausentes em `{{...}}` e `%...%` interrompem a ação com uma mensagem no Histórico; use `{{arg0|default:amigo}}` para valores opcionais.
+
+Para escrever marcadores literalmente, acrescente uma barra invertida: `\{{user}}`, `\%userName%` ou `\$user`. O valor recebido do chat nunca é interpretado novamente como um modelo: se alguém enviar `{{global.contador}}`, o uso de `{{message}}` mostrará aquele texto, sem ler a variável interna.
 
 ## Catálogo de contexto
 

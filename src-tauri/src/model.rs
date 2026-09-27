@@ -20,9 +20,21 @@ pub struct AiConfig {
  pub provider:String, pub endpoint:String, pub model:String,
  pub personality:String, pub temperature:f64, pub fallback:String,
  #[serde(default)] pub remember:bool,
+ /// Base de conhecimento importada: entra no prompt quando ativada.
+ #[serde(default="yes")] pub knowledge:bool,
+ #[serde(default)] pub knowledge_nicho:String,
+ #[serde(default="std_depth")] pub knowledge_depth:String,
+ #[serde(default)] pub knowledge_off:Vec<String>,
+ #[serde(default)] pub knowledge_source:String,
+ /// Padrões para ações novas; cada ação pode sobrescrever com valor vazio herdando estes.
+ #[serde(default)] pub anchor:String,
+ #[serde(default)] pub answer_length:String,
+ #[serde(default)] pub no_repeat:bool,
 }
+fn yes()->bool {true}
+fn std_depth()->String {"standard".into()}
 impl Default for AiConfig {
- fn default()->Self { Self { provider:"ollama".into(), endpoint:"http://localhost:11434".into(), model:"".into(),personality:"Você é um bot amigável de uma comunidade de live. Responda em português, brevemente e com respeito.".into(),temperature:0.7,fallback:"Não consegui responder agora. Tente novamente em instantes.".into(), remember:false } }
+ fn default()->Self { Self { provider:"ollama".into(), endpoint:"http://localhost:11434".into(), model:"".into(),personality:"Você é um bot amigável de uma comunidade de live. Responda em português, brevemente e com respeito.".into(),temperature:0.7,fallback:"Não consegui responder agora. Tente novamente em instantes.".into(), remember:false, knowledge:true, knowledge_nicho:String::new(), knowledge_depth:std_depth(), knowledge_off:Vec::new(), knowledge_source:String::new(), anchor:String::new(), answer_length:String::new(), no_repeat:false } }
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all="camelCase")]
@@ -43,6 +55,10 @@ fn send_chat()->String{"chat".into()}
 fn send_primary()->String{"primary".into()}
 pub const SEND_TYPES:[&str;4]=["chat","announce","pin","shoutout"];
 pub const SEND_COLORS:[&str;5]=["primary","blue","green","orange","purple"];
+/// Ancoragem da resposta com IA e tamanho máximo dela.
+pub const ANCHORS:[&str;4]=["all","message","chat","fixed"];
+pub const LENGTHS:[&str;3]=["short","medium","free"];
+pub const KNOWLEDGE_DEPTHS:[&str;3]=["light","standard","full"];
 /// True when the flow needs a message-sending action to make this delivery useful.
 pub fn needs_message(f:&Flow)->bool{f.actions.iter().any(|a|matches!(a.kind.as_str(),"chat"|"ai"|"script"))}
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -59,6 +75,27 @@ pub struct Action {
  pub kind:String, #[serde(default)] pub text:String,
  #[serde(default)] pub target:String, #[serde(default)] pub value:i64,
  #[serde(default)] pub condition:String,
+ /// Controles da resposta com IA. Vazio ou ausente herda o padrão do perfil.
+ #[serde(default)] pub ai_anchor:String,
+ #[serde(default)] pub ai_knowledge:String,
+ #[serde(default)] pub ai_length:String,
+ #[serde(default)] pub ai_style:String,
+ #[serde(default)] pub ai_no_repeat:Option<bool>,
+}
+impl Default for Action {
+ fn default()->Self { Self{kind:"chat".into(),text:String::new(),target:String::new(),value:0,condition:String::new(),ai_anchor:String::new(),ai_knowledge:String::new(),ai_length:String::new(),ai_style:String::new(),ai_no_repeat:None} }
+}
+impl Action {
+ pub fn anchor<'a>(&'a self,ai:&'a AiConfig)->&'a str { self.pick(&self.ai_anchor,&ai.anchor,"all") }
+ pub fn length<'a>(&'a self,ai:&'a AiConfig)->&'a str { self.pick(&self.ai_length,&ai.answer_length,"") }
+ fn pick<'a>(&'a self,mine:&'a str,fallback:&'a str,empty:&'a str)->&'a str {
+  if mine.is_empty() { if fallback.is_empty() {empty} else {fallback} } else {mine}
+ }
+ /// "" herda o perfil, "on"/"off" obriga.
+ pub fn knowledge(&self,ai:&AiConfig)->bool {
+  match self.ai_knowledge.as_str() { "on"=>true, "off"=>false, _=>ai.knowledge }
+ }
+ pub fn no_repeat(&self,ai:&AiConfig)->bool { self.ai_no_repeat.unwrap_or(ai.no_repeat) }
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all="camelCase")]
@@ -141,6 +178,10 @@ pub fn validate_flow(f:&Flow)->Result<(),String> {
  if a.kind.starts_with("variable."){crate::variables::target(&a.target)?;}
  if a.text.len()>32768 {return Err("Ação muito longa".into())}
  if a.kind=="delay" && !(0..=30000).contains(&a.value) {return Err("Espera máxima: 30 segundos".into())}
+ if !a.ai_anchor.is_empty()&&!ANCHORS.contains(&a.ai_anchor.as_str()){return Err("Ancoragem da IA inválida".into())}
+ if !a.ai_length.is_empty()&&!LENGTHS.contains(&a.ai_length.as_str()){return Err("Tamanho da resposta da IA inválido".into())}
+ if !a.ai_knowledge.is_empty()&&!["on","off"].contains(&a.ai_knowledge.as_str()){return Err("Base de conhecimento inválida".into())}
+ if a.ai_style.len()>600 {return Err("Tom deste bloco muito longo".into())}
  }
  Ok(())
 }
@@ -169,7 +210,7 @@ pub fn validate_flow(f:&Flow)->Result<(),String> {
   assert_eq!(preview_event(&f,e()).kind,"follow");
  }
  #[test] fn delivery_type_color_and_flow_audio_rules() {
-  let mut f=Flow{counter:false,timer_seconds:300,audio:String::new(),audio_volume:1.0,send_type:"chat".into(),send_color:"primary".into(),id:uuid::Uuid::new_v4().to_string(),profile_id:uuid::Uuid::new_v4().to_string(),name:"ifood".into(),enabled:true,trigger:Trigger{kind:"command".into(),pattern:"!ifood".into(),permission:"everyone".into(),cooldown:0,user_cooldown:0},actions:vec![Action{kind:"chat".into(),text:"Bora".into(),target:String::new(),value:0,condition:String::new()}],layout:Value::Null};
+  let mut f=Flow{counter:false,timer_seconds:300,audio:String::new(),audio_volume:1.0,send_type:"chat".into(),send_color:"primary".into(),id:uuid::Uuid::new_v4().to_string(),profile_id:uuid::Uuid::new_v4().to_string(),name:"ifood".into(),enabled:true,trigger:Trigger{kind:"command".into(),pattern:"!ifood".into(),permission:"everyone".into(),cooldown:0,user_cooldown:0},actions:vec![Action{kind:"chat".into(),text:"Bora".into(),target:String::new(),value:0,condition:String::new(),..Default::default()}],layout:Value::Null};
   assert!(validate_flow(&f).is_ok());
   f.send_type="announce".into();f.send_color="purple".into();assert!(validate_flow(&f).is_ok());
   f.send_type="letras".into();assert!(validate_flow(&f).is_err());
@@ -178,8 +219,19 @@ pub fn validate_flow(f:&Flow)->Result<(),String> {
   f.audio=uuid::Uuid::new_v4().to_string();f.audio_volume=1.5;assert!(validate_flow(&f).is_err());
   f.audio_volume=0.8;assert!(validate_flow(&f).is_ok());
   f.send_type="shoutout".into();f.actions.clear();assert!(validate_flow(&f).is_err());
-  f.actions.push(Action{kind:"chat".into(),text:"outrocanal".into(),target:String::new(),value:0,condition:String::new()});
+  f.actions.push(Action{kind:"chat".into(),text:"outrocanal".into(),target:String::new(),value:0,condition:String::new(),..Default::default()});
   assert!(validate_flow(&f).is_ok());
   assert_eq!(SEND_TYPES,["chat","announce","pin","shoutout"]);
+ }
+ #[test] fn action_controls_override_or_inherit_the_profile() {
+  let mut ai=AiConfig::default();let mut a=Action::default();
+  assert_eq!(a.anchor(&ai),"all");assert_eq!(a.length(&ai),"");assert!(a.knowledge(&ai));assert!(!a.no_repeat(&ai));
+  ai.anchor="fixed".into();ai.answer_length="short".into();ai.knowledge=false;ai.no_repeat=true;
+  assert_eq!(a.anchor(&ai),"fixed");assert_eq!(a.length(&ai),"short");assert!(!a.knowledge(&ai));assert!(a.no_repeat(&ai));
+  a.ai_anchor="message".into();a.ai_length="free".into();a.ai_knowledge="on".into();a.ai_no_repeat=Some(false);
+  assert_eq!(a.anchor(&ai),"message");assert_eq!(a.length(&ai),"free");assert!(a.knowledge(&ai));assert!(!a.no_repeat(&ai));
+  assert_eq!(ANCHORS,["all","message","chat","fixed"]);
+  assert_eq!(LENGTHS,["short","medium","free"]);
+  assert_eq!(KNOWLEDGE_DEPTHS,["light","standard","full"]);
  }
 }

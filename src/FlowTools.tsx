@@ -34,7 +34,7 @@ export function FlowDialog({flow,mode,profile,notify,onSaved,onClose}:{flow:Flow
   onClose();
  }
  return <Modal wide={editor} title={title} onClose={onClose}>
- {editor?<FlowEditor flow={editing} platform={profile.platform} onSave={save}/>:<form className="form-pad" onSubmit={e=>{e.preventDefault();save(editing).catch(err=>notify(errorText(err)))}}>
+ {editor?<FlowEditor flow={editing} platform={profile.platform} ai={profile.ai} onSave={save}/>:<form className="form-pad" onSubmit={e=>{e.preventDefault();save(editing).catch(err=>notify(errorText(err)))}}>
   <div className="form-grid">
    <Field label="Nome"><input required value={editing.name} onChange={e=>setEditing({...editing,name:e.target.value})}/></Field>
    {mode!=='timer'&&<Field label="Comando"><input required pattern="![^\s]+" value={editing.trigger.pattern} onChange={e=>setEditing({...editing,trigger:{...editing.trigger,pattern:e.target.value}})}/></Field>}

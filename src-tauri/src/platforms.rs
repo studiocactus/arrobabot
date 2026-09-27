@@ -103,6 +103,16 @@ async fn twitch_events(rt:Arc<Runtime>,p:Profile)->Result<(),String>{
  tokio::try_join!(twitch_session(rt.clone(),p.clone(),"bot"),twitch_session(rt,p,"channel"))?;Ok(())
  }else{twitch_session(rt,p,"bot").await}
 }
+/// Lê a categoria atual para o estado da live. Qualquer falha é silenciosa: é só um começo.
+async fn seed_category(rt:&Arc<Runtime>,p:&Profile){
+ let Ok(token)=oauth::token(&rt.http,p,"channel").await else {return};
+ let res=rt.http.get("https://api.twitch.tv/helix/streams").query(&[("user_id",p.channel_id.as_str())]).header("Client-Id",p.client_id.as_str()).bearer_auth(&token).send().await;
+ let Ok(res)=res else {return};
+ if !res.status().is_success(){return;}
+ let Ok(v)=res.json::<Value>().await else {return};
+ let Some(game)=v["data"][0]["game_name"].as_str() else {return};
+ if !game.is_empty(){rt.live.set_category(&p.id,game);rt.log(&p.id,"live",&format!("Categoria atual: {game}"),"info");}
+}
 async fn twitch_session(rt:Arc<Runtime>,p:Profile,account:&str)->Result<(),String>{
  if p.channel_id.is_empty()||p.bot_id.is_empty(){return Err("Autorize as contas do canal e do bot antes de conectar".into())}
  let bot=oauth::token(&rt.http,&p,account).await?;
@@ -118,14 +128,15 @@ async fn twitch_session(rt:Arc<Runtime>,p:Profile,account:&str)->Result<(),Strin
  "session_welcome"=>{
  let session=v["payload"]["session"]["id"].as_str().ok_or("Sessão Twitch inválida")?;
  if account=="bot" {subscribe(&rt,&p,&bot,session,"channel.chat.message","1",json!({"broadcaster_user_id":p.channel_id,"user_id":p.bot_id})).await?;
- rt.status(&p.id,"online");}
+ rt.status(&p.id,"online");seed_category(&rt,&p).await;}
  if account=="channel"{let channel=bot.clone();
  for (kind,version,condition) in [
  ("channel.follow","2",json!({"broadcaster_user_id":p.channel_id,"moderator_user_id":p.channel_id})),
  ("channel.subscribe","1",json!({"broadcaster_user_id":p.channel_id})),
  ("channel.cheer","1",json!({"broadcaster_user_id":p.channel_id})),
  ("channel.raid","1",json!({"to_broadcaster_user_id":p.channel_id})),
- ("channel.channel_points_custom_reward_redemption.add","1",json!({"broadcaster_user_id":p.channel_id}))
+ ("channel.channel_points_custom_reward_redemption.add","1",json!({"broadcaster_user_id":p.channel_id})),
+ ("channel.update","2",json!({"broadcaster_user_id":p.channel_id}))
  ] {
  if let Err(err)=subscribe(&rt,&p,&channel,session,kind,version,condition).await{rt.log(&p.id,"subscription",&format!("{kind}: {err}"),"error");}
  }
@@ -155,16 +166,16 @@ async fn subscribe(rt:&Runtime,p:&Profile,token:&str,session:&str,kind:&str,vers
 pub fn normalize_twitch(p:&Profile,v:&Value)->Option<Event>{
  let payload=&v["payload"]["event"];
  let kind=match v["metadata"]["subscription_type"].as_str()?{
- "channel.chat.message"=>"chat","channel.follow"=>"follow","channel.subscribe"=>"subscription","channel.cheer"=>"cheer","channel.raid"=>"raid","channel.channel_points_custom_reward_redemption.add"=>"redemption",_=>return None};
- let user_id=payload["chatter_user_id"].as_str().or(payload["user_id"].as_str()).or(payload["from_broadcaster_user_id"].as_str()).unwrap_or("");
- if user_id==p.bot_id{return None}
+ "channel.chat.message"=>"chat","channel.follow"=>"follow","channel.subscribe"=>"subscription","channel.cheer"=>"cheer","channel.raid"=>"raid","channel.channel_points_custom_reward_redemption.add"=>"redemption","channel.update"=>"category",_=>return None};
+ let user_id=payload["chatter_user_id"].as_str().or(payload["user_id"].as_str()).or(payload["from_broadcaster_user_id"].as_str()).or(payload["broadcaster_user_id"].as_str()).unwrap_or("");
+ if kind!="category"&&user_id==p.bot_id{return None}
  let mut role="everyone";
  if let Some(badges)=payload["badges"].as_array(){
  for b in badges{if b["set_id"]=="subscriber"{role="subscriber"}}
  for b in badges{if b["set_id"]=="moderator"{role="moderator"}}
  }
  if user_id==p.channel_id{role="broadcaster"}
- Some(Event{id:v["metadata"]["message_id"].as_str()?.into(),profile_id:p.id.clone(),kind:kind.into(),user:payload["chatter_user_name"].as_str().or(payload["user_name"].as_str()).or(payload["from_broadcaster_user_name"].as_str()).unwrap_or("espectador").into(),user_id:user_id.into(),role:role.into(),message:payload["message"]["text"].as_str().or(payload["message"].as_str()).or(payload["user_input"].as_str()).unwrap_or("").into(),data:payload.clone(),simulated:false})
+ Some(Event{id:v["metadata"]["message_id"].as_str()?.into(),profile_id:p.id.clone(),kind:kind.into(),user:payload["chatter_user_name"].as_str().or(payload["user_name"].as_str()).or(payload["from_broadcaster_user_name"].as_str()).or(payload["broadcaster_user_name"].as_str()).unwrap_or("espectador").into(),user_id:user_id.into(),role:role.into(),message:payload["message"]["text"].as_str().or(payload["message"].as_str()).or(payload["user_input"].as_str()).or(payload["category_name"].as_str()).unwrap_or("").into(),data:payload.clone(),simulated:false})
 }
 pub async fn youtube(rt:Arc<Runtime>,p:Profile)->Result<(),String>{
  let token=oauth::token(&rt.http,&p,"bot").await?;
@@ -187,5 +198,22 @@ pub async fn youtube(rt:Arc<Runtime>,p:Profile)->Result<(),String>{
  }}}
  first=false;page=v["nextPageToken"].as_str().unwrap_or("").into();
  tokio::time::sleep(Duration::from_millis(v["pollingIntervalMillis"].as_u64().unwrap_or(5000).max(1000))).await;
+ }
+}
+#[cfg(test)] mod tests {
+ use super::*;
+ fn profile()->Profile {serde_json::from_value(json!({"id":"p","name":"P","platform":"twitch","channel":"thenees","channelId":"123","botId":"456"})).unwrap()}
+ #[test] fn channel_update_tells_the_live_state_which_category_is_on() {
+  let p=profile();
+  let v=json!({"metadata":{"subscription_type":"channel.update","message_id":"m1"},"payload":{"event":{"broadcaster_user_id":"123","broadcaster_user_name":"Thenees","title":"Ranked","category_name":"Counter-Strike 2"}}});
+  let e=normalize_twitch(&p,&v).unwrap();
+  assert_eq!((e.kind.as_str(),e.message.as_str(),e.user.as_str(),e.role.as_str()),("category","Counter-Strike 2","Thenees","broadcaster"));
+  assert_eq!(e.data["category_name"],"Counter-Strike 2");
+  // O canal pode trocar de jogo mesmo quando o bot é a própria conta.
+  let own=json!({"metadata":{"subscription_type":"channel.update","message_id":"m2"},"payload":{"event":{"broadcaster_user_id":"456","broadcaster_user_name":"Streamer","category_name":"Just Chatting"}}});
+  assert_eq!(normalize_twitch(&p,&own).map(|e|e.kind),Some("category".into()));
+  // Mas a fala do próprio bot continua de fora do contexto.
+  let chat=json!({"metadata":{"subscription_type":"channel.chat.message","message_id":"m3"},"payload":{"event":{"chatter_user_id":"456","chatter_user_name":"botinhos","message":{"text":"oi"}}}});
+  assert!(normalize_twitch(&p,&chat).is_none());
  }
 }
