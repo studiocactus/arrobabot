@@ -17,7 +17,7 @@ type Data={label:string;action?:Action;[key:string]:unknown};
 function Section({title,open=false,children}:{title:string;open?:boolean;children:ReactNode}){return <details open={open}><summary>{title}</summary>{children}</details>}
 export default function FlowEditor({flow,platform='twitch',ai,onSave,intro}:{flow:Flow;platform?:string;ai?:AIConfig;onSave:(f:Flow)=>Promise<void>;intro?:string}){
  const [counter,setCounter]=useState(!!flow.counter);const [timerSeconds,setTimerSeconds]=useState(flow.timerSeconds||300);
- const [sendType,setSendType]=useState(flow.sendType||'chat');const [sendColor,setSendColor]=useState(flow.sendColor||'primary');
+ const [sendType,setSendType]=useState(flow.sendType||'chat');const [sendColor,setSendColor]=useState(flow.sendColor||'primary');const [replyTo,setReplyTo]=useState(!!flow.replyTo);
  const [audio,setAudio]=useState(flow.audio||'');const [audioVolume,setAudioVolume]=useState(flow.audioVolume??1);
  const layout=flow.layout as {nodes?:Node<Data>[];edges?:Edge[]}|undefined;
  const startNodes:Node<Data>[]=layout?.nodes||[{id:'trigger',position:{x:60,y:140},data:{label:'⚡ '+(triggers[flow.trigger.kind]||flow.trigger.kind)},type:'input'},...flow.actions.map((action,i)=>({id:'action-'+i,position:{x:340+i*280,y:140},data:{label:actions[action.kind],action}}))];
@@ -28,7 +28,7 @@ export default function FlowEditor({flow,platform='twitch',ai,onSave,intro}:{flo
  const node=nodes.find(n=>n.id===selected);const action=node?.data.action;
  const connect=useCallback((c:Connection)=>setEdges(e=>addEdge({...c,animated:true},e)),[setEdges]);
  function update(a:Action){setNodes(ns=>ns.map(n=>n.id===selected?{...n,data:{label:actions[a.kind],action:a}}:n))}
- async function save(){try{setBusy(true);setError(null);const ordered=orderedActions(nodes,edges);await onSave({...flow,name,trigger:trigger.kind==='timer'?{...trigger,permission:'everyone',cooldown:0,userCooldown:0,pattern:''}:trigger,counter:trigger.kind==='command'&&counter,timerSeconds,sendType,sendColor,audio,audioVolume,actions:ordered,layout:{nodes,edges}})}catch(e){setError(friendlyError(e))}finally{setBusy(false)}}
+ async function save(){try{setBusy(true);setError(null);const ordered=orderedActions(nodes,edges);await onSave({...flow,name,trigger:trigger.kind==='timer'?{...trigger,permission:'everyone',cooldown:0,userCooldown:0,pattern:''}:trigger,counter:trigger.kind==='command'&&counter,timerSeconds,sendType,sendColor,replyTo,audio,audioVolume,actions:ordered,layout:{nodes,edges}})}catch(e){setError(friendlyError(e))}finally{setBusy(false)}}
  return <div className="flow-editor">
  {intro&&<p className="notice flow-intro">{intro}</p>}
  <div className="flow-toolbar"><input aria-label="Nome do fluxo" value={name} onChange={e=>setName(e.target.value)}/><button onClick={()=>{const id=crypto.randomUUID();setNodes(ns=>ns.concat({id,position:{x:300+ns.length*70,y:260},data:{label:actions.chat,action:newAction()}}));setSelected(id)}}><Plus size={16}/>Adicionar ação</button><button className="primary" disabled={busy} onClick={save}><Save size={16}/>Salvar fluxo</button></div>
@@ -47,7 +47,7 @@ export default function FlowEditor({flow,platform='twitch',ai,onSave,intro}:{flo
  <Field label="Evento">
  <select value={trigger.kind} onChange={e=>setTrigger({...trigger,kind:e.target.value})}>{Object.entries(triggers).filter(([k])=>flow.trigger.kind==='timer'?k==='timer':k!=='timer').map(([k,n])=>
  <option key={k} value={k}>{n}</option>)}</select>
- </Field>{['command','contains','voice'].includes(trigger.kind)&&<Field label="Texto que dispara" hint={trigger.kind==='contains'?'Separe várias palavras ou frases com vírgula: o gatilho passa quando uma delas aparece na mensagem.':undefined}>
+ </Field>{['command','contains','voice','mention'].includes(trigger.kind)&&<Field label="Texto que dispara" hint={trigger.kind==='mention'?'Separe os nomes do bot com vírgula: o gatilho passa quando um deles aparece na mensagem, como palavra inteira. Ex.: Arroba, ArrobaSrv, arromba.':trigger.kind==='contains'?'Separe várias palavras ou frases com vírgula: o gatilho passa quando uma delas aparece na mensagem.':undefined}>
  <input value={trigger.pattern} onChange={e=>setTrigger({...trigger,pattern:e.target.value})}/>
  </Field>}{trigger.kind!=='timer'&&<>
  <Field label="Quem pode usar">
@@ -66,7 +66,7 @@ export default function FlowEditor({flow,platform='twitch',ai,onSave,intro}:{flo
  </Field>
  </>}</Section>
  <Section title="Como sai" open>
- <SendPicker platform={platform} value={sendType} color={sendColor} onChange={setSendType} onColor={setSendColor}/>
+ <SendPicker platform={platform} value={sendType} color={sendColor} reply={replyTo} onChange={setSendType} onColor={setSendColor} onReply={setReplyTo}/>
  <AudioPicker profileId={flow.profileId} value={audio} volume={audioVolume} onChange={setAudio} onVolume={setAudioVolume}/>
  </Section>{['command','timer'].includes(trigger.kind)&&<Section title="Comportamento">
  <CommandOptions timer={trigger.kind==='timer'} seconds={timerSeconds} counter={counter} onSeconds={setTimerSeconds} onCounter={setCounter}/>

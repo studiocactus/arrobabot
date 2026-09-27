@@ -46,6 +46,7 @@ Para escrever marcadores literalmente, acrescente uma barra invertida: `\{{user}
 | {{user}} / {{userName}} | Nome exibido de quem disparou |
 | {{userId}} | ID da pessoa informado pelo evento |
 | {{randomViewer}} | Nome sorteado entre quem já falou no chat; ausente se ninguém falou |
+| {{random:min,max}} | Número sorteado na faixa, por exemplo `{{random:1,50}}` ou `{{random:1,50.00}}` |
 | {{role}} | everyone, subscriber, moderator ou broadcaster |
 | {{isModerator}} | true para moderador ou streamer |
 | {{isBroadcaster}} | true para streamer |
@@ -166,6 +167,25 @@ Para uma mensagem longa após o comando, use rawInput em vez de arg0. Exemplo: `
 O cadastro de nomes é preenchido a cada mensagem recebida do chat e é apagado junto com o perfil. Sem ninguém no cadastro, `{{randomViewer}}` é variável ausente e interrompe a ação com a mensagem no Histórico, por isso o `|default:alguém` é recomendável em automações que rodam no começo da live. O nome é sorteado uma vez no início de cada execução: todas as ações do mesmo disparo citam a mesma pessoa e o próximo disparo escolhe outra. Mensagens simuladas não entram no cadastro.
 
 Em mensagens disparadas por uma pessoa, continue usando `{{user}}`, que é o nome de quem falou.
+
+## Receita: sortear um número
+
+`{{random:min,max}}` sortea dentro de uma faixa escrita no próprio marcador. Ele serve para número da vez, premiação, escolha entre opções e qualquer mensagem que precise de um valor aleatório sem variável prévia.
+
+1. Abra **Inserir variável e testar mensagem** e procure **Número sorteado**; a ficha insere `{{random:1,50}}` na mensagem.
+2. Em **Opções**, troque os dois valores da faixa na mão: o código é o único lugar onde a faixa fica definida.
+3. Confira em **Testar como a mensagem vai ficar**: cada conferência sorteia de novo, como acontece ao vivo.
+
+Duas formas são aceitas, e a diferença é só visual:
+
+| Escrito | Sai | Casas decimais |
+|---|---|---|
+| `{{random:1,50}}` | inteiro entre 1 e 50, ambos incluídos, como `17` | nenhuma |
+| `{{random:1,50.00}}` | decimal com vírgula brasileira entre 1 e 50, como `6,65` | as da ponta maior da faixa |
+
+As casas decimais são as do limite da faixa que tiver mais, até quatro; `{{random:1,50.5}}` sai com uma casa (`12,3`). No limite superior o sorteio é inclusivo para inteiros e exclusivo para decimais, como manda a faixa. Na entrada os decimais usam ponto, porque a vírgula separa os dois valores; na saída o separador é sempre vírgula. A faixa vai de -1000000000 a 1000000000 e `min` não pode ser maior que `max`.
+
+O sorteio acontece a cada conferência da prévia e a cada execução real, uma vez por texto renderizado: se a mesma ação usar `{{random:1,50}}` duas vezes, são dois sorteios diferentes. É o caminho para `Escolha: {{random:1,3}}` e para números de sorteio citados no chat.
 
 ## Onde os modelos funcionam
 

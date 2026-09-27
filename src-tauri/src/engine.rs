@@ -87,15 +87,25 @@ impl Runtime {
  if blocked(text,&fresh){return Err("Mensagem bloqueada pelas restrições atuais do perfil".into())}
  // A reply always goes back to the channel the question came from.
  let note=if kind=="chat" {None}else{Some("Anúncio, fixação e destaque valem só para o chat da Twitch: publicado como mensagem comum.")};
+ // Responder à pessoa: a Twitch prende a mensagem no fio de quem falou e o Discord
+ // cita a original. Quem não tem essa API avisa no Histórico e envia a mensagem comum.
+ let want_reply=f.map(|f|f.reply_to).unwrap_or(false)&&kind=="chat";
+ let mut reply=String::new();let mut reply_note:Option<String>=None;
+ if want_reply {
+  if crate::discord::from_discord(e).is_some(){reply=e.data["discord"]["id"].as_str().unwrap_or("").to_owned();}
+  else if fresh.platform=="twitch"{reply=e.data["message_id"].as_str().unwrap_or("").to_owned();}
+  else {let who=if fresh.platform=="kick"{"O Kick"}else if fresh.platform=="youtube"{"O YouTube"}else{"Esta plataforma"};reply_note=Some(format!("{who} não tem resposta direcionada: a mensagem saiu sem o fio de quem falou."));}
+ }
  if let Some(channel)=crate::discord::from_discord(e){
   if crate::discord::config(self,&fresh.id)["enabled"]!=true{return Err("O bot do Discord está desativado".into())}
   if channel.is_empty(){return Err("O Discord não informou o canal de origem".into())}
-  crate::discord::post(self,&fresh,&channel,text).await?;
+  if reply.is_empty(){crate::discord::post(self,&fresh,&channel,text).await?;}else{crate::discord::post_reply(self,&fresh,&channel,text,Some(&reply)).await?;}
   if let Some(note)=note{self.log(&p.id,"discord",note,"info");}
  }else{
-  platforms::send_as(self,&fresh,text,kind,color).await?;
+  platforms::send_as(self,&fresh,text,kind,color,if reply.is_empty(){None}else{Some(reply.as_str())}).await?;
   if kind!="chat"&&fresh.platform!="twitch"{if let Some(note)=note{self.log(&p.id,"chat",note,"info");}}
  }
+ if let Some(note)=reply_note{self.log(&p.id,"chat",&note,"info");}
  *last=Instant::now();
  self.conversation.lock().unwrap().sent(&p.id,text);
  self.log(&p.id,"chat",text,"success");Ok(())
@@ -174,6 +184,7 @@ async fn action(rt:&Arc<Runtime>,p:&Profile,e:&Event,a:&Action,variables:&mut cr
   live:rt.live.summary(&p.id),
   anchor:a.anchor(&p.ai).to_owned(),length:a.length(&p.ai).to_owned(),
   no_repeat:a.no_repeat(&p.ai),style:a.ai_style.clone(),
+  emotes:crate::emotes::list(&rt.db,&p.id),
  };
  let (output,success)=match ai::conversation(&rt.http,&rt.base,p,e,&text,history,&opts).await{
  Ok(answer)=>(answer,true),Err(err)=>{ai::save_response(variables,rt,p,e,a,"",false)?;return Err(err)}

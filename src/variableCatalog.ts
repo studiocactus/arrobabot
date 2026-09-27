@@ -6,6 +6,7 @@ export const variableCatalog:VariableChoice[]=[
  {key:'user',label:'Nome da pessoa',group:'Pessoa',example:'Ana'},
  {key:'userId',label:'Identificador da pessoa',group:'Pessoa'},
  {key:'randomViewer',label:'Nome sorteado no chat',group:'Pessoa',example:'Ana'},
+ {key:'random:1,50',label:'Número sorteado',group:'Execução',example:'17'},
  {key:'role',label:'Papel no chat',group:'Pessoa',example:'subscriber'},
  {key:'isModerator',label:'É moderador ou streamer?',group:'Pessoa'},
  {key:'isBroadcaster',label:'É o streamer?',group:'Pessoa'},
@@ -33,8 +34,11 @@ export const variableCatalog:VariableChoice[]=[
  {key:'lf',label:'Quebra de linha',group:'Mensagem'},
 ];
 export const scopeNames:Record<string,string>={local:'Só nesta execução',global:'Salva no perfil',user:'Salva por pessoa',session:'Perfil, até fechar o app',sessionUser:'Pessoa, até fechar o app',data:'Dados do evento'};
+// `random:min,max` traz a faixa dentro do próprio código, por isso não é um nome de variável.
+const drawKey=/^random:\s*-?\d{1,10}(\.\d{1,4})?\s*,\s*-?\d{1,10}(\.\d{1,4})?\s*$/;
 export function variableLabel(key:string){
  if(key==='userName')return 'Nome da pessoa';
+ if(key.startsWith('random:'))return 'Número sorteado';
  const builtin=variableCatalog.find(v=>v.key===key);if(builtin)return builtin.label;
  const [scope,...path]=key.split('.');return scopeNames[scope]?path.join('.')+' · '+scopeNames[scope]:key;
 }
@@ -43,7 +47,7 @@ export function insertVariable(text:string,token:string,start:number,end:number)
  return {text:text.slice(0,a)+token+text.slice(b),caret:a+token.length};
 }
 export function makeVariableToken(key:string,fallback:string,format:string){
- if(!/^[A-Za-z_][A-Za-z0-9_.]*$/.test(key))throw Error('Escolha uma variável válida.');
+ if(!(drawKey.test(key)||/^[A-Za-z_][A-Za-z0-9_.]*$/.test(key)))throw Error('Escolha uma variável válida.');
  if(/[|{}]/.test(fallback))throw Error('O texto alternativo não pode conter barras verticais ou chaves.');
  if(!['','upper','lower','trim','number:0','number:2','length'].includes(format))throw Error('Formato inválido.');
  return '{{'+key+(fallback?'|default:'+fallback:'')+(format?'|'+format:'')+'}}';

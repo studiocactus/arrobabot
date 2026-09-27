@@ -10,10 +10,10 @@ pub fn save_response(c:&mut crate::variables::Context,rt:&crate::engine::Runtime
 }
 /// O que uma ação pede da resposta: onde ela se ancora, quanto cabe e se a base entra.
 #[derive(Clone,Default)]
-pub struct Options { pub knowledge:String, pub live:String, pub anchor:String, pub length:String, pub no_repeat:bool, pub style:String }
+pub struct Options { pub knowledge:String, pub live:String, pub anchor:String, pub length:String, pub no_repeat:bool, pub style:String, pub emotes:String }
 impl Options {
  pub fn defaults(p:&Profile)->Self {
-  Self{knowledge:String::new(),live:String::new(),anchor:if p.ai.anchor.is_empty(){"all".into()}else{p.ai.anchor.clone()},length:p.ai.answer_length.clone(),no_repeat:p.ai.no_repeat,style:String::new()}
+  Self{knowledge:String::new(),live:String::new(),anchor:if p.ai.anchor.is_empty(){"all".into()}else{p.ai.anchor.clone()},length:p.ai.answer_length.clone(),no_repeat:p.ai.no_repeat,style:String::new(),emotes:String::new()}
  }
 }
 /// Tamanho pedido → limite de tokens do modelo e de caracteres da resposta final.
@@ -58,6 +58,7 @@ fn request_text(e:&Event,history:&[Value],instruction:&str,opts:&Options)->(Stri
  let mut rules=format!("{}\n{}",anchor_text(&opts.anchor),RULES);
  if opts.no_repeat { rules.push_str("\nEvite repetir as respostas em alreadySaid, inclusive suas aberturas e piadas. Acrescente algo à conversa."); }
  if !opts.style.trim().is_empty() { rules.push_str(&format!("\nTom deste bloco: {}",opts.style.trim())); }
+ if !opts.emotes.trim().is_empty() { rules.push_str(&format!("\nEmotes liberados neste chat: {}. Use no máximo um emote por resposta, só onde ele combinar com a frase, e deixe a maioria das respostas sem emote. Nunca coloque emote no meio de uma palavra nem cite o nome do emote como texto.",opts.emotes.trim())); }
  match opts.length.as_str() {
   "short"=>rules.push_str("\nResponda em uma frase só, no máximo 120 caracteres."),
   "medium"=>rules.push_str("\nResponda em no máximo 300 caracteres."),
@@ -227,7 +228,7 @@ async fn generate_with_instruction(client:&reqwest::Client,p:&Profile,prompt:&st
   let e:Event=serde_json::from_value(json!({"id":"1","profileId":"a","kind":"chat","user":"Ana","message":"boa jogada"})).unwrap();
   let history=json!([{"person":"Ana","message":"boa jogada"},{"person":"Bot","message":"vlw"}]);
   let history:Vec<Value>=history.as_array().unwrap().clone();
-  let opts=Options{anchor:"message".into(),length:"short".into(),no_repeat:true,style:"gírias do chat".into(),knowledge:"k".into(),live:String::new()};
+  let opts=Options{anchor:"message".into(),length:"short".into(),no_repeat:true,style:"gírias do chat".into(),knowledge:"k".into(),live:String::new(),emotes:"Kappa, LUL".into()};
   let (prompt,rules)=request_text(&e,&history,"Faça uma resenha",&opts);
   assert!(prompt.contains("alreadySaid"),"o que o bot já disse entra no pedido");
   assert!(rules.starts_with("Foque em currentMessage"));
@@ -236,7 +237,17 @@ async fn generate_with_instruction(client:&reqwest::Client,p:&Profile,prompt:&st
   let (_,all)=request_text(&e,&history,"x",&Options{anchor:"all".into(),..Options::default()});
   assert!(all.starts_with("Responda diretamente à mensagem atual"));
  }
- #[test] fn repetition_context_uses_latest_six_bot_replies(){
+ #[test] fn emote_rule_reaches_the_prompt_only_when_there_are_emotes(){
+  let e:Event=serde_json::from_value(json!({"id":"1","profileId":"a","kind":"chat","user":"Ana","message":"boa jogada"})).unwrap();
+  let history:Vec<Value>=vec![];
+  let (_,with)=request_text(&e,&history,"x",&Options{emotes:"Kappa, LUL".into(),..Default::default()});
+  assert!(with.contains("Emotes liberados neste chat: Kappa, LUL"));
+  assert!(with.contains("máximo um emote por resposta"),"a regra segura o uso a um emote");
+  assert!(with.contains("maioria das respostas sem emote"),"nem toda resposta leva emote");
+  let (_,without)=request_text(&e,&history,"x",&Options::default());
+  assert!(!without.contains("Emotes liberados"),"sem lista buscada, a regra não aparece");
+ }
+ fn repetition_context_uses_latest_six_bot_replies(){
   let e:Event=serde_json::from_value(json!({"id":"1","profileId":"a","kind":"chat","user":"Ana","message":"oi"})).unwrap();
   let history:Vec<Value>=(0..9).map(|i|json!({"person":"Bot","message":format!("resposta-{i}")})).collect();
   let (prompt,rules)=request_text(&e,&history,"x",&Options{no_repeat:true,..Default::default()});

@@ -60,6 +60,29 @@ fn add(a: Value, b: Value) -> R<Value> {
 pub fn typed(text: &str) -> Value { serde_json::from_str(text).unwrap_or_else(|_|json!(text)) }
 pub fn display(value: &Value) -> String { match value { Value::String(s)=>s.clone(), Value::Null=>String::new(), _=>value.to_string() } }
 
+/// Sorteio dentro de uma faixa: `{{random:1,50}}` sai inteiro e `{{random:1,50.00}}`
+/// sai com centavos em vírgula (6,65), como se escreve no Brasil. As casas decimais
+/// são as do limite da faixa que tem mais casas, e a vírgula é o separador da lista,
+/// por isso os decimais se escrevem com ponto na entrada.
+const FAIXA: &str = "Use random:min,max, por exemplo random:1,50 ou random:1,50.00";
+fn decimals(text: &str) -> usize { text.split_once('.').map(|(_, d)| d.len()).unwrap_or(0) }
+fn draw(key: &str) -> R<String> {
+    use rand::Rng;
+    let spec = key.strip_prefix("random:").ok_or_else(|| FAIXA.to_owned())?;
+    let mut parts = spec.split(',').map(str::trim);
+    let (Some(min), Some(max), None) = (parts.next(), parts.next(), parts.next()) else { return Err(FAIXA.into()); };
+    let a: f64 = min.parse().map_err(|_| FAIXA.to_owned())?;
+    let b: f64 = max.parse().map_err(|_| FAIXA.to_owned())?;
+    if !a.is_finite() || !b.is_finite() { return Err(FAIXA.into()); }
+    if a > b { return Err("A faixa começa no maior valor: use random:min,max".into()); }
+    if a.abs() > 1e9 || b.abs() > 1e9 { return Err("Faixa de random muito grande: use valores até 1000000000".into()); }
+    let digits = decimals(min).max(decimals(max));
+    if digits > 4 { return Err("Use no máximo quatro casas decimais na faixa".into()); }
+    if digits == 0 { return Ok(rand::thread_rng().gen_range(a as i64..=b as i64).to_string()); }
+    let n = if a == b { a } else { rand::thread_rng().gen_range(a..b) };
+    Ok(format!("{:.1$}", n, digits).replace('.', ","))
+}
+
 /// Nomes simples que existiram com cifrão antes da unificação em `{{...}}`.
 const LEGACY:[&str;28]=["user","userName","userId","role","message","channel","channelId","platform","profileId","profileName","eventId","eventType","isModerator","isBroadcaster","isSubscriber","simulated","date","time","unixtime","lf","randomViewer","command","rawInput","args","argCount","commandCount","actionId","actionName"];
 fn legacy(name:&str) -> bool { LEGACY.contains(&name) || name.strip_prefix("arg").is_some_and(|n|!n.is_empty()&&n.bytes().all(|b|b.is_ascii_digit())) }
@@ -123,7 +146,8 @@ impl Context {
     }
     fn expression(&self, expr: &str) -> R<String> {
         let mut parts=expr.split('|').map(str::trim); let key=parts.next().unwrap_or("");
-        let mut value=self.lookup(key);
+        // `random:min,max` é sorteado a cada uso, por isso não vem do cadastro de valores.
+        let mut value=if key.starts_with("random:"){Some(json!(draw(key)?))}else{self.lookup(key)};
         for filter in parts {
             let (name,param)=filter.split_once(':').unwrap_or((filter,""));
             if name=="default" {if value.as_ref().map_or(true,|v|v.is_null()||v.as_str()==Some("")){value=Some(json!(param));}continue;}
@@ -156,5 +180,29 @@ impl Context {
             if out.len()>LIMIT {return Err("Resultado ultrapassa 64 KiB".into());}
         }
         Ok(out)
+    }
+}
+#[cfg(test)] mod tests {
+    use super::*;
+    #[test] fn random_stays_inside_the_range_and_writes_decimals_with_a_comma(){
+        assert_eq!(draw("random:7,7").unwrap(),"7","faixa de um valor só entrega o próprio valor");
+        assert_eq!(draw("random:7.00,7.00").unwrap(),"7,00","as casas da faixa definem o formato");
+        assert_eq!(draw("random:7.0,7.0").unwrap(),"7,0","uma casa na faixa, uma casa na saída");
+        assert_eq!(draw("random:-5,-5").unwrap(),"-5");
+        for _ in 0..300 {
+            let n:u32=draw("random:1,50").unwrap().parse().expect("inteiro sem casa decimal");
+            assert!((1..=50).contains(&n));
+            let money=draw("random:1,50.00").unwrap();
+            let (whole,cents)=money.split_once(',').expect("vírgula decimal na saída");
+            assert_eq!(cents.len(),2,"duas casas: {money}");
+            let value=whole.parse::<i32>().unwrap()*100+cents.parse::<i32>().unwrap();
+            assert!((100..=5000).contains(&value),"fora da faixa: {money}");
+        }
+    }
+    #[test] fn random_explains_a_bad_range_instead_of_sending_a_hole(){
+        for bad in ["random","random:","random:50,1","random:a,b","random:1,50,2","random:1,,50","random:1,1e12","random:1,50.00000"] {
+            assert!(draw(bad).is_err(),"aceitaria {bad}");
+        }
+        assert!(draw("random:1,50").is_ok());
     }
 }

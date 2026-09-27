@@ -3,18 +3,19 @@ use serde_json::{json,Value};
 use std::{sync::Arc,time::Duration};
 use futures_util::{StreamExt,SinkExt};
 use tokio_tungstenite::{connect_async,tungstenite::Message};
-pub async fn send(rt:&Runtime,p:&Profile,text:&str)->Result<(),String>{send_as(rt,p,text,"chat","primary").await}
+pub async fn send(rt:&Runtime,p:&Profile,text:&str)->Result<(),String>{send_as(rt,p,text,"chat","primary",None).await}
 /// Publica no chat. Em Twitch aceita chat, announce (anúncio), pin (mensagem fixada) e shoutout (destaque de canal).
-pub async fn send_as(rt:&Runtime,p:&Profile,text:&str,kind:&str,color:&str)->Result<(),String>{
+/// `reply` prende a mensagem normal no fio da que disparou; os demais envios não têm fio.
+pub async fn send_as(rt:&Runtime,p:&Profile,text:&str,kind:&str,color:&str,reply:Option<&str>)->Result<(),String>{
  let kind=if SEND_TYPES.contains(&kind){kind}else{"chat"};
  let color=if SEND_COLORS.contains(&color){color}else{"primary"};
  let text:String=text.chars().take(450).collect();
  if p.platform!="twitch"{return plain(rt,p,&text).await}
  match kind {
   "announce"=>announce(rt,p,&text,color).await,
-  "pin"=>{let token=oauth::token(&rt.http,p,"bot").await?;chat_message(rt,p,&token,&text,true).await},
+  "pin"=>{let token=oauth::token(&rt.http,p,"bot").await?;chat_message(rt,p,&token,&text,true,None).await},
   "shoutout"=>shoutout(rt,p,&text).await,
-  _=>{let token=oauth::token(&rt.http,p,"bot").await?;chat_message(rt,p,&token,&text,false).await}
+  _=>{let token=oauth::token(&rt.http,p,"bot").await?;chat_message(rt,p,&token,&text,false,reply).await}
  }
 }
 fn refused(kind:&str,status:u16)->String{
@@ -25,9 +26,16 @@ fn refused(kind:&str,status:u16)->String{
   _=>format!("{kind} recusado: HTTP {status}. Confira autorização e permissões.")
  }
 }
-async fn chat_message(rt:&Runtime,p:&Profile,token:&str,text:&str,pin:bool)->Result<(),String>{
+/// Corpo do envio de chat da Twitch. `reply_parent_message_id` é o que faz a resposta
+/// abrir no fio da mensagem que disparou.
+fn chat_body(p:&Profile,text:&str,pin:bool,reply:Option<&str>)->Value{
  let mut body=json!({"broadcaster_id":p.channel_id,"sender_id":p.bot_id,"message":text});
  if pin {body["pin"]=json!(true);}
+ if let Some(id)=reply.filter(|id|!id.is_empty()){body["reply_parent_message_id"]=json!(id);}
+ body
+}
+async fn chat_message(rt:&Runtime,p:&Profile,token:&str,text:&str,pin:bool,reply:Option<&str>)->Result<(),String>{
+ let body=chat_body(p,text,pin,reply);
  let res=rt.http.post("https://api.twitch.tv/helix/chat/messages").header("Client-Id",&p.client_id).bearer_auth(token).json(&body).send().await.map_err(|_|"Não foi possível enviar a mensagem")?;
  if !res.status().is_success(){
   let status=res.status().as_u16();
@@ -99,6 +107,8 @@ pub async fn twitch(rt:Arc<Runtime>,p:Profile)->Result<(),String>{
  tokio::select!{result=twitch_events(rt.clone(),p.clone())=>result,_=crate::presence::run(rt,p)=>Ok(())}
 }
 async fn twitch_events(rt:Arc<Runtime>,p:Profile)->Result<(),String>{
+ // Os emotes da IA entram junto da conexão: a busca não atrasa o chat nem cada resposta.
+ {let rt=rt.clone();let p=p.clone();tokio::spawn(async move{crate::emotes::refresh(&rt,&p).await});}
  if crate::secrets::get(&p.id,"channel_token").is_ok() {
  tokio::try_join!(twitch_session(rt.clone(),p.clone(),"bot"),twitch_session(rt,p,"channel"))?;Ok(())
  }else{twitch_session(rt,p,"bot").await}
@@ -203,6 +213,16 @@ pub async fn youtube(rt:Arc<Runtime>,p:Profile)->Result<(),String>{
 #[cfg(test)] mod tests {
  use super::*;
  fn profile()->Profile {serde_json::from_value(json!({"id":"p","name":"P","platform":"twitch","channel":"thenees","channelId":"123","botId":"456"})).unwrap()}
+ #[test] fn chat_body_keeps_the_reply_thread_only_when_asked(){
+  let p=profile();
+  let body=chat_body(&p,"Valeu demais!",false,Some("msg-9"));
+  assert_eq!(body["reply_parent_message_id"],"msg-9");
+  assert_eq!(body["message"],"Valeu demais!");
+  assert_eq!(body["sender_id"],"456");
+  assert!(chat_body(&p,"Valeu!",false,None).get("reply_parent_message_id").is_none());
+  assert!(chat_body(&p,"Valeu!",false,Some("")).get("reply_parent_message_id").is_none(),"id vazio não abre fio");
+  assert_eq!(chat_body(&p,"Valeu!",true,None)["pin"],true);
+ }
  #[test] fn channel_update_tells_the_live_state_which_category_is_on() {
   let p=profile();
   let v=json!({"metadata":{"subscription_type":"channel.update","message_id":"m1"},"payload":{"event":{"broadcaster_user_id":"123","broadcaster_user_name":"Thenees","title":"Ranked","category_name":"Counter-Strike 2"}}});

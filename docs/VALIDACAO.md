@@ -1,5 +1,20 @@
 # Registro de validação
 
+## Atualização 0.1.17
+
+Compilação TypeScript/Vite, 25 testes Vitest, 18 cenários Playwright, 86 testes Rust e oito testes dos scripts de atualização aprovados. A entrega é composta por quatro funções independentes: a variável `{{random:min,max}}`, a opção **Responder a quem enviou**, o gatilho **Chamada pelo nome do bot** com campo de lista por vírgula e área que cresce com o texto, e os emotes da Twitch nas respostas da IA.
+
+Verificações desta versão:
+
+- Núcleo Rust: 86 testes aprovados, sendo novos os três do módulo de emotes (`keeps_channel_emotes_first_and_never_repeats`, `stops_at_the_prompt_limit` e `cache_roundtrip_reads_back_what_was_stored`), os dois do sorteio em `variables.rs` (`random_stays_inside_the_range_and_writes_decimals_with_a_comma` e `random_explains_a_bad_range_instead_of_sending_a_hole`), os dois do gatilho em `model.rs` (`mention_trigger_waits_for_one_of_the_bot_names` e `mention_preview_calls_the_bot_and_the_flow_needs_a_name`), a regra de emote em `ai.rs`, o fio da resposta em `platforms.rs`, a citação no Discord, e as asserções de `{{random:3,3}}` e `{{random:3.0,3.0}}` em `variable_templates_are_single_pass_bounded_and_typed`.
+- Interface: 18 cenários Playwright aprovados, sendo 4 novos em `tests/ui/random-reply-mention.spec.ts`: ficha **Número sorteado** que insere `{{random:1,50}}` e mostra em **Opções** a explicação da faixa no lugar de alternativa e formato; gatilho **Chamada pelo nome do bot** presente na lista, com a dica de lista por vírgula e palavra inteira, e **Responder à pessoa que enviou** que sobrevive a salvar e reabrir; o mesmo interruptor no comando simples, também persistido; e o quadro **Como a IA deve responder** que cresce com o texto e para no teto de 42vh.
+- `npm run check` (TypeScript) e `npm run test`: 25 testes Vitest aprovados, incluindo o do catálogo de variáveis para a ficha de sorteio.
+- Scripts de atualização: 8 testes aprovados e `npm run update:check` aprovado com as notas 0.1.17.
+- `npm run build` (tsc + Vite) e `npm run docs` aprovados; manual HTML regerado com os capítulos 03, 04 e 08 e `docs/VARIAVEIS.md` atualizados.
+- Em uma das três execuções da suíte completa o cenário antigo `app.spec.ts` "catálogo de variáveis insere marcador e informa limite da prévia web" falhou por corrida entre o preenchimento do campo **Resposta** e a inserção da ficha; ele passou isolado e nas outras duas execuções completas, sem alteração de código entre elas. O fato está registrado aqui e nas notas da versão.
+
+Sem contas OAuth configuradas nesta validação não houve envio real de chat, destaque, anúncio nem leitura de emotes da Twitch: o módulo de emotes foi comprovado pela composição da lista e pela persistência no perfil (testes unitários), o que não equivale à homologação da API da Twitch em canal ao vivo. A resposta direcionada foi verificada na persistência do fluxo; o fio real no chat depende da autorização vigente. Os registros abaixo descrevem verificações históricas das versões anteriores.
+
 ## Atualização 0.1.16
 
 Compilação TypeScript/Vite, 24 testes Vitest, 14 cenários Playwright, 77 testes Rust e oito testes dos scripts de atualização aprovados. A entrega corrige a IA das Automações: o caminho da chamada passa a ser montado pelo provedor para não duplicar o endereço, o erro passa a dizer qual é a ação (404 aponta o endereço usado, 401 e 403 a chave, 429 o limite), texto de análise é recusado antes de ir para o chat, o caso de modelo que gasta os tokens raciocinando ganha aviso próprio, o orçamento de tokens aumenta para os modelos que pensam antes de responder, o gatilho Mensagem contém aceita lista separada por vírgula e a marca no topo esquerdo passa a ser BotLive.
