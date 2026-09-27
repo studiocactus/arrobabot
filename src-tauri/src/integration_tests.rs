@@ -187,7 +187,7 @@ async fn ai_answer_uses_live_state_base_and_per_action_controls(){
 }
 fn profile(name:&str)->Profile{Profile{id:uuid::Uuid::new_v4().to_string(),name:name.into(),platform:"twitch".into(),channel:name.into(),channel_id:"123".into(),bot_id:"456".into(),client_id:"client".into(),blocklist:vec!["proibido".into()],topics:vec![],editors:vec![],ai:AiConfig::default(),modules:json!({"points":true,"raffles":true,"predictions":true,"queue":true})}}
 fn event(p:&Profile,text:&str,simulated:bool)->Event{Event{id:uuid::Uuid::new_v4().to_string(),profile_id:p.id.clone(),kind:"chat".into(),user:"Ana".into(),user_id:"ana".into(),role:"everyone".into(),message:text.into(),data:Value::Null,simulated}}
-fn flow(p:&Profile)->Flow{Flow{counter:false,timer_seconds:300,audio:String::new(),audio_volume:1.0,send_type:"chat".into(),send_color:"primary".into(),id:uuid::Uuid::new_v4().to_string(),profile_id:p.id.clone(),name:"Teste".into(),enabled:true,trigger:Trigger{kind:"command".into(),pattern:"!oi".into(),permission:"everyone".into(),cooldown:5,user_cooldown:5},actions:vec!["Um $user","Dois","Três"].into_iter().map(|s|Action{kind:"chat".into(),text:s.into(),target:"".into(),value:0,condition:"".into(),..Default::default()}).collect(),layout:Value::Null}}
+fn flow(p:&Profile)->Flow{Flow{counter:false,timer_seconds:300,audio:String::new(),audio_volume:1.0,send_type:"chat".into(),send_color:"primary".into(),reply_to:false,id:uuid::Uuid::new_v4().to_string(),profile_id:p.id.clone(),name:"Teste".into(),enabled:true,trigger:Trigger{kind:"command".into(),pattern:"!oi".into(),permission:"everyone".into(),cooldown:5,user_cooldown:5},actions:vec!["Um $user","Dois","Três"].into_iter().map(|s|Action{kind:"chat".into(),text:s.into(),target:"".into(),value:0,condition:"".into(),..Default::default()}).collect(),layout:Value::Null}}
 #[tokio::test]
 async fn ordered_execution_cooldown_filter_and_isolation(){
  let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();let p=profile("Canal A");let b=profile("Canal B");rt.db.save_profile(&p).unwrap();rt.db.save_profile(&b).unwrap();
@@ -348,6 +348,8 @@ async fn variable_templates_are_single_pass_bounded_and_typed(){
  assert_eq!(c.render("{{missing|default:amigo|upper}} {{arg0|length}}").unwrap(),"AMIGO 4");
  assert_eq!(c.render(r"\{{user}} \$user \%userName%").unwrap(),"{{user}} $user %userName%");
  assert!(c.render("{{missing}}").is_err());assert!(c.render("{{user|unsupported}}").is_err());assert!(c.render("{{user").is_err());assert!(c.render("{{arg1|number:7}}").is_err());
+ assert_eq!(c.render("{{random:3,3}}").unwrap(),"3","o sorteio passa pelo mesmo caminho das demais variáveis");
+ assert!(c.render("R$ {{random:3.0,3.0}}").unwrap().starts_with("R$ 3,0"),"centavos em vírgula no meio da frase");
  assert!(c.render(&"x".repeat(65537)).is_err());
 }
 #[test]

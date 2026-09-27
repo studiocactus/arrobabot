@@ -45,6 +45,8 @@ pub struct Flow {
  #[serde(default="full_volume")] pub audio_volume:f64,
  #[serde(default="send_chat")] pub send_type:String,
  #[serde(default="send_primary")] pub send_color:String,
+ /// Responde no fio de quem disparou: reply na Twitch, citação no Discord.
+ #[serde(default)] pub reply_to:bool,
  pub id:String, pub profile_id:String, pub name:String, pub enabled:bool,
  pub trigger:Trigger, pub actions:Vec<Action>,
  #[serde(default)] pub layout:Value,
@@ -136,6 +138,7 @@ pub fn matches(t:&Trigger,e:&Event)->bool {
  "timer"=>false, // Only the internal scheduler can execute periodic flows.
  "command"=>e.kind=="chat" && e.message.split_whitespace().next().is_some_and(|s| s.eq_ignore_ascii_case(&t.pattern)),
  "contains"=>e.kind=="chat" && contains_any(&t.pattern,&e.message),
+ "mention"=>e.kind=="chat" && mention_any(&t.pattern,&e.message),
  "voice"=>e.kind=="voice" && (t.pattern.is_empty()||e.message.to_lowercase().contains(&t.pattern.to_lowercase())),
  other=>other==e.kind,
  }
@@ -146,6 +149,25 @@ fn contains_any(pattern:&str,message:&str)->bool {
  if pattern.trim().is_empty() { return false; }
  let text=message.to_lowercase();
  pattern.split(',').map(str::trim).any(|alt|!alt.is_empty()&&text.contains(&alt.to_lowercase()))
+}
+/// "Chamada pelo nome do bot": dispara quando um dos nomes da lista aparece como
+/// palavra inteira. Sem a barreira de palavra, "arromba" dispararia dentro de
+/// "arrombado"; com ela, "@Arroba", "ArrobaSrv," e "chama o arromba" continuam passando.
+fn mention_any(pattern:&str,message:&str)->bool {
+ if pattern.trim().is_empty() { return false; }
+ let text=message.to_lowercase();
+ pattern.split(',').map(str::trim).filter(|n|!n.is_empty()).any(|n| {
+  let name=n.to_lowercase();
+  let mut from=0;
+  while let Some(at)=text[from..].find(&name) {
+   let start=from+at;let end=start+name.len();
+   let before=text[..start].chars().next_back().is_none_or(|c|!c.is_alphanumeric());
+   let after=text[end..].chars().next().is_none_or(|c|!c.is_alphanumeric());
+   if before&&after { return true; }
+   from=end;
+  }
+  false
+ })
 }
 /// Primeira opção da lista: é ela que a prévia usa para simular o gatilho.
 fn first_option(pattern:&str)->&str {
@@ -168,6 +190,14 @@ pub fn preview_event(f:&Flow,e:Event)->Event {
    else{format!("{} {}",e.message.trim(),alt)};
   Event{kind:"chat".into(),message,..e}
  },
+ // A prévia chama o bot pelo nome antes da fala, como faria um espectador.
+ "mention" if !f.trigger.pattern.is_empty()=>{
+  let alt=first_option(&f.trigger.pattern);
+  let message=if e.message.to_lowercase().contains(&alt.to_lowercase()){e.message}
+   else if e.message.trim().is_empty(){alt.to_owned()}
+   else{format!("{} {}",alt,e.message.trim())};
+  Event{kind:"chat".into(),message,..e}
+ },
  kind=>Event{kind:kind.into(),..e},
  }
 }
@@ -179,6 +209,7 @@ pub fn validate_flow(f:&Flow)->Result<(),String> {
  if !["everyone","subscriber","moderator","broadcaster"].contains(&f.trigger.permission.as_str()) {return Err("Permissão inválida".into())}
  if f.trigger.cooldown>86400||f.trigger.user_cooldown>86400{return Err("Cooldown máximo: 24 horas".into())}
  if f.trigger.kind=="command" && (!f.trigger.pattern.starts_with('!')||f.trigger.pattern.contains(char::is_whitespace)) {return Err("O comando deve começar com ! e não conter espaços".into())}
+ if f.trigger.kind=="mention" && f.trigger.pattern.trim().is_empty() {return Err("Informe pelo menos um nome do bot, separados por vírgula".into())}
  if !SEND_TYPES.contains(&f.send_type.as_str()){return Err("Forma de envio inválida".into())}
  if !SEND_COLORS.contains(&f.send_color.as_str()){return Err("Cor do anúncio inválida".into())}
  if f.send_type=="shoutout"&&!needs_message(f){return Err("O destaque de canal usa o texto de uma ação que envia mensagem: escreva ali o canal de destino".into())}
@@ -207,7 +238,7 @@ pub fn validate_flow(f:&Flow)->Result<(),String> {
  assert!(permitted("moderator","broadcaster"));assert!(!permitted("broadcaster","moderator"));
  }
  #[test] fn preview_event_follows_the_trigger() {
-  let mut f=Flow{counter:false,timer_seconds:300,audio:String::new(),audio_volume:1.0,send_type:"chat".into(),send_color:"primary".into(),id:"f".into(),profile_id:"p".into(),name:"Minecraft".into(),enabled:true,trigger:Trigger{kind:"timer".into(),pattern:String::new(),permission:"everyone".into(),cooldown:0,user_cooldown:0},actions:vec![],layout:Value::Null};
+  let mut f=Flow{counter:false,timer_seconds:300,audio:String::new(),audio_volume:1.0,send_type:"chat".into(),send_color:"primary".into(),reply_to:false,id:"f".into(),profile_id:"p".into(),name:"Minecraft".into(),enabled:true,trigger:Trigger{kind:"timer".into(),pattern:String::new(),permission:"everyone".into(),cooldown:0,user_cooldown:0},actions:vec![],layout:Value::Null};
   let t=preview_event(&f,e());
   assert_eq!((t.kind.as_str(),t.user.as_str(),t.user_id.as_str(),t.message.as_str(),t.simulated),("timer","BotLive","","",true));
   f.trigger.kind="command".into();f.trigger.pattern="!minecraft".into();
@@ -233,8 +264,25 @@ pub fn validate_flow(f:&Flow)->Result<(),String> {
   m.message="agora é pix".into();t.pattern="pix".into();assert!(matches(&t,&m),"sem vírgula continua sendo um trecho só");
   t.pattern.clear();assert!(!matches(&t,&m));
  }
+ #[test] fn mention_trigger_waits_for_one_of_the_bot_names() {
+  let mut t=Trigger{kind:"mention".into(),pattern:"Arroba, ArrobaSrv, arromba".into(),permission:"everyone".into(),cooldown:0,user_cooldown:0};
+  let mut m=e();
+  m.message="Arroba, chega aí".into();assert!(matches(&t,&m));
+  m.message="@arrobasrv bora jogar".into();assert!(matches(&t,&m),"maiúsculas e arroba do Twitter não atrapalham");
+  m.message="ArrobaSrv mandou salve".into();assert!(matches(&t,&m));
+  m.message="que arrombado, hein".into();assert!(!matches(&t,&m),"só palavra inteira: arromba não entra em arrombado");
+  m.message="só conversa por aqui".into();assert!(!matches(&t,&m));
+  t.pattern.clear();assert!(!matches(&t,&m),"lista vazia não dispara nada");
+  t.pattern="arromba".into();m.kind="follow".into();assert!(!matches(&t,&m),"só mensagem de chat");
+ }
+ #[test] fn mention_preview_calls_the_bot_and_the_flow_needs_a_name() {
+  let mut f=Flow{counter:false,timer_seconds:300,audio:String::new(),audio_volume:1.0,send_type:"chat".into(),send_color:"primary".into(),reply_to:false,id:uuid::Uuid::new_v4().to_string(),profile_id:uuid::Uuid::new_v4().to_string(),name:"Salve".into(),enabled:true,trigger:Trigger{kind:"mention".into(),pattern:"Arroba, arromba".into(),permission:"everyone".into(),cooldown:0,user_cooldown:0},actions:vec![Action{kind:"chat".into(),text:"Oi!".into(),target:String::new(),value:0,condition:String::new(),..Default::default()}],layout:Value::Null};
+  assert!(validate_flow(&f).is_ok());
+  assert_eq!(preview_event(&f,e()).message,"Arroba !oi tudo bem","a prévia já começa chamando o bot");
+  f.trigger.pattern.clear();assert_eq!(validate_flow(&f).unwrap_err(),"Informe pelo menos um nome do bot, separados por vírgula");
+ }
  #[test] fn delivery_type_color_and_flow_audio_rules() {
-  let mut f=Flow{counter:false,timer_seconds:300,audio:String::new(),audio_volume:1.0,send_type:"chat".into(),send_color:"primary".into(),id:uuid::Uuid::new_v4().to_string(),profile_id:uuid::Uuid::new_v4().to_string(),name:"ifood".into(),enabled:true,trigger:Trigger{kind:"command".into(),pattern:"!ifood".into(),permission:"everyone".into(),cooldown:0,user_cooldown:0},actions:vec![Action{kind:"chat".into(),text:"Bora".into(),target:String::new(),value:0,condition:String::new(),..Default::default()}],layout:Value::Null};
+  let mut f=Flow{counter:false,timer_seconds:300,audio:String::new(),audio_volume:1.0,send_type:"chat".into(),send_color:"primary".into(),reply_to:false,id:uuid::Uuid::new_v4().to_string(),profile_id:uuid::Uuid::new_v4().to_string(),name:"ifood".into(),enabled:true,trigger:Trigger{kind:"command".into(),pattern:"!ifood".into(),permission:"everyone".into(),cooldown:0,user_cooldown:0},actions:vec![Action{kind:"chat".into(),text:"Bora".into(),target:String::new(),value:0,condition:String::new(),..Default::default()}],layout:Value::Null};
   assert!(validate_flow(&f).is_ok());
   f.send_type="announce".into();f.send_color="purple".into();assert!(validate_flow(&f).is_ok());
   f.send_type="letras".into();assert!(validate_flow(&f).is_err());
@@ -242,6 +290,12 @@ pub fn validate_flow(f:&Flow)->Result<(),String> {
   f.send_color="primary".into();f.audio="audio com espaco".into();assert!(validate_flow(&f).is_err());
   f.audio=uuid::Uuid::new_v4().to_string();f.audio_volume=1.5;assert!(validate_flow(&f).is_err());
   f.audio_volume=0.8;assert!(validate_flow(&f).is_ok());
+ // Responder a quem enviou entra como um campo a mais: fluxos salvos antes continuam válidos.
+ let mut saved=serde_json::to_value(&f).unwrap();saved.as_object_mut().unwrap().remove("replyTo");
+ let back:Flow=serde_json::from_value(saved).unwrap();assert!(!back.reply_to);
+ f.reply_to=true;assert!(validate_flow(&f).is_ok());
+ let round:Flow=serde_json::from_value(serde_json::to_value(&f).unwrap()).unwrap();assert!(round.reply_to);
+ f.reply_to=false;
   f.send_type="shoutout".into();f.actions.clear();assert!(validate_flow(&f).is_err());
   f.actions.push(Action{kind:"chat".into(),text:"outrocanal".into(),target:String::new(),value:0,condition:String::new(),..Default::default()});
   assert!(validate_flow(&f).is_ok());

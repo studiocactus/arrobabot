@@ -111,9 +111,17 @@ pub async fn rest(rt:&Runtime,p:&Profile,method:&str,path:&str,body:Option<Value
  Err("O Discord aplicou limite de requisições. Aguarde alguns segundos e tente novamente.".into())
 }
 pub async fn post(rt:&Runtime,p:&Profile,channel:&str,text:&str)->Result<Value,String>{
+ post_reply(rt,p,channel,text,None).await
+}
+/// Corpo de uma mensagem do Discord. Com `reply` ela cita a original e vira fio de resposta.
+fn message_body(channel:&str,text:&str,reply:Option<&str>)->Value{
+ let mut body=json!({"content":truncate(text,2000),"allowed_mentions":{"parse":[]}});
+ if let Some(id)=reply.filter(|id|!id.trim().is_empty()){body["message_reference"]=json!({"message_id":id,"channel_id":channel});}
+ body
+}
+pub async fn post_reply(rt:&Runtime,p:&Profile,channel:&str,text:&str,reply:Option<&str>)->Result<Value,String>{
  if channel.trim().is_empty(){return Err("Canal do Discord não configurado".into())}
- let body=json!({"content":truncate(text,2000),"allowed_mentions":{"parse":[]}});
- rest(rt,p,"POST",&format!("/channels/{channel}/messages"),Some(body)).await
+ rest(rt,p,"POST",&format!("/channels/{channel}/messages"),Some(message_body(channel,text,reply))).await
 }
 pub async fn post_embed(rt:&Runtime,p:&Profile,channel:&str,title:&str,description:&str,color:i64,fields:Vec<Value>)->Result<Value,String>{
  if channel.trim().is_empty(){return Err("Canal do Discord não configurado".into())}
@@ -427,6 +435,15 @@ mod tests {
  let off=intents(&cfg(json!({"intents":{"members":false,"content":false}})));
  assert_eq!(off&(1<<1),0);assert_eq!(off&(1<<15),0);
  assert_eq!(on&off,on&(1<<0|1<<2|1<<6|1<<9));
+ }
+ #[test]
+ fn message_body_quotes_the_original_only_when_replying(){
+  let plain=message_body("42","boa!",None);
+  assert_eq!(plain["content"],"boa!");assert!(plain.get("message_reference").is_none(),"sem pedido, sem citação");
+  let reply=message_body("42","boa!",Some("77"));
+  assert_eq!(reply["message_reference"]["message_id"],"77");
+  assert_eq!(reply["message_reference"]["channel_id"],"42");
+  assert!(message_body("42","boa!",Some("  ")).get("message_reference").is_none(),"id em branco não abre fio");
  }
  #[test]
  fn invite_carries_scope_and_permissions() {

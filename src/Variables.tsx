@@ -36,10 +36,10 @@ export function VariableHelp({profileId,text,onInsert,flow}:{profileId:string;te
  {loadError&&<p role="alert">{loadError}</p>}
  <div className="variable-catalog" ref={catalogRef}>
  {chosen&&<section className="variable-options" aria-label="Opções da informação" tabIndex={-1} ref={optionsRef}><div className="variable-options-head"><strong>{chosen.label}</strong><code>{'{{'+chosen.key+'}}'}</code><button type="button" className="text-button variable-options-close" onClick={()=>setChosen(null)}>Cancelar escolha</button></div>
- <div className="variable-options-fields">
+ {chosen.key.startsWith('random:')?<div className="variable-options-fields"><p className="help">A faixa fica no código: troque os dois valores. <code>{'{{random:1,50}}'}</code> sorteia um inteiro de 1 a 50 e <code>{'{{random:1,50.00}}'}</code> sorteia com centavos em vírgula, como 6,65. As casas decimais são as do valor da faixa que tiver mais.</p></div>:<div className="variable-options-fields">
  <Field label="Se não houver valor, mostrar" hint="Opcional. Por exemplo: amigo, nenhum ou 0."><input value={fallback} onChange={e=>setFallback(e.target.value)} placeholder="Manter sem alternativa"/></Field>
  <Field label="Como mostrar"><select value={format} onChange={e=>setFormat(e.target.value)}><option value="">Como está</option><option value="upper">MAIÚSCULAS</option><option value="lower">minúsculas</option><option value="trim">Sem espaços nas pontas</option><option value="number:0">Número inteiro</option><option value="number:2">Número com duas casas</option><option value="length">Quantidade de caracteres ou itens</option></select></Field>
- </div>
+ </div>}
  <div className="row"><button type="button" className="primary" onClick={insert}>Inserir na mensagem</button></div></section>}
  {shown.map(v=><div className="variable-card" key={v.key}>
  <button type="button" className="variable-card-btn variable-card-main" title={v.example?`${v.label} · ${v.example}`:v.label} onClick={()=>quick(v)}><strong>{v.label}</strong><span className="variable-card-example">{v.example||''}</span>{codes&&<code>{'{{'+v.key+'}}'}</code>}</button>

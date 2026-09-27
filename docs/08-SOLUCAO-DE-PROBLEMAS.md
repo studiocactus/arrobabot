@@ -73,6 +73,8 @@ Não precisa apagar o perfil para testar uma configuração. Excluir pode destru
 | A base não entra na resposta | Confira **Usar a base nas respostas** e o interruptor do arquivo; depois de mudar, clique em **Salvar personalidade** |
 | O nicho escolhido não aparece | O arquivo precisa ficar em `nichos/` com o mesmo nome do campo, sem a extensão .md, por exemplo `fps-competitivo` |
 | A resposta não cita a categoria da live | A categoria vem da conexão com o canal; confira o perfil conectado e a linha de categoria registrada no **Histórico** |
+| A resposta não usa emote nenhum | A lista chega na conexão e vale 12 horas; confira no **Histórico** a linha "Emotes da Twitch carregados para a IA" (categoria `ai`, informação) e a autorização da conta do bot. Com a busca falhando, há um aviso único por sessão e as respostas seguem sem emote até a nova tentativa, 5 minutos depois |
+| Os emotes não parecem na resposta | É esperado: a regra pede no máximo um emote por resposta e deixa a maioria das respostas sem emote; o modelo decide onde cabe, e a escolha muda de uma resposta para outra |
 | O contexto da live some | Esse estado fica só em memória e vale por 90 segundos; fechar o aplicativo, trocar de canal ou excluir o perfil zera |
 | Obsidian não responde | Confira instância aberta, plugin, endereço local, chave e certificado confiável quando usar HTTPS |
 

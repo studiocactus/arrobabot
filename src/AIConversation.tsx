@@ -2,6 +2,7 @@ import {useEffect,useRef,useState} from 'react';
 import {api,desktop,errorText} from './api';
 import {Field} from './components';
 import {newAction,newFlow,type Flow} from './types';
+import {useAutoGrow} from './autoGrow';
 
 export const banterInstruction='Responda em uma frase curta, com humor de resenha de live e uma provocação leve sobre a jogada. Responda diretamente ao assunto, sem repetir nem reformular a mensagem recebida na abertura. Não invente partidas ou acontecimentos anteriores. Não use travessão.';
 export function conversationFlow(profileId:string,pattern:string,instruction:string):Flow {
@@ -20,10 +21,11 @@ export function AIResponseTest({profileId,instruction}:{profileId:string;instruc
 }
 export function ConversationForm({profileId,onSave}:{profileId:string;onSave:(f:Flow)=>Promise<void>}){
  const [pattern,setPattern]=useState('amassando');const [instruction,setInstruction]=useState(banterInstruction);const [busy,setBusy]=useState(false);const [error,setError]=useState('');
+ const instructionBox=useRef<HTMLTextAreaElement>(null);useAutoGrow(instructionBox,instruction);
  return <form className="form-pad" onSubmit={async e=>{e.preventDefault();setBusy(true);try{await onSave(conversationFlow(profileId,pattern.trim(),instruction))}catch(err){setError(errorText(err))}finally{setBusy(false)}}}>
  <p>Conecte uma fala do chat à IA. O bot gera uma resposta nova para cada mensagem que combinar com o gatilho.</p>
  <Field label="Responder quando a mensagem contiver"><input required value={pattern} onChange={e=>setPattern(e.target.value)} placeholder="amassando"/></Field>
- <Field label="Como a IA deve responder"><textarea required rows={4} value={instruction} onChange={e=>setInstruction(e.target.value)}/></Field>
+ <Field label="Como a IA deve responder"><textarea ref={instructionBox} className="auto-grow" required rows={4} value={instruction} onChange={e=>setInstruction(e.target.value)}/></Field>
  <p className="help">Usa a personalidade salva em IA e Memória. Intervalo de 60 segundos entre respostas e 120 por pessoa. Você pode ajustar tudo no editor da automação.</p>
  <AIResponseTest profileId={profileId} instruction={instruction}/>{error&&<p role="alert">{error}</p>}
  <footer className="form-footer"><button className="primary" disabled={busy||!pattern.trim()||!instruction.trim()}>Salvar resenha do chat</button></footer></form>

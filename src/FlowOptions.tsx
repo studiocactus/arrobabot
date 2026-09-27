@@ -2,7 +2,7 @@ import {useEffect,useState} from 'react';
 import {open} from '@tauri-apps/plugin-dialog';
 import {api,desktop} from './api';
 import {friendlyMessage} from './errors';
-import {Field} from './components';
+import {Field,Toggle} from './components';
 import {playViewerSound} from './viewerSound';
 import {sendTypes,sendColors} from './types';
 
@@ -15,16 +15,23 @@ const HINT:Record<string,string>={
  pin:'Comunicado: a mensagem fica fixada no topo do chat por cerca de 20 minutos. Exige bot moderador e autorização nova.',
  shoutout:'A Twitch destaca outro canal no seu chat. Escreva na mensagem apenas o nome do canal de destino, como outrocanal ou {{user}}. Só funciona com o canal ao vivo e tem limite de destaques por hora.'
 };
+const REPLY:Record<string,string>={
+ twitch:'A mensagem entra no fio da pessoa que disparou, como um reply da Twitch. Vale quando a automação parte de uma mensagem de chat.',
+ discord:'O BotLive cita a mensagem original no Discord, como um fio de resposta.'
+};
+const REPLY_OFF='Esta plataforma não tem resposta direcionada: o BotLive registra o aviso no Histórico e envia a mensagem comum.';
 
-export function SendPicker({value,color,platform,onChange,onColor}:{value:string;color:string;platform:string;onChange:(v:string)=>void;onColor:(v:string)=>void}){
+export function SendPicker({value,color,platform,reply,onChange,onColor,onReply}:{value:string;color:string;platform:string;reply?:boolean;onChange:(v:string)=>void;onColor:(v:string)=>void;onReply?:(v:boolean)=>void}){
  const twitch=platform==='twitch';
  const type=sendTypes[value]||sendTypes.chat;
+ const replyHint=(REPLY[platform]||REPLY_OFF)+(twitch&&value!=='chat'?' Neste envio escolhido a mensagem sai sem o fio.':'');
  return <>
  <div className="form-grid">
   <Field label="Como enviar na Twitch" hint={twitch?(HINT[value]||HINT.chat):'Somente a Twitch oferece anúncio, fixação e destaque. Nesta plataforma tudo é publicado como mensagem comum.'}>
    <select value={value} onChange={e=>onChange(e.target.value)} disabled={!twitch}>{Object.entries(sendTypes).map(([k,n])=><option key={k} value={k}>{n}</option>)}</select>
   </Field>
   {value==='announce'&&<Field label="Cor do anúncio"><select value={color} onChange={e=>onColor(e.target.value)} disabled={!twitch}>{Object.entries(sendColors).map(([k,n])=><option key={k} value={k}>{n}</option>)}</select></Field>}
+  {onReply&&<Field label="Responder a quem enviou" hint={replyHint}><Toggle label="Responder à pessoa que enviou" checked={!!reply} onChange={onReply}/></Field>}
  </div>
  {twitch&&value!=='chat'&&<p className="help">Envio escolhido: {type}. Confira no Histórico se a Twitch aceitou; quando falta permissão, o aplicativo diz o que falta corrigir.</p>}
  </>

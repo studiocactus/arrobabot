@@ -57,6 +57,10 @@ Anúncio, mensagem fixada e destaque exigem bot moderador do canal. Autorizaçõ
 
 A prévia registra a forma escolhida no **Histórico**, por exemplo `[Simulação] [Anúncio] O ifood já passou a milhão na rua 3 vezes!`, para conferir sem publicar nada.
 
+**Responder a quem enviou** fica logo abaixo e é um interruptor: com ele ligado, a mensagem sai no fio da pessoa que disparou, como um reply da Twitch, em vez de solta no chat. Vale para comandos, timers e automações que partem de uma mensagem. Na Twitch e no Discord a resposta direcionada existe; nas demais plataformas o **Histórico** registra o aviso e a mensagem sai comum.
+
+O fio vale para a forma escolhida em **Como enviar na Twitch**; se você trocar para anúncio, mensagem fixada ou destaque, a mensagem sai sem o fio e o próprio aviso do campo avisa disso. A prévia mostra a escolha no **Histórico**.
+
 ## Tocar áudio ao disparar
 
 **Tocar áudio ao disparar** escolhe um som da biblioteca de **Respostas e sons** para tocar quando o comando, o timer ou a automação executar. O som sai na saída de áudio do BotLive: capture essa saída no OBS para a live ouvir. Use **Escolher som** para importar um arquivo novo, **Testar som** para ouvir antes de salvar e **Volume** para ajustar a intensidade.
@@ -106,6 +110,7 @@ Para reorganizar, remova as conexões antigas e conecte a sequência desejada. N
 | Timer periódico | Intervalo próprio entre execuções enquanto conectado |
 | Comando de chat | Primeiro termo igual ao comando cadastrado |
 | Mensagem contém | Trecho presente em uma mensagem de chat; separe várias palavras ou frases com vírgula e basta uma delas aparecer |
+| Chamada pelo nome do bot | O bot é chamado pelo nome na mensagem; separe os nomes com vírgula e o gatilho passa quando um deles aparece como palavra inteira |
 | Toda mensagem | Qualquer mensagem de chat que chegue ao processamento |
 | Novo seguidor | Evento follow |
 | Nova inscrição | Evento subscription |
@@ -116,6 +121,8 @@ Para reorganizar, remova as conexões antigas e conecte a sequência desejada. N
 | Comando de voz | Texto reconhecido pelo módulo de voz |
 
 A presença da opção no editor não garante que todas as plataformas emitam aquele evento. Consulte as capacidades do adaptador e confirme com o Histórico.
+
+**Chamada pelo nome do bot** existe para o caso em que o espectador escreve o nome do bot sem marcar com `@`, como "Arroba, vem aqui". A lista é de nomes separados por vírgula, e a comparação é por palavra inteira: com `Arroba, ArrobaSrv`, a mensagem "ArrobaSrv mandou" não dispara o gatilho pelo nome curto, porque `ArrobaSrv` é uma palavra só, não `Arroba`. O gatilho considera só mensagens de chat e respeita os mesmos intervalos por fluxo e por pessoa dos demais gatilhos.
 
 ## Referência das ações
 

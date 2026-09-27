@@ -1,5 +1,5 @@
 import {describe,it,expect} from 'vitest';
-import {insertVariable,makeVariableToken,messageParts} from './variableCatalog';
+import {insertVariable,makeVariableToken,messageParts,variableLabel} from './variableCatalog';
 describe('edição de mensagens com variáveis',()=>{
  it('substitui só a seleção e preserva o restante da mensagem',()=>{
   expect(insertVariable('Olá, convidado!','{{user}}',5,14)).toEqual({text:'Olá, {{user}}!',caret:13});
@@ -20,5 +20,13 @@ describe('edição de mensagens com variáveis',()=>{
  it('cataloga o nome sorteado para mensagens sem pessoa no evento',()=>{
   const p=messageParts('Boa live, {{randomViewer}}!');
   expect(p.filter(v=>v.label).map(v=>v.label)).toEqual(['Nome sorteado no chat']);
+ });
+ it('aceita a faixa do número sorteado e rotula ela como número',()=>{
+  expect(makeVariableToken('random:1,50','','')).toBe('{{random:1,50}}');
+  expect(makeVariableToken('random:1,50.00','','')).toBe('{{random:1,50.00}}');
+  expect(variableLabel('random:1,50.00')).toBe('Número sorteado');
+  expect(messageParts('doou R$ {{random:1,50.00}}!').find(v=>v.label)?.label).toBe('Número sorteado');
+  expect(()=>makeVariableToken('random:1','','')).toThrow('variável válida');
+  expect(()=>makeVariableToken('random:x,y','','')).toThrow();
  });
 });

@@ -3,7 +3,7 @@ export type Profile={id:string;name:string;platform:'twitch'|'youtube'|'kick';ch
 export type Trigger={kind:string;pattern:string;permission:string;cooldown:number;userCooldown:number};
 export type Action={kind:string;text:string;target:string;value:number;condition:string;aiAnchor:string;aiKnowledge:string;aiLength:string;aiStyle:string;aiNoRepeat:boolean|null};
 export type KnowledgeEntry={path:string;category:string;file:string;title:string;kind:string;size:number};
-export type Flow={counter?:boolean;timerSeconds?:number;audio?:string;audioVolume?:number;sendType?:string;sendColor?:string;id:string;profileId:string;name:string;enabled:boolean;trigger:Trigger;actions:Action[];layout?:unknown};
+export type Flow={counter?:boolean;timerSeconds?:number;audio?:string;audioVolume?:number;sendType?:string;sendColor?:string;replyTo?:boolean;id:string;profileId:string;name:string;enabled:boolean;trigger:Trigger;actions:Action[];layout?:unknown};
 export type Activity={id:number;profileId:string;timestamp:string;kind:string;message:string;status:string};
 export type Note={path:string;content:string};
 export type Preset={id:string;format:string;version:number;name:string;kind:string;tags:string[];data:Record<string,unknown>};
@@ -14,7 +14,7 @@ export const newAction=(kind='chat'):Action=>({kind,text:kind==='chat'?'Olá, {{
 export const newFlow=(profileId:string):Flow=>({id:crypto.randomUUID(),profileId,name:'Boas-vindas',enabled:true,audio:'',audioVolume:1,sendType:'chat',sendColor:'primary',trigger:{kind:'command',pattern:'!oi',permission:'everyone',cooldown:5,userCooldown:15},actions:[newAction()]});
 export const platforms={twitch:'Twitch',youtube:'YouTube',kick:'Kick'};
 export const actions:Record<string,string>={chat:'Enviar mensagem',ai:'Responder com IA','ai.generate':'Gerar resposta da IA (variável)',memory:'Registrar memória',delay:'Esperar',overlay:'Atualizar overlay',webhook:'Chamar webhook',discord:'Enviar ao Discord',tts:'Ler em voz alta',points:'Ajustar pontos',script:'Executar script Rhai','variable.set':'Definir variável','variable.increment':'Incrementar variável','variable.delete':'Apagar variável'};
-export const triggers:Record<string,string>={timer:'Timer periódico',command:'Comando de chat',contains:'Mensagem contém',chat:'Toda mensagem',follow:'Novo seguidor',subscription:'Nova inscrição',cheer:'Bits / Super Chat',raid:'Raid',redemption:'Resgate de pontos',custom:'Evento externo',voice:'Comando de voz'};
+export const triggers:Record<string,string>={timer:'Timer periódico',command:'Comando de chat',contains:'Mensagem contém',mention:'Chamada pelo nome do bot',chat:'Toda mensagem',follow:'Novo seguidor',subscription:'Nova inscrição',cheer:'Bits / Super Chat',raid:'Raid',redemption:'Resgate de pontos',custom:'Evento externo',voice:'Comando de voz'};
 export const sendTypes:Record<string,string>={chat:'Mensagem normal',announce:'Anúncio',pin:'Mensagem fixada',shoutout:'Destaque de canal'};
 export const sendColors:Record<string,string>={primary:'Cor do canal',blue:'Azul',green:'Verde',orange:'Laranja',purple:'Roxo'};
 export const aiAnchors:Record<string,string>={all:'Mensagem atual e chat',message:'Só a mensagem atual',chat:'Só o assunto do chat',fixed:'Só a instrução fixa'};

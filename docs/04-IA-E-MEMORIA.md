@@ -54,6 +54,19 @@ Dois casos que antes poluíam o chat agora também ficam em silêncio com erro n
 
 Os filtros por classificação não garantem compreensão perfeita de todo assunto. Revise personalidade, termos e exemplos de resposta da sua comunidade. Respostas do adaptador são limitadas a 450 caracteres.
 
+### Emotes da Twitch nas respostas
+
+Quando o perfil conecta na Twitch, o BotLive busca os emotes do seu canal e os globais pela API da Twitch e guarda os nomes no perfil. A lista entra no pedido à IA com uma regra: usar no máximo um emote por resposta, só onde combinar com a frase, deixar a maioria das respostas sem emote, nunca no meio de uma palavra e nunca citando o nome do emote como texto. Como a lista vem do canal, um emote novo ganho na live aparece nas respostas sozinho, sem você mexer em nada.
+
+Detalhes que importam na prática:
+
+- **A busca acontece na conexão**, não em cada resposta: a geração lê a lista guardada e não gasta rede nem latência extra.
+- A lista vale **12 horas**; depois disso a próxima conexão busca de novo.
+- Quando a Twitch não responde, o aplicativo **tenta de novo em 5 minutos** e as respostas seguem sem emote nesse meio-tempo.
+- Os avisos (lista carregada ou busca falha) aparecem **uma vez por sessão** no **Histórico**, com a contagem de emotes.
+- Entram no máximo **60 nomes**, com os do seu canal antes dos globais, para a regra não pesar no orçamento do prompt.
+- A busca usa o mesmo token da conta do bot, **sem nenhuma autorização nova**. Em perfil que não é da Twitch a lista fica vazia e nada muda.
+
 ## Base de conhecimento
 
 A base de conhecimento é uma pasta de arquivos `.md` que a IA lê antes de responder. Em **Inteligência artificial**, no cartão **Base de conhecimento**, clique em **Importar pasta** e escolha a sua pasta `E:\StudioCactus\Arroba Chatbot\documentação\knowledge`, ou outra base que você tenha montado. Essa pasta de trabalho não acompanha necessariamente o instalador.

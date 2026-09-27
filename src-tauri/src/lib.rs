@@ -14,6 +14,7 @@ mod chat_extras;
 mod oauth;
 mod engine;
 mod platforms;
+mod emotes;
 mod modules;
 mod presets;
 mod local_api;
@@ -115,7 +116,7 @@ pub async fn dispatch(rt:Arc<Runtime>,op:&str,args:Value)->R<Value>{
  let e=Event{id:"ai-preview".into(),profile_id:p,kind:"chat".into(),user:"Espectador de teste".into(),user_id:"test-user".into(),role:"everyone".into(),message:message.into(),data:Value::Null,simulated:true};
  let c=variables::Context::new(&rt.db,&profile,&e,None)?;
  let history:Vec<Value>=recent.lines().filter(|s|!s.trim().is_empty()).rev().take(12).collect::<Vec<_>>().into_iter().rev().map(|s|json!({"message":s.chars().take(500).collect::<String>()})).collect();
- let opts=ai::Options{knowledge:crate::knowledge::context(&rt.base,&profile,Some(&e),message),live:rt.live.summary(&profile.id),..ai::Options::defaults(&profile)};
+ let opts=ai::Options{knowledge:crate::knowledge::context(&rt.base,&profile,Some(&e),message),live:rt.live.summary(&profile.id),emotes:crate::emotes::list(&rt.db,&profile.id),..ai::Options::defaults(&profile)};
  Ok(json!(ai::conversation(&rt.http,&rt.base,&profile,&e,&c.render(instruction)?,&history,&opts).await?))
  },
  "ai.test"=>{let profile=rt.db.profile(&p)?;Ok(json!(ai::generate(&rt.http,&rt.base,&profile,args["user"].as_str().unwrap_or("streamer"),args["prompt"].as_str().unwrap_or("Olá! Apresente-se brevemente.")).await?))},

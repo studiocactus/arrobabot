@@ -48,6 +48,8 @@
 .node-inspector>details .field{margin:12px 0}
 .node-inspector details details{margin:10px 0;padding:10px 11px}
 .node-inspector .ai-help summary{font-size:11px}
+/* O quadro cresce com o texto: uma instrução longa de IA não fica rolando numa caixa fixa. */
+.auto-grow{max-height:42vh}
 .inline-error details{margin:8px 0 0;padding:7px 10px;border-color:#ef999d33;background:#0003}
 .inline-error summary{font-size:11px;color:var(--muted)}
 .inline-error code{display:block;margin-top:6px;font-size:10px;color:var(--muted);white-space:pre-wrap;word-break:break-all}
