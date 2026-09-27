@@ -3,7 +3,7 @@ import {api,desktop,errorText} from './api';
 import {Field} from './components';
 import {newAction,newFlow,type Flow} from './types';
 
-export const banterInstruction='Responda em uma frase curta, com humor de resenha de live e uma provocação leve sobre a jogada. Reconheça o que a pessoa acabou de dizer e mantenha o mesmo assunto. Não invente partidas ou acontecimentos anteriores.';
+export const banterInstruction='Responda em uma frase curta, com humor de resenha de live e uma provocação leve sobre a jogada. Responda diretamente ao assunto, sem repetir nem reformular a mensagem recebida na abertura. Não invente partidas ou acontecimentos anteriores. Não use travessão.';
 export function conversationFlow(profileId:string,pattern:string,instruction:string):Flow {
  return {...newFlow(profileId),name:'Resenha do chat',trigger:{kind:'contains',pattern,permission:'everyone',cooldown:60,userCooldown:120},actions:[{...newAction('ai.generate'),text:instruction,target:'local.aiResponse'},{...newAction('chat'),text:'{{local.aiResponse}}'}]};
 }

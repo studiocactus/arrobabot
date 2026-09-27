@@ -1,5 +1,7 @@
 # Timers e contadores por comando
 
+**Timers** é a área exclusiva das mensagens periódicas. Eles não aparecem em **Automações** nem em **Comandos**, e o editor de automações não oferece o gatilho de timer. Fluxos periódicos já existentes continuam preservados na aba Timers. O motor compartilha ações entre as áreas, mas a organização e a edição permanecem separadas.
+
 Use **Timers** para publicar lembretes periódicos. Use **Contar usos deste comando** na configuração do comando para manter um total independente em cada um; os totais ficam reunidos em **Contadores**. Um timer dispara pelo tempo; um contador aumenta quando um comando é aceito. Nenhum dos dois é uma contagem regressiva.
 
 ## Receita: divulgar a comunidade a cada dez minutos

@@ -170,18 +170,18 @@ async fn action(rt:&Arc<Runtime>,p:&Profile,e:&Event,a:&Action,variables:&mut cr
  "chat"=>rt.send_with(p,e,&text,Some(f)).await,
  "ai"|"ai.generate"=>{
  let opts=crate::ai::Options{
-  knowledge:if a.knowledge(&p.ai){crate::knowledge::context(&rt.base,p,Some(e),&text)}else{String::new()},
+  knowledge:if a.knowledge(&p.ai){crate::knowledge::context_enabled(&rt.base,p,Some(e),&e.message)}else{String::new()},
   live:rt.live.summary(&p.id),
   anchor:a.anchor(&p.ai).to_owned(),length:a.length(&p.ai).to_owned(),
   no_repeat:a.no_repeat(&p.ai),style:a.ai_style.clone(),
  };
  let (output,success)=match ai::conversation(&rt.http,&rt.base,p,e,&text,history,&opts).await{
- Ok(answer)=>(answer,true),Err(err)=>{rt.log(&p.id,"ai",&err,"error");(p.ai.fallback.clone(),false)}
+ Ok(answer)=>(answer,true),Err(err)=>{ai::save_response(variables,rt,p,e,a,"",false)?;return Err(err)}
  };
- if blocked(&output,p){return Err("Resposta alternativa bloqueada pelas restrições do perfil".into())}
+ if blocked(&output,p){return Err("Resposta bloqueada pelas restrições do perfil".into())}
  ai::save_response(variables,rt,p,e,a,&output,success)?;
  if a.kind=="ai"{rt.send_with(p,e,&output,Some(f)).await?;}
- if p.ai.remember {let _lock=rt.vault_lock.lock().unwrap();rt.db.profile(&p.id)?;let name=format!("usuarios/{}.md",safe_name(&e.user_id));vault::write(&rt.base,&p.id,&name,&format!("{} disse: {}",e.user,e.message),true)?;}
+ if p.ai.remember && e.kind=="chat" {let _lock=rt.vault_lock.lock().unwrap();rt.db.profile(&p.id)?;let platform=if crate::discord::from_discord(e).is_some(){"discord"}else{p.platform.as_str()};vault::record_interaction(&rt.base,&p.id,platform,&e.user_id,&e.user,&e.message)?;}
  Ok(())
  },
  "memory"=>{let _lock=rt.vault_lock.lock().unwrap();rt.db.profile(&p.id)?;vault::write(&rt.base,&p.id,&variables.render(&a.target)?,&text,true)},
@@ -205,4 +205,3 @@ async fn action(rt:&Arc<Runtime>,p:&Profile,e:&Event,a:&Action,variables:&mut cr
  _=>Err("Ação desconhecida".into())
  }
 }
-fn safe_name(s:&str)->String {let out:String=s.chars().filter(|c|c.is_ascii_alphanumeric()||*c=='-'||*c=='_').take(80).collect();if out.is_empty(){"anonimo".into()}else{out}}

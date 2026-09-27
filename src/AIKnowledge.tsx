@@ -58,8 +58,8 @@ export function ResponseDefaults({ai,onChange}:{ai:AIConfig;onChange:(ai:AIConfi
   <p className="help">Vale para todo bloco novo de IA. Cada ação pode mudar na hora de editar o comando.</p>
   <div className="form-grid">
    <Field label="Onde a resposta se ancora"><select value={ai.anchor||'all'} onChange={e=>onChange({...ai,anchor:e.target.value})}>{Object.entries(aiAnchors).map(([k,n])=><option key={k} value={k}>{n}</option>)}</select></Field>
-   <Field label="Tamanho da resposta"><select value={ai.answerLength} onChange={e=>onChange({...ai,answerLength:e.target.value})}><option value="">Sem limite fixo</option>{Object.entries(aiLengths).map(([k,n])=><option key={k} value={k}>{n}</option>)}</select></Field>
+   <Field label="Tamanho da resposta"><select value={ai.answerLength} onChange={e=>onChange({...ai,answerLength:e.target.value})}><option value="">Automático: até 120 caracteres</option>{Object.entries(aiLengths).map(([k,n])=><option key={k} value={k}>{n}</option>)}</select></Field>
   </div>
-  <div className="switch-row"><div><strong>Evitar repetição</strong><small>Não repete o que o bot já falou nos últimos minutos.</small></div><Toggle label="Evitar repetição" checked={ai.noRepeat} onChange={noRepeat=>onChange({...ai,noRepeat})}/></div>
+  <div className="switch-row"><div><strong>Evitar repetição</strong><small>Orienta a IA a variar em relação às últimas respostas do bot.</small></div><Toggle label="Evitar repetição" checked={ai.noRepeat} onChange={noRepeat=>onChange({...ai,noRepeat})}/></div>
  </Card>;
 }

@@ -62,6 +62,9 @@ async fn txt_engine_simulation_and_file_configuration_permissions(){
  *rt.actor.lock().unwrap()="intruso".into();assert!(dispatch(rt,"chatExtras.get",json!({"profileId":p.id})).await.is_err());
 }
 async fn mock_ai(answer:&str)->(String,tokio::task::JoinHandle<Value>){
+ mock_ai_status(answer,200).await
+}
+async fn mock_ai_status(answer:&str,status:u16)->(String,tokio::task::JoinHandle<Value>){
  use tokio::io::{AsyncReadExt,AsyncWriteExt};
  let listener=tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();let address=listener.local_addr().unwrap();let answer=answer.to_owned();
  let task=tokio::spawn(async move{
@@ -75,9 +78,24 @@ async fn mock_ai(answer:&str)->(String,tokio::task::JoinHandle<Value>){
    }
   };
   let body=json!({"message":{"content":answer}}).to_string();
-  socket.write_all(format!("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",body.len()).as_bytes()).await.unwrap();request
+  socket.write_all(format!("HTTP/1.1 {status} Response\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",body.len()).as_bytes()).await.unwrap();request
  });
  (format!("http://{address}"),task)
+}
+#[tokio::test]
+async fn api_errors_never_publish_fallback_or_execute_following_actions(){
+ for kind in ["ai","ai.generate"] {for status in [401,429,500] {
+  let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();let mut p=profile("Falhas");
+  p.ai.model="test".into();p.ai.remember=true;p.ai.fallback="Não consegui responder agora. Tente novamente em instantes.".into();
+  let(endpoint,request)=mock_ai_status("Detalhe privado do provedor",status).await;p.ai.endpoint=endpoint;rt.db.save_profile(&p).unwrap();
+  let mut f=flow(&p);f.actions=vec![Action{kind:kind.into(),text:"Responda".into(),..Default::default()},Action{kind:"overlay".into(),text:"Não pode executar".into(),..Default::default()}];rt.db.save_flow(&f).unwrap();
+  let mut rx=rt.broadcast.subscribe();engine::process(rt.clone(),event(&p,"!oi falha de teste",false)).await;request.await.unwrap();
+  while let Ok(e)=rx.try_recv(){assert_ne!(e["type"],"overlay");}
+  let logs=rt.db.logs(&p.id).unwrap();assert!(logs.iter().any(|l|l.status=="error"&&l.message.contains(&format!("HTTP {status}"))));
+  assert!(!logs.iter().any(|l|(l.kind=="chat"&&l.status=="success")||l.message.contains("Detalhe privado")||l.message.contains(&p.ai.fallback)));
+  assert_eq!(logs.iter().filter(|l|l.status=="error").count(),1,"somente a falha do provedor, sem tentativa posterior de envio");
+  assert_eq!(vault::list(&rt.base,&p.id).unwrap().len(),1);
+ }}
 }
 #[tokio::test]
 async fn contextual_ai_uses_chat_and_stores_single_pass_response_without_sending(){
@@ -99,7 +117,7 @@ async fn contextual_ai_uses_chat_and_stores_single_pass_response_without_sending
  assert!(variables::Context::new(&rt.db,&p,&event(&p,"oi",false),None).unwrap().render("{{local.aiResponse}}").is_err());
 }
 #[tokio::test]
-async fn ai_simulation_preview_and_fallback_define_response(){
+async fn ai_simulation_preview_and_failures_stop_the_flow(){
  let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();let mut p=profile("Simulação");p.ai.fallback="Volto já".into();rt.db.save_profile(&p).unwrap();
  let mut f=flow(&p);f.actions=vec![Action{kind:"ai.generate".into(),text:"Resenha".into(),target:"local.aiResponse".into(),value:0,condition:"".into(),..Default::default()},Action{kind:"chat".into(),text:"{{local.aiResponse}} / {{local.aiSuccess}}".into(),target:"".into(),value:0,condition:"".into(),..Default::default()}];rt.db.save_flow(&f).unwrap();
  engine::process(rt.clone(),event(&p,"!oi",true)).await;
@@ -107,7 +125,9 @@ async fn ai_simulation_preview_and_fallback_define_response(){
  let preview=dispatch(rt.clone(),"variables.preview",json!({"profileId":p.id,"flow":f,"event":event(&p,"!oi",true)})).await.unwrap();
  assert_eq!(preview["steps"][1]["text"],"[Prévia: resposta contextual da IA] / false");
  f.actions[1].kind="overlay".into();rt.db.save_flow(&f).unwrap();let mut rx=rt.broadcast.subscribe();engine::process(rt.clone(),event(&p,"!oi",false)).await;
- let mut found=false;while let Ok(e)=rx.try_recv(){if e["type"]=="overlay"{assert_eq!(e["payload"]["text"],"Volto já / false");found=true}}assert!(found);
+ while let Ok(e)=rx.try_recv(){assert_ne!(e["type"],"overlay","falha da IA deve interromper as próximas ações");}
+ assert!(rt.db.logs(&p.id).unwrap().iter().any(|l|l.status=="error"));
+ assert!(!rt.db.logs(&p.id).unwrap().iter().any(|l|l.message.contains("Volto já")));
  f.actions[0].target="global.resposta".into();assert!(model::validate_flow(&f).is_err());
  f.actions[0].target="local.aiSuccess".into();assert!(model::validate_flow(&f).is_err());
 }

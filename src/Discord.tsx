@@ -87,7 +87,7 @@ export default function Discord({profileId,blocklist,notify}:{profileId:string;b
  async function saveToken(){await call('secret.save',{key:'discord_token',value:token},'Token do bot salvo no cofre do sistema.');setToken('')}
  async function saveCfg(){const r=await call('discord.save',{config:cfg},'Configuração do Discord salva.');if(r!==null)await refresh()}
  async function discover(){const d=await call('discord.discover',{},'Servidor, canais e cargos carregados.');if(d)setSt(s=>s?{...s,guilds:arr(d.guilds),channels:arr(d.channels),roles:arr(d.roles)}:s)}
- async function invite(){const r=await action({action:'invite'});if(r&&r.url)window.open(String(r.url),'_blank','noopener')}
+ async function invite(){const r=await action({action:'invite'});if(r&&r.url)await call('url.open',{url:String(r.url)})}
  async function searchMembers(){setMembers(arr(await action({action:'members',q})))}
  async function punish(act:string){
   if(!target)return notify('Escolha um membro primeiro.');
@@ -145,6 +145,13 @@ export default function Discord({profileId,blocklist,notify}:{profileId:string;b
 
  return <div className="discord-screen">
  <Card title="Conexão com o Discord">
+  <details><summary>Primeira conexão: como adicionar o bot ao servidor</summary><ol>
+   <li>No portal de desenvolvedores do Discord, crie seu aplicativo e habilite Guild Install em Installation.</li>
+   <li>Em Bot, habilite Server Members Intent e Message Content Intent. Copie o token e salve abaixo.</li>
+   <li>Clique em Convite do bot, escolha Adicionar ao servidor e autorize com uma conta que possa gerenciar esse servidor.</li>
+   <li>Volte aqui, descubra os servidores, escolha o seu e salve. Descubra novamente para carregar os canais e cargos desse servidor.</li>
+   <li>Ative o bot, salve a configuração e conecte. Depois, registre os comandos slash.</li>
+  </ol><p className="help">Salvar o token não adiciona o bot ao servidor. Webhook também não instala um bot. Para moderar, posicione o cargo do bot acima dos cargos que ele administrará e permita acesso aos canais desejados.</p></details>
   <p className="help">Use o token de um bot criado no portal do desenvolvedor do Discord. O token fica no cofre do sistema e nunca é gravado nas configurações exportadas.</p>
   <Field label="Token do bot" hint="Formato 1234567890.abcdefghijklmnopqrstuvwxyz. Ele não volta para a tela depois de salvo.">
    <input type="password" autoComplete="off" value={token} placeholder={st&&st.hasToken?'Token já salvo':'Cole o token do bot'} onChange={e=>setToken(e.target.value)}/>

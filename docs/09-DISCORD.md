@@ -22,15 +22,32 @@ O token é salvo no cofre do sistema e sai da gravação em texto: ele não apar
 1. Crie o aplicativo no portal do desenvolvedor do Discord e copie o token.
 2. Abra **Discord** no perfil desejado e clique em **Salvar token**.
 3. Ative **Server Members Intent** e **Message Content Intent** na página do aplicativo. Sem elas, o bot não lê o texto nem conta quem entrou.
-4. Clique em **Descobrir servidor e canais**. Os servidores onde o bot já está aparecem na lista.
-5. Escolha o **Servidor do Discord** e os canais que forem usar.
-6. Ligue **Ativar o bot do Discord** e clique em **Salvar configuração**.
-7. Clique em **Convite do bot** e autorize no servidor, se ainda não tiver convidado.
-8. Por fim, clique em **Conectar**. O rótulo passa a mostrar **Conectado**.
+4. No portal, em **Installation**, habilite **Guild Install**. No BotLive, clique em **Convite do bot**. O navegador abre a autorização oficial. Escolha **Adicionar ao servidor**, selecione seu servidor e autorize com uma conta que tenha **Gerenciar servidor**. Salvar o token sozinho não faz o bot entrar.
+5. Volte ao BotLive e clique em **Descobrir servidor e canais**. Escolha o **Servidor do Discord**, ative o bot e clique em **Salvar configuração**.
+6. Clique novamente em **Descobrir servidor e canais**, agora com o servidor salvo, para carregar seus canais e cargos. Escolha os canais desejados e salve novamente.
+7. No Discord, em **Configurações do servidor → Cargos**, coloque o cargo do bot acima dos cargos que ele deve moderar ou atribuir. Confira também as permissões dos canais privados.
+8. Clique em **Conectar** no BotLive e aguarde **Conectado**. Depois, clique em **Registrar comandos slash**. O aplicativo precisa permanecer aberto para receber eventos e moderar.
 
 **Se a conexão falhar:** confirme que o token é de bot e não de aplicativo OAuth, que o servidor foi informado e que as intents privilegiadas estão ligadas. Os motivos aparecem no **Histórico**, com a categoria `discord`.
 
 ## Servidor, canais e cargos
+
+### Exemplo: moderar o canal #geral
+
+Convide o bot para o **servidor** que contém `#geral`; não existe convite separado para cada canal de texto. Nas permissões de `#geral`, permita ao cargo do bot ver o canal, enviar mensagens, ler o histórico e gerenciar mensagens. Para timeout, expulsão e banimento, mantenha as permissões correspondentes do convite e a hierarquia de cargos adequada. Não é necessário conceder Administrador. O dono do servidor e membros acima do bot não podem ser moderados por ele.
+
+No BotLive, selecione esse servidor, configure as regras em **Comunidade**, ligue **Auto-moderação do Discord**, salve e conecte. Para conferir sem punir ninguém, use `/painel` no canal e verifique se o bot aparece conectado. Experimente as regras depois em um canal de teste, com uma conta de teste abaixo do cargo do bot.
+
+| Sintoma | O que conferir |
+|---|---|
+| Servidor não aparece na descoberta | Primeiro aceite o Convite do bot no navegador; a descoberta só lista servidores onde ele já está |
+| Bot está no servidor, mas offline | Deixe o BotLive aberto, ative, salve e conecte; confira o Histórico |
+| Não lê mensagens ou entradas | Habilite as intents de conteúdo e membros no portal e na configuração do BotLive |
+| Conecta, mas não apaga ou silencia | Confira permissões do canal, cargo do bot e posição do alvo |
+| Slash não aparece | Registre os comandos após salvar o servidor e confirme a autorização de `applications.commands` |
+| Só funciona envio por webhook | Webhook publica mensagens; não instala nem conecta o bot de moderação |
+
+Referências oficiais: [instalação no servidor](https://github.com/discord/discord-api-docs/blob/main/developers/quick-start/getting-started.mdx), [intents do Gateway](https://github.com/discord/discord-api-docs/blob/main/developers/events/gateway.mdx) e [permissões e hierarquia](https://github.com/discord/discord-api-docs/blob/main/developers/topics/permissions.mdx).
 
 | Campo | O que faz | Observação |
 |---|---|---|

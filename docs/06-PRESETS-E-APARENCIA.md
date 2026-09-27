@@ -6,7 +6,7 @@
 |---|---|
 | Comandos | Um ou todos os fluxos de gatilho por comando selecionados |
 | Fluxo de automação | Uma ou todas as automações selecionadas |
-| Personalidade de IA | Provedor, modelo, personalidade, fallback e restrições, sem chave |
+| Personalidade de IA | Provedor, modelo, personalidade e restrições, sem chave; o campo legado de fallback não é usado |
 | Perfil completo | Fluxos, IA, restrições, módulos e configurações selecionadas de módulos, tema e cor |
 | Tema visual | Modo claro/escuro e cor de destaque do painel |
 

@@ -8,6 +8,8 @@ test('tela do Discord configura servidor, canais, engajamento e auditoria',async
  await nav('Discord').click();
  await expect(page.getByRole('heading',{name:'Discord',exact:true})).toBeVisible();
  await expect(page.getByRole('heading',{name:'Conexão com o Discord',exact:true})).toBeVisible();
+ await page.getByText('Primeira conexão: como adicionar o bot ao servidor',{exact:true}).click();
+ await expect(page.getByText('Salvar o token não adiciona o bot ao servidor.',{exact:false})).toBeVisible();
 
  await page.getByLabel('Token do bot',{exact:true}).fill('1234567890.abcdefghijklmnopqrstuvwxyz');
  await page.getByRole('button',{name:'Salvar token',exact:true}).click();

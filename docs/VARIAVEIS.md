@@ -119,7 +119,7 @@ Texto numérico entre aspas é texto e não pode ser incrementado. Resultados fo
 
 O conteúdo é gerado a partir da mensagem atual, conversa recente do perfil, personalidade, orientação da ação e memórias recuperadas. Cada execução tem sua própria resposta. Um nome personalizado como `resenha` cria também `{{local.resenha}}`. A geração deve acontecer antes de usar o valor; inserir o marcador sozinho não chama a IA. Marcadores dentro da resposta gerada são texto literal, sem segunda interpretação.
 
-Na falha do provedor, a resposta alternativa configurada ocupa a variável e aiSuccess fica false. Na prévia e simulação, nenhum provedor é chamado: o texto **[Prévia: resposta contextual da IA]** ocupa o valor e aiSuccess fica false. Para avaliar uma resposta real sem publicar, use **Testar resposta contextual**. Consulte a receita **Resenha com IA** no [capítulo de inteligência artificial](04-IA-E-MEMORIA.md).
+Na falha do provedor, a variável fica vazia, aiSuccess fica false e o fluxo é interrompido antes das ações seguintes. Nenhuma resposta de erro é publicada no chat. Na prévia e simulação, nenhum provedor é chamado: o texto **[Prévia: resposta contextual da IA]** ocupa o valor e aiSuccess fica false. Para avaliar uma resposta real sem publicar, use **Testar resposta contextual**. Consulte a receita **Resenha com IA** no [capítulo de inteligência artificial](04-IA-E-MEMORIA.md).
 
 ## Filtros
 

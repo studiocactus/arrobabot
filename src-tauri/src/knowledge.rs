@@ -127,20 +127,29 @@ fn hint(e:Option<&Event>)->&'static str {
 /// gírias e exemplos do canal, sempre dentro do orçamento da profundidade escolhida.
 pub fn context(base:&Path,p:&Profile,e:Option<&Event>,query:&str)->String {
  if !p.ai.knowledge {return String::new();}
+ context_enabled(base,p,e,query)
+}
+/// O chamador já resolveu a escolha do perfil/bloco; preserva os arquivos desligados.
+pub fn context_enabled(base:&Path,p:&Profile,e:Option<&Event>,query:&str)->String {
  let root=match root(base,&p.id) {Ok(r)=>r,Err(_)=>return String::new()};
  let found=scan(&root);
  if found.is_empty() {return String::new();}
+ let niche=p.ai.knowledge_nicho.trim().to_lowercase();
+ let channel=p.channel.trim().to_lowercase();
+ let event=hint(e);
  let mut loaded=vec![];
  for (rel,path) in found {
   if p.ai.knowledge_off.iter().any(|o|*o==rel) {continue;}
+  // Não abrir arquivos de outros nichos/canais/eventos a cada mensagem.
+  let cat=category(&rel);let file=file_of(&rel).to_lowercase();
+  if (cat=="nichos"&&(niche.is_empty()||file!=niche))
+   ||(cat=="canais"&&(channel.is_empty()||(file!=channel&&file!=format!("{channel}-exemplos-reais"))))
+   ||(cat=="eventos-de-live"&&(event.is_empty()||!file.contains(event))){continue}
   let Ok(text)=fs::read_to_string(&path) else {continue};
   let (kind,title)=meta(&text);
   if kind=="documento_de_logica" {continue;}
   loaded.push((Entry{category:category(&rel),file:file_of(&rel),path:rel,title,kind,size:0},body(&text).to_owned()));
  }
- let niche=p.ai.knowledge_nicho.trim().to_lowercase();
- let channel=p.channel.trim().to_lowercase();
- let event=hint(e);
  let (mut tom,mut nicho,mut evento,mut girias,mut canal,mut outros)=(vec![],vec![],vec![],vec![],vec![],vec![]);
  for item in loaded {
   match item.0.category.as_str() {
@@ -150,28 +159,46 @@ pub fn context(base:&Path,p:&Profile,e:Option<&Event>,query:&str)->String {
    "nichos"=>{},
    "eventos-de-live" if !event.is_empty()&&item.0.file.contains(event)=>evento.push(item),
    "eventos-de-live"=>{},
-   "canais" if !channel.is_empty()&&item.0.file.to_lowercase()==channel=>canal.push(item),
+   "canais" if !channel.is_empty()&&(item.0.file.to_lowercase()==channel||item.0.file.to_lowercase()==format!("{channel}-exemplos-reais"))=>canal.push(item),
    "canais"=>{},
    _=>outros.push(item),
   }
  }
  let words:Vec<String>=query.to_lowercase().split_whitespace().filter(|s|s.len()>2).take(24).map(str::to_owned).collect();
  outros.sort_by(|a,b|score(&b.1,&words).cmp(&score(&a.1,&words)));outros.truncate(4);
- let mut order=tom;order.extend(nicho);order.extend(evento);order.extend(girias);order.extend(canal);order.extend(outros);
+ let mut order=tom;order.extend(nicho);order.extend(evento);order.extend(canal);order.extend(girias);order.extend(outros);
  let budget=depth_budget(&p.ai.knowledge_depth);
  let mut out=Vec::new();let mut used=0usize;
+ let count=order.len().max(1);
+ let allowance=(budget/count).min(2200);
  for (entry,text) in order {
-  let piece=format!("{}\n{}",entry.path,text);
-  if used+piece.len()<=budget {used+=piece.len();out.push(piece);}
-  else if out.is_empty() { // Orçamento menor que o primeiro arquivo: corta sem perder as regras fixas.
-   out.push(piece.chars().take(budget).collect());break;
+  let header=format!("{}\n",entry.path);
+  let room=allowance.saturating_sub(header.chars().count()+2);
+  let mut paragraphs:Vec<_>=text.split("\n\n").enumerate().collect();
+  paragraphs.sort_by(|a,b|score(b.1,&words).cmp(&score(a.1,&words)).then_with(||a.0.cmp(&b.0)));
+  let mut excerpt=String::new();
+  for (_,paragraph) in paragraphs {
+   let remaining=room.saturating_sub(excerpt.chars().count());if remaining<20{break}
+   excerpt.push_str(&paragraph.chars().take(remaining.saturating_sub(2)).collect::<String>());excerpt.push_str("\n\n");
   }
+  let piece=format!("{header}{}",excerpt.trim());
+  let size=piece.chars().count()+2;
+  if used+size<=budget {used+=size;out.push(piece);}
  }
  out.join("\n\n")
 }
 fn score(text:&str,words:&[String])->usize {let t=text.to_lowercase();words.iter().filter(|w|t.contains(w.as_str())).count()}
 #[cfg(test)] mod tests {
  use super::*;
+ #[test] fn corpus_and_each_category_fit_without_loading_whole_files(){
+  let d=tempfile::tempdir().unwrap();let src=d.path().join("origem");
+  for name in ["tom-e-comportamento/tom.md","nichos/fps.md","canais/canal.md","canais/canal-exemplos-reais.md","girias/geral.md"]{write(&src,name,&format!("# Exemplo\n\n{}","mira boa áéíóú ".repeat(1500)));}
+  let id=uuid::Uuid::new_v4().to_string();import(d.path(),&id,src.to_str().unwrap()).unwrap();
+  let mut p=profile(&id,"canal");p.ai.knowledge_depth="light".into();p.ai.knowledge_nicho="fps".into();
+  let out=context(d.path(),&p,None,"mira");assert!(out.chars().count()<=5000);
+  for name in ["tom-e-comportamento/tom.md","nichos/fps.md","canais/canal.md","canais/canal-exemplos-reais.md","girias/geral.md"]{assert!(out.contains(name));}
+  p.ai.knowledge=false;assert!(context(d.path(),&p,None,"").is_empty());assert!(!context_enabled(d.path(),&p,None,"").is_empty());
+ }
  fn write(dir:&Path,rel:&str,text:&str){let path=dir.join(rel);fs::create_dir_all(path.parent().unwrap()).unwrap();fs::write(path,text).unwrap();}
  fn profile(id:&str,channel:&str)->Profile{serde_json::from_value(json!({"id":id,"name":"P","platform":"twitch","channel":channel})).unwrap()}
  #[test]

@@ -1,5 +1,44 @@
 # Histórico de atualizações
 
+# BotLive 0.1.14
+
+## O que mudou
+
+- Resenha contextual: instruções passam a exigir resposta direta, sem repetir a fala na abertura e sem travessão. A limpeza local remove cópia literal inicial da mensagem com 12 ou mais caracteres, substitui travessões e limita o texto sem cortar palavras quando possível. Evitar repetição usa as seis respostas mais recentes do bot, em vez das primeiras da janela.
+- Respostas automáticas sem tamanho explícito passam a até 120 caracteres e orçamento de 110 tokens. Escolhas explícitas de 300/450 caracteres continuam valendo. Trechos de conhecimento dividem o orçamento e têm teto de 2.200 caracteres por arquivo. Arquivos de outros nichos, canais e eventos não são abertos durante a seleção.
+- Knowledge reconhece também canais/<canal>-exemplos-reais.md e prioriza o canal antes das gírias gerais. A opção Usar base no bloco funciona mesmo se o padrão do perfil estiver desligado, respeitando arquivos individualmente desativados.
+- Memórias automáticas usam ID e plataforma, preservam notas manuais e antigas, guardam até 100 falas distintas de até 500 caracteres e evitam registros duplicados. Recuperação usa a mensagem atual, pontuação normalizada, relevância e linhas recentes, até quatro notas e 6.000 caracteres. Históricos automáticos de outras identidades não são lidos na recuperação.
+- Em erro da IA, a variável é limpa, aiSuccess fica false e o fluxo para. Não há fallback para chat, voz ou overlay; o erro fica no Histórico. A opção antiga de resposta de indisponibilidade saiu da interface e valores legados são ignorados.
+- Timers aparecem apenas na área Timers. O editor de automações não oferece mais gatilho periódico; timers existentes continuam preservados.
+- Convite do Discord abre pelo navegador do sistema. A tela e o manual mostram a ordem correta: token, convite/autorização, descoberta, servidor salvo, canais/cargos, ativação e conexão. Explicam intents, hierarquia e permissões para moderação.
+- Manual atualizado com fluxo completo da resenha, inventário dos 22 arquivos knowledge, diferença entre referências de projeto e funções implementadas, manutenção das memórias, exemplos, limites e silêncio em falhas. Fontes de variáveis, presets e timers também foram ajustadas.
+
+## Como usar
+
+1. Em Inteligência artificial, importe E:\StudioCactus\Arroba Chatbot\documentação\knowledge; escolha o nicho, a profundidade e salve. Após editar os originais, use Atualizar da pasta original.
+2. Use Resenha com IA, ancoragem na mensagem atual, Uma frase e Evitar repetição. O tamanho automático agora também é curto. As opções por bloco sobrescrevem as do perfil.
+3. Ative Registrar interações para guardar falas bem-sucedidas. Revise ou apague notas em Memórias. Falas muito curtas, comandos com ! e eventos sem ID não entram no registro automático.
+4. Crie e edite mensagens periódicas em Timers. Automações fica para eventos e sequências de ações.
+5. No Discord, salve o token de bot e abra Convite do bot antes de descobrir servidores. Autorize no servidor, volte, escolha e salve o servidor, descubra os canais novamente, ative e conecte. Posicione o cargo do bot acima dos cargos administrados. Consulte o capítulo Discord do manual.
+
+## Validação
+
+- Compilação TypeScript/Vite concluída; 17 testes Vitest e 13 cenários Playwright aprovados, incluindo a ausência de timers em Automações, gatilhos separados e instruções de instalação Discord.
+- 74 testes Rust aprovados, incluindo limpeza de resposta, seleção dos últimos seis textos, orçamento e corpus do canal, deduplicação/limite/isolamento de memórias e interrupção de ai/ai.generate para respostas HTTP 401, 429 e 500 de um provedor local simulado.
+- Oito testes dos scripts de atualização/publicação aprovados. Manual offline regenerado com 21 capítulos e links validados pelo gerador.
+- A primeira compilação Vite e os testes dos scripts encontraram restrição de subprocessos EPERM; foram executados novamente com a permissão necessária e passaram. Falhas intermediárias de compilação/testes foram corrigidas antes do fechamento desta atualização.
+
+## Limitações
+
+- Não houve homologação com provedor de IA pago, chat ao vivo ou servidor Discord real. A latência real depende do modelo, rede e fila de envio; redução de contexto e tokens não é medição de tempo em produção.
+- Memória continua lexical e registra falas, sem extração semântica ou verificação automática de fatos. Não há migração destrutiva das notas antigas; históricos legados continuam disponíveis como notas manuais.
+- Paráfrases da pergunta e repetição semântica ainda dependem do modelo. O bloqueio de assuntos continua fazendo uma segunda chamada quando configurado.
+- A autorização do convite Discord precisa ser concluída pelo responsável pelo servidor no navegador. A integração exige intents/permissões e o aplicativo aberto. Nenhuma punição real foi aplicada nesta atualização.
+- A pasta original knowledge não foi modificada; referências de projeto nela não representam automaticamente recursos implementados. Testes de prévia usam configurações salvas do perfil, sem homologar ajustes por ação no provedor real.
+- Não foi feita instalação em máquina limpa nem substituição do aplicativo que estava em execução no computador.
+
+---
+
 # BotLive 0.1.13
 
 ## O que mudou

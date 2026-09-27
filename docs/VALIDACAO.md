@@ -1,5 +1,9 @@
 # Registro de validação
 
+## Atualização 0.1.14
+
+Compilação TypeScript/Vite, 17 testes Vitest, 13 cenários Playwright, 74 testes Rust e oito testes dos scripts de atualização aprovados. Regressões cobrem silêncio em erros HTTP 401/429/500, isolamento e limites de memórias, seleção do corpus de knowledge, limpeza de texto e separação de timers. Os erros de API foram simulados localmente; não representam homologação de um provedor pago ou do servidor Discord do usuário. Não houve medição de latência em produção. As restrições locais de subprocessos exigiram nova execução autorizada de parte dos comandos. Os registros abaixo descrevem verificações históricas das versões anteriores.
+
 ## Verificações realizadas
 
 - TypeScript: `npm run check` aprovado após as alterações de comunidade e onboarding.
