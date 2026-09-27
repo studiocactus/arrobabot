@@ -135,10 +135,21 @@ pub fn matches(t:&Trigger,e:&Event)->bool {
  match t.kind.as_str() {
  "timer"=>false, // Only the internal scheduler can execute periodic flows.
  "command"=>e.kind=="chat" && e.message.split_whitespace().next().is_some_and(|s| s.eq_ignore_ascii_case(&t.pattern)),
- "contains"=>e.kind=="chat" && !t.pattern.is_empty() && e.message.to_lowercase().contains(&t.pattern.to_lowercase()),
+ "contains"=>e.kind=="chat" && contains_any(&t.pattern,&e.message),
  "voice"=>e.kind=="voice" && (t.pattern.is_empty()||e.message.to_lowercase().contains(&t.pattern.to_lowercase())),
  other=>other==e.kind,
  }
+}
+/// "Mensagem contém" aceita opções separadas por vírgula: basta uma delas aparecer
+/// na mensagem. Sem vírgula o comportamento continua o de antes, um trecho só.
+fn contains_any(pattern:&str,message:&str)->bool {
+ if pattern.trim().is_empty() { return false; }
+ let text=message.to_lowercase();
+ pattern.split(',').map(str::trim).any(|alt|!alt.is_empty()&&text.contains(&alt.to_lowercase()))
+}
+/// Primeira opção da lista: é ela que a prévia usa para simular o gatilho.
+fn first_option(pattern:&str)->&str {
+ pattern.split(',').map(str::trim).find(|alt|!alt.is_empty()).unwrap_or(pattern.trim())
 }
 pub fn preview_event(f:&Flow,e:Event)->Event {
  match f.trigger.kind.as_str() {
@@ -151,9 +162,10 @@ pub fn preview_event(f:&Flow,e:Event)->Event {
   Event{kind:"chat".into(),message,..e}
  },
  "contains" if !f.trigger.pattern.is_empty()=>{
-  let message=if e.message.to_lowercase().contains(&f.trigger.pattern.to_lowercase()){e.message}
-   else if e.message.trim().is_empty(){f.trigger.pattern.clone()}
-   else{format!("{} {}",e.message.trim(),f.trigger.pattern)};
+  let alt=first_option(&f.trigger.pattern);
+  let message=if e.message.to_lowercase().contains(&alt.to_lowercase()){e.message}
+   else if e.message.trim().is_empty(){alt.to_owned()}
+   else{format!("{} {}",e.message.trim(),alt)};
   Event{kind:"chat".into(),message,..e}
  },
  kind=>Event{kind:kind.into(),..e},
@@ -203,11 +215,23 @@ pub fn validate_flow(f:&Flow)->Result<(),String> {
   assert_eq!((t.kind.as_str(),t.message.as_str()),("chat","!minecraft tudo bem"));
   f.trigger.kind="contains".into();f.trigger.pattern="minecraft".into();
   assert_eq!(preview_event(&f,e()).message,"!oi tudo bem minecraft");
+  f.trigger.pattern="minecraft, cs2".into();
+  assert_eq!(preview_event(&f,e()).message,"!oi tudo bem minecraft","a prévia usa a primeira opção da lista");
   f.trigger.kind="voice".into();f.trigger.pattern.clear();
   let t=preview_event(&f,e());
   assert_eq!((t.kind.as_str(),t.user_id.as_str(),t.message.as_str()),("voice","local-streamer","!oi tudo bem"));
   f.trigger.kind="follow".into();
   assert_eq!(preview_event(&f,e()).kind,"follow");
+ }
+ #[test] fn contains_trigger_accepts_a_list_separated_by_commas() {
+  let mut t=Trigger{kind:"contains".into(),pattern:"comprei, comprar , gastei".into(),permission:"everyone".into(),cooldown:0,user_cooldown:0};
+  let mut m=e();
+  m.message="amigo comprou ontem".into();assert!(!matches(&t,&m),"não precisa colar com o radical");
+  m.message="oi eu comprei sim".into();assert!(matches(&t,&m));
+  m.message="vou comprar hoje".into();assert!(matches(&t,&m));
+  m.message="só conversa por aqui".into();assert!(!matches(&t,&m));
+  m.message="agora é pix".into();t.pattern="pix".into();assert!(matches(&t,&m),"sem vírgula continua sendo um trecho só");
+  t.pattern.clear();assert!(!matches(&t,&m));
  }
  #[test] fn delivery_type_color_and_flow_audio_rules() {
   let mut f=Flow{counter:false,timer_seconds:300,audio:String::new(),audio_volume:1.0,send_type:"chat".into(),send_color:"primary".into(),id:uuid::Uuid::new_v4().to_string(),profile_id:uuid::Uuid::new_v4().to_string(),name:"ifood".into(),enabled:true,trigger:Trigger{kind:"command".into(),pattern:"!ifood".into(),permission:"everyone".into(),cooldown:0,user_cooldown:0},actions:vec![Action{kind:"chat".into(),text:"Bora".into(),target:String::new(),value:0,condition:String::new(),..Default::default()}],layout:Value::Null};

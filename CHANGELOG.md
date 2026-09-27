@@ -1,5 +1,53 @@
 # Histórico de atualizações
 
+# BotLive 0.1.16
+
+## O que mudou
+
+A IA das **Automações** passou por três correções independentes sobre o diagnóstico de quem relatou os sintomas. Nenhuma função existente mudou de lugar:
+
+- **Endereço do provedor sem caminho duplicado.** O caminho da chamada agora é montado conforme o provedor escolhido (função `chat_url` em `src-tauri/src/ai.rs`). Sem caminho no endereço entra o do provedor: `/api/chat` no Ollama, `/v1/chat/completions` na API compatível e `/v1/messages` no Anthropic. Um endereço que já traz o caminho é aproveitado como está e nunca recebe o caminho duas vezes, e um endereço vindo de outro formato é convertido para o equivalente: `https://ollama.com/api/chat` com a API compatível selecionada vira `https://ollama.com/v1/chat/completions` em vez de `https://ollama.com/api/chat/chat/completions`, que devolve HTTP 404.
+- **Cada erro diz qual é a ação certa.** HTTP 404 aponta o endereço exato usado na chamada, porque o problema é o endereço e não o modelo; 401 e 403 apontam a chave; 429 aponta limite ou quota; e os 5xx pedem nova tentativa.
+- **Texto de análise não vai mais para o chat.** Quando o provedor devolve a leitura da mensagem em vez da frase pronta (o padrão que publicava "The user sent ..." em inglês), a ação falha com erro em português no Histórico, a variável de resposta fica vazia e nada é enviado ao público. O pedido ao modelo passou a carregar `replyFormat`, pedindo a frase final em português sem análise, e as regras do sistema reforçam que análise, tradução e raciocínio interno não vão para o chat.
+- **Raciocínio sem resposta ganhou erro próprio.** Quando o conteúdo vem vazio porque o modelo gastou os tokens raciocinando, o aviso explica isso e sugere aumentar o tamanho da resposta ou escolher outro modelo; antes aparecia apenas "O provedor não retornou uma mensagem".
+- **Mais espaço para o raciocínio do modelo.** O orçamento de tokens enviado ao provedor passa de 110/250/450 para 500/1000/1600 nos tamanhos curto, médio e livre. O texto publicado continua cortado em 120, 300 ou 450 caracteres, sem mudança do que o espectador vê.
+- **Gatilho Mensagem contém aceita lista por vírgula.** Um gatilho escrito como `comprei, comprar, gastei` passa a disparar quando uma das partes aparece na mensagem. Antes a lista inteira precisava aparecer no texto, e por isso gatilhos que funcionavam na prévia nunca disparavam na live. Sem vírgula o comportamento continua o mesmo de antes. A prévia do editor usa a primeira opção da lista, o campo **Texto que dispara** ganhou uma dica no editor visual e a recusa de salvar continua igual.
+- **Nome BotLive no topo esquerdo.** A marca na barra lateral passa de `botlive.` para `BotLive.`.
+
+Arquivos: `src-tauri/src/ai.rs`, `src-tauri/src/model.rs`, `src/App.tsx`, `src/AIMemory.tsx`, `src/FlowEditor.tsx`, `tests/ui/app.spec.ts`, `tests/ui/flow-inspector.spec.ts`, os capítulos 03, 04 e 08 do manual e `docs/VARIAVEIS.md`.
+
+## Como usar
+
+1. Em **Inteligência artificial**, informe a base do provedor (por exemplo `https://ollama.com` ou `https://api.openai.com/v1`) e deixe o caminho para o BotLive montar; a dica do campo explica o comportamento. Endereços completos já existentes continuam valendo sem reconfigurar.
+2. Em **Automações → gatilho Mensagem contém**, separe palavras ou frases com vírgula. Basta uma delas aparecer na mensagem; sem vírgula, o texto precisa aparecer inteiro.
+3. Se a IA não responder, abra **Histórico**: o erro diz se é endereço (404, com o endereço usado), chave (401/403), limite (429), raciocínio sem resposta ou texto de análise recusado.
+4. Em **Como esta ação responde**, aumente o tamanho da resposta quando o aviso indicar que o modelo gastou os tokens pensando; a troca de modelo continua sendo o caminho quando a resposta vier como análise.
+5. O topo esquerdo do aplicativo agora mostra **BotLive.**; nada mais foi renomeado.
+
+## Validação
+
+Executado localmente nesta versão, em Windows x64 com Node.js 25 e Rust MSVC:
+
+- `npm run check` (TypeScript) aprovado após as mudanças no App, no editor de fluxos e na tela de IA.
+- `npm run test`: 24 testes Vitest aprovados.
+- `node .tools/run.cjs cargo test --locked --lib --manifest-path src-tauri/Cargo.toml`: 77 testes Rust aprovados, sendo 3 novos: `chat_path_follows_the_provider_without_duplicating` (composição por provedor, conversão de `/api/chat`, caminho completo reaproveitado e recusas), `analysis_openers_never_pass_to_the_chat` (aberturas de análise em inglês e português barradas, respostas normais liberadas) e `contains_trigger_accepts_a_list_separated_by_commas` (lista com vírgula, trecho único e gatilho vazio).
+- `npx playwright test`: 14 cenários aprovados, incluindo as asserções novas de marca `BotLive` na barra lateral e da dica de lista por vírgula no campo **Texto que dispara** (ausente em Comando, visível em Mensagem contém).
+- `npm run test:updates`: 8 testes dos scripts de atualização aprovados.
+- `npm run build` (tsc + Vite) aprovado.
+- Sonda HTTP real sem chave: `POST https://ollama.com/api/chat/chat/completions` respondeu 404, que era o endereço montado antes da correção, e `POST https://ollama.com/v1/chat/completions` respondeu 401, confirmando que o caminho corrigido existe e pede chave.
+- `npm run update:check` aprovado com as notas 0.1.16.
+
+## Limitações
+
+- Sem chave de API desta validação não houve geração real de um modelo pago: o endereço corrigido foi comprovado pela sonda HTTP (401) e por teste unitário, o que não equivale à homologação de uma resposta do provedor.
+- O diagnóstico dos sintomas relatados — automação que não respondia, demora e resposta em inglês — foi feito sobre o banco e o log locais do aplicativo: caminho montado com 404, lista de gatilho que nunca casava na live, intervalo do gatilho e latência do próprio provedor.
+- Modelos com raciocínio muito extenso ainda podem estourar o orçamento de tokens; o caso vira erro claro no Histórico, sem resposta publicada. O aumento de orçamento reduz a chance, não elimina.
+- Quando a resposta já vem como análise, ela é descartada e não há nova tentativa automática; o fluxo segue em silêncio para o público, como já acontece em qualquer falha de geração.
+- A conversão de endereço cobre os formatos conhecidos (`/api/chat`, `/v1`, `/chat/completions`, `/messages`). Um caminho desconhecido continua sendo apenas completado com o sufixo do provedor, e nesse caso um erro 404 mostra o endereço final para correção.
+- Esta versão não reduz o tempo de resposta: a latência continua vindo do provedor, do modelo e da rede.
+
+---
+
 # BotLive 0.1.15
 
 ## O que mudou

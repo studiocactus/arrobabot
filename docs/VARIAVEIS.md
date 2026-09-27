@@ -27,7 +27,7 @@ A leitura com etiquetas serve para entender a composição; não é o resultado 
 
 Abra **Testar como a mensagem vai ficar**, informe mensagem e nome de teste e clique em **Conferir variáveis** no aplicativo desktop. O resultado mostra o texto calculado e os valores disponíveis. **Dados avançados do teste** reúne ID da pessoa e JSON do evento, para quem precisa desses detalhes. No editor visual, a prévia percorre a sequência conectada e calcula as ações de variável sem executar serviços ou gravar mudanças.
 
-Quando o fluxo tem gatilho, a prévia entrega o evento que aquele gatilho produz na prática e não os dados de teste: em um timer, remetente BotLive, papel de streamer, sem ID de pessoa e sem mensagem de chat, por isso os campos de teste não aparecem. Nos gatilhos de comando e mensagem contém, a mensagem de teste passa a começar pelo texto que dispara. Nos demais, os campos de teste continuam valendo.
+Quando o fluxo tem gatilho, a prévia entrega o evento que aquele gatilho produz na prática e não os dados de teste: em um timer, remetente BotLive, papel de streamer, sem ID de pessoa e sem mensagem de chat, por isso os campos de teste não aparecem. Nos gatilhos de comando e mensagem contém, a mensagem de teste passa a começar pelo texto que dispara; em uma lista separada por vírgula, entra a primeira opção da lista. Nos demais, os campos de teste continuam valendo.
 
 ## Sintaxe e compatibilidade
 

@@ -47,7 +47,7 @@ export default function FlowEditor({flow,platform='twitch',ai,onSave,intro}:{flo
  <Field label="Evento">
  <select value={trigger.kind} onChange={e=>setTrigger({...trigger,kind:e.target.value})}>{Object.entries(triggers).filter(([k])=>flow.trigger.kind==='timer'?k==='timer':k!=='timer').map(([k,n])=>
  <option key={k} value={k}>{n}</option>)}</select>
- </Field>{['command','contains','voice'].includes(trigger.kind)&&<Field label="Texto que dispara">
+ </Field>{['command','contains','voice'].includes(trigger.kind)&&<Field label="Texto que dispara" hint={trigger.kind==='contains'?'Separe várias palavras ou frases com vírgula: o gatilho passa quando uma delas aparece na mensagem.':undefined}>
  <input value={trigger.pattern} onChange={e=>setTrigger({...trigger,pattern:e.target.value})}/>
  </Field>}{trigger.kind!=='timer'&&<>
  <Field label="Quem pode usar">

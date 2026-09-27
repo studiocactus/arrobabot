@@ -22,6 +22,12 @@ test('editor de automações agrupa campos em seções, avisa a troca para o vis
  await expect(page.getByRole('switch',{name:'Contar usos deste comando',exact:true})).toBeHidden();
  await page.getByLabel('Texto que dispara',{exact:true}).fill('!oi');
 
+ // lista de opções no gatilho de mensagem contém
+ await expect(page.getByText('Separe várias palavras ou frases com vírgula:',{exact:false})).toHaveCount(0);
+ await page.getByRole('combobox',{name:'Evento',exact:true}).selectOption('contains');
+ await expect(page.getByText('Separe várias palavras ou frases com vírgula: o gatilho passa quando uma delas aparece na mensagem.',{exact:true})).toBeVisible();
+ await page.getByRole('combobox',{name:'Evento',exact:true}).selectOption('command');
+
  // a ordem vem das conexões, não da posição dos blocos
  await expect(page.locator('.node-inspector > p.help')).toContainText('A ordem é a das setas');
 

@@ -105,7 +105,7 @@ Para reorganizar, remova as conexões antigas e conecte a sequência desejada. N
 |---|---|
 | Timer periódico | Intervalo próprio entre execuções enquanto conectado |
 | Comando de chat | Primeiro termo igual ao comando cadastrado |
-| Mensagem contém | Trecho presente em uma mensagem de chat |
+| Mensagem contém | Trecho presente em uma mensagem de chat; separe várias palavras ou frases com vírgula e basta uma delas aparecer |
 | Toda mensagem | Qualquer mensagem de chat que chegue ao processamento |
 | Novo seguidor | Evento follow |
 | Nova inscrição | Evento subscription |
