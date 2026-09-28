@@ -135,18 +135,19 @@ async fn twitch_err(res:reqwest::Response,what:&str)->String{
  let base=refused(what,status);
  if detail.is_empty(){base}else{format!("{base} Resposta da Twitch: {detail}")}
 }
-/// Nome do jogo vira o ID que a API de canal exige. Devolve None quando a Twitch
-/// não conhece o nome, para o chamador tentar outra grafia antes de desistir.
+/// Nome do jogo vira o ID e o nome oficial que a API de canal exige. Devolve
+/// None quando a Twitch não conhece o nome, para o chamador tentar outra
+/// grafia antes de desistir.
 async fn lookup_game(rt:&Runtime,p:&Profile,token:&str,name:&str)->Result<Option<String>,String>{
  let res=rt.http.get("https://api.twitch.tv/helix/games").query(&[("name",name)]).header("Client-Id",&p.client_id).bearer_auth(token).send().await.map_err(|_|"Não foi possível consultar o jogo na Twitch".to_string())?;
  if !res.status().is_success(){return Err(twitch_err(res,"Categoria").await)}
  let v:Value=res.json().await.map_err(|_|"Resposta de jogo inválida".to_string())?;
- Ok(Some(v["data"][0]["id"].as_str().unwrap_or("").to_owned()).filter(|s|!s.is_empty()))
+ Ok(Some((v["data"][0]["id"].as_str().unwrap_or("").to_owned(),v["data"][0]["name"].as_str().unwrap_or("").to_owned())).filter(|(id,_)|!id.is_empty()))
 }
-async fn game_id(rt:&Runtime,p:&Profile,token:&str,name:&str)->Result<String,String>{
- if let Some(id)=lookup_game(rt,p,token,name).await?{return Ok(id)}
+async fn game_id(rt:&Runtime,p:&Profile,token:&str,name:&str)->Result<(String,String),String>{
+ if let Some(found)=lookup_game(rt,p,token,name).await?{return Ok(found)}
  let titled=title_case(name);
- if titled!=name{if let Some(id)=lookup_game(rt,p,token,&titled).await?{return Ok(id)}}
+ if titled!=name{if let Some(found)=lookup_game(rt,p,token,&titled).await?{return Ok(found)}}
  Err(format!("A Twitch não encontrou o jogo {name}. Confira o nome ou configure o jogo fixo no conteúdo da ação."))
 }
 /// Palavras de ligação descartadas das bordas ao extrair o assunto da fala.
@@ -246,9 +247,11 @@ pub async fn run(rt:&Arc<Runtime>,p:&Profile,e:&Event,a:&Action,text:&str,trigge
     name=derive_subject(&strip_activation(&e.message,&cfg.activation),trigger);
    }
    if name.is_empty(){return Err("Não entendi o nome do jogo. Fale como 'troca o jogo para Minecraft' ou configure o jogo fixo no conteúdo da ação.".into())}
-   let id=game_id(rt,p,&token,&name).await?;
+   let (id,official)=game_id(rt,p,&token,&name).await?;
    modify_channel(rt,p,&token,json!({"game_id":id}),"Categoria").await?;
-   let done=format!("Categoria alterada para {name} pelo bot");
+   let display=if official.is_empty(){name.clone()}else{official};
+   let who=if e.kind=="voice"{p.channel.clone()}else{e.user.clone()};
+   let done=format!("@{who} mudou o jogo para \"{display}\"!");
    rt.log(&p.id,"twitch",&done,"success");Ok(done)
   }
   "title"=>{
@@ -260,7 +263,8 @@ pub async fn run(rt:&Arc<Runtime>,p:&Profile,e:&Event,a:&Action,text:&str,trigge
    if title.is_empty(){return Err("Não entendi o novo título. Fale como 'troca o título para Ranked com viewers' ou configure o título fixo no conteúdo da ação.".into())}
    let title:String=title.chars().take(140).collect();
    modify_channel(rt,p,&token,json!({"title":title}),"Título").await?;
-   let done=format!("Título alterado para {title} pelo bot");
+   let who=if e.kind=="voice"{p.channel.clone()}else{e.user.clone()};
+   let done=format!("@{who} mudou o título para \"{title}\"!");
    rt.log(&p.id,"twitch",&done,"success");Ok(done)
   }
   "timeout"|"ban"|"unban"|"warn"=>{
