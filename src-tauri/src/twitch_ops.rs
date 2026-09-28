@@ -95,20 +95,43 @@ async fn game_id(rt:&Runtime,p:&Profile,token:&str,name:&str)->Result<String,Str
 }
 /// Palavras de ligação descartadas das bordas ao extrair o assunto da fala.
 const FILLERS:&[&str]=&["para","pra","pro","o","a","os","as","um","uma","de","do","da","dos","das","no","na","nos","nas","por","favor","porfavor","jogo","categoria","titulo","título","jogar","troca","trocar","muda","mudar","coloca","colocar","bota","botar","ponha","poe","põe","agora","ai","aí","meu","minha"];
+/// Remove a primeira ocorrência de `agulha` em `palheiro` sem diferenciar
+/// maiúsculas de minúsculas, mantendo a caixa original do restante.
+fn remove_first_case_insensitive(palheiro:&str,agulha:&str)->String{
+ let lower=palheiro.to_lowercase();
+ let Some(pos)=lower.find(&agulha.to_lowercase()) else{return palheiro.to_owned()};
+ let before=lower[..pos].chars().count();
+ let len=agulha.chars().count();
+ let chars:Vec<char>=palheiro.chars().collect();
+ chars[..before].iter().collect::<String>()+&chars[before+len..].iter().collect::<String>()
+}
 /// Extrai o assunto da fala removendo a variação do gatilho que casou e as
 /// palavras de ligação das bordas: "troca o jogo para minecraft" vira "minecraft".
+/// A pontuação das bordas sai ("Minecraft." vira "Minecraft") mas a caixa
+/// original é mantida para a busca na Twitch e para o título.
 fn derive_subject(message:&str,pattern:&str)->String{
- let mut alts:Vec<String>=pattern.split(',').map(str::trim).filter(|s|!s.is_empty()).map(|s|s.to_lowercase()).collect();
+ let mut alts:Vec<String>=pattern.split(',').map(str::trim).filter(|s|!s.is_empty()).map(|s|s.to_owned()).collect();
  alts.sort_by_key(|s|std::cmp::Reverse(s.len()));
- let mut rest=message.to_lowercase();
+ let mut rest=message.to_owned();
  for alt in &alts{
-  if let Some(pos)=rest.find(alt){rest=rest[..pos].to_owned()+&rest[pos+alt.len()..];break}
+  let next=remove_first_case_insensitive(&rest,alt);
+  if next!=rest{rest=next;break}
  }
- let words:Vec<&str>=rest.split_whitespace().collect();
+ let words:Vec<String>=rest.split_whitespace().map(|w|w.trim_matches(|c:char|!(c.is_alphanumeric()||c=='_'||c=='-')).to_owned()).filter(|w|!w.is_empty()).collect();
  let mut start=0;let mut end=words.len();
- while start<end&&FILLERS.contains(&words[start]){start+=1}
- while end>start&&FILLERS.contains(&words[end-1]){end-=1}
+ while start<end&&FILLERS.contains(&words[start].to_lowercase().as_str()){start+=1}
+ while end>start&&FILLERS.contains(&words[end-1].to_lowercase().as_str()){end-=1}
  words[start..end].join(" ").trim().to_owned()
+}
+/// Tira a palavra de ativação da fala ("Arroba. Troca o jogo..." vira
+/// "Troca o jogo..."), para ela não vazar para o nome do jogo ou o alvo.
+fn strip_activation(message:&str,activation:&str)->String{
+ let mut stops:Vec<String>=activation.split(',').map(str::trim).filter(|s|!s.is_empty()).map(|s|s.to_owned()).collect();
+ if stops.is_empty(){return message.to_owned()}
+ stops.sort_by_key(|s|std::cmp::Reverse(s.len()));
+ let mut rest=message.to_owned();
+ for s in &stops{rest=remove_first_case_insensitive(&rest,s);}
+ rest.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 fn title_case(s:&str)->String{
  s.split_whitespace().map(|w|{let mut c=w.chars();match c.next(){None=>String::new(),Some(f)=>f.to_uppercase().collect::<String>()+c.as_str()}}).collect::<Vec<_>>().join(" ")
@@ -154,9 +177,13 @@ pub async fn run(rt:&Arc<Runtime>,p:&Profile,e:&Event,a:&Action,text:&str,trigge
  let (token,moderator)=bot_creds(rt,p).await?;
  match a.tw_op.as_str(){
   "game"=>{
-   // Conteúdo vazio usa o que foi falado: remove o gatilho e as ligações.
+   // Conteúdo vazio usa o que foi falado: tira a ativação, remove o gatilho
+   // e as ligações.
    let mut name=text.trim().to_owned();
-   if name.is_empty(){name=derive_subject(&e.message,trigger);}
+   if name.is_empty(){
+    let cfg=crate::listen::Config::read(&rt.db,&p.id);
+    name=derive_subject(&strip_activation(&e.message,&cfg.activation),trigger);
+   }
    if name.is_empty(){return Err("Não entendi o nome do jogo. Fale como 'troca o jogo para Minecraft' ou configure o jogo fixo no conteúdo da ação.".into())}
    let id=game_id(rt,p,&token,&name).await?;
    modify_channel(rt,p,&token,json!({"game_id":id}),"Categoria").await?;
@@ -164,7 +191,10 @@ pub async fn run(rt:&Arc<Runtime>,p:&Profile,e:&Event,a:&Action,text:&str,trigge
   }
   "title"=>{
    let mut title:String=text.trim().to_owned();
-   if title.is_empty(){title=derive_subject(&e.message,trigger);}
+   if title.is_empty(){
+    let cfg=crate::listen::Config::read(&rt.db,&p.id);
+    title=derive_subject(&strip_activation(&e.message,&cfg.activation),trigger);
+   }
    if title.is_empty(){return Err("Não entendi o novo título. Fale como 'troca o título para Ranked com viewers' ou configure o título fixo no conteúdo da ação.".into())}
    let title:String=title.chars().take(140).collect();
    modify_channel(rt,p,&token,json!({"title":title}),"Título").await?;
@@ -233,5 +263,12 @@ pub async fn run(rt:&Arc<Runtime>,p:&Profile,e:&Event,a:&Action,text:&str,trigge
   assert_eq!(derive_subject("minecraft",""),"minecraft");
   assert_eq!(derive_subject("troca o jogo","troca o jogo"),"");
   assert_eq!(title_case("counter strike"),"Counter Strike");
+ }
+ #[test] fn a_ativacao_e_a_pontuacao_nao_vazam_para_o_nome(){
+  assert_eq!(strip_activation("Arroba. Troca o jogo para Minecraft.","Arroba"),"Troca o jogo para Minecraft.");
+  assert_eq!(derive_subject("Troca o jogo para Minecraft.","troca o jogo, muda o jogo"),"Minecraft");
+  assert_eq!(
+   derive_subject(&strip_activation("Arroba. Troca o jogo para Minecraft.","Arroba"),"troca o jogo, muda o jogo"),
+   "Minecraft");
  }
 }
