@@ -1,5 +1,28 @@
 # Histórico de atualizações
 
+# BotLive 0.1.45
+
+## O que mudou
+
+- O editor limpa o texto do gatilho ao trocar para um tipo sem texto (seguidor, inscrição, raid e demais): antes, o padrão antigo (ex.: `!oi` herdado da criação) ficava gravado e aparecia na lista, confundindo. Funcionalmente era ignorado, agora nem aparece.
+- Ao salvar, gatilhos sem texto sempre gravam padrão vazio, o que também limpa fluxos antigos na próxima gravação.
+
+## Como usar
+
+- Nada muda no uso. Fluxos existentes com texto fantasma se limpam sozinhos ao salvar de novo.
+
+## Validação
+
+- `npm run check` (tsc), `npm run update:check` e `npm run test:updates` executados antes do push.
+- `cargo test` não executado localmente (toolchain Rust indisponível); sem mudança em Rust e a CI compila e testa de verdade.
+- Teste visual do editor ainda pendente.
+
+## Limitações
+
+- Nenhuma limitação nova.
+
+---
+
 # BotLive 0.1.44
 
 ## O que mudou

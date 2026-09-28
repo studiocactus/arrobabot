@@ -28,12 +28,13 @@ export default function FlowEditor({flow,platform='twitch',ai,onSave,intro}:{flo
  const node=nodes.find(n=>n.id===selected);const action=node?.data.action;
  const connect=useCallback((c:Connection)=>setEdges(e=>addEdge({...c,animated:true},e)),[setEdges]);
  function update(a:Action){setNodes(ns=>ns.map(n=>n.id===selected?{...n,data:{label:actions[a.kind],action:a}}:n))}
- function switchKind(current:Action,next:string){const base:Action={...current,kind:next};
+ const keepText=(kind:string)=>["command","contains","voice","mention"].includes(kind);
+function switchKind(current:Action,next:string){const base:Action={...current,kind:next};
   if(next==='ai.generate'&&!base.target.startsWith('local.'))base.target='local.aiResponse';
   if(next==='punish'){if(!['sender','first'].includes(base.target))base.target='sender';if(!base.punish)base.punish='timeout';if(base.value<1)base.value=60}
   if(next==='twitch'){if(!base.twOp)base.twOp='game';if(base.value<1)base.value=60}
   update(base)}
- async function save(){try{setBusy(true);setError(null);const ordered=orderedActions(nodes,edges);await onSave({...flow,name,trigger:trigger.kind==='timer'?{...trigger,permission:'everyone',cooldown:0,userCooldown:0,pattern:''}:trigger,counter:trigger.kind==='command'&&counter,timerSeconds,sendType,sendColor,replyTo,audio,audioVolume,actions:ordered,layout:{nodes,edges}})}catch(e){setError(friendlyError(e))}finally{setBusy(false)}}
+ async function save(){try{setBusy(true);setError(null);const ordered=orderedActions(nodes,edges);await onSave({...flow,name,trigger:trigger.kind==='timer'?{...trigger,permission:'everyone',cooldown:0,userCooldown:0,pattern:''}:keepText(trigger.kind)?trigger:{...trigger,pattern:''},counter:trigger.kind==='command'&&counter,timerSeconds,sendType,sendColor,replyTo,audio,audioVolume,actions:ordered,layout:{nodes,edges}})}catch(e){setError(friendlyError(e))}finally{setBusy(false)}}
  return <div className="flow-editor">
  {intro&&<p className="notice flow-intro">{intro}</p>}
  <div className="flow-toolbar"><input aria-label="Nome do fluxo" value={name} onChange={e=>setName(e.target.value)}/><button onClick={()=>{const id=crypto.randomUUID();setNodes(ns=>ns.concat({id,position:{x:300+ns.length*70,y:260},data:{label:actions.chat,action:newAction()}}));setSelected(id)}}><Plus size={16}/>Adicionar ação</button><button className="primary" disabled={busy} onClick={save}><Save size={16}/>Salvar fluxo</button></div>
@@ -50,7 +51,7 @@ export default function FlowEditor({flow,platform='twitch',ai,onSave,intro}:{flo
  <div className="eyebrow"><Zap size={14}/> CONFIGURAR BLOCO</div>{selected==='trigger'?<>
  <Section title="Quando" open>
  <Field label="Evento">
- <select value={trigger.kind} onChange={e=>{const kind=e.target.value;setTrigger({...trigger,kind});setNodes(ns=>ns.map(n=>n.id==='trigger'?{...n,data:{...n.data,label:'⚡ '+(triggers[kind]||kind)}}:n))}}>{Object.entries(triggers).filter(([k])=>flow.trigger.kind==='timer'?k==='timer':k!=='timer').map(([k,n])=>
+ <select value={trigger.kind} onChange={e=>{const kind=e.target.value;setTrigger({...trigger,kind,pattern:keepText(kind)?trigger.pattern:''});setNodes(ns=>ns.map(n=>n.id==='trigger'?{...n,data:{...n.data,label:'⚡ '+(triggers[kind]||kind)}}:n))}}>{Object.entries(triggers).filter(([k])=>flow.trigger.kind==='timer'?k==='timer':k!=='timer').map(([k,n])=>
  <option key={k} value={k}>{n}</option>)}</select>
  </Field>{['command','contains','voice','mention'].includes(trigger.kind)&&<Field label="Texto que dispara" hint={trigger.kind==='mention'?'Separe os nomes do bot com vírgula: o gatilho passa quando um deles aparece na mensagem, como palavra inteira. Ex.: Arroba, ArrobaSrv, arromba.':trigger.kind==='contains'?'Separe várias palavras ou frases com vírgula: o gatilho passa quando uma delas aparece na mensagem.':trigger.kind==='command'?'Separe variações com vírgula quando o povo erra o comando: !whislist, !whishlist, !wishlist. Qualquer uma delas dispara.':trigger.kind==='voice'?'Separe variações com vírgula: o gatilho passa quando uma delas aparece na fala. Ex.: troca o jogo, muda o jogo, minecraft.':undefined}>
  <input value={trigger.pattern} onChange={e=>setTrigger({...trigger,pattern:e.target.value})}/>
