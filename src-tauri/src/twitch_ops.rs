@@ -133,7 +133,7 @@ fn strip_activation(message:&str,activation:&str)->String{
  stops.sort_by_key(|s|std::cmp::Reverse(s.len()));
  let mut rest=message.to_owned();
  for s in &stops{rest=remove_first_case_insensitive(&rest,s);}
- rest.split_whitespace().collect::<Vec<_>>().join(" ")
+ rest.trim_matches(|c:char|c.is_whitespace()|| matches!(c,'.'|','|'!'|'?'|':'|';'|'-')).to_owned().split_whitespace().collect::<Vec<_>>().join(" ")
 }
 fn title_case(s:&str)->String{
  s.split_whitespace().map(|w|{let mut c=w.chars();match c.next(){None=>String::new(),Some(f)=>f.to_uppercase().collect::<String>()+c.as_str()}}).collect::<Vec<_>>().join(" ")
