@@ -151,6 +151,29 @@ pub async fn process(rt:Arc<Runtime>,e:Event){
       return;
     }
   }
+ // Nativos !setgame e !settitle: moderadores e streamer digitam no chat e o
+ // bot executa pela própria conta, sem precisar de automação. Quem criar uma
+ // automação própria com o mesmo comando usa o fluxo em vez do nativo.
+ if e.kind=="chat"&&!e.simulated&&!p.bot_id.is_empty()&&e.user_id!=p.bot_id{
+  if let Some((op,rest))=crate::twitch_ops::builtin_command(&e.message){
+   if crate::model::permitted("moderator",&e.role){
+    let first=e.message.split_whitespace().next().unwrap_or("");
+    let custom=rt.db.flows(&e.profile_id).unwrap_or_default().iter().any(|f|f.enabled&&f.trigger.kind=="command"&&crate::model::command_any(&f.trigger.pattern,first));
+    if !custom{
+     if rest.trim().is_empty(){let _=rt.send(&p,&e,if op=="game"{"Use: !setgame Nome do Jogo"}else{"Use: !settitle Novo título"}).await;}
+     else{
+      let a=crate::model::Action{kind:"twitch".into(),text:String::new(),target:String::new(),value:0,condition:String::new(),punish:String::new(),tw_op:op.into(),..Default::default()};
+      let trigger=if op=="game"{"!setgame"}else{"!settitle"};
+      match crate::twitch_ops::run(&rt,&p,&e,&a,rest,trigger).await{
+       Ok(msg)=>{let _=rt.send(&p,&e,&msg).await;},
+       Err(err)=>{let _=rt.send(&p,&e,&err).await;}
+      }
+     }
+    }
+    return;
+   }
+  }
+ }
  if e.kind=="voice"&&p.modules["voice"]!=true{rt.log(&p.id,"voice","Controle por voz desativado","info");return}
  rt.log(&p.id,&e.kind,&format!("{}: {}",e.user,e.message),"info");
  rt.emit("platform-event",serde_json::to_value(&e).unwrap());

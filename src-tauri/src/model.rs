@@ -162,7 +162,7 @@ fn contains_any(pattern:&str,message:&str)->bool {
 /// "Comando de chat" aceita variações separadas por vírgula, como !whislist, !whishlist:
 /// qualquer uma delas como primeira palavra da mensagem dispara o fluxo. Sem vírgula o
 /// comportamento continua o de antes, um comando exato.
-fn command_any(pattern:&str,first:&str)->bool {
+pub(crate) fn command_any(pattern:&str,first:&str)->bool {
  if pattern.trim().is_empty() { return false; }
  pattern.split(',').map(str::trim).any(|alt|!alt.is_empty()&&first.eq_ignore_ascii_case(alt))
 }

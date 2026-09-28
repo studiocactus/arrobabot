@@ -128,6 +128,8 @@ A presença da opção no editor não garante que todas as plataformas emitam aq
 
 **Comando de chat** também aceita variações separadas por vírgula, como `!whislist, !whishlist, !wishlist`. Cada variação começa com `!`, não contém espaço e é comparada como palavra inteira. Use esse recurso para o erro de digitação mais comum do seu público: quem escreveu errado dispara o mesmo comando e recebe a mesma resposta. A prévia usa a primeira variação da lista.
 
+**Comandos nativos da Twitch no chat**: `!setgame Nome do Jogo` e `!settitle Novo título` funcionam digitados no chat por moderadores e streamer, executados pela conta do bot sem precisar de automação. Para falar em vez de digitar, use o gatilho Comando de voz com a ação Ação na Twitch: os dois caminhos fazem o mesmo. Se você criar uma automação própria com o mesmo comando, a sua vale em vez da nativa.
+
 **Comando de voz** também aceita variações separadas por vírgula, como `troca o jogo, muda o jogo, minecraft`. Basta uma delas aparecer na fala transcrita, sem diferenciar maiúsculas de minúsculas. Use esse recurso para os jeitos diferentes de pedir a mesma coisa: quem falou de outro jeito dispara a mesma automação.
 
 ## Referência das ações

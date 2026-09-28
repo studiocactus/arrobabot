@@ -36,6 +36,15 @@ pub fn note_chatter(rt:&Arc<Runtime>,e:&Event){
  map.insert(login.clone(),(login.clone(),now));
  if display!=login&&login_chars(&display){map.insert(display,(login,now));}
 }
+/// !setgame e !settitle digitados no chat: devolve (op, resto da mensagem).
+/// Falar ou digitar é escolha de quem usa: os dois caminhos executam a mesma
+/// operação pela conta do bot.
+pub fn builtin_command(message:&str)->Option<(&str,&str)>{
+ let first=message.split_whitespace().next()?;
+ let op=if first.eq_ignore_ascii_case("!setgame"){"game"}else if first.eq_ignore_ascii_case("!settitle"){"title"}else{return None};
+ let rest=message[first.len()..].trim_start_matches(|c:char|c.is_whitespace());
+ Some((op,rest))
+}
 /// Primeiro número da fala: "timeout 300" ou "slow 5".
 fn first_number(message:&str)->Option<i64>{message.split_whitespace().filter_map(|w|w.parse::<i64>().ok()).find(|n|*n>=0)}
 async fn user_id(rt:&Runtime,p:&Profile,login:&str)->Result<String,String>{crate::moderation::twitch_user_id(rt,p,login).await}
@@ -92,6 +101,8 @@ async fn require_scopes(rt:&Runtime,p:&Profile,op:&str,token:&str)->Result<(),St
  let uid=v["user_id"].as_str().unwrap_or("");
  let login=v["login"].as_str().unwrap_or("?");
  if !uid.is_empty()&&uid!=p.bot_id{return Err(format!("O token guardado é da conta {login}, diferente da conta de bot registrada no perfil. Entre como a conta do bot no navegador e reautorize a CONTA DO BOT em Perfis."))}
+ let token_client=v["client_id"].as_str().unwrap_or("");
+ if !token_client.is_empty()&&token_client!=p.client_id{return Err("O token do bot foi emitido para outro Client ID (o campo Client ID do perfil mudou depois da autorização). Confira o Client ID e reautorize a CONTA DO BOT em Perfis.".into())}
  if need.is_empty(){return Ok(())}
  let have:Vec<&str>=v["scopes"].as_array().map(|a|a.iter().filter_map(|s|s.as_str()).collect()).unwrap_or_default();
  let missing:Vec<&str>=need.iter().copied().filter(|s|!have.contains(s)).collect();
@@ -292,6 +303,12 @@ pub async fn run(rt:&Arc<Runtime>,p:&Profile,e:&Event,a:&Action,text:&str,trigge
   assert_eq!(required_scopes("slow"),&["moderator:manage:chat_settings"]);
   assert!(required_scopes("mention").is_empty());
   assert!(required_scopes("shoutout").is_empty());
+ }
+ #[test] fn comandos_nativos_separam_operacao_e_texto(){
+  assert_eq!(builtin_command("!setgame Valorant"),Some(("game","Valorant")));
+  assert_eq!(builtin_command("!SETTITLE Ranked hoje"),Some(("title","Ranked hoje")));
+  assert_eq!(builtin_command("!setgame"),Some(("game","")));
+  assert_eq!(builtin_command("!oi"),None);
  }
  #[test] fn o_primeiro_numero_vira_duracao(){
   assert_eq!(first_number("timeout 300 por favor"),Some(300));
