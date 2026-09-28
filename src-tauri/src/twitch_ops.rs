@@ -138,7 +138,7 @@ async fn twitch_err(res:reqwest::Response,what:&str)->String{
 /// Nome do jogo vira o ID e o nome oficial que a API de canal exige. Devolve
 /// None quando a Twitch não conhece o nome, para o chamador tentar outra
 /// grafia antes de desistir.
-async fn lookup_game(rt:&Runtime,p:&Profile,token:&str,name:&str)->Result<Option<String>,String>{
+async fn lookup_game(rt:&Runtime,p:&Profile,token:&str,name:&str)->Result<Option<(String,String)>,String>{
  let res=rt.http.get("https://api.twitch.tv/helix/games").query(&[("name",name)]).header("Client-Id",&p.client_id).bearer_auth(token).send().await.map_err(|_|"Não foi possível consultar o jogo na Twitch".to_string())?;
  if !res.status().is_success(){return Err(twitch_err(res,"Categoria").await)}
  let v:Value=res.json().await.map_err(|_|"Resposta de jogo inválida".to_string())?;

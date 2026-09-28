@@ -1,5 +1,28 @@
 # Histórico de atualizações
 
+# BotLive 0.1.38
+
+## O que mudou
+
+- Corrige a compilação da confirmação em formato de menção: faltavam as assinaturas de retorno em tupla na busca do jogo. Nenhuma mudança de comportamento além da 0.1.37.
+
+## Como usar
+
+- Vale o manual da 0.1.37: `!setgame` digitado ou falado confirma marcando quem pediu, com o nome oficial; automação própria continua tendo prioridade.
+
+## Validação
+
+- `npm run update:check` e `npm run test:updates` executados antes do push.
+- `cargo test` não executado localmente (toolchain Rust indisponível); a correção segue exatamente o erro apontado pela CI e a CI compila e testa de verdade.
+- Teste ao vivo da mensagem de confirmação ainda pendente.
+
+## Limitações
+
+- As mesmas da 0.1.37.
+- A 0.1.37 não gerou build (CI reprovou na compilação); esta 0.1.38 a substitui sem reescrever release, pois nenhuma release 0.1.37 chegou a existir.
+
+---
+
 # BotLive 0.1.37
 
 ## O que mudou
