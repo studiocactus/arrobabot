@@ -265,7 +265,7 @@ pub fn validate_flow(f:&Flow)->Result<(),String> {
  assert!(permitted("moderator","broadcaster"));assert!(!permitted("broadcaster","moderator"));
  }
  #[test] fn gatilho_de_voz_aceita_variacoes_com_virgula() {
-  let mut t=Trigger{kind:"voice".into(),pattern:"troca o jogo, minecraft".into(),permission:"everyone".into(),cooldown:0,user_cooldown:0};
+  let t=Trigger{kind:"voice".into(),pattern:"troca o jogo, minecraft".into(),permission:"everyone".into(),cooldown:0,user_cooldown:0};
   let mut v=e();v.kind="voice".into();v.message="troca o jogo para minecraft".into();
   assert!(matches(&t,&v));
   v.message="muda o jogo agora".into();assert!(!matches(&t,&v));

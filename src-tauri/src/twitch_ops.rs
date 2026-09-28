@@ -40,7 +40,7 @@ pub fn note_chatter(rt:&Arc<Runtime>,e:&Event){
 fn first_number(message:&str)->Option<i64>{message.split_whitespace().filter_map(|w|w.parse::<i64>().ok()).find(|n|*n>=0)}
 async fn user_id(rt:&Runtime,p:&Profile,login:&str)->Result<String,String>{crate::moderation::twitch_user_id(rt,p,login).await}
 /// Resolve quem sofre a ação: @menção, nome visto no chat, alvo fixo do editor.
-fn resolve_login(rt:&Runtime,p:&Profile,e:&Event,a:&Action)->Result<(String,String),String>{
+async fn resolve_login(rt:&Runtime,p:&Profile,e:&Event,a:&Action)->Result<(String,String),String>{
  let words:Vec<&str>=e.message.split_whitespace().collect();
  for w in &words{
   if w.starts_with('@')&&w.len()>1{
@@ -48,13 +48,16 @@ fn resolve_login(rt:&Runtime,p:&Profile,e:&Event,a:&Action)->Result<(String,Stri
    if mention_ok(&login){let id=user_id(rt,p,&login).await?;return Ok((login,id))}
   }
  }
- {
+ let found={
   let map=rt.seen_chatters.lock().unwrap();
+  let mut hit=None;
   for w in words.iter().rev(){
    let name=clean_word(w);
-   if bare_ok(&name){if let Some((login,_))=map.get(&name){let login=login.clone();drop(map);let id=user_id(rt,p,&login).await?;return Ok((login,id))}}
+   if bare_ok(&name){if let Some((login,_))=map.get(&name){hit=Some(login.clone());break}}
   }
- }
+  hit
+ };
+ if let Some(login)=found{let id=user_id(rt,p,&login).await?;return Ok((login,id))}
  let fixed=a.target.trim().trim_start_matches('@').to_lowercase();
  if login_chars(&fixed)&&fixed.len()>=2{let id=user_id(rt,p,&fixed).await?;return Ok((fixed,id))}
  Err("Não entendi quem. Fale @nome, use o nome de alguém do chat ou configure o alvo fixo na automação.".into())
@@ -133,13 +136,13 @@ pub async fn run(rt:&Arc<Runtime>,p:&Profile,e:&Event,a:&Action,text:&str)->Resu
    rt.log(&p.id,"twitch",&format!("Categoria alterada para {name} pelo bot"),"success");Ok(())
   }
   "title"=>{
-   let title:text.trim().chars().take(140).collect();
+   let title=text.trim().chars().take(140).collect();
    if title.is_empty(){return Err("Escreva o novo título no conteúdo da ação".into())}
    modify_channel(rt,p,&token,json!({"title":title}),"Título").await?;
    rt.log(&p.id,"twitch",&format!("Título alterado para {title} pelo bot"),"success");Ok(())
   }
   "timeout"|"ban"|"unban"|"warn"=>{
-   let (login,user_id)=resolve_login(rt,p,e,a)?;
+   let (login,user_id)=resolve_login(rt,p,e,a).await?;
    guard_streamer(p,&login,&user_id)?;
    let reason=if text.trim().is_empty(){"Regras da comunidade".to_string()}else{text.trim().chars().take(500).collect::<String>()};
    let seconds=if a.tw_op=="timeout"{first_number(&e.message).or(if a.value>0{Some(a.value)}else{None}).unwrap_or(60).clamp(1,1209600) as u64}else{0};
@@ -147,7 +150,7 @@ pub async fn run(rt:&Arc<Runtime>,p:&Profile,e:&Event,a:&Action,text:&str)->Resu
    rt.log(&p.id,"twitch",&format!("{} aplicado a @{login} pelo bot",a.tw_op.as_str()),"success");Ok(())
   }
   "vip"|"unvip"=>{
-   let (login,user_id)=resolve_login(rt,p,e,a)?;
+   let (login,user_id)=resolve_login(rt,p,e,a).await?;
    guard_streamer(p,&login,&user_id)?;
    vip(rt,p,&token,a.tw_op=="vip",&user_id).await?;
    rt.log(&p.id,"twitch",&format!("{} aplicado a @{login} pelo bot",if a.tw_op=="vip"{"VIP"}else{"remoção de VIP"}),"success");Ok(())
@@ -167,12 +170,12 @@ pub async fn run(rt:&Arc<Runtime>,p:&Profile,e:&Event,a:&Action,text:&str)->Resu
    rt.log(&p.id,"twitch",&format!("Modo do chat ajustado pelo bot: {}",a.tw_op.as_str()),"success");Ok(())
   }
   "shoutout"=>{
-   let (login,_)=resolve_login(rt,p,e,a)?;
+   let (login,_)=resolve_login(rt,p,e,a).await?;
    crate::platforms::shoutout(rt,p,&login).await?;
    rt.log(&p.id,"twitch",&format!("Destaque para @{login} pelo bot"),"success");Ok(())
   }
   "mention"=>{
-   let (login,_)=resolve_login(rt,p,e,a)?;
+   let (login,_)=resolve_login(rt,p,e,a).await?;
    let msg=text.trim();
    if msg.is_empty(){return Err("Escreva a mensagem no conteúdo da ação".into())}
    rt.send(p,e,&format!("@{login} {msg}")).await?;
