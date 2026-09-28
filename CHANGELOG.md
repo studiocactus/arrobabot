@@ -1,5 +1,29 @@
 # Histórico de atualizações
 
+# BotLive 0.1.34
+
+## O que mudou
+
+- Corrige a compilação dos nativos `!setgame` e `!settitle`: a ação da Twitch agora devolve a mensagem de confirmação (antes devolvia vazio e o bloco do chat nativo não compilava). Nenhuma mudança de comportamento além disso.
+
+## Como usar
+
+- Digite no chat como moderador ou streamer: `!setgame Nome do Jogo` ou `!settitle Novo título`. Sem texto, o bot responde o modo de usar. Automação própria com o mesmo comando continua tendo prioridade sobre o nativo.
+- Para voz, vale o manual anterior: gatilho com variações e ação Ação na Twitch.
+
+## Validação
+
+- `npm run update:check` e `npm run test:updates` executados antes do push.
+- `cargo test` não executado localmente (toolchain Rust indisponível); a correção segue exatamente o erro apontado pela CI e a CI compila e testa de verdade.
+- Teste ao vivo digitando `!setgame` e falando jogos variados ainda pendente.
+
+## Limitações
+
+- As mesmas da 0.1.33.
+- A 0.1.33 não gerou build (CI reprovou na compilação); esta 0.1.34 a substitui sem reescrever release, pois nenhuma release 0.1.33 chegou a existir.
+
+---
+
 # BotLive 0.1.33
 
 ## O que mudou

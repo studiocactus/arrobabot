@@ -211,7 +211,8 @@ async fn vip(rt:&Runtime,p:&Profile,token:&str,add:bool,user_id:&str)->Result<()
  Ok(())
 }
 /// Executa a operação da ação "twitch" com a conta do bot. `text` já vem renderizado.
-pub async fn run(rt:&Arc<Runtime>,p:&Profile,e:&Event,a:&Action,text:&str,trigger:&str)->Result<(),String>{
+/// Devolve a mensagem de confirmação para o chat e o Histórico.
+pub async fn run(rt:&Arc<Runtime>,p:&Profile,e:&Event,a:&Action,text:&str,trigger:&str)->Result<String,String>{
  if p.platform!="twitch"{return Err("A ação na Twitch só vale em perfil Twitch".into())}
  if crate::discord::from_discord(e).is_some(){return Err("A ação na Twitch não vale em mensagens vindas do Discord".into())}
  let (token,moderator)=bot_creds(rt,p).await?;
@@ -228,7 +229,8 @@ pub async fn run(rt:&Arc<Runtime>,p:&Profile,e:&Event,a:&Action,text:&str,trigge
    if name.is_empty(){return Err("Não entendi o nome do jogo. Fale como 'troca o jogo para Minecraft' ou configure o jogo fixo no conteúdo da ação.".into())}
    let id=game_id(rt,p,&token,&name).await?;
    modify_channel(rt,p,&token,json!({"game_id":id}),"Categoria").await?;
-   rt.log(&p.id,"twitch",&format!("Categoria alterada para {name} pelo bot"),"success");Ok(())
+   let done=format!("Categoria alterada para {name} pelo bot");
+   rt.log(&p.id,"twitch",&done,"success");Ok(done)
   }
   "title"=>{
    let mut title:String=text.trim().to_owned();
@@ -239,7 +241,8 @@ pub async fn run(rt:&Arc<Runtime>,p:&Profile,e:&Event,a:&Action,text:&str,trigge
    if title.is_empty(){return Err("Não entendi o novo título. Fale como 'troca o título para Ranked com viewers' ou configure o título fixo no conteúdo da ação.".into())}
    let title:String=title.chars().take(140).collect();
    modify_channel(rt,p,&token,json!({"title":title}),"Título").await?;
-   rt.log(&p.id,"twitch",&format!("Título alterado para {title} pelo bot"),"success");Ok(())
+   let done=format!("Título alterado para {title} pelo bot");
+   rt.log(&p.id,"twitch",&done,"success");Ok(done)
   }
   "timeout"|"ban"|"unban"|"warn"=>{
    let (login,user_id)=resolve_login(rt,p,e,a).await?;
@@ -247,13 +250,15 @@ pub async fn run(rt:&Arc<Runtime>,p:&Profile,e:&Event,a:&Action,text:&str,trigge
    let reason=if text.trim().is_empty(){"Regras da comunidade".to_string()}else{text.trim().chars().take(500).collect::<String>()};
    let seconds=if a.tw_op=="timeout"{first_number(&e.message).or(if a.value>0{Some(a.value)}else{None}).unwrap_or(60).clamp(1,1209600) as u64}else{0};
    punish_as(rt,p,&token,&moderator,&a.tw_op,&user_id,&reason,seconds).await?;
-   rt.log(&p.id,"twitch",&format!("{} aplicado a @{login} pelo bot",a.tw_op.as_str()),"success");Ok(())
+   let done=format!("{} aplicado a @{login} pelo bot",a.tw_op.as_str());
+   rt.log(&p.id,"twitch",&done,"success");Ok(done)
   }
   "vip"|"unvip"=>{
    let (login,user_id)=resolve_login(rt,p,e,a).await?;
    guard_streamer(p,&login,&user_id)?;
    vip(rt,p,&token,a.tw_op=="vip",&user_id).await?;
-   rt.log(&p.id,"twitch",&format!("{} aplicado a @{login} pelo bot",if a.tw_op=="vip"{"VIP"}else{"remoção de VIP"}),"success");Ok(())
+   let done=format!("{} aplicado a @{login} pelo bot",if a.tw_op=="vip"{"VIP"}else{"remoção de VIP"});
+   rt.log(&p.id,"twitch",&done,"success");Ok(done)
   }
   "slow"|"slowoff"|"followers"|"followersoff"|"subsonly"|"subsonlyoff"|"emoteonly"|"emoteonlyoff"=>{
    let body=match a.tw_op.as_str(){
@@ -267,19 +272,21 @@ pub async fn run(rt:&Arc<Runtime>,p:&Profile,e:&Event,a:&Action,text:&str,trigge
     _=>json!({"emote_mode":false}),
    };
    chat_settings(rt,p,&token,&moderator,body).await?;
-   rt.log(&p.id,"twitch",&format!("Modo do chat ajustado pelo bot: {}",a.tw_op.as_str()),"success");Ok(())
+   let done=format!("Modo do chat ajustado pelo bot: {}",a.tw_op.as_str());
+   rt.log(&p.id,"twitch",&done,"success");Ok(done)
   }
   "shoutout"=>{
    let (login,_)=resolve_login(rt,p,e,a).await?;
    crate::platforms::shoutout(rt,p,&login).await?;
-   rt.log(&p.id,"twitch",&format!("Destaque para @{login} pelo bot"),"success");Ok(())
+   let done=format!("Destaque para @{login} pelo bot");
+   rt.log(&p.id,"twitch",&done,"success");Ok(done)
   }
   "mention"=>{
    let (login,_)=resolve_login(rt,p,e,a).await?;
    let msg=text.trim();
    if msg.is_empty(){return Err("Escreva a mensagem no conteúdo da ação".into())}
    rt.send(p,e,&format!("@{login} {msg}")).await?;
-   Ok(())
+   Ok(format!("Resposta enviada para @{login}"))
   }
   _=>Err("Ação na Twitch: escolha uma operação válida".into())
  }
