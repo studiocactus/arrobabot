@@ -97,7 +97,7 @@ async fn require_scopes(rt:&Runtime,op:&str,token:&str)->Result<(),String>{
 }
 fn refused(what:&str,status:u16)->String{
  match status{
-  401=>format!("{what} recusado. Autorize novamente a conta do bot em Perfis."),
+  401=>format!("{what} recusado (HTTP 401). O token é válido mas a Twitch recusou o chamador: confira se o bot é editor do canal (categoria e título) ou moderador (moderação, VIP, modos), se o ID do canal está correto e, por último, autorize novamente a conta do bot em Perfis."),
   403=>format!("{what} recusado: marque o bot como moderador (e editor, para categoria e título) do canal e autorize novamente."),
   429=>format!("{what} recusado: a Twitch limitou os pedidos agora. Tente em instantes."),
   _=>format!("{what} recusado: HTTP {status}."),

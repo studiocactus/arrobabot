@@ -1,5 +1,27 @@
 # Histórico de atualizações
 
+# BotLive 0.1.31
+
+## O que mudou
+
+- Texto do erro HTTP 401 nas ações da Twitch passa a orientar a ordem certa: cargo do bot (editor para categoria e título, moderador para o resto) e ID do canal primeiro, reautorização por último. Antes, o texto mandava reautorizar sempre, o que levava a reautorizações repetidas quando a causa real era cargo. Nenhuma mudança de comportamento nas chamadas.
+
+## Como usar
+
+- Ao ver recusa da Twitch no Histórico, confira nesta ordem: bot como editor e moderador no Gestor de funções do canal, ID do canal no perfil e, por último, reautorização da conta do bot.
+
+## Validação
+
+- `npm run update:check` e `npm run test:updates` executados antes do push.
+- `cargo test` não executado localmente (toolchain Rust indisponível); alteração só em texto de erro, sem lógica nova, e a CI compila e testa de verdade.
+- Teste ao vivo da troca de categoria ainda pendente do cargo de editor.
+
+## Limitações
+
+- Mensagem de erro não distingue sozinha token sem escopo de chamador sem cargo quando a Twitch responde o mesmo HTTP; a checagem de escopos da 0.1.30 cobre o primeiro caso e este texto cobre o segundo.
+
+---
+
 # BotLive 0.1.30
 
 ## O que mudou
