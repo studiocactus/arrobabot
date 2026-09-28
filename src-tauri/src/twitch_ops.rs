@@ -267,7 +267,7 @@ pub async fn run(rt:&Arc<Runtime>,p:&Profile,e:&Event,a:&Action,text:&str,trigge
   assert_eq!(title_case("counter strike"),"Counter Strike");
  }
  #[test] fn a_ativacao_e_a_pontuacao_nao_vazam_para_o_nome(){
-  assert_eq!(strip_activation("Arroba. Troca o jogo para Minecraft.","Arroba"),"Troca o jogo para Minecraft.");
+  assert_eq!(strip_activation("Arroba. Troca o jogo para Minecraft.","Arroba"),"Troca o jogo para Minecraft");
   assert_eq!(derive_subject("Troca o jogo para Minecraft.","troca o jogo, muda o jogo"),"Minecraft");
   assert_eq!(
    derive_subject(&strip_activation("Arroba. Troca o jogo para Minecraft.","Arroba"),"troca o jogo, muda o jogo"),
