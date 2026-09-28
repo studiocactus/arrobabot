@@ -1,5 +1,28 @@
 # Histórico de atualizações
 
+# BotLive 0.1.30
+
+## O que mudou
+
+- A ação na Twitch agora confere os escopos reais do token do bot antes de executar (`GET https://id.twitch.tv/oauth2/validate`) e cobra os que faltam por operação (ex.: categoria e título exigem `channel:manage:broadcast`). Se faltar algum, o Histórico diz exatamente quais escopos faltam e manda reautorizar a conta do bot, em vez de um 401 genérico que levava a reautorizações no escuro.
+
+## Como usar
+
+- Nada muda na configuração. Ao falar o comando, se o token estiver incompleto, leia no Histórico quais escopos faltam e reautorize a CONTA DO BOT (botão Autorizar conta do bot, no perfil certo, com o programa atualizado) após aprovar cada permissão na página da Twitch.
+
+## Validação
+
+- `npm run update:check` e `npm run test:updates` executados antes do push.
+- `cargo test` não executado localmente (toolchain Rust indisponível); inclui teste do mapa de escopos por operação e a CI compila e testa de verdade.
+- Teste ao vivo falando jogos variados ainda pendente.
+
+## Limitações
+
+- A conferência soma uma chamada à Twitch por execução da ação; ações de voz são esporádicas, sem impacto relevante.
+- Reautorização continua necessária uma única vez por mudança de escopos; tokens seguem no cofre do sistema com renovação silenciosa, sem reautorizar a cada build.
+
+---
+
 # BotLive 0.1.29
 
 ## O que mudou

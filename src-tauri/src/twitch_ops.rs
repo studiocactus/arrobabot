@@ -71,6 +71,30 @@ async fn bot_creds(rt:&Runtime,p:&Profile)->Result<(String,String),String>{
  let token=crate::oauth::token(&rt.http,p,"bot").await.map_err(|_|"Autorize novamente a conta do bot em Perfis para conceder as permissões novas".to_string())?;
  Ok((token,p.bot_id.clone()))
 }
+/// Escopos que cada operação exige do token do bot.
+fn required_scopes(op:&str)->&'static [&'static str]{
+ match op{
+  "game"|"title"=>&["channel:manage:broadcast"],
+  "timeout"|"ban"|"unban"=>&["moderator:manage:banned_users"],
+  "warn"=>&["moderator:manage:warnings"],
+  "vip"|"unvip"=>&["channel:manage:vips"],
+  "slow"|"slowoff"|"followers"|"followersoff"|"subsonly"|"subsonlyoff"|"emoteonly"|"emoteonlyoff"=>&["moderator:manage:chat_settings"],
+  _=>&[],
+ }
+}
+/// Lê os escopos reais do token e cobra os que faltam, para a reautorização
+/// não ser tentativa e erro: o Histórico diz exatamente o que reautorizar.
+async fn require_scopes(rt:&Runtime,op:&str,token:&str)->Result<(),String>{
+ let need=required_scopes(op);
+ if need.is_empty(){return Ok(())}
+ let res=rt.http.get("https://id.twitch.tv/oauth2/validate").header("Authorization",format!("OAuth {token}")).send().await.map_err(|_|"Não foi possível conferir a autorização do bot".to_string())?;
+ if !res.status().is_success(){return Err("Autorize novamente a conta do bot em Perfis".into())}
+ let v:Value=res.json().await.map_err(|_|"Resposta de autorização inválida".to_string())?;
+ let have:Vec<&str>=v["scopes"].as_array().map(|a|a.iter().filter_map(|s|s.as_str()).collect()).unwrap_or_default();
+ let missing:Vec<&str>=need.iter().copied().filter(|s|!have.contains(s)).collect();
+ if missing.is_empty(){return Ok(())}
+ Err(format!("O token do bot não tem os escopos: {}. Reautorize a CONTA DO BOT em Perfis (botão Autorizar conta do bot) usando a versão atual do programa.",missing.join(", ")))
+}
 fn refused(what:&str,status:u16)->String{
  match status{
   401=>format!("{what} recusado. Autorize novamente a conta do bot em Perfis."),
@@ -177,6 +201,7 @@ pub async fn run(rt:&Arc<Runtime>,p:&Profile,e:&Event,a:&Action,text:&str,trigge
  if p.platform!="twitch"{return Err("A ação na Twitch só vale em perfil Twitch".into())}
  if crate::discord::from_discord(e).is_some(){return Err("A ação na Twitch não vale em mensagens vindas do Discord".into())}
  let (token,moderator)=bot_creds(rt,p).await?;
+ require_scopes(rt,&a.tw_op,&token).await?;
  match a.tw_op.as_str(){
   "game"=>{
    // Conteúdo vazio usa o que foi falado: tira a ativação, remove o gatilho
@@ -254,6 +279,16 @@ pub async fn run(rt:&Arc<Runtime>,p:&Profile,e:&Event,a:&Action,text:&str,trigge
   assert!(!mention_ok("a"));
   assert!(bare_ok("maria"));
   assert!(!bare_ok("no"));
+ }
+ #[test] fn cada_operacao_cobra_seu_escopo(){
+  assert_eq!(required_scopes("game"),&["channel:manage:broadcast"]);
+  assert_eq!(required_scopes("title"),&["channel:manage:broadcast"]);
+  assert_eq!(required_scopes("ban"),&["moderator:manage:banned_users"]);
+  assert_eq!(required_scopes("warn"),&["moderator:manage:warnings"]);
+  assert_eq!(required_scopes("vip"),&["channel:manage:vips"]);
+  assert_eq!(required_scopes("slow"),&["moderator:manage:chat_settings"]);
+  assert!(required_scopes("mention").is_empty());
+  assert!(required_scopes("shoutout").is_empty());
  }
  #[test] fn o_primeiro_numero_vira_duracao(){
   assert_eq!(first_number("timeout 300 por favor"),Some(300));
