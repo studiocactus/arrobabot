@@ -1,5 +1,28 @@
 # Histórico de atualizações
 
+# BotLive 0.1.44
+
+## O que mudou
+
+- Corrige o teste de variáveis dos alertas da live: os eventos de teste usavam `profile_id` e o modelo exige `profileId` em camelCase. Nenhuma mudança de comportamento.
+
+## Como usar
+
+- Vale o manual da 0.1.43: receitas de follow, sub, presente e raid com as variáveis documentadas.
+
+## Validação
+
+- `npm run update:check` e `npm run test:updates` executados antes do push.
+- `cargo test` não executado localmente (toolchain Rust indisponível); a correção alinha o teste ao modelo e a CI testa de verdade.
+- Teste ao vivo com follow, sub, presente e raid reais ainda pendente.
+
+## Limitações
+
+- As mesmas da 0.1.43.
+- A 0.1.43 não gerou build (CI reprovou só neste teste novo); esta 0.1.44 a substitui sem reescrever release, pois nenhuma release 0.1.43 chegou a existir.
+
+---
+
 # BotLive 0.1.43
 
 ## O que mudou

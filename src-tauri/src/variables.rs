@@ -231,7 +231,7 @@ impl Context {
         let dir=tempfile::tempdir().unwrap();let db=Db::open(&dir.path().join("t.sqlite")).unwrap();
         let p:Profile=serde_json::from_value(serde_json::json!({"id":"00000000-0000-4000-8000-000000000003","name":"P","platform":"twitch","channel":"canal"})).unwrap();
         db.save_profile(&p).unwrap();
-        let e:Event=serde_json::from_value(serde_json::json!({"id":"e1","profile_id":p.id,"kind":"resub","user":"Bia","user_id":"99","role":"subscriber","message":"amo aqui","data":{"tier":"2000","cumulative_months":5,"streak_months":3,"message":{"text":"amo aqui"}}})).unwrap();
+        let e:Event=serde_json::from_value(serde_json::json!({"id":"e1","profileId":p.id,"kind":"resub","user":"Bia","user_id":"99","role":"subscriber","message":"amo aqui","data":{"tier":"2000","cumulative_months":5,"streak_months":3,"message":{"text":"amo aqui"}}})).unwrap();
         let mut c=Context::new(&db,&p,&e,None).unwrap();
         assert_eq!(c.render("{{subTier}}").unwrap(),"2","mil vira nível 1, dois mil vira 2");
         assert_eq!(c.render("{{subMonths}}").unwrap(),"5");
@@ -240,7 +240,7 @@ impl Context {
         assert_eq!(c.render("{{followerCount}}").unwrap(),"","sem contagem o modelo sai vazio, sem erro");
         c.set("followerCount",serde_json::json!(1022));c.set("subCount",serde_json::json!(42));
         assert_eq!(c.render("Obrigado por seguir a gente {{user}}! Agora estamos em {{followerCount}} seguidores e {{subCount}} subs!").unwrap(),"Obrigado por seguir a gente Bia! Agora estamos em 1022 seguidores e 42 subs!");
-        let r:Event=serde_json::from_value(serde_json::json!({"id":"e2","profile_id":p.id,"kind":"raid","user":"Mia","user_id":"98","role":"everyone","message":"","data":{"viewers":17,"from_broadcaster_user_login":"miazinha"}})).unwrap();
+        let r:Event=serde_json::from_value(serde_json::json!({"id":"e2","profileId":p.id,"kind":"raid","user":"Mia","user_id":"98","role":"everyone","message":"","data":{"viewers":17,"from_broadcaster_user_login":"miazinha"}})).unwrap();
         let rc=Context::new(&db,&p,&r,None).unwrap();
         assert_eq!(rc.render("{{raidViewers}}").unwrap(),"17");
         assert_eq!(rc.render("{{raiderLogin}}").unwrap(),"miazinha");
