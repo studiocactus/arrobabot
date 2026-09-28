@@ -34,6 +34,10 @@ export const variableCatalog:VariableChoice[]=[
  {key:'lf',label:'Quebra de linha',group:'Mensagem'},
  {key:'lastSpeech',label:'Última fala no microfone',group:'Voz',example:'bora de ranked'},
  {key:'liveSpeech',label:'Falas da escuta nesta sessão',group:'Voz',example:'bora de ranked | vamos ganhar hoje'},
+ {key:'local.twitchGame',label:'Jogo resolvido pela ação Twitch',group:'Twitch',example:'VALORANT — vale nas ações seguintes'},
+ {key:'local.twitchGameId',label:'ID do jogo resolvido',group:'Twitch'},
+ {key:'local.twitchTitle',label:'Título aplicado pela ação Twitch',group:'Twitch'},
+ {key:'local.twitchTarget',label:'Alvo da ação Twitch',group:'Twitch',example:'maria'},
 ];
 export const scopeNames:Record<string,string>={local:'Só nesta execução',global:'Salva no perfil',user:'Salva por pessoa',session:'Perfil, até fechar o app',sessionUser:'Pessoa, até fechar o app',data:'Dados do evento'};
 // `random:min,max` traz a faixa dentro do próprio código, por isso não é um nome de variável.
@@ -60,10 +64,16 @@ export function makeVariableToken(key:string,fallback:string,format:string){
  * que era o caso de um timer citando {{local.aiResponse}} sem nenhuma ação de IA.
  * Um texto alternativo no próprio código (|default:) resolve e tira o aviso.
  */
-export function missingLocals(text:string,actions:{kind:string;target:string}[]):string[]{
+export function missingLocals(text:string,actions:{kind:string;target:string;twOp?:string}[]):string[]{
  const defined=new Set<string>();
  for(const a of actions){
   if(a.kind==='ai'||a.kind==='ai.generate'){defined.add('local.aiResponse');defined.add('local.aiSuccess')}
+  if(a.kind==='twitch'){
+   if(a.twOp==='game'){defined.add('local.twitchGame');defined.add('local.twitchGameId')}
+   else if(a.twOp==='title'){defined.add('local.twitchTitle')}
+   else if(['timeout','ban','unban','warn','vip','unvip','shoutout','mention'].includes(a.twOp||'')){defined.add('local.twitchTarget')}
+   else{defined.add('local.twitchGame');defined.add('local.twitchGameId');defined.add('local.twitchTitle');defined.add('local.twitchTarget')}
+  }
   if(a.kind==='ai.generate'&&a.target.startsWith('local.'))defined.add(a.target);
   if((a.kind==='variable.set'||a.kind==='variable.increment')&&a.target.startsWith('local.'))defined.add(a.target);
  }

@@ -229,9 +229,15 @@ async fn vip(rt:&Runtime,p:&Profile,token:&str,add:bool,user_id:&str)->Result<()
  if !res.status().is_success(){return Err(twitch_err(res,"VIP").await)}
  Ok(())
 }
-/// Executa a operação da ação "twitch" com a conta do bot. `text` já vem renderizado.
+/// Guarda o resultado para as ações seguintes do mesmo fluxo, como
+/// `{{local.twitchGame}}` na mensagem de confirmação própria.
+fn remember(variables:Option<&mut crate::variables::Context>,rt:&Arc<Runtime>,p:&Profile,e:&Event,key:&str,value:Value){
+ if let Some(v)=variables{let _=v.change(&rt.db,p,e,key,"set",value);}
+}
+/// Executa a operação da ação "twitch". `text` já vem renderizado.
 /// Devolve a mensagem de confirmação para o chat e o Histórico.
-pub async fn run(rt:&Arc<Runtime>,p:&Profile,e:&Event,a:&Action,text:&str,trigger:&str)->Result<String,String>{
+/// `variables` recebe o resultado (jogo, título, alvo) quando presente.
+pub async fn run(rt:&Arc<Runtime>,p:&Profile,e:&Event,a:&Action,text:&str,trigger:&str,variables:Option<&mut crate::variables::Context>)->Result<String,String>{
  if p.platform!="twitch"{return Err("A ação na Twitch só vale em perfil Twitch".into())}
  if crate::discord::from_discord(e).is_some(){return Err("A ação na Twitch não vale em mensagens vindas do Discord".into())}
  let (token,moderator)=if uses_channel_account(&a.tw_op){(channel_creds(rt,p).await?,String::new())}else{bot_creds(rt,p).await?};
@@ -252,6 +258,8 @@ pub async fn run(rt:&Arc<Runtime>,p:&Profile,e:&Event,a:&Action,text:&str,trigge
    let display=if official.is_empty(){name.clone()}else{official};
    let who=if e.kind=="voice"{p.channel.clone()}else{e.user.clone()};
    let done=format!("@{who} mudou o jogo para \"{display}\"!");
+   remember(variables,rt,p,e,"local.twitchGame",json!(display));
+   remember(variables,rt,p,e,"local.twitchGameId",json!(id));
    rt.log(&p.id,"twitch",&done,"success");Ok(done)
   }
   "title"=>{
@@ -265,6 +273,7 @@ pub async fn run(rt:&Arc<Runtime>,p:&Profile,e:&Event,a:&Action,text:&str,trigge
    modify_channel(rt,p,&token,json!({"title":title}),"Título").await?;
    let who=if e.kind=="voice"{p.channel.clone()}else{e.user.clone()};
    let done=format!("@{who} mudou o título para \"{title}\"!");
+   remember(variables,rt,p,e,"local.twitchTitle",json!(title));
    rt.log(&p.id,"twitch",&done,"success");Ok(done)
   }
   "timeout"|"ban"|"unban"|"warn"=>{
@@ -274,6 +283,7 @@ pub async fn run(rt:&Arc<Runtime>,p:&Profile,e:&Event,a:&Action,text:&str,trigge
    let seconds=if a.tw_op=="timeout"{first_number(&e.message).or(if a.value>0{Some(a.value)}else{None}).unwrap_or(60).clamp(1,1209600) as u64}else{0};
    punish_as(rt,p,&token,&moderator,&a.tw_op,&user_id,&reason,seconds).await?;
    let done=format!("{} aplicado a @{login} pelo bot",a.tw_op.as_str());
+   remember(variables,rt,p,e,"local.twitchTarget",json!(login));
    rt.log(&p.id,"twitch",&done,"success");Ok(done)
   }
   "vip"|"unvip"=>{
@@ -281,6 +291,7 @@ pub async fn run(rt:&Arc<Runtime>,p:&Profile,e:&Event,a:&Action,text:&str,trigge
    guard_streamer(p,&login,&user_id)?;
    vip(rt,p,&token,a.tw_op=="vip",&user_id).await?;
    let done=format!("{} aplicado a @{login} pelo bot",if a.tw_op=="vip"{"VIP"}else{"remoção de VIP"});
+   remember(variables,rt,p,e,"local.twitchTarget",json!(login));
    rt.log(&p.id,"twitch",&done,"success");Ok(done)
   }
   "slow"|"slowoff"|"followers"|"followersoff"|"subsonly"|"subsonlyoff"|"emoteonly"|"emoteonlyoff"=>{
@@ -302,6 +313,7 @@ pub async fn run(rt:&Arc<Runtime>,p:&Profile,e:&Event,a:&Action,text:&str,trigge
    let (login,_)=resolve_login(rt,p,e,a).await?;
    crate::platforms::shoutout(rt,p,&login).await?;
    let done=format!("Destaque para @{login} pelo bot");
+   remember(variables,rt,p,e,"local.twitchTarget",json!(login));
    rt.log(&p.id,"twitch",&done,"success");Ok(done)
   }
   "mention"=>{
@@ -309,6 +321,7 @@ pub async fn run(rt:&Arc<Runtime>,p:&Profile,e:&Event,a:&Action,text:&str,trigge
    let msg=text.trim();
    if msg.is_empty(){return Err("Escreva a mensagem no conteúdo da ação".into())}
    rt.send(p,e,&format!("@{login} {msg}")).await?;
+   remember(variables,rt,p,e,"local.twitchTarget",json!(login));
    Ok(format!("Resposta enviada para @{login}"))
   }
   _=>Err("Ação na Twitch: escolha uma operação válida".into())

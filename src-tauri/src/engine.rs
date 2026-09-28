@@ -164,7 +164,7 @@ pub async fn process(rt:Arc<Runtime>,e:Event){
      else{
       let a=crate::model::Action{kind:"twitch".into(),text:String::new(),target:String::new(),value:0,condition:String::new(),punish:String::new(),tw_op:op.into(),..Default::default()};
       let trigger=if op=="game"{"!setgame"}else{"!settitle"};
-      match crate::twitch_ops::run(&rt,&p,&e,&a,rest,trigger).await{
+      match crate::twitch_ops::run(&rt,&p,&e,&a,rest,trigger,None).await{
        Ok(msg)=>{let _=rt.send(&p,&e,&msg).await;},
        Err(err)=>{let _=rt.send(&p,&e,&err).await;}
       }
@@ -257,7 +257,7 @@ async fn action(rt:&Arc<Runtime>,p:&Profile,e:&Event,a:&Action,variables:&mut cr
  if e.simulated && a.kind!="chat" {if matches!(a.kind.as_str(),"ai"|"ai.generate"){crate::ai::save_response(variables,rt,p,e,a,"[Prévia: resposta contextual da IA]",false)?;}rt.log(&p.id,"simulation",&format!("Executaria {}: {}",a.kind,text.chars().take(200).collect::<String>()),"success");return Ok(())}
  match a.kind.as_str(){
  "punish"=>crate::moderation::punish(rt,p,e,a,&text).await,
- "twitch"=>crate::twitch_ops::run(rt,p,e,a,&text,&f.trigger.pattern).await.map(|_|()),
+ "twitch"=>crate::twitch_ops::run(rt,p,e,a,&text,&f.trigger.pattern,Some(variables)).await.map(|_|()),
  "chat"=>rt.send_with(p,e,&text,Some(f)).await,
  "ai"|"ai.generate"=>{
  let opts=crate::ai::Options{

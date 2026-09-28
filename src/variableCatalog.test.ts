@@ -60,4 +60,10 @@ describe('aviso de variável local sem origem no fluxo',()=>{
   expect(missingLocals('{{local.aiResponse}}',[{kind:'variable.delete',target:'local.aiResponse'}])).toEqual(['local.aiResponse']);
   expect(missingLocals('{{local.x}}',[{kind:'variable.increment',target:'local.x'}])).toEqual([]);
  });
+ it('ação Twitch define jogo, título e alvo',()=>{
+  const jogo={kind:'twitch',target:'',twOp:'game'};
+  expect(missingLocals('{{local.twitchGame}}',[chat,jogo])).toEqual([]);
+  expect(missingLocals('{{local.twitchTitle}}',[chat,jogo])).toEqual(['local.twitchTitle']);
+  expect(missingLocals('{{local.twitchTarget}}',[chat,{kind:'twitch',target:'',twOp:'ban'}])).toEqual([]);
+ });
 });
