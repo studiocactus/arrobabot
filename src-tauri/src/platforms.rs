@@ -152,7 +152,16 @@ async fn twitch_session(rt:Arc<Runtime>,p:Profile,account:&str)->Result<(),Strin
  }
  }
  },
- "notification"=>{if let Some(e)=normalize_twitch(&p,&v){rt.submit(e).await?;}},
+ "notification"=>{
+  let sub=v["metadata"]["subscription_type"].as_str().unwrap_or("").to_owned();
+  if let Some(e)=normalize_twitch(&p,&v){rt.submit(e).await?;}
+  else if sub=="channel.chat.message"{
+   let payload=&v["payload"]["event"];
+   let who=payload["chatter_user_name"].as_str().or(payload["user_name"].as_str()).unwrap_or("?");
+   let what=payload["message"]["text"].as_str().unwrap_or("");
+   rt.log(&p.id,"chat",&format!("Mensagem própria ignorada ({who}): {what}"),"info");
+  }
+ },
  "session_reconnect"=>{
  let target=v["payload"]["session"]["reconnect_url"].as_str().ok_or("Reconexão sem URL")?;
  let u=url::Url::parse(target).map_err(|_|"URL de reconexão inválida")?;
