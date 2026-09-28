@@ -116,6 +116,8 @@ Para reorganizar, remova as conexões antigas e conecte a sequência desejada. N
 | Toda mensagem | Qualquer mensagem de chat que chegue ao processamento |
 | Novo seguidor | Evento follow |
 | Nova inscrição | Evento subscription |
+| Nova re-inscrição | Evento resub, com meses, sequência e mensagem |
+| Sub de presente | Evento gift, com quem presenteou e quantidade |
 | Bits / Super Chat | Evento cheer |
 | Raid | Evento raid |
 | Resgate de pontos | Evento redemption |
@@ -151,7 +153,7 @@ A presença da opção no editor não garante que todas as plataformas emitam aq
 | Apagar variável | Destino | Remove a variável |
 | Punir na Twitch | O que aplicar (silenciar por um tempo, banir ou avisar), duração quando for silêncio, quem leva a punição (quem enviou a mensagem ou primeiro argumento do comando) e motivo | Aplica a punição na conta indicada; só em perfil Twitch e só com a conta do canal autorizada |
 | Executar script Rhai | Código que devolve texto | Executa com limites e envia o texto resultante |
-| Ação na Twitch (conta do bot) | Operação, alvo fixo opcional, duração ou intervalo e conteúdo conforme a operação | Executa pela conta do bot: categoria, título, moderação, VIP, modos do chat, destaque ou menção |
+Na ação **Ação na Twitch (conta do bot)**, escolha a operação:
 
 Use HTTPS para serviços externos; HTTP é permitido somente no próprio computador. Um webhook pode produzir efeitos reais no destino. Não use a simulação como comprovação de que ele foi recebido.
 

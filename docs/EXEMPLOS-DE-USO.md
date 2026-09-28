@@ -214,6 +214,22 @@ Para overlay, siga [OBS e API local](API-LOCAL.md): fonte, porta e chave da sess
 
 Presets não transportam totais dos contadores, saldos ou todo o estado da live. Backup e preset não são equivalentes. Consulte [Presets](06-PRESETS-E-APARENCIA.md), [Acesso e backup](07-OPERACAO-E-BACKUP.md), [Atualizações](ATUALIZACOES.md) e [Solução de problemas](08-SOLUCAO-DE-PROBLEMAS.md).
 
+## Alertas de follow, sub e raid
+
+Crie uma automação para cada gatilho abaixo, com uma ação Enviar mensagem e o texto sugerido. Os contadores vêm da Twitch na hora do alerta.
+
+### Boas-vindas a quem segue
+
+Gatilho Novo seguidor com a mensagem `Obrigado por seguir a gente {{user}}! Agora estamos em {{followerCount}} seguidores e {{subCount}} subs! Seja bem vindo e divirta-se!`.
+
+### Sub, resub e presente
+
+Gatilho Nova inscrição com mensagem para a primeira vez, gatilho Nova re-inscrição com `{{user}} há {{subMonths}} meses com a gente!` e gatilho Sub de presente com `{{gifterName}} presenteou {{giftTotal}} subs!`. O nível está em `{{subTier}}` e a mensagem do resub em `{{subMessage}}`.
+
+### Raid com destaque automático
+
+Gatilho Raid com duas ações: destaque de canal com `{{raiderLogin}}` e mensagem como `Chegou raid de {{user}} com {{raidViewers}} pessoas! Sigam de volta!`.
+
 ## Checklist de uma live de exemplo
 
 1. Abra o perfil certo e conecte o canal.

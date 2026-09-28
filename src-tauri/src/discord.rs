@@ -406,6 +406,8 @@ pub fn notify(rt:&Arc<Runtime>,p:&Profile,kind:&str,e:&Event){
  let (title,color,description)=match kind{
  "follow"=>("Novo seguidor",0x9146FF,format!("{} começou a seguir o canal.",e.user)),
  "subscription"=>("Nova inscrição",0x00F593,format!("{} assinou o canal.",e.user)),
+ "resub"=>("Nova re-inscrição",0x00F593,format!("{} renovou a inscrição.",e.user)),
+ "gift"=>("Sub de presente",0x00F593,format!("{} presenteou subs.",e.user)),
  "cheer"=>("Bits",0xFFB300,format!("{} enviou {} bits.",e.user,e.message)),
  "raid"=>("Raid",0xE91E63,format!("{} invadiu a transmissão.",e.user)),
  _=>return

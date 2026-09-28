@@ -45,6 +45,19 @@ pub fn builtin_command(message:&str)->Option<(&str,&str)>{
  let rest=message[first.len()..].trim_start_matches(|c:char|c.is_whitespace());
  Some((op,rest))
 }
+/// Totais do canal para as mensagens de alerta (seguidores, assinantes).
+/// Usa a conta do canal, que já tem leitura de seguidores e inscrições.
+/// Falha retorna None e as variáveis ficam vazias, sem quebrar o fluxo.
+pub async fn channel_counts(rt:&Arc<Runtime>,p:&Profile)->(Option<i64>,Option<i64>){
+ let Ok(token)=crate::oauth::token(&rt.http,p,"channel").await else{return (None,None)};
+ let followers=rt.http.get("https://api.twitch.tv/helix/channels/followers").query(&[("broadcaster_id",p.channel_id.as_str())]).header("Client-Id",&p.client_id).bearer_auth(&token).send().await.ok().filter(|r|r.status().is_success());
+ let subs=rt.http.get("https://api.twitch.tv/helix/subscriptions").query(&[("broadcaster_id",p.channel_id.as_str())]).header("Client-Id",&p.client_id).bearer_auth(&token).send().await.ok().filter(|r|r.status().is_success());
+ async fn total(res:Option<reqwest::Response>)->Option<i64>{
+  let v:Value=res?.json().await.ok()?;
+  v["total"].as_i64()
+ }
+ (total(followers).await,total(subs).await)
+}
 /// Primeiro número da fala: "timeout 300" ou "slow 5".
 fn first_number(message:&str)->Option<i64>{message.split_whitespace().filter_map(|w|w.parse::<i64>().ok()).find(|n|*n>=0)}
 async fn user_id(rt:&Runtime,p:&Profile,login:&str)->Result<String,String>{crate::moderation::twitch_user_id(rt,p,login).await}

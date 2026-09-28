@@ -125,6 +125,21 @@ impl Context {
         let args:Vec<_>=tokens.collect();
         values.insert("command".into(),json!(command)); values.insert("rawInput".into(),json!(raw)); values.insert("args".into(),json!(args)); values.insert("argCount".into(),json!(args.len()));
         for (i,arg) in args.iter().enumerate() { values.insert(format!("arg{i}"),json!(arg)); }
+     // Alertas da live: contadores do canal, detalhes de subs e dados da raid.
+     // followerCount e subCount chegam depois, com os totais da Twitch; aqui
+     // ficam vazios para o modelo nunca quebrar por evento sem contagem.
+     values.insert("followerCount".into(),json!("")); values.insert("subCount".into(),json!(""));
+     let tier_short=match e.data["tier"].as_str().unwrap_or(""){"1000"=>"1","2000"=>"2","3000"=>"3",other=>other};
+     values.insert("subTier".into(),json!(tier_short));
+     values.insert("subMonths".into(),json!(e.data["cumulative_months"].as_u64().unwrap_or(0)));
+     values.insert("subStreak".into(),json!(e.data["streak_months"].as_u64().unwrap_or(0)));
+     values.insert("subMessage".into(),json!(e.data["message"]["text"].as_str().unwrap_or("")));
+     values.insert("isGift".into(),json!(e.data["is_gift"]==true));
+     values.insert("gifterName".into(),json!(e.data["user_name"].as_str().filter(|s|!s.is_empty()).unwrap_or("Anônimo")));
+     values.insert("giftTotal".into(),json!(e.data["total"].as_u64().unwrap_or(0)));
+     values.insert("giftTier".into(),json!(tier_short));
+     values.insert("raidViewers".into(),json!(e.data["viewers"].as_u64().unwrap_or(0)));
+     values.insert("raiderLogin".into(),json!(e.data["from_broadcaster_user_login"].as_str().unwrap_or("")));
         if let Some(f)=flow { values.insert("commandCount".into(),json!(crate::command_counter::get(db,&p.id,&f.id)?)); values.insert("actionId".into(),json!(f.id)); values.insert("actionName".into(),json!(f.name)); }
         // O que o microfone acabou de ouvir. Sem fala ainda as duas existem vazias:
         // uma automação que usa {{lastSpeech}} não pode quebrar por o streamer estar calado.
@@ -136,6 +151,7 @@ impl Context {
         Ok(Self{values,data:e.data.clone(),simulated:e.simulated})
     }
     pub fn set_command_count(&mut self,n:i64){self.values.insert("commandCount".into(),json!(n));}
+     pub fn set(&mut self,key:&str,value:Value){self.values.insert(key.into(),value);}
     fn lookup(&self, key: &str) -> Option<Value> {
         if let Some(path)=key.strip_prefix("data.") { let mut v=&self.data; for part in path.split('.') { v=if let Some(a)=v.as_array(){a.get(part.parse::<usize>().ok()?)?}else{v.get(part)?}; } Some(v.clone()) } else { self.values.get(key).cloned() }
     }
@@ -209,5 +225,24 @@ impl Context {
             assert!(draw(bad).is_err(),"aceitaria {bad}");
         }
         assert!(draw("random:1,50").is_ok());
+    }
+    #[test] fn alertas_da_live_expoem_contadores_e_detalhes(){
+        use crate::model::{Event, Profile};
+        let dir=tempfile::tempdir().unwrap();let db=Db::open(&dir.path().join("t.sqlite")).unwrap();
+        let p:Profile=serde_json::from_value(serde_json::json!({"id":"00000000-0000-4000-8000-000000000003","name":"P","platform":"twitch","channel":"canal"})).unwrap();
+        db.save_profile(&p).unwrap();
+        let e:Event=serde_json::from_value(serde_json::json!({"id":"e1","profile_id":p.id,"kind":"resub","user":"Bia","user_id":"99","role":"subscriber","message":"amo aqui","data":{"tier":"2000","cumulative_months":5,"streak_months":3,"message":{"text":"amo aqui"}}})).unwrap();
+        let mut c=Context::new(&db,&p,&e,None).unwrap();
+        assert_eq!(c.render("{{subTier}}").unwrap(),"2","mil vira nível 1, dois mil vira 2");
+        assert_eq!(c.render("{{subMonths}}").unwrap(),"5");
+        assert_eq!(c.render("{{subStreak}}").unwrap(),"3");
+        assert_eq!(c.render("{{subMessage}}").unwrap(),"amo aqui");
+        assert_eq!(c.render("{{followerCount}}").unwrap(),"","sem contagem o modelo sai vazio, sem erro");
+        c.set("followerCount",serde_json::json!(1022));c.set("subCount",serde_json::json!(42));
+        assert_eq!(c.render("Obrigado por seguir a gente {{user}}! Agora estamos em {{followerCount}} seguidores e {{subCount}} subs!").unwrap(),"Obrigado por seguir a gente Bia! Agora estamos em 1022 seguidores e 42 subs!");
+        let r:Event=serde_json::from_value(serde_json::json!({"id":"e2","profile_id":p.id,"kind":"raid","user":"Mia","user_id":"98","role":"everyone","message":"","data":{"viewers":17,"from_broadcaster_user_login":"miazinha"}})).unwrap();
+        let rc=Context::new(&db,&p,&r,None).unwrap();
+        assert_eq!(rc.render("{{raidViewers}}").unwrap(),"17");
+        assert_eq!(rc.render("{{raiderLogin}}").unwrap(),"miazinha");
     }
 }

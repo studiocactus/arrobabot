@@ -27,6 +27,7 @@ fn event_text(e:&Event)->Option<String> {
  let user:String=e.user.chars().take(32).collect();
  Some(match e.kind.as_str() {
   "subscription" if e.data["cumulative_months"].as_u64().unwrap_or(0)>1 => format!("re-sub de {user}"),
+  "resub" => format!("re-sub de {user}"),
   "subscription"|"gift" => format!("sub de {user}"),
   "cheer" => {let bits=e.data["bits"].as_u64().unwrap_or(0);if bits>0 {format!("{bits} bits de {user}")} else {format!("bits de {user}")}},
   "raid" => format!("raid de {user}"),

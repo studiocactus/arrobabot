@@ -1,5 +1,33 @@
 # Histórico de atualizações
 
+# BotLive 0.1.43
+
+## O que mudou
+
+- Alerta de follow com contadores ao vivo: gatilho Novo seguidor agora entrega `{{followerCount}}` e `{{subCount}}` com os totais da Twitch buscados na hora do evento. Ex.: `Obrigado por seguir a gente {{user}}! Agora estamos em {{followerCount}} seguidores e {{subCount}} subs!`.
+- Novos gatilhos Nova re-inscrição e Sub de presente, com inscrições de resub (mensagem, meses acumulados e sequência) e de presente (quem presenteou, quantidade e nível) vindas da Twitch. O gatilho Nova inscrição segue para a primeira vez.
+- Detalhes de sub e raid como variáveis: `{{subTier}}`, `{{subMonths}}`, `{{subStreak}}`, `{{subMessage}}`, `{{isGift}}`, `{{gifterName}}`, `{{giftTotal}}`, `{{giftTier}}`, `{{raidViewers}}` e `{{raiderLogin}}`, com entradas no catálogo.
+- Raid com destaque automático por receita: gatilho Raid com ação de destaque usando `{{raiderLogin}}` mais mensagem com `{{user}}` e `{{raidViewers}}`. Resubs e presentes também avisam no Discord quando ligado.
+
+## Como usar
+
+- Crie uma automação por gatilho (Novo seguidor, Nova inscrição, Nova re-inscrição, Sub de presente, Raid) com uma ação Enviar mensagem e o texto das receitas no capítulo de exemplos. Contadores e detalhes chegam sozinhos; sem rede com a Twitch no instante, os contadores saem vazios sem quebrar a mensagem.
+- Para raid: adicione antes a ação de destaque com `{{raiderLogin}}`; o login sai da Twitch na hora.
+
+## Validação
+
+- `npm run check` (tsc), `npm test` (vitest 31/31), `npx playwright test tests/ui/manual.spec.ts` (1 passed), varredura de tabelas, `npm run update:check` e `npm run test:updates` executados antes do push.
+- `cargo test` não executado localmente (toolchain Rust indisponível); inclui testes de enriquecimento de variáveis e de normalização de resub e presente, e a CI compila e testa de verdade.
+- Teste ao vivo com follow, sub, presente e raid reais ainda pendente.
+
+## Limitações
+
+- Resubs sem mensagem e presentes anônimos chegam com texto e nome vazios ou Anônimo; a receita sugere texto alternativo.
+- Níveis vêm como 1, 2 e 3; o detalhamento por benefícios fica para a mensagem customizada.
+- Contadores dependem da API da Twitch no instante do alerta; em falha saem vazios.
+
+---
+
 # BotLive 0.1.42
 
 ## O que mudou

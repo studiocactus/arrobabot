@@ -182,7 +182,7 @@ pub async fn process(rt:Arc<Runtime>,e:Event){
  if let Some(reply)=crate::discord_engage::link_command(&rt,&p,&e){if let Err(err)=rt.send(&p,&e,&reply).await{rt.log(&p.id,"discord",&err,"error");}return}
  crate::discord::mirror_chat(&rt,&p,&e);
  }
- if matches!(e.kind.as_str(),"follow"|"subscription"|"cheer"|"raid"){crate::discord::notify(&rt,&p,&e.kind,&e);}
+ if matches!(e.kind.as_str(),"follow"|"subscription"|"resub"|"gift"|"cheer"|"raid"){crate::discord::notify(&rt,&p,&e.kind,&e);}
  let history=rt.conversation.lock().unwrap().receive(&e);
  rt.live.record(&p.id,&e);
  crate::chat_extras::sound(&rt,&p,&e);
@@ -208,6 +208,8 @@ pub async fn process(rt:Arc<Runtime>,e:Event){
  ready.push(f);
  }
  let publisher=responder(&ready);
+ // Totais do canal uma vez por alerta, para {{followerCount}} e {{subCount}}.
+ let counts=if !ready.is_empty()&&matches!(e.kind.as_str(),"follow"|"subscription"|"resub"|"gift")&&!e.simulated{Some(crate::twitch_ops::channel_counts(&rt,&p).await)}else{None};
  for f in ready {
   let answers=publisher.as_ref().is_none_or(|id|id==&f.id);
   rt.log(&p.id,"flow",&format!("Iniciando {}",f.name),"info");
@@ -216,6 +218,7 @@ pub async fn process(rt:Arc<Runtime>,e:Event){
  if let Some(n)=count{if !e.simulated{rt.emit("command-counter",json!({"profileId":p.id,"id":f.id,"value":n}));}}
  let mut variables=match crate::variables::Context::new(&rt.db,&p,&e,Some(&f)){Ok(v)=>v,Err(err)=>{rt.log(&p.id,"variables",&err,"error");continue}};
  if let Some(n)=count{variables.set_command_count(n);}
+ if let Some((followers,subs))=counts{variables.set("followerCount",followers.map_or(serde_json::Value::String(String::new()),|n|serde_json::json!(n)));variables.set("subCount",subs.map_or(serde_json::Value::String(String::new()),|n|serde_json::json!(n)));}
  crate::chat_extras::play_flow(&rt,&p,&f,&e);
  for a in &f.actions {
   if !answers&&matches!(a.kind.as_str(),"chat"|"ai"|"ai.generate"){continue}

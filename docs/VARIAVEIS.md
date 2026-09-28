@@ -67,6 +67,18 @@ Para escrever marcadores literalmente, acrescente uma barra invertida: `\{{user}
 | {{time}} | Hora local HH:MM:SS |
 | {{unixtime}} | Instante Unix em segundos |
 | {{lf}} | Quebra de linha |
+| {{followerCount}} | Seguidores do canal, atualizado a cada alerta |
+| {{subCount}} | Assinantes do canal, atualizado a cada alerta |
+| {{subTier}} | Nível do sub: 1, 2 ou 3 |
+| {{subMonths}} | Meses acumulados de sub |
+| {{subStreak}} | Meses em sequência |
+| {{subMessage}} | Texto enviado junto do resub |
+| {{isGift}} | true quando o sub foi presenteado |
+| {{gifterName}} | Quem presenteou, ou Anônimo |
+| {{giftTotal}} | Subs presenteados de uma vez |
+| {{giftTier}} | Nível do presente |
+| {{raidViewers}} | Pessoas trazidas pela raid |
+| {{raiderLogin}} | Login do canal que fez a raid, pronto para destaque |
 | {{lastSpeech}} | Última fala reconhecida na escuta contínua (vazia se nenhuma) |
 | {{liveSpeech}} | Todas as falas da sessão de escuta, separadas por ` \| ` |
 
