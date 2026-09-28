@@ -117,11 +117,20 @@ fn refused(what:&str,status:u16)->String{
   _=>format!("{what} recusado: HTTP {status}."),
  }
 }
+/// Lê o motivo que a Twitch devolveu no corpo, para o Histórico mostrar a
+/// causa exata em vez de só o HTTP.
+async fn twitch_err(res:reqwest::Response,what:&str)->String{
+ let status=res.status().as_u16();
+ let detail=res.text().await.unwrap_or_default();
+ let detail=detail.trim().chars().take(200).collect::<String>();
+ let base=refused(what,status);
+ if detail.is_empty(){base}else{format!("{base} Resposta da Twitch: {detail}")}
+}
 /// Nome do jogo vira o ID que a API de canal exige. Devolve None quando a Twitch
 /// não conhece o nome, para o chamador tentar outra grafia antes de desistir.
 async fn lookup_game(rt:&Runtime,p:&Profile,token:&str,name:&str)->Result<Option<String>,String>{
  let res=rt.http.get("https://api.twitch.tv/helix/games").query(&[("name",name)]).header("Client-Id",&p.client_id).bearer_auth(token).send().await.map_err(|_|"Não foi possível consultar o jogo na Twitch".to_string())?;
- if !res.status().is_success(){return Err(refused("Categoria",res.status().as_u16()))}
+ if !res.status().is_success(){return Err(twitch_err(res,"Categoria").await)}
  let v:Value=res.json().await.map_err(|_|"Resposta de jogo inválida".to_string())?;
  Ok(Some(v["data"][0]["id"].as_str().unwrap_or("").to_owned()).filter(|s|!s.is_empty()))
 }
@@ -178,7 +187,7 @@ fn title_case(s:&str)->String{
 }
 async fn modify_channel(rt:&Runtime,p:&Profile,token:&str,body:Value,what:&str)->Result<(),String>{
  let res=rt.http.patch("https://api.twitch.tv/helix/channels").query(&[("broadcaster_id",p.channel_id.as_str())]).header("Client-Id",&p.client_id).bearer_auth(token).json(&body).send().await.map_err(|_|format!("Não foi possível alterar {what}"))?;
- if !res.status().is_success(){return Err(refused(what,res.status().as_u16()))}
+ if !res.status().is_success(){return Err(twitch_err(res,what).await)}
  Ok(())
 }
 async fn punish_as(rt:&Runtime,p:&Profile,token:&str,moderator:&str,action:&str,user_id:&str,reason:&str,seconds:u64)->Result<(),String>{
@@ -193,12 +202,12 @@ async fn punish_as(rt:&Runtime,p:&Profile,token:&str,moderator:&str,action:&str,
   _=>return Err("Operação de moderação inválida".into())
  };
  let res=req.header("Client-Id",&p.client_id).bearer_auth(token).send().await.map_err(|_|"Falha ao moderar na Twitch".to_string())?;
- if !res.status().is_success(){return Err(refused("Moderação",res.status().as_u16()))}
+ if !res.status().is_success(){return Err(twitch_err(res,"Moderação").await)}
  Ok(())
 }
 async fn chat_settings(rt:&Runtime,p:&Profile,token:&str,moderator:&str,body:Value)->Result<(),String>{
  let res=rt.http.patch("https://api.twitch.tv/helix/chat/settings").query(&[("broadcaster_id",p.channel_id.as_str()),("moderator_id",moderator)]).header("Client-Id",&p.client_id).bearer_auth(token).json(&body).send().await.map_err(|_|"Não foi possível ajustar o chat".to_string())?;
- if !res.status().is_success(){return Err(refused("Modo do chat",res.status().as_u16()))}
+ if !res.status().is_success(){return Err(twitch_err(res,"Modo do chat").await)}
  Ok(())
 }
 async fn vip(rt:&Runtime,p:&Profile,token:&str,add:bool,user_id:&str)->Result<(),String>{
@@ -207,7 +216,7 @@ async fn vip(rt:&Runtime,p:&Profile,token:&str,add:bool,user_id:&str)->Result<()
   else{rt.http.delete("https://api.twitch.tv/helix/channels/vips").query(&query).header("Client-Id",&p.client_id).bearer_auth(token).send().await};
  let res=res.map_err(|_|"Falha ao alterar VIP na Twitch".to_string())?;
  if res.status().as_u16()==409{return Err("Limite de VIPs do canal atingido".into())}
- if !res.status().is_success(){return Err(refused("VIP",res.status().as_u16()))}
+ if !res.status().is_success(){return Err(twitch_err(res,"VIP").await)}
  Ok(())
 }
 /// Executa a operação da ação "twitch" com a conta do bot. `text` já vem renderizado.
