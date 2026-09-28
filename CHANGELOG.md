@@ -1,5 +1,28 @@
 # Histórico de atualizações
 
+# BotLive 0.1.40
+
+## O que mudou
+
+- Corrige a compilação das variáveis de resultado: o auxiliar de gravação recebe a opção por empréstimo em vez de mover o valor no primeiro uso. Nenhuma mudança de comportamento além da 0.1.39.
+
+## Como usar
+
+- Vale o manual da 0.1.39: ação da Twitch guarda `local.twitchGame`, `local.twitchGameId`, `local.twitchTitle` e `local.twitchTarget` para as ações seguintes do mesmo fluxo.
+
+## Validação
+
+- `npm run update:check` e `npm run test:updates` executados antes do push.
+- `cargo test` não executado localmente (toolchain Rust indisponível); a correção segue exatamente o erro apontado pela CI e a CI compila e testa de verdade.
+- Teste ao vivo da mensagem variável ainda pendente.
+
+## Limitações
+
+- As mesmas da 0.1.39.
+- A 0.1.39 não gerou build (CI reprovou na compilação); esta 0.1.40 a substitui sem reescrever release, pois nenhuma release 0.1.39 chegou a existir.
+
+---
+
 # BotLive 0.1.39
 
 ## O que mudou
