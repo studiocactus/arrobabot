@@ -1,5 +1,28 @@
 # Histórico de atualizações
 
+# BotLive 0.1.32
+
+## O que mudou
+
+- A ação na Twitch agora confere se o token guardado pertence mesmo à conta de bot registrada no perfil (compara o `user_id` da Twitch com o `bot_id`). Se for de outra conta — ex.: aprovou o código do bot logado como o canal — o Histórico diz exatamente qual conta é dona do token e manda reautorizar logado como o bot. Isso fecha o último caso de 401 com escopos em ordem.
+
+## Como usar
+
+- Nada muda na configuração. Ao falar o comando, se a conta estiver trocada, siga a mensagem do Histórico: entre no navegador como a conta do bot e reautorize a conta do bot em Perfis.
+
+## Validação
+
+- `npm run update:check` e `npm run test:updates` executados antes do push.
+- `cargo test` não executado localmente (toolchain Rust indisponível); mudança pequena e isolada, e a CI compila e testa de verdade.
+- Teste ao vivo da troca de categoria ainda pendente da conta certa.
+
+## Limitações
+
+- A checagem soma uma chamada à Twitch por execução da ação, junto da checagem de escopos já existente.
+- Se o token for da conta certa, com escopos e cargos certos, e a Twitch ainda recusar, o erro original da Twitch é mantido no Histórico para diagnóstico.
+
+---
+
 # BotLive 0.1.31
 
 ## O que mudou

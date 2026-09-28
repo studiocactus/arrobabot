@@ -84,12 +84,15 @@ fn required_scopes(op:&str)->&'static [&'static str]{
 }
 /// Lê os escopos reais do token e cobra os que faltam, para a reautorização
 /// não ser tentativa e erro: o Histórico diz exatamente o que reautorizar.
-async fn require_scopes(rt:&Runtime,op:&str,token:&str)->Result<(),String>{
+async fn require_scopes(rt:&Runtime,p:&Profile,op:&str,token:&str)->Result<(),String>{
  let need=required_scopes(op);
- if need.is_empty(){return Ok(())}
  let res=rt.http.get("https://id.twitch.tv/oauth2/validate").header("Authorization",format!("OAuth {token}")).send().await.map_err(|_|"Não foi possível conferir a autorização do bot".to_string())?;
  if !res.status().is_success(){return Err("Autorize novamente a conta do bot em Perfis".into())}
  let v:Value=res.json().await.map_err(|_|"Resposta de autorização inválida".to_string())?;
+ let uid=v["user_id"].as_str().unwrap_or("");
+ let login=v["login"].as_str().unwrap_or("?");
+ if !uid.is_empty()&&uid!=p.bot_id{return Err(format!("O token guardado é da conta {login}, diferente da conta de bot registrada no perfil. Entre como a conta do bot no navegador e reautorize a CONTA DO BOT em Perfis."))}
+ if need.is_empty(){return Ok(())}
  let have:Vec<&str>=v["scopes"].as_array().map(|a|a.iter().filter_map(|s|s.as_str()).collect()).unwrap_or_default();
  let missing:Vec<&str>=need.iter().copied().filter(|s|!have.contains(s)).collect();
  if missing.is_empty(){return Ok(())}
@@ -201,7 +204,7 @@ pub async fn run(rt:&Arc<Runtime>,p:&Profile,e:&Event,a:&Action,text:&str,trigge
  if p.platform!="twitch"{return Err("A ação na Twitch só vale em perfil Twitch".into())}
  if crate::discord::from_discord(e).is_some(){return Err("A ação na Twitch não vale em mensagens vindas do Discord".into())}
  let (token,moderator)=bot_creds(rt,p).await?;
- require_scopes(rt,&a.tw_op,&token).await?;
+ require_scopes(rt,p,&a.tw_op,&token).await?;
  match a.tw_op.as_str(){
   "game"=>{
    // Conteúdo vazio usa o que foi falado: tira a ativação, remove o gatilho
