@@ -109,9 +109,21 @@ pub async fn twitch(rt:Arc<Runtime>,p:Profile)->Result<(),String>{
 async fn twitch_events(rt:Arc<Runtime>,p:Profile)->Result<(),String>{
  // Os emotes da IA entram junto da conexão: a busca não atrasa o chat nem cada resposta.
  {let rt=rt.clone();let p=p.clone();tokio::spawn(async move{crate::emotes::refresh(&rt,&p).await});}
+ // Sessões independentes: a queda de uma não derruba a outra no mesmo instante,
+ // o que abria janelas cegas onde mensagens do chat se perdiam em silêncio.
  if crate::secrets::get(&p.id,"channel_token").is_ok() {
- tokio::try_join!(twitch_session(rt.clone(),p.clone(),"bot"),twitch_session(rt,p,"channel"))?;Ok(())
- }else{twitch_session(rt,p,"bot").await}
+  let (a,b)=(tokio::spawn(session_forever(rt.clone(),p.clone(),"bot")),tokio::spawn(session_forever(rt.clone(),p.clone(),"channel")));
+  let _=tokio::join!(a,b);Ok(())
+ }else{session_forever(rt,p,"bot").await;Ok(())}
+}
+/// Mantém uma sessão EventSub de pé sozinha, com espera crescente entre tentativas.
+async fn session_forever(rt:Arc<Runtime>,p:Profile,account:&'static str){
+ let mut delay=2;
+ loop{
+  if let Err(e)=twitch_session(rt.clone(),p.clone(),account).await{rt.log(&p.id,"connection",&format!("{account}: {e}"),"error");}
+  rt.status(&p.id,"reconnecting");
+  tokio::time::sleep(Duration::from_secs(delay)).await;delay=(delay*2).min(60);
+ }
 }
 /// Lê a categoria atual para o estado da live. Qualquer falha é silenciosa: é só um começo.
 async fn seed_category(rt:&Arc<Runtime>,p:&Profile){
@@ -128,7 +140,7 @@ async fn twitch_session(rt:Arc<Runtime>,p:Profile,account:&str)->Result<(),Strin
  let bot=oauth::token(&rt.http,&p,account).await?;
  let (mut ws,_)=connect_async("wss://eventsub.wss.twitch.tv/ws?keepalive_timeout_seconds=30").await.map_err(|_|"Não foi possível conectar ao EventSub")?;
  loop{
- let msg=tokio::time::timeout(Duration::from_secs(40),ws.next()).await.map_err(|_|"Twitch sem resposta; reconectando")?.ok_or("Conexão Twitch encerrada")?.map_err(|_|"Conexão Twitch interrompida")?;
+ let msg=tokio::time::timeout(Duration::from_secs(90),ws.next()).await.map_err(|_|"Twitch sem resposta; reconectando")?.ok_or("Conexão Twitch encerrada")?.map_err(|_|"Conexão Twitch interrompida")?;
  match msg{
  Message::Ping(v)=>{ws.send(Message::Pong(v)).await.map_err(|_|"Falha de conexão")?;continue},
  Message::Close(_)=>return Err("Conexão Twitch encerrada".into()),
