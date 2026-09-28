@@ -101,7 +101,7 @@ export default function FlowEditor({flow,platform='twitch',ai,onSave,intro}:{flo
  <p className="help">{action.target==='first'?'Escreva o alvo depois do comando, como !silenciar @alvo. O nome é convertido em ID na Twitch antes da ação.':'A ação pune quem disparou o gatilho. Em comando de todo mundo, restrinja em Quem pode usar para Moderadores ou Só o streamer.'}</p>
  <p className="help">Só executa em perfil Twitch com a conta do canal autorizada. A prévia não pune ninguém e o Histórico registra o resultado.</p>
  </>}{action.kind==='twitch'&&<>
- <Field label="Operação (conta do bot)">
+ <Field label="Operação">
  <select value={action.twOp||'game'} onChange={e=>update({...action,twOp:e.target.value})}>{Object.entries(twOps).map(([k,n])=><option key={k} value={k}>{n}</option>)}</select>
  </Field>
  {['timeout','ban','unban','warn','vip','unvip','shoutout','mention'].includes(action.twOp||'game')&&<Field label="Alvo fixo (opcional)" hint="Vale quando a fala não traz @menção nem nome de quem está no chat. Ex.: maria.">
@@ -117,7 +117,7 @@ export default function FlowEditor({flow,platform='twitch',ai,onSave,intro}:{flo
  <input type="number" min="0" max="129600" value={action.value} onChange={e=>update({...action,value:+e.target.value})}/>
  </Field>}
  <p className="help">O alvo sai da fala: @menção primeiro, depois nome de quem está no chat, depois o alvo fixo. Sem nenhum, o bot avisa no Histórico e não executa.</p>
- <p className="help">Executa com a conta do bot: ele precisa ser moderador do canal (moderação, VIP, modos do chat) e editor (categoria e título). Reautorize o bot em Perfis após atualizar. A prévia não executa.</p>
+ <p className="help">Categoria, título e VIP executam com a conta do canal (reautorize o canal após atualizar); o resto executa com a conta do bot, que precisa ser moderadora. A prévia não executa.</p>
  </>}</Section>
  <Section title="Comportamento">
  <Field label="Executar só se a mensagem contiver">

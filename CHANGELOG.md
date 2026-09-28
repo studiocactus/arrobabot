@@ -1,5 +1,31 @@
 # Histórico de atualizações
 
+# BotLive 0.1.36
+
+## O que mudou
+
+- Correção de fundo na ação da Twitch: categoria, título e VIP agora executam com o token da **conta do canal**, não do bot. A documentação oficial da Twitch exige `broadcaster_id` igual ao usuário do token nesse endpoint, sem exceção para editores (diferente dos endpoints de moderação, que aceitam moderador). Minha premissa anterior de que bastava o bot editor estava errada e causava o 401 persistente.
+- Escopos novos na conta do canal: `channel:manage:broadcast` e `channel:manage:vips`. É preciso reautorizar a conta do canal uma vez. Moderação e modos do chat continuam no bot (moderador), sem mudança.
+- Editor e manual atualizados para a divisão correta: categoria, título e VIP pela conta do canal; o resto pela conta do bot.
+
+## Como usar
+
+- Reautorize a **conta do canal** em Perfis (para os escopos novos) e fale ou digite o comando como antes. As mensagens no chat continuam saindo pela conta do bot; só a chamada de categoria, título e VIP usa a credencial do canal, invisível para os viewers.
+
+## Validação
+
+- `npm run check` (tsc), `npm test` (vitest 30/30), `npx playwright test tests/ui/manual.spec.ts` (1 passed) e varredura de tabelas executados localmente.
+- `npm run update:check` e `npm run test:updates` executados antes do push.
+- `cargo test` não executado localmente (toolchain Rust indisponível); inclui teste do roteamento por conta e a CI compila e testa de verdade.
+- Teste ao vivo da troca de categoria ainda pendente.
+
+## Limitações
+
+- Quem nunca autorizou a conta do canal precisa autorizá-la agora; quem já tinha, precisa reautorizar uma vez pelos escopos novos.
+- VIP pela conta do canal segue a regra da Twitch para o dono do canal.
+
+---
+
 # BotLive 0.1.35
 
 ## O que mudou

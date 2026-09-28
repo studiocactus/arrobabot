@@ -80,6 +80,14 @@ async fn bot_creds(rt:&Runtime,p:&Profile)->Result<(String,String),String>{
  let token=crate::oauth::token(&rt.http,p,"bot").await.map_err(|_|"Autorize novamente a conta do bot em Perfis para conceder as permissões novas".to_string())?;
  Ok((token,p.bot_id.clone()))
 }
+async fn channel_creds(rt:&Runtime,p:&Profile)->Result<String,String>{
+ if p.platform!="twitch"||p.channel_id.is_empty(){return Err("A ação na Twitch exige perfil Twitch com a conta do canal autorizada".into())}
+ crate::oauth::token(&rt.http,p,"channel").await.map_err(|_|"Autorize novamente a conta do canal em Perfis para conceder as permissões novas".to_string())
+}
+/// Categoria, título e VIP mexem no canal e executam com o token do canal
+/// (a Twitch só aceita o dono do canal nesse endpoint). O resto executa
+/// com o token do bot, que precisa ser moderador.
+fn uses_channel_account(op:&str)->bool{matches!(op,"game"|"title"|"vip"|"unvip")}
 /// Escopos que cada operação exige do token do bot.
 fn required_scopes(op:&str)->&'static [&'static str]{
  match op{
@@ -93,26 +101,27 @@ fn required_scopes(op:&str)->&'static [&'static str]{
 }
 /// Lê os escopos reais do token e cobra os que faltam, para a reautorização
 /// não ser tentativa e erro: o Histórico diz exatamente o que reautorizar.
-async fn require_scopes(rt:&Runtime,p:&Profile,op:&str,token:&str)->Result<(),String>{
+async fn require_scopes(rt:&Runtime,p:&Profile,account:&str,op:&str,token:&str)->Result<(),String>{
  let need=required_scopes(op);
- let res=rt.http.get("https://id.twitch.tv/oauth2/validate").header("Authorization",format!("OAuth {token}")).send().await.map_err(|_|"Não foi possível conferir a autorização do bot".to_string())?;
- if !res.status().is_success(){return Err("Autorize novamente a conta do bot em Perfis".into())}
+ let expected_id=if account=="do canal"{p.channel_id.as_str()}else{p.bot_id.as_str()};
+ let res=rt.http.get("https://id.twitch.tv/oauth2/validate").header("Authorization",format!("OAuth {token}")).send().await.map_err(|_|"Não foi possível conferir a autorização".to_string())?;
+ if !res.status().is_success(){return Err(format!("Autorize novamente a conta {account} em Perfis"))}
  let v:Value=res.json().await.map_err(|_|"Resposta de autorização inválida".to_string())?;
  let uid=v["user_id"].as_str().unwrap_or("");
  let login=v["login"].as_str().unwrap_or("?");
- if !uid.is_empty()&&uid!=p.bot_id{return Err(format!("O token guardado é da conta {login}, diferente da conta de bot registrada no perfil. Entre como a conta do bot no navegador e reautorize a CONTA DO BOT em Perfis."))}
+ if !uid.is_empty()&&uid!=expected_id{return Err(format!("O token guardado é da conta {login}, diferente da conta registrada no perfil. Entre como a conta certa no navegador e reautorize a conta {account} em Perfis."))}
  let token_client=v["client_id"].as_str().unwrap_or("");
- if !token_client.is_empty()&&token_client!=p.client_id{return Err("O token do bot foi emitido para outro Client ID (o campo Client ID do perfil mudou depois da autorização). Confira o Client ID e reautorize a CONTA DO BOT em Perfis.".into())}
+ if !token_client.is_empty()&&token_client!=p.client_id{return Err(format!("O token foi emitido para outro Client ID (o campo Client ID do perfil mudou depois da autorização). Confira o Client ID e reautorize a conta {account} em Perfis."))}
  if need.is_empty(){return Ok(())}
  let have:Vec<&str>=v["scopes"].as_array().map(|a|a.iter().filter_map(|s|s.as_str()).collect()).unwrap_or_default();
  let missing:Vec<&str>=need.iter().copied().filter(|s|!have.contains(s)).collect();
  if missing.is_empty(){return Ok(())}
- Err(format!("O token do bot não tem os escopos: {}. Reautorize a CONTA DO BOT em Perfis (botão Autorizar conta do bot) usando a versão atual do programa.",missing.join(", ")))
+ Err(format!("O token da conta {account} não tem os escopos: {}. Reautorize a conta {account} em Perfis usando a versão atual do programa.",missing.join(", ")))
 }
 fn refused(what:&str,status:u16)->String{
  match status{
-  401=>format!("{what} recusado (HTTP 401). O token é válido mas a Twitch recusou o chamador: confira se o bot é editor do canal (categoria e título) ou moderador (moderação, VIP, modos), se o ID do canal está correto e, por último, autorize novamente a conta do bot em Perfis."),
-  403=>format!("{what} recusado: marque o bot como moderador (e editor, para categoria e título) do canal e autorize novamente."),
+  401=>format!("{what} recusado (HTTP 401). A Twitch recusou o chamador: categoria, título e VIP usam a conta do canal; o resto usa a conta do bot, que precisa ser moderadora. Confira a conta autorizada em Perfis e o ID do canal."),
+  403=>format!("{what} recusado: a conta usada não tem o papel exigido (bot precisa ser moderador do canal para moderação e modos)."),
   429=>format!("{what} recusado: a Twitch limitou os pedidos agora. Tente em instantes."),
   _=>format!("{what} recusado: HTTP {status}."),
  }
@@ -224,8 +233,9 @@ async fn vip(rt:&Runtime,p:&Profile,token:&str,add:bool,user_id:&str)->Result<()
 pub async fn run(rt:&Arc<Runtime>,p:&Profile,e:&Event,a:&Action,text:&str,trigger:&str)->Result<String,String>{
  if p.platform!="twitch"{return Err("A ação na Twitch só vale em perfil Twitch".into())}
  if crate::discord::from_discord(e).is_some(){return Err("A ação na Twitch não vale em mensagens vindas do Discord".into())}
- let (token,moderator)=bot_creds(rt,p).await?;
- require_scopes(rt,p,&a.tw_op,&token).await?;
+ let (token,moderator)=if uses_channel_account(&a.tw_op){(channel_creds(rt,p).await?,String::new())}else{bot_creds(rt,p).await?};
+ let account=if uses_channel_account(&a.tw_op){"do canal"}else{"do bot"};
+ require_scopes(rt,p,account,&a.tw_op,&token).await?;
  match a.tw_op.as_str(){
   "game"=>{
    // Conteúdo vazio usa o que foi falado: tira a ativação, remove o gatilho
@@ -309,6 +319,10 @@ pub async fn run(rt:&Arc<Runtime>,p:&Profile,e:&Event,a:&Action,text:&str,trigge
   assert!(!mention_ok("a"));
   assert!(bare_ok("maria"));
   assert!(!bare_ok("no"));
+ }
+ #[test] fn categoria_titulo_e_vip_usam_a_conta_do_canal(){
+  for op in ["game","title","vip","unvip"]{assert!(uses_channel_account(op),"{op} mexe no canal")}
+  for op in ["timeout","ban","unban","warn","slow","slowoff","followers","shoutout","mention"]{assert!(!uses_channel_account(op),"{op} usa o bot")}
  }
  #[test] fn cada_operacao_cobra_seu_escopo(){
   assert_eq!(required_scopes("game"),&["channel:manage:broadcast"]);
