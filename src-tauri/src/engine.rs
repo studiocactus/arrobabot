@@ -1,4 +1,4 @@
-use crate::{db::Db,model::*,ai,oauth,platforms,vault,modules};
+use crate::{cmd_manager, db::Db,model::*,ai,oauth,platforms,vault,modules};
 use serde_json::{json,Value};
 use std::{collections::HashMap,path::PathBuf,sync::{Arc,Mutex},time::{Instant,Duration}};
 use tokio::sync::{broadcast,mpsc,Semaphore};
@@ -124,6 +124,31 @@ pub async fn process(rt:Arc<Runtime>,e:Event){
  let _pending=crate::timers::Pending(rt.clone(),if e.kind=="timer"&&!e.simulated{e.data["timerId"].as_str().map(str::to_owned)}else{None});
  let Ok(p)=rt.db.profile(&e.profile_id) else{return};
  if e.kind=="chat"&&!e.simulated&&!p.bot_id.is_empty()&&e.user_id==p.bot_id{return}
+  // Novo: Tratar !cmd apenas para moderadores e streamer
+  if e.kind=="chat"&&!e.simulated&&!p.bot_id.is_empty()&&e.user_id!=p.bot_id&&e.message.starts_with("!cmd") {
+    // Verificar se o usuário tem permissão de moderador ou broadcaster
+    if crate::model::permitted("moderator", &e.role) {
+      let op_result = cmd_manager::parse(&e.message);
+      match op_result {
+        Ok(op) => {
+          let exec_result = cmd_manager::execute(&rt.db, &e.profile_id, op);
+          match exec_result {
+            Ok(msg) => {
+                // Envia a resposta para o chat
+                let _ = rt.send(&p, &e, &msg).await;
+            }
+            Err(err) => {
+                let _ = rt.send(&p, &e, &err).await;
+            }
+          }
+        }
+        Err(parse_err) => {
+            let _ = rt.send(&p, &e, &format!("Erro ao processar comando: {}", parse_err)).await;
+        }
+      }
+      return;
+    }
+  }
  if e.kind=="voice"&&p.modules["voice"]!=true{rt.log(&p.id,"voice","Controle por voz desativado","info");return}
  rt.log(&p.id,&e.kind,&format!("{}: {}",e.user,e.message),"info");
  rt.emit("platform-event",serde_json::to_value(&e).unwrap());

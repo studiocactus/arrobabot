@@ -21,6 +21,7 @@ mod presets;
 mod local_api;
 mod update;
 mod moderation;
+mod cmd_manager;
 mod voice;
 mod listen;
 mod speech;

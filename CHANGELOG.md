@@ -1,5 +1,57 @@
 # Histórico de atualizações
 
+# BotLive 0.1.20
+
+# Versão 0.1.20 "Comandos via Chat"
+
+## O que mudou
+
+- **Comandos via chat da Twitch**: Moderadores e streamers podem criar automações usando `!cmd add/del/edit/list` no chat
+- **Sintaxe**: `!cmd add !nome resposta`, `!cmd del !nome`, `!cmd edit !nova resposta`, `!cmd list`
+- **Permissões**: Apenas usuários com papel `moderator` ou `broadcaster` da Twitch podem usar o recurso
+- **Integração**: Comandos criados via chat aparecem como automações normais na página "Comandos"
+
+## Sintaxe Detalhada
+
+- `!cmd add !oi Olá {{user}}` - Cria comando !oi que responde "Olá {{user}}"
+- `!cmd del !oi` - Remove o comando !oi
+- `!cmd edit !oi Ola a todos` - Atualiza a resposta do comando !oi
+- `!cmd list` - Lista todos os comandos criados via chat
+
+## Como usar
+
+1. Entre no chat da Twitch como moderador ou streamer
+2. Digite `!cmd add !nome resposta` para criar um novo comando
+3. Use `!cmd del !nome` para remover um comando
+4. Use `!cmd edit !nome nova resposta` para atualizar a resposta
+5. Use `!cmd list` para ver todos os comandos criados via chat
+6. Os comandos aparecerão na página "Comandos" da interface desktop para edição avançada
+
+## Limitações
+
+- Comandos criados via chat são respostas de texto simples
+- Automações complexas (com ações múltiplas, scripts, etc.) ainda devem ser criadas via interface desktop
+- O comando `!cmd list` mostra todos os comandos de tipo "command" no perfil
+
+## Testes
+
+- Testes unitários do parser (`parse`) em `src-tauri/src/cmd_manager.rs`: casos add/del/edit/list, nome sem `!` e entrada inválida.
+- As mensagens do próprio bot continuam ignoradas pela checagem existente em `src-tauri/src/engine.rs` (`e.user_id==p.bot_id`).
+
+## Validação
+
+- `npm run update:check` e `npm run test:updates` executados nesta máquina; registrar o resultado antes do push.
+- Testes Rust (`cargo test`) NÃO executados aqui: toolchain Rust indisponível no ambiente. Não afirmar homologação Rust.
+- Validação com conta moderadora na Twitch ao vivo ainda pendente: criar, editar, listar e remover um comando de teste e confirmar que ele aparece na página Comandos.
+
+## Notas de Desenvolvimento
+
+- Backend: `src-tauri/src/cmd_manager.rs` (novo), `src-tauri/src/engine.rs` (interceptação do `!cmd`) e `src-tauri/src/lib.rs` (registro do módulo)
+- Frontend: sem alterações; a página Comandos já filtra por `trigger.kind === 'command'`
+- Permissões via `crate::model::permitted("moderator", &e.role)`, que aceita `moderator` e `broadcaster`
+
+---
+
 # BotLive 0.1.19
 
 # 0.1.19 "Escuta contínua"
