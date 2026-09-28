@@ -1,5 +1,37 @@
 # Histórico de atualizações
 
+# BotLive 0.1.22
+
+## O que mudou
+
+- Nova ação **Ação na Twitch (conta do bot)** com 18 operações: trocar categoria (setgame), trocar título (settitle), silenciar (timeout), banir, desbanir, avisar, dar e tirar VIP, modo lento e desligar, só seguidores e liberar, só assinantes e liberar, só emotes e liberar, destaque de canal (shoutout) e responder marcando arroba (mention). Tudo executa com o token do bot, nunca com a conta do canal.
+- Gatilho **Comando de voz** passa a aceitar variações separadas por vírgula, como `troca o jogo, muda o jogo, minecraft`. Basta uma delas aparecer na fala transcrita.
+- Alvo em fala livre resolvido nesta ordem: arroba menção da frase, nome de quem passou pelo chat nas últimas 24 horas, alvo fixo configurado na automação. Sem nenhum, o bot avisa no Histórico e não executa. Durações usam o primeiro número da fala, ou o valor do editor.
+- Escopos novos no token do bot: moderação de banidos e avisos, modos do chat, transmissão (categoria e título) e VIPs. É preciso reautorizar o bot em Perfis, e ele precisa ser moderador do canal (moderação, VIP, modos) e editor (categoria e título).
+
+## Como usar
+
+- No canal da Twitch, marque o bot como moderador e como editor, depois reautorize a conta do bot em Perfis para conceder os escopos novos.
+- Crie uma automação com gatilho Comando de voz (ex.: `troca o jogo, muda o jogo, minecraft`) e adicione a ação Ação na Twitch com a operação desejada (ex.: trocar categoria com o nome do jogo no conteúdo).
+- Para punir ou dar VIP por voz, fale a arroba (`bana o @troll123`) ou o nome de quem está no chat (`vip para a maria`); durações pedem dígitos (`timeout 300`).
+- O Histórico registra cada execução com sucesso ou o motivo da recusa da Twitch.
+
+## Validação
+
+- `npm run check` (tsc), `npm test` (vitest 30/30) e `npx playwright test tests/ui/manual.spec.ts` (1 passed) executados localmente nesta máquina.
+- `npm run update:check` e `npm run test:updates` executados antes do push.
+- `cargo test` não executado localmente (toolchain Rust indisponível nesta máquina); coberto pelo job `windows` da CI, que compila o novo módulo e roda os testes de parser, alvo e gatilho de voz.
+- Teste ao vivo com conta moderadora (falar e conferir categoria, timeout e VIP reais) ainda pendente.
+
+## Limitações
+
+- VIP por conta editora depende da Twitch aceitar a operação; se recusar, o erro aparece claro no Histórico.
+- Responder em fio (reply) é impossível em evento de voz, que não tem mensagem de origem: a operação de menção posta `@alvo` mais o texto como mensagem normal.
+- Números por extenso não valem como duração: fale os dígitos.
+- O cache de nomes do chat é melhor esforço (24 horas, 2000 nomes) e só enxerga quem falou depois desta atualização.
+
+---
+
 # BotLive 0.1.21
 
 ## O que mudou

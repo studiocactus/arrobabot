@@ -120,13 +120,15 @@ Para reorganizar, remova as conexões antigas e conecte a sequência desejada. N
 | Raid | Evento raid |
 | Resgate de pontos | Evento redemption |
 | Evento externo | Evento custom enviado por integração |
-| Comando de voz | Texto reconhecido pelo módulo de voz |
+| Comando de voz | Trecho da fala transcrita; separe variações com vírgula e basta uma delas aparecer |
 
 A presença da opção no editor não garante que todas as plataformas emitam aquele evento. Consulte as capacidades do adaptador e confirme com o Histórico.
 
 **Chamada pelo nome do bot** existe para o caso em que o espectador escreve o nome do bot sem marcar com `@`, como "Arroba, vem aqui". A lista é de nomes separados por vírgula, e a comparação é por palavra inteira: com `Arroba, ArrobaSrv`, a mensagem "ArrobaSrv mandou" não dispara o gatilho pelo nome curto, porque `ArrobaSrv` é uma palavra só, não `Arroba`. O gatilho considera só mensagens de chat e respeita os mesmos intervalos por fluxo e por pessoa dos demais gatilhos.
 
 **Comando de chat** também aceita variações separadas por vírgula, como `!whislist, !whishlist, !wishlist`. Cada variação começa com `!`, não contém espaço e é comparada como palavra inteira. Use esse recurso para o erro de digitação mais comum do seu público: quem escreveu errado dispara o mesmo comando e recebe a mesma resposta. A prévia usa a primeira variação da lista.
+
+**Comando de voz** também aceita variações separadas por vírgula, como `troca o jogo, muda o jogo, minecraft`. Basta uma delas aparecer na fala transcrita, sem diferenciar maiúsculas de minúsculas. Use esse recurso para os jeitos diferentes de pedir a mesma coisa: quem falou de outro jeito dispara a mesma automação.
 
 ## Referência das ações
 
@@ -147,12 +149,15 @@ A presença da opção no editor não garante que todas as plataformas emitam aq
 | Apagar variável | Destino | Remove a variável |
 | Punir na Twitch | O que aplicar (silenciar por um tempo, banir ou avisar), duração quando for silêncio, quem leva a punição (quem enviou a mensagem ou primeiro argumento do comando) e motivo | Aplica a punição na conta indicada; só em perfil Twitch e só com a conta do canal autorizada |
 | Executar script Rhai | Código que devolve texto | Executa com limites e envia o texto resultante |
+| Ação na Twitch (conta do bot) | Operação, alvo fixo opcional, duração ou intervalo e conteúdo conforme a operação | Executa pela conta do bot: categoria, título, moderação, VIP, modos do chat, destaque ou menção |
 
 Use HTTPS para serviços externos; HTTP é permitido somente no próprio computador. Um webhook pode produzir efeitos reais no destino. Não use a simulação como comprovação de que ele foi recebido.
 
 Scripts Rhai recebem as variáveis user, message e channel, sem o prefixo $. Um exemplo de expressão que retorna texto é: "Olá, " + user + "!". Não são scripts JavaScript nem comandos do Windows.
 
 Na ação **Punir na Twitch**, **Quem leva a punição** escolhe entre quem enviou a mensagem e o primeiro argumento do comando. No segundo caso, escreva o alvo depois do comando, como `!silenciar @alvo`; o nome é convertido em ID da Twitch antes da ação. O motivo fica registrado na Twitch e no Histórico. Restrinja o gatilho em **Quem pode usar** para Moderadores ou Só o streamer, senão qualquer pessoa do chat pode punir. A duração vai de 1 segundo a 14 dias e vale só para o modo silenciar. A prévia e a simulação não pune ninguém: mostram apenas o plano no Histórico. Perfis fora da Twitch recusam a ação com aviso.
+
+Na ação **Ação na Twitch (conta do bot)**, escolha a operação: trocar categoria, trocar título, silenciar, banir, desbanir, avisar, dar ou tirar VIP, ligar ou desligar modo lento, só seguidores, só assinantes, só emotes, destaque de canal ou responder marcando arroba. O alvo sai da fala nesta ordem: arroba menção primeiro, depois nome de quem está no chat, depois o alvo fixo da automação. Sem nenhum, o bot avisa no Histórico e não executa. A duração do silêncio e os intervalos usam o primeiro número da fala, ou o valor do editor quando a fala não traz número. Fale os dígitos, como 300. O bot precisa ser moderador do canal para moderação, VIP e modos do chat, e editor para categoria e título; reautorize o bot em Perfis após atualizar, pois os escopos novos exigem nova autorização. A prévia e a simulação não executam: mostram apenas o plano no Histórico.
 
 ## Condição opcional
 

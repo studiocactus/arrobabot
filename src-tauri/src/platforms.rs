@@ -64,7 +64,7 @@ async fn announce(rt:&Runtime,p:&Profile,text:&str,color:&str)->Result<(),String
  if status==0 {return Err(token_err.unwrap_or_else(||"Autorize a conta do bot ou a conta do canal no perfil para enviar anúncios".into()))}
  Err(refused("Anúncio",status))
 }
-async fn shoutout(rt:&Runtime,p:&Profile,text:&str)->Result<(),String>{
+pub async fn shoutout(rt:&Runtime,p:&Profile,text:&str)->Result<(),String>{
  let login=text.trim().trim_start_matches('@').to_ascii_lowercase();
  if login.is_empty(){return Err("No destaque de canal, escreva na mensagem o canal de destino, como outrocanal".into())}
  if login.len()>25||!login.chars().all(|c|c.is_ascii_alphanumeric()||c=='_'){return Err("No destaque de canal, a mensagem deve ser apenas o nome do canal de destino, sem espaços".into())}

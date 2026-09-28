@@ -82,6 +82,10 @@ pub struct Action {
  #[serde(default)] pub condition:String,
  /// Modo da ação de punição: silenciar, banir ou avisar. Só é usado por "punish".
  #[serde(default)] pub punish:String,
+ /// Operação da ação na Twitch: setgame, settitle, timeout, ban, unban, warn,
+ /// vip, unvip, slow, slowoff, followers, followersoff, subsonly, subsonlyoff,
+ /// emoteonly, emoteonlyoff, shoutout ou mention. Só é usado por "twitch".
+ #[serde(default)] pub tw_op:String,
  /// Controles da resposta com IA. Vazio ou ausente herda o padrão do perfil.
  #[serde(default)] pub ai_anchor:String,
  #[serde(default)] pub ai_knowledge:String,
@@ -90,7 +94,7 @@ pub struct Action {
  #[serde(default)] pub ai_no_repeat:Option<bool>,
 }
 impl Default for Action {
- fn default()->Self { Self{kind:"chat".into(),text:String::new(),target:String::new(),value:0,condition:String::new(),punish:String::new(),ai_anchor:String::new(),ai_knowledge:String::new(),ai_length:String::new(),ai_style:String::new(),ai_no_repeat:None} }
+ fn default()->Self { Self{kind:"chat".into(),text:String::new(),target:String::new(),value:0,condition:String::new(),punish:String::new(),tw_op:String::new(),ai_anchor:String::new(),ai_knowledge:String::new(),ai_length:String::new(),ai_style:String::new(),ai_no_repeat:None} }
 }
 impl Action {
  pub fn anchor<'a>(&'a self,ai:&'a AiConfig)->&'a str { self.pick(&self.ai_anchor,&ai.anchor,"all") }
@@ -144,7 +148,7 @@ pub fn matches(t:&Trigger,e:&Event)->bool {
  "command"=>e.kind=="chat" && e.message.split_whitespace().next().is_some_and(|s| command_any(&t.pattern,s)),
  "contains"=>e.kind=="chat" && contains_any(&t.pattern,&e.message),
  "mention"=>e.kind=="chat" && mention_any(&t.pattern,&e.message),
- "voice"=>e.kind=="voice" && (t.pattern.is_empty()||e.message.to_lowercase().contains(&t.pattern.to_lowercase())),
+ "voice"=>e.kind=="voice" && (t.pattern.is_empty()||contains_any(&t.pattern,&e.message)),
  other=>other==e.kind,
  }
 }
@@ -228,7 +232,7 @@ pub fn validate_flow(f:&Flow)->Result<(),String> {
  if !f.audio.is_empty()&&(f.audio.len()>64||f.audio.contains(char::is_whitespace)){return Err("Áudio inválido: escolha um som da biblioteca".into())}
  if !f.audio_volume.is_finite()||!(0.0..=1.0).contains(&f.audio_volume){return Err("Volume do áudio: escolha de 0% a 100%".into())}
  for a in &f.actions {
- if !["chat","ai","ai.generate","memory","webhook","discord","overlay","delay","script","points","tts","variable.set","variable.increment","variable.delete","punish"].contains(&a.kind.as_str()) {return Err("Tipo de ação inválido".into())}
+ if !["chat","ai","ai.generate","memory","webhook","discord","overlay","delay","script","points","tts","variable.set","variable.increment","variable.delete","punish","twitch"].contains(&a.kind.as_str()) {return Err("Tipo de ação inválido".into())}
  if a.kind=="ai.generate" {let (scope,name)=crate::variables::target(crate::ai::response_target(a))?;if scope!="local"||name=="aiSuccess"{return Err("Guarde a resposta da IA numa variável local de texto".into())}}
  if a.kind.starts_with("variable."){crate::variables::target(&a.target)?;}
  if a.text.len()>32768 {return Err("Ação muito longa".into())}
@@ -238,6 +242,11 @@ pub fn validate_flow(f:&Flow)->Result<(),String> {
   if !PUNISH_TARGETS.contains(&a.target.as_str()){return Err("Punição: escolha quem leva a ação, quem enviou ou o primeiro argumento".into())}
   if a.punish=="timeout"&&!(1..=1209600).contains(&a.value){return Err("Punição: duração de 1 segundo a 14 dias".into())}
   if a.text.len()>500{return Err("Punição: o motivo pode ter até 500 caracteres".into())}
+ }
+ if a.kind=="twitch" {
+  if !crate::twitch_ops::OPS.contains(&a.tw_op.as_str()){return Err("Ação na Twitch: escolha uma operação válida".into())}
+  if ["timeout","slow"].contains(&a.tw_op.as_str())&&a.value<0{return Err("Ação na Twitch: a duração não pode ser negativa".into())}
+  if a.tw_op=="title"&&a.text.chars().count()>140{return Err("Ação na Twitch: o título pode ter até 140 caracteres".into())}
  }
  if !a.ai_anchor.is_empty()&&!ANCHORS.contains(&a.ai_anchor.as_str()){return Err("Ancoragem da IA inválida".into())}
  if !a.ai_length.is_empty()&&!LENGTHS.contains(&a.ai_length.as_str()){return Err("Tamanho da resposta da IA inválido".into())}
@@ -254,6 +263,13 @@ pub fn validate_flow(f:&Flow)->Result<(),String> {
  assert!(matches(&t,&e()));t.pattern="!o".into();assert!(!matches(&t,&e()));
  t.pattern="!oi".into();t.permission="moderator".into();assert!(!matches(&t,&e()));
  assert!(permitted("moderator","broadcaster"));assert!(!permitted("broadcaster","moderator"));
+ }
+ #[test] fn gatilho_de_voz_aceita_variacoes_com_virgula() {
+  let mut t=Trigger{kind:"voice".into(),pattern:"troca o jogo, minecraft".into(),permission:"everyone".into(),cooldown:0,user_cooldown:0};
+  let mut v=e();v.kind="voice".into();v.message="troca o jogo para minecraft".into();
+  assert!(matches(&t,&v));
+  v.message="muda o jogo agora".into();assert!(!matches(&t,&v));
+  v.message="poe minecraft ai".into();assert!(matches(&t,&v));
  }
  #[test] fn preview_event_follows_the_trigger() {
   let mut f=Flow{counter:false,timer_seconds:300,audio:String::new(),audio_volume:1.0,send_type:"chat".into(),send_color:"primary".into(),reply_to:false,id:"f".into(),profile_id:"p".into(),name:"Minecraft".into(),enabled:true,trigger:Trigger{kind:"timer".into(),pattern:String::new(),permission:"everyone".into(),cooldown:0,user_cooldown:0},actions:vec![],layout:Value::Null};

@@ -22,6 +22,7 @@ mod local_api;
 mod update;
 mod moderation;
 mod cmd_manager;
+mod twitch_ops;
 mod voice;
 mod listen;
 mod speech;
