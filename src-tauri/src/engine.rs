@@ -234,7 +234,7 @@ async fn action(rt:&Arc<Runtime>,p:&Profile,e:&Event,a:&Action,variables:&mut cr
  if e.simulated && a.kind!="chat" {if matches!(a.kind.as_str(),"ai"|"ai.generate"){crate::ai::save_response(variables,rt,p,e,a,"[Prévia: resposta contextual da IA]",false)?;}rt.log(&p.id,"simulation",&format!("Executaria {}: {}",a.kind,text.chars().take(200).collect::<String>()),"success");return Ok(())}
  match a.kind.as_str(){
  "punish"=>crate::moderation::punish(rt,p,e,a,&text).await,
- "twitch"=>crate::twitch_ops::run(rt,p,e,a,&text).await,
+ "twitch"=>crate::twitch_ops::run(rt,p,e,a,&text,&f.trigger.pattern).await,
  "chat"=>rt.send_with(p,e,&text,Some(f)).await,
  "ai"|"ai.generate"=>{
  let opts=crate::ai::Options{

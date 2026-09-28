@@ -1,5 +1,33 @@
 # Histórico de atualizações
 
+# BotLive 0.1.25
+
+## O que mudou
+
+- Rótulo do bloco de gatilho no canvas agora acompanha o tipo escolhido: ao trocar o Evento para Comando de voz (ou qualquer outro), o desenho atualiza na hora. Antes, o rótulo ficava preso no tipo anterior e confundia (o dado salvo sempre esteve correto).
+- Categoria e título aceitam conteúdo vazio na ação da Twitch: com o campo vazio, o bot extrai o nome do que você falou, removendo a variação do gatilho que casou e as palavras de ligação. Ex.: `troca o jogo para Valorant` vira `Valorant`. Se a Twitch não reconhecer, tenta com iniciais maiúsculas antes de desistir com aviso no Histórico.
+
+## Como usar
+
+- Para jogo variável: gatilho Comando de voz (`troca o jogo, muda o jogo`) e ação de categoria com o conteúdo vazio. Fale o nome do jogo de forma clara após o pedido.
+- Para jogo certo sempre: preencha o nome fixo no conteúdo (ex.: `Minecraft`). Nomes fixos não dependem da transcrição e são mais certeiros; abreviações como `lol` ou `cs` não resolvem para o nome oficial.
+- Vale o mesmo para título: conteúdo vazio usa o que você falou (`troca o título para Ranked com viewers`), ou preencha o título fixo.
+
+## Validação
+
+- `npm run check` (tsc), `npm test` (vitest 30/30) e `npx playwright test tests/ui/manual.spec.ts` (1 passed) executados localmente.
+- `npm run update:check` e `npm run test:updates` executados antes do push.
+- `cargo test` não executado localmente (toolchain Rust indisponível); inclui testes novos de extração do assunto e cobre a compilação na CI.
+- Teste ao vivo falando jogos variados ainda pendente.
+
+## Limitações
+
+- A extração depende da transcrição: nomes mal reconhecidos (`minecráfti`) não acham o jogo e o erro aparece no Histórico com o nome tentado.
+- Abreviações e apelidos não mapeiam para o nome oficial da Twitch; use o nome como está na plataforma ou o modo fixo.
+- As demais limitações da 0.1.22 seguem valendo (VIP por conta editora, sem reply em fio para voz, durações em dígitos).
+
+---
+
 # BotLive 0.1.24
 
 ## O que mudou
