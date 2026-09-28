@@ -1,5 +1,28 @@
 # Histórico de atualizações
 
+# BotLive 0.1.27
+
+## O que mudou
+
+- Corrige a compilação da 0.1.26: concatenação `String + &String` não existe em Rust; trocado por `push_str`. Nenhuma mudança de comportamento.
+
+## Como usar
+
+- Vale o manual da 0.1.25/0.1.26: conteúdo vazio na ação de categoria ou título usa o que você falou, com ativação e pontuação removidas.
+
+## Validação
+
+- `npm run update:check` e `npm run test:updates` executados antes do push.
+- `cargo test` não executado localmente (toolchain Rust indisponível); a correção segue exatamente o erro apontado pela CI e a CI compila e testa de verdade.
+- Teste ao vivo falando jogos variados ainda pendente.
+
+## Limitações
+
+- As mesmas da 0.1.25/0.1.26.
+- A 0.1.26 não gerou build (CI reprovou na compilação); esta 0.1.27 a substitui sem reescrever release, pois nenhuma release 0.1.26 chegou a existir.
+
+---
+
 # BotLive 0.1.26
 
 ## O que mudou

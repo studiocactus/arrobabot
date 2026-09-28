@@ -103,7 +103,9 @@ fn remove_first_case_insensitive(palheiro:&str,agulha:&str)->String{
  let before=lower[..pos].chars().count();
  let len=agulha.chars().count();
  let chars:Vec<char>=palheiro.chars().collect();
- chars[..before].iter().collect::<String>()+&chars[before+len..].iter().collect::<String>()
+ let mut out:String=chars[..before].iter().collect();
+ out.push_str(&chars[before+len..].iter().collect::<String>());
+ out
 }
 /// Extrai o assunto da fala removendo a variação do gatilho que casou e as
 /// palavras de ligação das bordas: "troca o jogo para minecraft" vira "minecraft".
