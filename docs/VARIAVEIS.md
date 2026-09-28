@@ -68,7 +68,7 @@ Para escrever marcadores literalmente, acrescente uma barra invertida: `\{{user}
 | {{unixtime}} | Instante Unix em segundos |
 | {{lf}} | Quebra de linha |
 | {{lastSpeech}} | Última fala reconhecida na escuta contínua (vazia se nenhuma) |
-| {{liveSpeech}} | Todas as falas da sessão de escuta, separadas por ` | ` |
+| {{liveSpeech}} | Todas as falas da sessão de escuta, separadas por ` \| ` |
 
 Data e hora são capturadas no início de cada fluxo. Os argumentos são separados por espaços em branco: aspas não agrupam várias palavras. Para eventos sem texto, command/rawInput ficam vazios e argCount é zero. Nem todo evento possui usuário; um ID vazio impede gravar variáveis por pessoa.
 

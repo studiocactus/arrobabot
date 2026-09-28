@@ -1,5 +1,28 @@
 # Histórico de atualizações
 
+# BotLive 0.1.21
+
+## O que mudou
+
+- Corrige a tabela do capítulo Variáveis do manual (`docs/VARIAVEIS.md`): a linha da variável `{{liveSpeech}}` continha um caractere `|` literal na descrição ("separadas por ` | `"), que o gerador do manual interpretava como divisória de coluna. A tabela era renderizada com 2 cabeçalhos e uma linha de 3 células, e o teste `tests/ui/manual.spec.ts` reprovava na CI, abortando a publicação antes das etapas de build e release. O pipe foi escapado (`\|`), formato que o parser de tabelas já previa; a célula continua exibindo `|` normalmente.
+
+## Como usar
+
+- Nenhuma mudança de uso. O manual volta a ser gerado íntegro com `npm run docs` (21 capítulos) e o teste do manual passa tanto localmente quanto na CI.
+
+## Validação
+
+- `npm run docs` executado localmente: manual gerado com 21 capítulos; varredura de todas as tabelas do `MANUAL-BOTLIVE.html`: nenhuma divergência entre `thead` e `tbody`, 21 artigos, 4 grupos de navegação, nenhum link interno quebrado.
+- `npx playwright test tests/ui/manual.spec.ts` executado localmente: 1 passed.
+- `npm run update:check` e `npm run test:updates` executados antes do push (resultado registrado no histórico do commit).
+- `cargo test` não executado localmente (toolchain Rust indisponível nesta máquina); coberto pelo job `windows` da CI.
+
+## Limitações
+
+- As builds 0.1.19 e 0.1.20 não foram publicadas porque a execução da CI que as continha falhou neste teste do manual antes das etapas de release. Esta 0.1.21 carrega o mesmo código das duas mais a correção; a publicação da 0.1.21 pela CI libera os instaladores com Escuta contínua e Comandos via chat. Lançamentos retroativos de 0.1.19/0.1.20 exigiriam builds assinados via CI a partir dos commits antigos e ficam como decisão pendente.
+
+---
+
 # BotLive 0.1.20
 
 # Versão 0.1.20 "Comandos via Chat"
