@@ -136,7 +136,7 @@ pub async fn run(rt:&Arc<Runtime>,p:&Profile,e:&Event,a:&Action,text:&str)->Resu
    rt.log(&p.id,"twitch",&format!("Categoria alterada para {name} pelo bot"),"success");Ok(())
   }
   "title"=>{
-   let title=text.trim().chars().take(140).collect();
+   let title:String=text.trim().chars().take(140).collect();
    if title.is_empty(){return Err("Escreva o novo título no conteúdo da ação".into())}
    modify_channel(rt,p,&token,json!({"title":title}),"Título").await?;
    rt.log(&p.id,"twitch",&format!("Título alterado para {title} pelo bot"),"success");Ok(())
