@@ -56,3 +56,25 @@
 /* Aviso de conteúdo: o texto cita informação que nenhuma ação do fluxo define. */
 .inline-warning{margin-top:8px;padding:9px 11px;border:1px solid #e0b76a55;border-left:3px solid #e0b76a;border-radius:var(--r-md);background:#e0b76a14;font-size:12px}
 .inline-warning code{color:var(--muted)}
+
+/* Padrão de alinhamento 0.1.46: fileiras, perfis e pílulas de estado. */
+.row.end{align-items:flex-end}
+.row>.field{flex:1 1 200px;min-width:0;margin:6px 0}
+.row.end>button{margin-bottom:6px}
+.list-row>div{display:flex;flex-direction:column;gap:4px;min-width:0}
+.list-row small{color:var(--muted);line-height:1.5}
+.form-grid{gap:4px var(--s4)}
+.card .row:first-child{margin-top:2px}
+.profile-card{padding:20px}
+.profile-top{display:flex;align-items:center;gap:12px}
+.profile-id{min-width:0;flex:1 1 auto}
+.profile-id h2{font-size:18px;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.profile-id .help{margin:4px 0 0}
+.status-pill{display:inline-flex;align-items:center;gap:7px;font-size:10px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;border:1px solid var(--border);border-radius:var(--r-pill);padding:6px 11px;white-space:nowrap}
+.status-pill .status-dot{width:8px;height:8px;border-radius:50%;background:var(--muted)}
+.status-pill.on{color:#7dd58a;border-color:#7dd58a44;background:#7dd58a12}
+.status-pill.on .status-dot{background:#58c472;box-shadow:0 0 0 3px #58c47222;animation:pulse-dot 2s infinite}
+.status-pill.off{color:var(--muted)}
+@keyframes pulse-dot{0%,100%{opacity:1}50%{opacity:.45}}
+.profile-card.is-online{border-color:#58c47244}
+.profile-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;border-top:1px solid var(--border);padding-top:14px;margin-top:14px}

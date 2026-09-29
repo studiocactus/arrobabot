@@ -7,7 +7,7 @@ type Any=Record<string,any>;
 type Opt={id:string;label:string};
 type Status={status:string;running:boolean;enabled:boolean;hasToken:boolean;config:Any;guilds:Any[];guildId:string;channels:Any[];roles:Any[];moduleEnabled:boolean;platform:string;auditCount:number};
 
-const blank:Any={enabled:false,guildId:'',logChannelId:'',autoroleId:'',counterChannelId:'',counterLabel:'membros',appId:'',slowmodeSeconds:0,roleMap:{moderator:'',subscriber:''},intents:{members:true,content:true},automod:{enabled:false},mirror:{enabled:false,toDiscord:true,toTwitch:true,channelId:''},welcome:{enabled:false,channelId:'',text:''},goodbye:{enabled:false,channelId:'',text:''},notify:{enabled:false,channelId:''},birthday:{enabled:false,channelId:'',text:''},xp:{enabled:false,perMessage:15},giveaway:{enabled:false,minutes:10}};
+const blank:Any={enabled:false,guildId:'',logChannelId:'',autoroleId:'',counterChannelId:'',counterLabel:'membros',appId:'',slowmodeSeconds:0,roleMap:{moderator:'',subscriber:''},intents:{members:true,content:true},automod:{enabled:false},mirror:{enabled:false,toDiscord:true,toTwitch:true,channelId:''},welcome:{enabled:false,channelId:'',text:''},goodbye:{enabled:false,channelId:'',text:''},notify:{enabled:false,channelId:''},birthday:{enabled:false,channelId:'',text:'',askOnJoin:false},xp:{enabled:false,perMessage:15},giveaway:{enabled:false,minutes:10}};
 
 const merge=(base:Any,over:Any|undefined):Any=>{
  const out:Any={...base,...(over||{})};
@@ -243,6 +243,7 @@ export default function Discord({profileId,blocklist,notify}:{profileId:string;b
    <div className="list-row"><div><strong>Mensagens de aniversário</strong><small>Um cumprimento no dia certo.</small></div><Toggle label="Mensagens de aniversário" checked={sub('birthday').enabled===true} onChange={v=>nest('birthday','enabled',v)}/></div>
    <Pick label="Canal dos aniversários" value={String(sub('birthday').channelId||'')} options={channels} onChange={v=>nest('birthday','channelId',v)}/>
    <Field label="Texto do cumprimento"><input value={String(sub('birthday').text||'')} placeholder="Feliz aniversário, {name}! Você está com {age} anos." onChange={e=>nest('birthday','text',e.target.value)}/></Field>
+   <div className="list-row"><div><strong>Pedir a data na entrada</strong><small>Quem entra sem data registrada recebe um pedido com o comando /aniversario.</small></div><Toggle label="Pedir a data na entrada" checked={sub('birthday').askOnJoin===true} onChange={v=>nest('birthday','askOnJoin',v)}/></div>
    <div className="row">
     <Field label="ID do aniversariante"><input value={bday.target} placeholder="ID no Discord" onChange={e=>setBday(b=>({...b,target:e.target.value}))}/></Field>
     <Field label="Data do aniversário" hint="DD/MM ou DD/MM/AAAA."><input value={bday.date} placeholder="25/12/1990" onChange={e=>setBday(b=>({...b,date:e.target.value}))}/></Field>
@@ -258,7 +259,7 @@ export default function Discord({profileId,blocklist,notify}:{profileId:string;b
  <div className="two-columns">
   <Card title="Identidade unificada Twitch e Discord">
    <p className="help">Um código de seis dígitos liga quem fala na Twitch a quem reage no Discord. Depois do vínculo, avisos, punições e reconhecimento valem nas duas casas.</p>
-   <div className="row">
+   <div className="row end">
     <Field label="ID do membro vinculado"><input value={linkTarget} placeholder="ID no Discord" onChange={e=>setLinkTarget(e.target.value)}/></Field>
     <button disabled={!linkTarget.trim()} onClick={createLink}><Link2 size={15}/>Gerar código</button>
    </div>
@@ -280,7 +281,7 @@ export default function Discord({profileId,blocklist,notify}:{profileId:string;b
  </div>
 
  <Card title="Moderação no servidor">
-  <div className="row">
+  <div className="row end">
    <Field label="Buscar membro no Discord"><input value={q} placeholder="Nome ou ID" onChange={e=>setQ(e.target.value)}/></Field>
    <button onClick={searchMembers}><Search size={15}/>Buscar</button>
   </div>

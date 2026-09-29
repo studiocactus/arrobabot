@@ -120,7 +120,7 @@ Com o vínculo, o bot reconhece a mesma pessoa nas duas casas: aviso, punição,
 
 - **Sorteios:** informe canal, prêmio, minutos e quantidade de vencedores. A inscrição acontece reagindo com 🎉. **Encerrar** sorteia os vencedores; **Sortear de novo** refaz o sorteio sem repetir quem já ganhou.
 - **XP e níveis:** quem conversa no Discord ganha XP a cada mensagem, com intervalo de um minuto por membro. O ranking mostra posição, nível e XP, e a linha também informa quanto falta para o próximo nível.
-- **Aniversariantes:** registre o ID e a data em `DD/MM` ou `DD/MM/AAAA`. O BotLive comemora no dia, com a idade calculada a partir do ano informado.
+- **Aniversariantes:** registre o ID e a data em `DD/MM` ou `DD/MM/AAAA`. O BotLive comemora no dia, com a idade calculada a partir do ano informado. Com **Pedir a data na entrada** ligado, quem entra no servidor sem data registrada recebe um pedido com o comando `/aniversario` no canal dos aniversários.
 
 Todos os três têm interruptor próprio e canal próprio, para você ligar só o que usa.
 

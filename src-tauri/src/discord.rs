@@ -364,6 +364,15 @@ fn on_member_join(rt:&Arc<Runtime>,p:&Profile,d:&Value){
   tokio::spawn(async move{let _=post_embed(&rt2,&p2,&ch,"Novo membro",&n,0x57F287,vec![]).await;});
  }
  schedule_counter(rt,p,&cfg,1);
+ if cfg["birthday"]["askOnJoin"]==true&&cfg["birthday"]["channelId"].as_str().is_some_and(|c|!c.is_empty()){
+  let uid_owned=uid.to_owned();
+  if !crate::discord_engage::has_birthday(rt,&p.id,&uid_owned){
+   let channel=cfg["birthday"]["channelId"].as_str().unwrap_or("").to_owned();
+   let ask=format!("Bem-vindo(a), <@{uid_owned}>! Quando quiser, registre seu aniversário com /aniversario (ex.: /aniversario data:25/12/1990) para o BotLive te parabenizar no dia certo.");
+   let rt2=rt.clone();let p2=p.clone();
+   tokio::spawn(async move{if let Err(err)=post(&rt2,&p2,&channel,&ask).await{rt2.log(&p2.id,"discord",&err,"error")}});
+  }
+ }
  rt.log(&p.id,"discord",&format!("{name} entrou no servidor"),"info");
 }
 fn on_member_leave(rt:&Arc<Runtime>,p:&Profile,d:&Value){

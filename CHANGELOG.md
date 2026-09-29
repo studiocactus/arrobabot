@@ -1,5 +1,34 @@
 # Histórico de atualizações
 
+# BotLive 0.1.46
+
+## O que mudou
+
+- Perfis de bot com cartão compacto: o espaço vazio grande sumiu. Cada perfil mostra avatar, nome, canal e uma pílula de estado (Conectado/Conectando/Reconectando/Desconectado) no topo, com as ações em fileira única abaixo. Cartões online ganham borda verde sutil.
+- Botões de conexão mais claros: Conectar virou botão de destaque (verde) quando o bot está fora; Desconectar fica neutro quando está dentro. O estado também aparece na pílula com ponto pulsante, sem depender só da cor do botão.
+- Discord com campos alinhados: fileiras de campo + botão (vínculo de identidade, busca de membro) agora alinham o botão à base do input, campos lado a lado dividem a largura por igual e textos auxiliares quebram em coluna própria. Vale para todas as telas que usam o mesmo padrão.
+- Aniversário resgatado na entrada: novo interruptor **Pedir a data na entrada** no cartão Aniversariantes. Ligado, quem entra no servidor sem data registrada recebe mensagem no canal dos aniversários pedindo `/aniversario` com a data. Quem já tem registro não recebe de novo.
+
+## Como usar
+
+- Perfis: nada muda no fluxo; Conectar/Desconectar continuam no mesmo lugar, só mais visíveis.
+- Discord → Aniversariantes: escolha o canal, ative Mensagens de aniversário e ligue **Pedir a data na entrada**. Salve a configuração.
+- Limitação honesta: o Discord não entrega data de nascimento de ninguém via API; o bot pede e a pessoa informa pelo `/aniversario` ou pelo registro manual na tela.
+
+## Validação
+
+- `npm run check` (tsc) e `npm test` (vitest 31/31) executados antes do push.
+- `npm run update:check` e `npm run test:updates` executados antes do push.
+- `cargo test` não executado localmente (toolchain Rust indisponível); inclui teste `birthday_lookup_finds_only_registered_members` e a CI compila e testa de verdade.
+- Teste visual das telas e teste ao vivo da mensagem de entrada ainda pendentes.
+
+## Limitações
+
+- O pedido na entrada exige canal dos aniversários configurado; sem canal, nada é enviado e nada quebra.
+- A mensagem de entrada usa o canal dos aniversários (não o de boas-vindas) para não misturar os fluxos.
+
+---
+
 # BotLive 0.1.45
 
 ## O que mudou

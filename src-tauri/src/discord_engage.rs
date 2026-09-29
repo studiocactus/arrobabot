@@ -12,6 +12,12 @@ fn xp_key(p: &str) -> String {
 fn bday_key(p: &str) -> String {
 	format!("discord_birthdays:{p}")
 }
+/// Diz se o membro já tem aniversário registrado (para não pedir de novo na entrada).
+pub fn has_birthday(rt: &Runtime, profile: &str, uid: &str) -> bool {
+	read(rt, &bday_key(profile))
+		.as_array()
+		.is_some_and(|list| list.iter().any(|b| b["user"].as_str() == Some(uid)))
+}
 fn give_key(p: &str) -> String {
 	format!("discord_giveaways:{p}")
 }
@@ -838,5 +844,16 @@ mod tests {
 		assert_eq!(first.len(), 2);
 		let second = pick_winners(&entries, 2, &first);
 		assert!(first.iter().all(|w| !second.contains(w)));
+	}
+
+	#[tokio::test]
+	async fn birthday_lookup_finds_only_registered_members() {
+		let dir = tempfile::tempdir().unwrap();
+		let rt = crate::engine::Runtime::new(dir.path().into()).unwrap();
+		assert!(!has_birthday(&rt, "p1", "111"));
+		write(&rt, &bday_key("p1"), &json!([{"user":"111","name":"Ana","day":25,"month":12,"year":1990,"lastYear":0}])).unwrap();
+		assert!(has_birthday(&rt, "p1", "111"));
+		assert!(!has_birthday(&rt, "p1", "222"));
+		assert!(!has_birthday(&rt, "outro", "111"));
 	}
 }
