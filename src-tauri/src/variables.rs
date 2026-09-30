@@ -85,6 +85,61 @@ fn draw(key: &str) -> R<String> {
 
 /// Nomes simples que existiram com cifrão antes da unificação em `{{...}}`.
 const LEGACY:[&str;28]=["user","userName","userId","role","message","channel","channelId","platform","profileId","profileName","eventId","eventType","isModerator","isBroadcaster","isSubscriber","simulated","date","time","unixtime","lf","randomViewer","command","rawInput","args","argCount","commandCount","actionId","actionName"];
+/// Variáveis de contexto que nunca tiveram forma com cifrão. Mantida em sincronia
+/// com o catálogo da interface (`src/variableCatalog.ts`).
+const EXTRA:[&str;14]=["followerCount","subCount","subTier","subMonths","subStreak","subMessage","isGift","gifterName","giftTotal","giftTier","raidViewers","raiderLogin","lastSpeech","liveSpeech"];
+const SCOPES:[&str;5]=["local","global","user","session","sessionUser"];
+fn levenshtein(a:&str,b:&str)->usize{
+ let (a,b)=(a.as_bytes(),b.as_bytes());let mut prev:Vec<usize>=(0..=b.len()).collect();
+ for i in 1..=a.len(){let mut cur=vec![i];for j in 1..=b.len(){cur.push((prev[j]+1).min(cur[j-1]+1).min(prev[j-1]+usize::from(a[i-1]!=b[j-1])));}prev=cur;}
+ prev[b.len()]
+}
+fn closest<'a>(name:&str,cands:impl Iterator<Item=&'a str>)->Option<String>{
+ let mut best:(usize,String)=(usize::MAX,String::new());
+ for c in cands{
+  let d=levenshtein(&name.to_lowercase(),&c.to_lowercase());
+  if d==0{if name!=c{return Some(c.into())}continue}
+  if d<best.0{best=(d,c.into());}
+ }
+ let limit=if name.len()>=8{3}else{2};
+ if best.0>limit||best.1.is_empty(){None}else{Some(best.1)}
+}
+/// Sugere o nome de variável válido mais próximo, ou None quando o nome já vale
+/// ou está longe demais de qualquer candidato. `random:`, `data.` e escopos
+/// dinâmicos (`local.` etc.) nunca são erro por si sós.
+pub fn suggest_variable(raw:&str)->Option<String>{
+ let name=raw.split('|').next().unwrap_or("").trim();
+ if name.is_empty()||name.starts_with("random:")||name.starts_with("data."){return None}
+ if let Some((scope,rest))=name.split_once('.'){
+  if SCOPES.contains(&scope){return None}
+  return closest(scope,SCOPES.iter().copied()).map(|s|format!("{s}.{rest}"));
+ }
+ if name.strip_prefix("arg").is_some_and(|n|!n.is_empty()&&n.bytes().all(|b|b.is_ascii_digit())){return None}
+ if LEGACY.contains(&name)||EXTRA.contains(&name){return None}
+ closest(name,LEGACY.iter().copied().chain(EXTRA.iter().copied()))
+}
+/// Confere os marcadores de um texto (`{{x}}`, `%x%`, `$x`) e devolve um problema
+/// por marcador desconhecido, com a linha (1-based), o marcador e a sugestão.
+pub fn analyze_variables(text:&str)->Vec<Value>{
+ let mut out=vec![];
+ for (i,line) in text.lines().enumerate(){
+  let mut marks=vec![];
+  let b=line.as_bytes();let mut k=0;
+  while k<b.len(){
+   if line[k..].starts_with("{{"){if let Some(end)=line[k+2..].find("}}"){marks.push(line[k+2..k+2+end].to_owned());k+=end+4;continue;}}
+   else if b[k]==b'%' {if let Some(end)=line[k+1..].find('%'){let name=&line[k+1..k+1+end];if valid_name(name){marks.push(name.to_owned());}k+=end+2;continue;}}
+   else if b[k]==b'$' {let mut end=k+1;while end<b.len()&&(b[end].is_ascii_alphanumeric()||b[end]==b'_'){end+=1;}let name=&line[k+1..end];if legacy(name){marks.push(name.to_owned());}k=end.max(k+1);continue;}
+   k+=1;
+  }
+  for m in marks{
+   let key=m.split('|').next().unwrap_or("").trim();
+   if key.is_empty(){continue}
+   let known=key.starts_with("random:")||key.starts_with("data.")||key.split_once('.').is_some_and(|(s,_)|SCOPES.contains(&s))||key.strip_prefix("arg").is_some_and(|n|!n.is_empty()&&n.bytes().all(|b|b.is_ascii_digit()))||LEGACY.contains(&key)||EXTRA.contains(&key);
+   if !known{out.push(json!({"line":i+1,"marker":m,"suggestion":suggest_variable(&m)}));}
+  }
+ }
+ out
+}
 fn legacy(name:&str) -> bool { LEGACY.contains(&name) || name.strip_prefix("arg").is_some_and(|n|!n.is_empty()&&n.bytes().all(|b|b.is_ascii_digit())) }
 /// Reescreve o marcador legado `$nome` como `{{nome}}`. Só nomes conhecidos viram modelo:
 /// `$5`, `R$100`, `$desconhecido` e o escape `\$user` ficam exatamente como estavam.
@@ -251,5 +306,21 @@ impl Context {
         let rc=Context::new(&db,&p,&r,None).unwrap();
         assert_eq!(rc.render("{{raidViewers}}").unwrap(),"17");
         assert_eq!(rc.render("{{raiderLogin}}").unwrap(),"miazinha");
+    }
+    #[test] fn analisador_aponta_erro_e_sugere_o_nome_certo(){
+        assert_eq!(suggest_variable("user"),None);
+        assert_eq!(suggest_variable("randomViewer"),None);
+        assert_eq!(suggest_variable("followerCount"),None);
+        assert_eq!(suggest_variable("random:1,50"),None);
+        assert_eq!(suggest_variable("local.meta"),None);
+        assert_eq!(suggest_variable("randomViewr"),Some("randomViewer".into()));
+        assert_eq!(suggest_variable("usr"),Some("user".into()));
+        assert_eq!(suggest_variable("followercount"),Some("followerCount".into()));
+        assert_eq!(suggest_variable("loca.meta"),Some("local.meta".into()));
+        assert_eq!(suggest_variable("xyzabc123"),None,"longe de tudo não sugere nada");
+        let issues=analyze_variables("Oi {{user}}!\nValeu {{randomViewr}} e {{xyzabc123}}.\nPreço R$100 e $desconhecido ficam.");
+        assert_eq!(issues.len(),2,"só os dois desconhecidos de verdade");
+        assert_eq!(issues[0]["line"],2);assert_eq!(issues[0]["marker"],"randomViewr");assert_eq!(issues[0]["suggestion"],"randomViewer");
+        assert_eq!(issues[1]["marker"],"xyzabc123");assert!(issues[1]["suggestion"].is_null());
     }
 }

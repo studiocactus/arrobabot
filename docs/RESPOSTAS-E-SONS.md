@@ -6,6 +6,10 @@ Cada regra e cada pessoa aparecem como uma linha compacta com um ponto de situa�
 
 ## Responder a uma palavra usando um TXT
 
+A resposta sai no fio de quem falou: na Twitch, presa à mensagem da pessoa; no Discord, citando a mensagem original. Cada regra tem o interruptor **Responder no fio da pessoa** para ligar ou desligar esse comportamento. Regras antigas ganham o fio ligado sozinhas; desligue por regra se preferir a mensagem solta. No Kick e no YouTube não há fio, e o Histórico avisa que a mensagem saiu comum.
+
+Ao vincular um TXT, o BotLive confere as variáveis de todas as linhas na hora e mostra até 20 avisos com o número da linha. Uma variável que não existe no sistema aparece como `{{randomViewr}} não existe — quis dizer {{randomViewer}}?`. O **Conferir linhas** repete a conferência quando quiser. A lista de variáveis válidas está em [Variáveis](VARIAVEIS.md); `R$100` e `$desconhecido` não são variáveis e ficam como texto.
+
 1. Clique em **Adicionar resposta TXT** e escreva a palavra ou expressão, por exemplo `café`.
 2. Escolha **Palavra / expressão inteira** para evitar que café combine com cafés, ou **Qualquer trecho da mensagem** para permitir esse caso. Maiúsculas e minúsculas não alteram a busca; acentos são preservados.
 3. Clique em **Vincular TXT** e escolha um arquivo UTF-8 com uma resposta por linha. Linhas vazias são ignoradas. Não existe sintaxe especial de comentários.

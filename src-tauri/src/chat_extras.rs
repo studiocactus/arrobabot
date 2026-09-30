@@ -10,7 +10,8 @@ type R<T> = Result<T,String>;
 pub struct Config {pub presence_enabled:bool,pub audio_device_id:String,pub replies_enabled:bool,pub sounds_enabled:bool,pub replies:Vec<Reply>,pub people:Vec<Person>}
 #[derive(Clone,Serialize,Deserialize)]
 #[serde(rename_all="camelCase")]
-pub struct Reply {pub id:String,pub enabled:bool,pub keyword:String,pub matching:String,pub selection:String,pub asset:String,pub cooldown:u64,pub user_cooldown:u64}
+pub struct Reply {pub id:String,pub enabled:bool,pub keyword:String,pub matching:String,pub selection:String,pub asset:String,pub cooldown:u64,pub user_cooldown:u64,#[serde(default="reply_yes")] pub reply:bool}
+fn reply_yes()->bool{true}
 fn default_trigger()->String{"message".into()}
 #[derive(Clone,Serialize,Deserialize)]
 #[serde(rename_all="camelCase")]
@@ -65,7 +66,9 @@ pub fn operation(rt:&Runtime,p:&str,op:&str,args:&Value)->R<Value>{
  let dir=rt.base.join("media").join(p);std::fs::create_dir_all(&dir).map_err(|_|"Não foi possível guardar o som")?;
  let path=dir.join(format!("{}.{}",id,source.extension().unwrap().to_string_lossy().to_lowercase()));std::fs::write(&path,bytes).map_err(|_|"Não foi possível copiar o som")?;path
  }else{return Err("Tipo de arquivo inválido".into())};
- let a=Asset{id:id.clone(),kind:kind.into(),name:source.file_name().unwrap().to_string_lossy().into(),path:path.to_string_lossy().into()};list.push(a.clone());rt.db.set_module(p,"chatAssets",&json!(list))?;Ok(json!({"id":id,"kind":kind,"name":a.name}))
+ let a=Asset{id:id.clone(),kind:kind.into(),name:source.file_name().unwrap().to_string_lossy().into(),path:path.to_string_lossy().into()};list.push(a.clone());rt.db.set_module(p,"chatAssets",&json!(list))?;
+ let issues=if kind=="txt"{variables::analyze_variables(&lines(&source)?.join("\n")).into_iter().take(20).collect::<Vec<_>>()}else{vec![]};
+ Ok(json!({"id":id,"kind":kind,"name":a.name,"issues":issues}))
  },
  "chatExtras.save"=>{
  let mut c:Config=serde_json::from_value(args["config"].clone()).map_err(|_|"Configuração inválida")?;
@@ -85,7 +88,7 @@ pub fn operation(rt:&Runtime,p:&str,op:&str,args:&Value)->R<Value>{
  }
  rt.db.set_module(p,"chatExtras",&json!(c))?;Ok(Value::Null)
  },
- "chatExtras.preview"=>{let a=asset(rt,p,args["asset"].as_str().unwrap_or(""),"txt")?;let rows=lines(Path::new(&a.path))?;Ok(json!({"count":rows.len(),"lines":rows.into_iter().take(10).collect::<Vec<_>>()}))},
+ "chatExtras.preview"=>{let a=asset(rt,p,args["asset"].as_str().unwrap_or(""),"txt")?;let rows=lines(Path::new(&a.path))?;let issues:variables::analyze_variables(&rows.join("\n")).into_iter().take(20).collect::<Vec<_>>();Ok(json!({"count":rows.len(),"lines":rows.into_iter().take(10).collect::<Vec<_>>(),"issues":issues}))},
  "chatExtras.audio"=>{
  let a=asset(rt,p,args["asset"].as_str().unwrap_or(""),"sound")?;let path=audio_path(rt,p,&a)?;let bytes=read_file(&path,5*1024*1024)?;let mime=audio_kind(&path,&bytes)?;
  Ok(json!(format!("data:{mime};base64,{}",base64::engine::general_purpose::STANDARD.encode(bytes))))
@@ -114,7 +117,7 @@ fn available(s:&State,key:&str,seconds:u64)->bool{!s.last.get(key).is_some_and(|
  fn p()->Profile{serde_json::from_value(json!({"id":uuid::Uuid::new_v4(),"name":"Teste","platform":"twitch","channel":"canal","blocklist":["bloqueado"]})).unwrap()}
  fn e(p:&Profile)->Event{serde_json::from_value(json!({"id":"1","profileId":p.id,"kind":"chat","user":"ANA","userId":"123","message":"Olá, café!"})).unwrap()}
  fn register(rt:&Runtime,p:&Profile,path:&Path,kind:&str)->String{operation(rt,&p.id,"chatExtras.import",&json!({"path":path,"kind":kind})).unwrap()["id"].as_str().unwrap().into()}
- fn rule(asset:String)->Reply{Reply{id:uuid::Uuid::new_v4().to_string(),enabled:true,keyword:"café".into(),matching:"word".into(),selection:"sequence".into(),asset,cooldown:30,user_cooldown:60}}
+ fn rule(asset:String)->Reply{Reply{id:uuid::Uuid::new_v4().to_string(),enabled:true,keyword:"café".into(),matching:"word".into(),selection:"sequence".into(),asset,cooldown:30,user_cooldown:60,reply:true}}
  fn save(rt:&Runtime,p:&Profile,c:&Config){operation(rt,&p.id,"chatExtras.save",&json!({"config":c})).unwrap();}
  #[test] fn matching_and_txt_validation(){
   assert!(keyword_matches("CAFÉ!","café","word"));assert!(!keyword_matches("cafés","café","word"));assert!(keyword_matches("cafés","café","contains"));assert!(keyword_matches("um bom dia!","bom dia","word"));assert!(!keyword_matches("bom diazão","bom dia","word"));
@@ -124,14 +127,26 @@ fn available(s:&State,key:&str,seconds:u64)->bool{!s.last.get(key).is_some_and(|
  #[tokio::test] async fn txt_reload_cooldown_simulation_sequence_random_and_isolation(){
   let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().join("app")).unwrap();let p=p();let other=super::tests::p();rt.db.save_profile(&p).unwrap();rt.db.save_profile(&other).unwrap();let path=dir.path().join("respostas.txt");std::fs::write(&path,"Olá {{user}}\nSegunda\nTerceira").unwrap();
   let id=register(&rt,&p,&path,"txt");let mut c=Config{replies_enabled:true,replies:vec![rule(id.clone())],..Default::default()};save(&rt,&p,&c);let mut event=e(&p);
-  event.simulated=true;assert_eq!(response(&rt,&p,&event).unwrap(),Some("Olá ANA".into()));event.simulated=false;assert_eq!(response(&rt,&p,&event).unwrap(),Some("Olá ANA".into()));assert!(response(&rt,&p,&event).unwrap().is_none());
+  event.simulated=true;assert_eq!(response(&rt,&p,&event).unwrap(),Some(("Olá ANA".into(),true)));event.simulated=false;assert_eq!(response(&rt,&p,&event).unwrap(),Some(("Olá ANA".into(),true)));assert!(response(&rt,&p,&event).unwrap().is_none());
   operation(&rt,&p.id,"chatExtras.reset",&json!({})).unwrap();assert!(response(&rt,&p,&event).unwrap().is_none());
-  rt.chat_extras.lock().unwrap().last.clear();assert_eq!(response(&rt,&p,&event).unwrap(),Some("Segunda".into()));
-  std::fs::write(&path,"Atualizado").unwrap();rt.chat_extras.lock().unwrap().last.clear();assert_eq!(response(&rt,&p,&event).unwrap(),Some("Atualizado".into()));
+  rt.chat_extras.lock().unwrap().last.clear();assert_eq!(response(&rt,&p,&event).unwrap(),Some(("Segunda".into(),true)));
+  std::fs::write(&path,"Atualizado").unwrap();rt.chat_extras.lock().unwrap().last.clear();assert_eq!(response(&rt,&p,&event).unwrap(),Some(("Atualizado".into(),true)));
   assert!(operation(&rt,&other.id,"chatExtras.preview",&json!({"asset":id})).is_err());assert!(response(&rt,&other,&e(&other)).unwrap().is_none());
-  std::fs::write(&path,"A\nB").unwrap();c.replies[0].selection="random".into();save(&rt,&p,&c);let mut last=String::new();for _ in 0..8{rt.chat_extras.lock().unwrap().last.clear();let next=response(&rt,&p,&event).unwrap().unwrap();assert_ne!(last,next);last=next;}
+  std::fs::write(&path,"A\nB").unwrap();c.replies[0].selection="random".into();save(&rt,&p,&c);let mut last=String::new();for _ in 0..8{rt.chat_extras.lock().unwrap().last.clear();let next=response(&rt,&p,&event).unwrap().unwrap().0;assert_ne!(last,next);last=next;}
   std::fs::write(&path,"bloqueado").unwrap();rt.chat_extras.lock().unwrap().last.clear();assert!(response(&rt,&p,&event).is_err());
   std::fs::remove_file(&path).unwrap();assert!(response(&rt,&p,&event).is_err());c.replies_enabled=false;save(&rt,&p,&c);assert!(response(&rt,&p,&event).unwrap().is_none());
+ }
+ #[tokio::test] async fn txt_responde_no_fio_e_regra_antiga_herda_ativado(){
+  let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().join("app")).unwrap();let p=p();rt.db.save_profile(&p).unwrap();let path=dir.path().join("r.txt");std::fs::write(&path,"Oi {{user}}").unwrap();
+  let id=register(&rt,&p,&path,"txt");
+  // Regra gravada sem o campo novo liga a resposta no fio sozinha.
+  let old:Reply=serde_json::from_value(json!({"id":uuid::Uuid::new_v4().to_string(),"enabled":true,"keyword":"oi","matching":"word","selection":"sequence","asset":id,"cooldown":30,"userCooldown":60})).unwrap();
+  assert!(old.reply,"regra antiga herda resposta no fio ligada");
+  let mut c=Config{replies_enabled:true,replies:vec![old],..Default::default()};save(&rt,&p,&c);
+  let mut event=e(&p);event.message="oi".into();
+  assert_eq!(response(&rt,&p,&event).unwrap(),Some(("Oi ANA".into(),true)));
+  c.replies[0].reply=false;save(&rt,&p,&c);rt.chat_extras.lock().unwrap().last.clear();
+  assert_eq!(response(&rt,&p,&event).unwrap(),Some(("Oi ANA".into(),false)),"desligar o fio é respeitado");
  }
  #[tokio::test] async fn sound_copy_identity_toggles_session_and_simulation(){
   let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().join("app")).unwrap();let p=p();rt.db.save_profile(&p).unwrap();let path=dir.path().join("som.wav");std::fs::write(&path,b"RIFF0000WAVEfmt ").unwrap();let id=register(&rt,&p,&path,"sound");std::fs::remove_file(path).unwrap();
@@ -168,7 +183,7 @@ pub fn play_flow(rt:&Runtime,p:&Profile,f:&Flow,e:&Event){
  rt.emit("viewer-sound",json!({"profileId":p.id,"asset":f.audio,"volume":volume,"deviceId":c.audio_device_id}));
  rt.log(&p.id,"sound",&format!("Áudio solicitado: {}",f.name),"info");
 }
-pub fn response(rt:&Runtime,p:&Profile,e:&Event)->R<Option<String>>{
+pub fn response(rt:&Runtime,p:&Profile,e:&Event)->R<Option<(String,bool)>>{
  if e.kind!="chat"{return Ok(None)}let c=config(rt,&p.id);if !c.replies_enabled{return Ok(None)}
  let mut s=rt.chat_extras.lock().unwrap();s.last.retain(|_,t|t.elapsed()<Duration::from_secs(86400));
  for r in c.replies.iter().filter(|r|r.enabled&&keyword_matches(&e.message,&r.keyword,&r.matching)){
@@ -182,6 +197,6 @@ pub fn response(rt:&Runtime,p:&Profile,e:&Event)->R<Option<String>>{
  if blocked(&text,p){return Err("Resposta TXT bloqueada pelas restrições do perfil".into())}
  if text.trim().is_empty()||text.chars().count()>450{return Err("Resposta TXT expandida vazia ou maior que 450 caracteres".into())}
  if !e.simulated{s.last.insert(key.clone(),Instant::now());s.last.insert(user,Instant::now());s.index.insert(key,index);}
- return Ok(Some(text))
+ return Ok(Some((text,r.reply)))
  }Ok(None)
 }

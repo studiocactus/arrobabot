@@ -186,7 +186,7 @@ pub async fn process(rt:Arc<Runtime>,e:Event){
  let history=rt.conversation.lock().unwrap().receive(&e);
  rt.live.record(&p.id,&e);
  crate::chat_extras::sound(&rt,&p,&e);
- match crate::chat_extras::response(&rt,&p,&e){Ok(Some(text))=>{if let Err(err)=rt.send(&p,&e,&text).await{rt.log(&p.id,"txt",&err,"error");}return},Err(err)=>{rt.log(&p.id,"txt",&err,"error");return},_=>{}}
+ match crate::chat_extras::response(&rt,&p,&e){Ok(Some((text,reply)))=>{let f=Flow{counter:false,timer_seconds:300,audio:String::new(),audio_volume:1.0,send_type:"chat".into(),send_color:"primary".into(),reply_to:reply,id:String::new(),profile_id:p.id.clone(),name:"Resposta TXT".into(),enabled:true,trigger:Trigger{kind:"chat".into(),pattern:String::new(),permission:"everyone".into(),cooldown:0,user_cooldown:0},actions:vec![],layout:Value::Null};if let Err(err)=rt.send_with(&p,&e,&text,Some(&f)).await{rt.log(&p.id,"txt",&err,"error");}return},Err(err)=>{rt.log(&p.id,"txt",&err,"error");return},_=>{}}
  if e.kind=="chat" {
  match modules::chat(&rt,&p,&e) {
  Ok(Some(reply))=>{if let Err(err)=rt.send(&p,&e,&reply).await{rt.log(&p.id,"module",&err,"error");}return},

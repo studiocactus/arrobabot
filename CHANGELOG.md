@@ -1,5 +1,31 @@
 # Histórico de atualizações
 
+# BotLive 0.1.49
+
+## O que mudou
+
+- Resposta TXT no fio da pessoa: quando o gatilho vem de um arquivo de texto, a resposta sai presa à mensagem de quem falou (fio na Twitch, citação no Discord). Cada regra tem o interruptor **Responder no fio da pessoa**; regras antigas ganham o fio ligado sozinhas. No Kick e no YouTube não há fio e o Histórico avisa que saiu mensagem comum.
+- Conferência de variáveis do TXT: ao vincular um arquivo, o BotLive analisa todas as linhas e lista até 20 avisos com número da linha e sugestão, ex.: `Linha 3: {{randomViewr}} não existe — quis dizer {{randomViewer}}?`. O botão **Conferir linhas** repete a conferência a qualquer momento. `R$100` e `$desconhecido` continuam texto, sem aviso.
+
+## Como usar
+
+- Respostas e sons → abra a regra e confira **Responder no fio da pessoa**. Salve.
+- Vincule o TXT e leia os avisos logo abaixo da prévia; corrija o arquivo no seu editor e vincule de novo (ou confira de novo) até zerar.
+
+## Validação
+
+- `npm run check` (tsc), `npm test` (vitest 31/31), `npm run docs` (manual 21 capítulos) e `npm run test:updates` (8/8) executados antes do push.
+- `cargo test` não executado localmente (toolchain Rust indisponível); inclui testes de fio ligado por padrão em regra antiga, fio desligável e do analisador (acerto, sugestão e silêncio para texto comum); a CI compila e testa de verdade.
+- Teste ao vivo do fio no chat e da conferência num TXT real ainda pendentes.
+
+## Limitações
+
+- O fio depende do ID da mensagem de origem; eventos sem ID (simulação, prévia) não prendem fio.
+- A sugestão usa proximidade de nome (até 2–3 edições); variável muito diferente do catálogo sai como desconhecida sem palpite.
+- Variáveis dinâmicas (`local.`, `global.`, `user.`, `session.`, `data.`, `random:`) não são conferidas pelo nome, só pelo escopo.
+
+---
+
 # BotLive 0.1.48
 
 ## O que mudou
