@@ -53,7 +53,7 @@ export function VariableHelp({profileId,text,onInsert,flow}:{profileId:string;te
  <details className="variable-test"><summary>Testar como a mensagem vai ficar</summary>
  <h4>Conferir sem executar ações</h4><p className="help">{flow?'Calcula as ações de variável e os textos na ordem do fluxo.':'Resolve o conteúdo com os dados de teste.'} A prévia não envia mensagens nem grava variáveis. Scripts e serviços externos não são executados.</p>
  {flow?.trigger.kind==='timer'
-  ?<p className="help">Este timer dispara sozinho, sem alguém enviando mensagem. A prévia usa o mesmo evento do disparo real: remetente BotLive, papel de streamer, sem ID de pessoa e sem mensagem de chat. Para citar alguém, use <code>{'{{randomViewer|default:alguém}}'}</code> — o nome é sorteado a cada conferência.</p>
+  ?<p className="help">Este timer dispara sozinho, sem alguém enviando mensagem. A prévia usa o mesmo evento do disparo real: remetente BotLive, papel de streamer, sem ID de pessoa e sem mensagem de chat. Para citar alguém, use <code>{'{{randomViewer|default:alguém}}'}</code> — cada ocorrência sorteia um nome novo na hora.</p>
   :<>
  <Field label="Mensagem de teste"><input value={message} onChange={e=>setMessage(e.target.value)}/></Field>
  <Field label="Nome de teste"><input value={user} onChange={e=>setUser(e.target.value)}/></Field>

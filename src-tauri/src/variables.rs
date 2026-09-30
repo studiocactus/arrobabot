@@ -112,13 +112,16 @@ pub fn migrate_flow(f: &mut Flow) -> bool {
     }
     changed
 }
-pub struct Context { values: BTreeMap<String,Value>, data: Value, pub simulated: bool }
+pub struct Context { values: BTreeMap<String,Value>, data: Value, pub simulated: bool, viewers: Vec<String> }
 impl Context {
     pub fn new(db: &Db, p: &Profile, e: &Event, flow: Option<&Flow>) -> R<Self> {
         let now=chrono::Local::now(); let mut values=BTreeMap::new();
          for (key,value) in [("user",json!(e.user)),("userName",json!(e.user)),("userId",json!(e.user_id)),("role",json!(e.role)),("message",json!(e.message)),("channel",json!(p.channel)),("channelId",json!(p.channel_id)),("platform",json!(p.platform)),("profileId",json!(p.id)),("profileName",json!(p.name)),("eventId",json!(e.id)),("eventType",json!(e.kind)),("isModerator",json!(matches!(e.role.as_str(),"moderator"|"broadcaster"))),("isBroadcaster",json!(e.role=="broadcaster")),("isSubscriber",json!(e.role=="subscriber")),("simulated",json!(e.simulated)),("date",json!(now.format("%Y-%m-%d").to_string())),("time",json!(now.format("%H:%M:%S").to_string())),("unixtime",json!(now.timestamp())),("lf",json!("\n"))] { values.insert(key.into(),value); }
         // Sem pessoa no evento, como em um timer, o sorteio é o único caminho para citar um espectador.
+        // O cadastro é guardado para sortear de novo a cada ocorrência: dois {{randomViewer}}
+        // na mesma mensagem citam pessoas possivelmente diferentes, nunca o mesmo nome congelado.
         if let Some(name)=crate::modules::random_chatter(db,&p.id){values.insert("randomViewer".into(),json!(name));}
+        let viewers=crate::modules::chatter_names(db,&p.id);
         let mut tokens=e.message.split_whitespace();
         let command=tokens.next().unwrap_or("");
         let raw=e.message.trim_start().strip_prefix(command).unwrap_or("").trim_start();
@@ -148,7 +151,7 @@ impl Context {
         values.insert("liveSpeech".into(),json!(spoken.join(" | ")));
         let uid=if e.user_id.is_empty(){String::new()}else{format!("{}:{}",p.platform,e.user_id)};
         for item in list(db,&p.id,&uid)?.as_array().unwrap() { values.insert(format!("{}.{}",item["scope"].as_str().unwrap(),item["name"].as_str().unwrap()),item["value"].clone()); }
-        Ok(Self{values,data:e.data.clone(),simulated:e.simulated})
+        Ok(Self{values,data:e.data.clone(),simulated:e.simulated,viewers})
     }
     pub fn set_command_count(&mut self,n:i64){self.values.insert("commandCount".into(),json!(n));}
      pub fn set(&mut self,key:&str,value:Value){self.values.insert(key.into(),value);}
@@ -166,9 +169,13 @@ impl Context {
         Ok(next)
     }
     fn expression(&self, expr: &str) -> R<String> {
+        use rand::Rng;
         let mut parts=expr.split('|').map(str::trim); let key=parts.next().unwrap_or("");
         // `random:min,max` é sorteado a cada uso, por isso não vem do cadastro de valores.
-        let mut value=if key.starts_with("random:"){Some(json!(draw(key)?))}else{self.lookup(key)};
+        // `randomViewer` também sorteia de novo a cada ocorrência, do cadastro do momento.
+        let mut value=if key.starts_with("random:"){Some(json!(draw(key)?))}
+        else if key=="randomViewer"&&!self.viewers.is_empty(){Some(json!(self.viewers[rand::thread_rng().gen_range(0..self.viewers.len())].clone()))}
+        else{self.lookup(key)};
         for filter in parts {
             let (name,param)=filter.split_once(':').unwrap_or((filter,""));
             if name=="default" {if value.as_ref().map_or(true,|v|v.is_null()||v.as_str()==Some("")){value=Some(json!(param));}continue;}

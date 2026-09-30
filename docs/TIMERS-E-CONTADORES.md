@@ -10,22 +10,22 @@ Use **Timers** para publicar lembretes periódicos. Use **Contar usos deste coma
 2. Clique em **Novo timer**.
 3. Em Nome, escreva Lembrete da comunidade.
 4. Em Resposta, escreva: Participe da nossa comunidade! Digite !discord para receber o convite.
-5. Em **Repetir a cada (segundos)**, informe **600**.
+5. Em **Repetir a cada (minutos)**, informe **10**.
 6. Clique em **Salvar timer** e confira se está ativo na lista de timers.
 7. Use o botão **Simular timer Lembrete da comunidade**. Confira a resposta no Histórico; nada é publicado nesse teste.
 8. Conecte o perfil. O primeiro envio real ocorre depois do intervalo completo; os seguintes repetem o intervalo.
 
 **Resultado esperado:** enquanto o perfil estiver conectado, o bot publica o lembrete aproximadamente a cada dez minutos. Não depende de alguém escrever um comando.
 
-| Tempo desejado | Valor em segundos |
+| Tempo desejado | Valor em minutos |
 |---|---|
-| 30 segundos, para teste curto | 30 |
-| 5 minutos | 300 |
-| 10 minutos | 600 |
-| 30 minutos | 1800 |
-| 1 hora | 3600 |
+| 0,5 minuto, para teste curto | 0,5 |
+| 5 minutos | 5 |
+| 10 minutos | 10 |
+| 30 minutos | 30 |
+| 1 hora | 60 |
 
-Cada timer tem nome, mensagem, intervalo e chave de ativação próprios. São aceitos de 30 segundos a 86400 segundos (24 horas). Você pode ter um lembrete da comunidade a cada dez minutos e outro sobre as regras a cada quinze.
+Cada timer tem nome, mensagem, intervalo e chave de ativação próprios. São aceitos de 0,5 minuto (30 segundos) a 1440 minutos (24 horas). Você pode ter um lembrete da comunidade a cada dez minutos e outro sobre as regras a cada quinze.
 
 ## Pausar, editar e reconectar
 
@@ -52,7 +52,7 @@ Um timer não representa um espectador: o nome do evento é BotLive, o ID da pes
 3. Ative **Contar usos deste comando**.
 4. Na Resposta, escreva **O streamer já morreu **, clique em **+ Contagem do comando** e complete com ** vezes.**
 5. Escolha **Só o streamer** ou **Moderadores** em Quem pode usar. Assim, espectadores comuns não aumentam o total.
-6. Defina o intervalo entre usos para evitar cliques repetidos, por exemplo cinco segundos.
+6. Defina o intervalo entre usos para evitar cliques repetidos, por exemplo um minuto.
 7. Clique em **Salvar comando**.
 
 O texto salvo será:
@@ -98,4 +98,4 @@ O contador mede usos aceitos, não mensagens entregues com sucesso. Para ter um 
 
 Simule o comando com um papel autorizado, leia a resposta no Histórico e confirme que o total real na lista não mudou. Depois, teste no chat com outra conta autorizada: as mensagens da própria conta do bot são ignoradas.
 
-Para o timer, comece com 30 segundos em um canal de teste, confira uma publicação e pause. Depois ajuste para o intervalo da live. A simulação não comprova autorização ou entrega na plataforma.
+Para o timer, comece com 0,5 minuto em um canal de teste, confira uma publicação e pause. Depois ajuste para o intervalo da live. A simulação não comprova autorização ou entrega na plataforma.

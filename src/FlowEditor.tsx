@@ -3,7 +3,7 @@ import {useState,useCallback,type ReactNode} from 'react';
 import {ReactFlow,Background,Controls,MiniMap,addEdge,useNodesState,useEdgesState,type Connection,type Node,type Edge} from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import {Plus,Save,Trash2,Zap} from 'lucide-react';
-import {actions,triggers,newAction,punishModes,punishTargets,twOps,type Flow,type Action,type AIConfig} from './types';
+import {actions,triggers,newAction,punishModes,punishTargets,twOps,minutesToSeconds,secondsToMinutes,type Flow,type Action,type AIConfig} from './types';
 import {orderedActions} from './flow';
 import {Field} from './components';
 import {VariableTarget} from './Variables';
@@ -64,11 +64,11 @@ function switchKind(current:Action,next:string){const base:Action={...current,ki
  <option value="broadcaster">Só o streamer</option>
  </select>
  </Field>
- <Field label="Intervalo entre usos (segundos)">
- <input type="number" min="0" value={trigger.cooldown} onChange={e=>setTrigger({...trigger,cooldown:+e.target.value})}/>
+ <Field label="Intervalo entre usos (minutos)">
+ <input type="number" min="0" max="1440" step="any" value={secondsToMinutes(trigger.cooldown)} onChange={e=>setTrigger({...trigger,cooldown:minutesToSeconds(Number(e.target.value)||0)})}/>
  </Field>
- <Field label="Intervalo por pessoa (segundos)">
- <input type="number" min="0" value={trigger.userCooldown} onChange={e=>setTrigger({...trigger,userCooldown:+e.target.value})}/>
+ <Field label="Intervalo por pessoa (minutos)">
+ <input type="number" min="0" max="1440" step="any" value={secondsToMinutes(trigger.userCooldown)} onChange={e=>setTrigger({...trigger,userCooldown:minutesToSeconds(Number(e.target.value)||0)})}/>
  </Field>
  </>}</Section>
  <Section title="Como sai" open>

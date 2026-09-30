@@ -16,7 +16,7 @@ Em **Avançado**, configure:
 |---|---|---|
 | Nome da moeda | pontos | Até 30 caracteres na interface |
 | Pontos por participação | 5 | 0 a 10000 |
-| Intervalo por pessoa | 60 segundos | 10 a 86400 segundos |
+| Intervalo por pessoa | 1 minuto | 0 a 1440 minutos |
 | Multiplicador para assinantes | 2 | 1 a 10 |
 
 A concessão acontece quando chega uma mensagem elegível e o intervalo daquela pessoa terminou. Não há contagem de tempo de espectadores silenciosos. O multiplicador usa a hierarquia de papéis: moderadores e streamer também passam pela condição de assinante.

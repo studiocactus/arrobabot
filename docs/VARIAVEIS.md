@@ -174,9 +174,9 @@ Para uma mensagem longa após o comando, use rawInput em vez de arg0. Exemplo: `
 
 ## Receita: citar um espectador numa mensagem automática
 
-`{{randomViewer}}` sorteia um nome entre quem já falou no chat do perfil. Ele existe justamente para mensagens que não têm pessoa associada, como timers.
+`{{randomViewer}}` sorteia um nome entre quem já falou no chat do perfil, de novo a cada ocorrência na mensagem. Ele existe justamente para mensagens que não têm pessoa associada, como timers.
 
-1. Em **Timers → Novo timer**, nome Minecraft, repetir a cada 600 segundos.
+1. Em **Timers → Novo timer**, nome Minecraft, repetir a cada 10 minutos.
 2. Na resposta, escreva: `Minecraft — {{randomViewer|default:alguém}}, quer jogar com a gente? Nosso servidor funciona 24/7.`
 3. Salve e confira em **Testar como a mensagem vai ficar**: a prévia usa o mesmo evento do disparo real.
 

@@ -15,12 +15,12 @@ Cada exemplo mostra **onde configurar**, **o que usar** e **o resultado esperado
 |---|---|---|---|
 | Cumprimentar quem pede | Comandos → Novo comando | !oi → Olá, {{user}}! Bem-vindo ao canal {{channel}}. | Ana escreve !oi e recebe uma saudação com seu nome |
 | Compartilhar redes | Comandos → Novo comando | !redes → Nossas redes: coloque aqui seus links públicos. | O chat recebe os links cadastrados |
-| Repetir um lembrete | Timers → Novo timer | Nome: Água; intervalo: 900; resposta: Hora de beber água! | Publica aproximadamente a cada 15 minutos, enquanto conectado |
-| Citar um espectador no lembrete | Timers → Novo timer | Nome: Minecraft; intervalo: 600; resposta: {{randomViewer\|default:alguém}}, quer jogar com a gente? | Sorteia um nome entre quem já falou no chat; sem ninguém, publica "alguém" |
+| Repetir um lembrete | Timers → Novo timer | Nome: Água; intervalo: 15; resposta: Hora de beber água! | Publica aproximadamente a cada 15 minutos, enquanto conectado |
+| Citar um espectador no lembrete | Timers → Novo timer | Nome: Minecraft; intervalo: 10; resposta: {{randomViewer\|default:alguém}}, quer jogar com a gente? | Sorteia um nome entre quem já falou no chat; sem ninguém, publica "alguém". Cada {{randomViewer}} na mensagem sorteia de novo |
 | Contar mortes | Novo comando → Contar usos deste comando | !mortes → Mortes registradas: {{commandCount}}. | Cada uso autorizado soma um ao total de !mortes |
 | Contar vitórias separadamente | Outro comando com contador | !vitorias → Vitórias: {{commandCount}}. | Usa um total independente de !mortes |
 | Corrigir o placar | Lista de comandos → número · Ajustar | Novo total: 7 | O próximo uso aceito mostra 8 |
-| Evitar spam | Editar comando → intervalos | Global: 10; por pessoa: 60 | No máximo uma execução a cada dez segundos, e uma por minuto para a mesma pessoa |
+| Evitar spam | Editar comando → intervalos | Global: 0,5; por pessoa: 1 | No máximo uma execução a cada trinta segundos, e uma por minuto para a mesma pessoa |
 | Limitar quem altera um contador | Editar comando → Quem pode usar | Moderadores | Só moderadores e streamer disparam o comando |
 | Somar a contagem com um som de caixa | Novo comando → Contar usos + Tocar áudio ao disparar | !ifood → O ifood já passou a milhão na rua {{commandCount}} vezes! | Cada uso aceito soma 1 e toca o som escolhido na saída do BotLive |
 | Aceitar o erro de digitação do comando | Novo comando → campo Comando | !whislist, !whishlist, !wishlist → Lista atualizada! | As três grafias disparam a mesma resposta, comparadas como palavra inteira |
@@ -110,7 +110,7 @@ Para uma variável própria, abra **Comandos → Variáveis**, escolha o escopo 
 
 ### Recompensar participação
 
-**Onde:** Comunidade → ative Pontos & loja → Avançado. Configure cinco pontos por participação e intervalo de sessenta segundos.
+**Onde:** Comunidade → ative Pontos & loja → Avançado. Configure cinco pontos por participação e intervalo de um minuto.
 
 **Entrada:** Ana envia uma mensagem elegível. **Resultado:** recebe cinco pontos; outra mensagem logo depois não concede novamente. **!pontos** consulta o saldo e **!ranking** mostra o ranking. Não são pontos por minutos assistidos em silêncio.
 
@@ -235,7 +235,7 @@ Gatilho Raid com duas ações: destaque de canal com `{{raiderLogin}}` e mensage
 1. Abra o perfil certo e conecte o canal.
 2. Teste !oi usando outra conta.
 3. Confira !mortes e !vitorias; zere somente se quiser começar novos totais.
-4. Ative os timers Água (900 segundos) e Comunidade (600 segundos).
+4. Ative os timers Água (15 minutos) e Comunidade (10 minutos).
 5. Teste o som de uma pessoa e confira o medidor no OBS.
 6. Confira a personalidade da IA e a nota de contexto do dia.
 7. Durante a live, acompanhe Histórico, fila e operações de comunidade.

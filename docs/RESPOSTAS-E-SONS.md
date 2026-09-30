@@ -10,7 +10,7 @@ Cada regra e cada pessoa aparecem como uma linha compacta com um ponto de situa�
 2. Escolha **Palavra / expressão inteira** para evitar que café combine com cafés, ou **Qualquer trecho da mensagem** para permitir esse caso. Maiúsculas e minúsculas não alteram a busca; acentos são preservados.
 3. Clique em **Vincular TXT** e escolha um arquivo UTF-8 com uma resposta por linha. Linhas vazias são ignoradas. Não existe sintaxe especial de comentários.
 4. Escolha **Aleatória, sem repetir a última** ou **Em sequência**. Uma única linha pode repetir; a sequência volta ao início ao terminar.
-5. Ajuste os intervalos da regra e por pessoa. Os padrões são 30 e 60 segundos. A regra exige pelo menos um segundo; zero desativa somente o intervalo por pessoa.
+5. Ajuste os intervalos da regra e por pessoa, em minutos. Os padrões são 0,5 e 1 minuto. A regra exige pelo menos um segundo; zero desativa somente o intervalo por pessoa.
 6. Use **Conferir linhas** para visualizar as primeiras dez respostas e a quantidade total, sem publicar.
 7. Ative a regra e **Ativar respostas TXT**, depois clique em **Salvar respostas e sons**.
 
@@ -39,7 +39,7 @@ Clique em **Adicionar pessoa** e preencha:
 - **ID da pessoa (opcional)**: quando informado, a identificação usa esse ID. Recomendado para nomes exibidos iguais. Correspondências por ID têm prioridade sobre nome.
 - **Escolher som**: selecione WAV, MP3 ou OGG, até 5 MiB. O aplicativo guarda uma cópia; mover o original não quebra o som.
 - **Disparar som**: quando enviar mensagem, quando entrar mesmo sem falar, ou ao entrar ou enviar mensagem.
-- **Quando tocar**: uma vez por sessão ou repetir com intervalo. O intervalo individual mínimo é cinco segundos; o padrão é sessenta.
+- **Quando tocar**: uma vez por sessão ou repetir com intervalo, em minutos. O intervalo individual mínimo é 0,5 minuto; o padrão é um minuto.
 - **Volume**: ajuste a intensidade e use **Testar som** para ouvir antes da live. O teste reproduz mesmo com a função desativada.
 
 Ative a pessoa e **Ativar sons por espectador**, depois clique em **Salvar respostas e sons**. Para suspender, desligue o controle geral ou o individual e salve. Remover uma pessoa também exige salvar. Mudanças valem para novos eventos; áudio já em reprodução ou na fila termina normalmente.

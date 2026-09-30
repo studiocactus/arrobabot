@@ -1,6 +1,7 @@
 import {useCallback,useEffect,useState} from 'react';
 import {RefreshCw,Save,Search,Download,Plug,Power,Gift,Cake,Link2,Terminal,ShieldAlert,Undo2,Send,Unlink} from 'lucide-react';
 import {api,errorText} from './api';
+import {minutesToSeconds,secondsToMinutes} from './types';
 import {Card,Field,Tag,Toggle,Busy,Empty} from './components';
 
 type Any=Record<string,any>;
@@ -207,7 +208,7 @@ export default function Discord({profileId,blocklist,notify}:{profileId:string;b
   <Card title="Moderação em dupla">
    <div className="list-row"><div><strong>Auto-moderação do Discord</strong><small>Mesmas regras da Twitch: {blocklist.length} expressões bloqueadas, anti-link e anti-repetição.</small></div><Toggle label="Auto-moderação do Discord" checked={sub('automod').enabled===true} onChange={v=>nest('automod','enabled',v)}/></div>
    <p className="help">A mensagem violadora é apagada e registrada na auditoria. O aviso, o timeout e o banimento continuam saindo pela página Comunidade e valem nas duas casas quando a identidade está vinculada. As entradas e saídas vão para o canal de logs escolhido no cartão “Servidor e canais”.</p>
-   <Field label="Modo lento do servidor (segundos)" hint="0 desativa; o máximo é 21600 segundos (6 horas)."><input type="number" min={0} max={21600} value={Number(cfg.slowmodeSeconds)||0} onChange={e=>set('slowmodeSeconds',Number(e.target.value))}/></Field>
+   <Field label="Modo lento do servidor (minutos)" hint="0 desativa; o máximo é 360 minutos (6 horas)."><input type="number" min={0} max={360} step="any" value={secondsToMinutes(Number(cfg.slowmodeSeconds)||0)} onChange={e=>set('slowmodeSeconds',minutesToSeconds(Number(e.target.value)||0))}/></Field>
   </Card>
 
   <Card title="Ranking de XP">

@@ -431,6 +431,16 @@ async fn timer_preview_delivers_the_real_event_and_sorts_a_chatter(){
  assert_eq!(preview["variables"]["userId"],"");
 }
 #[tokio::test]
+async fn random_viewer_draws_fresh_on_every_occurrence(){
+ let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();let p=profile("Sorteio");rt.db.save_profile(&p).unwrap();
+ rt.db.set_module(&p.id,"community",&json!({"names":{"a":"Ana","b":"Bia"}})).unwrap();
+ let ctx=variables::Context::new(&rt.db,&p,&event(&p,"!x",true),None).unwrap();
+ // Um único contexto, 60 mensagens com duas ocorrências cada: o nome não pode ficar congelado.
+ let mut seen=std::collections::HashSet::new();
+ for _ in 0..60{let out=ctx.render("{{randomViewer}} contra {{randomViewer}}").unwrap();for part in out.split(" contra "){assert!(["Ana","Bia"].contains(&part),"sorteio fora do cadastro: {part}");seen.insert(part.to_owned());}}
+ assert_eq!(seen.len(),2,"um único Context sorteou 120 vezes sem variar o nome");
+}
+#[tokio::test]
 async fn only_one_automation_publishes_when_several_match(){
  let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();let p=profile("Uma resposta");rt.db.save_profile(&p).unwrap();
  let mut comando=flow(&p);comando.name="Comando".into();comando.actions=vec![Action{kind:"overlay".into(),text:"efeito paralelo".into(),target:String::new(),value:0,condition:String::new(),..Default::default()},Action{kind:"chat".into(),text:"resposta do comando".into(),target:String::new(),value:0,condition:String::new(),..Default::default()}];

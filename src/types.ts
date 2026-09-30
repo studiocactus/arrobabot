@@ -25,3 +25,6 @@ export const aiLengths:Record<string,string>={short:'Uma frase',medium:'Até 300
 export const knowledgeDepths:Record<string,string>={light:'Leve · 5 mil',standard:'Padrão · 13 mil',full:'Completa · 20 mil'};
 
 export const newTimer=(profileId:string):Flow=>({...newFlow(profileId),name:'Lembrete',timerSeconds:600,counter:false,trigger:{kind:'timer',pattern:'',permission:'everyone',cooldown:0,userCooldown:0},actions:[{...newAction(),text:'Participe da nossa comunidade!'}]});
+/** Intervalos aparecem em minutos na tela e continuam em segundos no armazenamento e nas APIs. */
+export const secondsToMinutes=(s:number)=>{const m=(Number(s)||0)/60;return String(Math.round(m*100)/100)};
+export const minutesToSeconds=(m:number)=>Math.max(0,Math.round((Number(m)||0)*60));

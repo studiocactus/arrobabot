@@ -26,7 +26,7 @@ export function ConversationForm({profileId,onSave}:{profileId:string;onSave:(f:
  <p>Conecte uma fala do chat à IA. O bot gera uma resposta nova para cada mensagem que combinar com o gatilho.</p>
  <Field label="Responder quando a mensagem contiver"><input required value={pattern} onChange={e=>setPattern(e.target.value)} placeholder="amassando"/></Field>
  <Field label="Como a IA deve responder"><textarea ref={instructionBox} className="auto-grow" required rows={4} value={instruction} onChange={e=>setInstruction(e.target.value)}/></Field>
- <p className="help">Usa a personalidade salva em IA e Memória. Intervalo de 60 segundos entre respostas e 120 por pessoa. Você pode ajustar tudo no editor da automação.</p>
+ <p className="help">Usa a personalidade salva em IA e Memória. Intervalo de 1 minuto entre respostas e 2 por pessoa. Você pode ajustar tudo no editor da automação.</p>
  <AIResponseTest profileId={profileId} instruction={instruction}/>{error&&<p role="alert">{error}</p>}
  <footer className="form-footer"><button className="primary" disabled={busy||!pattern.trim()||!instruction.trim()}>Salvar resenha do chat</button></footer></form>
 }

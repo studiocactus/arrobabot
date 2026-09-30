@@ -2,7 +2,7 @@ import {useEffect,useState} from 'react';
 import {Save,Play,Trash2,Pencil,Package,Workflow} from 'lucide-react';
 import {api,desktop} from './api';
 import {friendlyMessage} from './errors';
-import {type Flow,type Profile,type Preset} from './types';
+import {type Flow,type Profile,type Preset,minutesToSeconds,secondsToMinutes} from './types';
 import {Modal,Field,Toggle} from './components';
 import FlowEditor from './FlowEditor';
 import MessageEditor from './MessageEditor';
@@ -50,8 +50,8 @@ export function FlowDialog({flow,mode,profile,notify,onSaved,onClose}:{flow:Flow
   {editing.counter&&<button type="button" onClick={()=>setEditing({...editing,actions:[{...editing.actions[0],text:editing.actions[0].text+'{{commandCount}}'}]})}>+ Contagem do comando</button>}
   {mode!=='timer'&&<div className="form-grid">
    <Field label="Quem pode usar"><select value={editing.trigger.permission} onChange={e=>setEditing({...editing,trigger:{...editing.trigger,permission:e.target.value}})}><option value="everyone">Todo mundo</option><option value="subscriber">Assinantes</option><option value="moderator">Moderadores</option><option value="broadcaster">Só o streamer</option></select></Field>
-   <Field label="Intervalo entre usos (segundos)"><input type="number" min="0" max="86400" value={editing.trigger.cooldown} onChange={e=>setEditing({...editing,trigger:{...editing.trigger,cooldown:+e.target.value}})}/></Field>
-   <Field label="Intervalo por pessoa (segundos)"><input type="number" min="0" max="86400" value={editing.trigger.userCooldown} onChange={e=>setEditing({...editing,trigger:{...editing.trigger,userCooldown:+e.target.value}})}/></Field>
+   <Field label="Intervalo entre usos (minutos)"><input type="number" min="0" max="1440" step="any" value={secondsToMinutes(editing.trigger.cooldown)} onChange={e=>setEditing({...editing,trigger:{...editing.trigger,cooldown:minutesToSeconds(Number(e.target.value)||0)}})}/></Field>
+   <Field label="Intervalo por pessoa (minutos)"><input type="number" min="0" max="1440" step="any" value={secondsToMinutes(editing.trigger.userCooldown)} onChange={e=>setEditing({...editing,trigger:{...editing.trigger,userCooldown:minutesToSeconds(Number(e.target.value)||0)}})}/></Field>
   </div>}
   <footer className="form-footer"><span className="help">{mode==='timer'?'Ao pausar, desconectar ou editar, o intervalo começa novamente.':'Vá para o editor visual quando quiser conectar várias ações em sequência.'}</span><button type="button" onClick={()=>setForceVisual(true)}><Workflow size={15}/>Abrir no editor visual</button><button className="primary"><Save size={16}/>{mode==='timer'?'Salvar timer':'Salvar comando'}</button></footer>
  </form>}
