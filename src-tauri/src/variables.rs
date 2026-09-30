@@ -120,16 +120,35 @@ pub fn suggest_variable(raw:&str)->Option<String>{
 }
 /// Confere os marcadores de um texto (`{{x}}`, `%x%`, `$x`) e devolve um problema
 /// por marcador desconhecido, com a linha (1-based), o marcador e a sugestão.
+/// Todo o fatiamento usa fronteiras de `find`/ASCII: texto com acento nunca quebra.
 pub fn analyze_variables(text:&str)->Vec<Value>{
  let mut out=vec![];
  for (i,line) in text.lines().enumerate(){
   let mut marks=vec![];
-  let b=line.as_bytes();let mut k=0;
-  while k<b.len(){
-   if line[k..].starts_with("{{"){if let Some(end)=line[k+2..].find("}}"){marks.push(line[k+2..k+2+end].to_owned());k+=end+4;continue;}}
-   else if b[k]==b'%' {if let Some(end)=line[k+1..].find('%'){let name=&line[k+1..k+1+end];if valid_name(name){marks.push(name.to_owned());}k+=end+2;continue;}}
-   else if b[k]==b'$' {let mut end=k+1;while end<b.len()&&(b[end].is_ascii_alphanumeric()||b[end]==b'_'){end+=1;}let name=&line[k+1..end];if legacy(name){marks.push(name.to_owned());}k=end.max(k+1);continue;}
-   k+=1;
+  let mut rest=line;
+  while let Some(s)=rest.find("{{"){
+   let after=s+2;
+   match rest[after..].find("}}"){Some(e)=>{marks.push(rest[after..after+e].to_owned());rest=&rest[after+e+2..];}None=>break,}
+  }
+  rest=line;
+  while let Some(s)=rest.find('%'){
+   let after=s+1;
+   match rest[after..].find('%'){
+    Some(e)=>{let name=&rest[after..after+e];if valid_name(name){marks.push(name.to_owned());rest=&rest[after+e+1..];}else{rest=&rest[s+1..];}}
+    None=>break,
+   }
+  }
+  let idx:Vec<(usize,char)>=line.char_indices().collect();let mut j=0;
+  while j<idx.len(){
+   let (pos,ch)=idx[j];
+   if ch=='$'&&!(pos>0&&line.as_bytes()[pos-1]==b'\\'){
+    let mut end=pos+1;
+    while end<line.len()&&(line.as_bytes()[end].is_ascii_alphanumeric()||line.as_bytes()[end]==b'_'){end+=1;}
+    let name=&line[pos+1..end];
+    if legacy(name){marks.push(name.to_owned());}
+    j=idx.iter().position(|(p,_)|*p>=end).unwrap_or(idx.len());continue;
+   }
+   j+=1;
   }
   for m in marks{
    let key=m.split('|').next().unwrap_or("").trim();
@@ -322,5 +341,8 @@ impl Context {
         assert_eq!(issues.len(),2,"só os dois desconhecidos de verdade");
         assert_eq!(issues[0]["line"],2);assert_eq!(issues[0]["marker"],"randomViewr");assert_eq!(issues[0]["suggestion"],"randomViewer");
         assert_eq!(issues[1]["marker"],"xyzabc123");assert!(issues[1]["suggestion"].is_null());
+        // Acento antes do marcador não quebra o analisador (fatiamento UTF-8 seguro).
+        let acc=analyze_variables("Olá {{user}}, café {{randomViewr}}!");
+        assert_eq!(acc.len(),1);assert_eq!(acc[0]["suggestion"],"randomViewer");
     }
 }

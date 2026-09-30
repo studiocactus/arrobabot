@@ -1,5 +1,27 @@
 # Histórico de atualizações
 
+# BotLive 0.1.51
+
+## O que mudou
+
+- Corrige pânico do analisador de variáveis com acentos: `Olá {{user}}` derrubava o núcleo (índice de byte no meio de caractere UTF-8), quebrando resposta TXT, simulação e o próprio teste. O analisador agora só fatia em fronteiras seguras, com teste dedicado. Nenhuma mudança de comportamento além da 0.1.49.
+
+## Como usar
+
+- Vale o manual da 0.1.49: resposta TXT no fio da pessoa e conferência de variáveis.
+
+## Validação
+
+- `npm run test:updates` (8/8) executado antes do push.
+- `cargo test` não executado localmente (toolchain Rust indisponível); a falha foi reproduzida pelo log da CI (3 testes com o mesmo pânico) e a correção cobre o caso exato; a CI testa de verdade.
+- A 0.1.50 não gerou build (CI reprovou nestes testes); esta 0.1.51 a substitui sem reescrever release, pois nenhuma release 0.1.50 chegou a existir.
+
+## Limitações
+
+- As mesmas da 0.1.49.
+
+---
+
 # BotLive 0.1.50
 
 ## O que mudou
