@@ -88,7 +88,7 @@ pub fn operation(rt:&Runtime,p:&str,op:&str,args:&Value)->R<Value>{
  }
  rt.db.set_module(p,"chatExtras",&json!(c))?;Ok(Value::Null)
  },
- "chatExtras.preview"=>{let a=asset(rt,p,args["asset"].as_str().unwrap_or(""),"txt")?;let rows=lines(Path::new(&a.path))?;let issues:variables::analyze_variables(&rows.join("\n")).into_iter().take(20).collect::<Vec<_>>();Ok(json!({"count":rows.len(),"lines":rows.into_iter().take(10).collect::<Vec<_>>(),"issues":issues}))},
+ "chatExtras.preview"=>{let a=asset(rt,p,args["asset"].as_str().unwrap_or(""),"txt")?;let rows=lines(Path::new(&a.path))?;let issues=variables::analyze_variables(&rows.join("\n")).into_iter().take(20).collect::<Vec<_>>();Ok(json!({"count":rows.len(),"lines":rows.into_iter().take(10).collect::<Vec<_>>(),"issues":issues}))},
  "chatExtras.audio"=>{
  let a=asset(rt,p,args["asset"].as_str().unwrap_or(""),"sound")?;let path=audio_path(rt,p,&a)?;let bytes=read_file(&path,5*1024*1024)?;let mime=audio_kind(&path,&bytes)?;
  Ok(json!(format!("data:{mime};base64,{}",base64::engine::general_purpose::STANDARD.encode(bytes))))

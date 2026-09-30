@@ -1,5 +1,27 @@
 # Histórico de atualizações
 
+# BotLive 0.1.50
+
+## O que mudou
+
+- Corrige a compilação da 0.1.49 (`let issues=` escrito com `:` no preview do TXT). Nenhuma mudança de comportamento além da 0.1.49.
+
+## Como usar
+
+- Vale o manual da 0.1.49: resposta TXT no fio da pessoa e conferência de variáveis.
+
+## Validação
+
+- `npm run test:updates` (8/8) executado antes do push.
+- `cargo test` não executado localmente (toolchain Rust indisponível); correção sintática apontada pelo compilador da CI; a CI testa de verdade.
+- A 0.1.49 não gerou build (CI reprovou na compilação); esta 0.1.50 a substitui sem reescrever release, pois nenhuma release 0.1.49 chegou a existir.
+
+## Limitações
+
+- As mesmas da 0.1.49.
+
+---
+
 # BotLive 0.1.49
 
 ## O que mudou
