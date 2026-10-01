@@ -155,7 +155,7 @@ fn write_all(rt: &Runtime, p: &Profile, c: &Config, d: &Value) -> Result<(), Str
  let vals = values(d);
  for def in DEFS {
   if !enabled(c, def.key) { continue; }
-  let text = render(&template_of(c, def.key), vals.get(def.key).cloned().unwrap_or_default());
+  let text = render(&template_of(c, def.key), &vals.get(def.key).cloned().unwrap_or_default());
   std::fs::write(dir.join(def.file), text).map_err(|_| format!("Não foi possível gravar {}.", def.file))?;
  }
  let _ = rt;
@@ -198,19 +198,22 @@ pub async fn chatters(rt: &Arc<Runtime>, p: &Profile) -> Result<(i64, Vec<String
  }
  let total = v["total"].as_i64().unwrap_or(0);
  let users: Vec<String> = v["data"].as_array().cloned().unwrap_or_default().into_iter()
-  .filter_map(|u| u["user_login"].as_str().map(str::to_owned)).take(1000).collect();
+  .filter_map(|u| u["user_login"].as_str().map(|s| s.to_owned())).take(1000).collect();
  Ok((total, users))
 }
 async fn totals(rt: &Arc<Runtime>, p: &Profile) -> (Option<i64>, Option<i64>, String) {
  let (followers, subs) = crate::twitch_ops::channel_counts(rt, p).await;
- let uptime = match oauth::token(&rt.http, p, "channel").await {
-  Ok(token) => rt.http.get("https://api.twitch.tv/helix/streams").query(&[("user_id", p.channel_id.as_str())])
-   .header("Client-Id", &p.client_id).bearer_auth(&token)
-   .send().await.ok().and_then(|r| r.json::<Value>().ok())
-   .and_then(|v| v["data"][0]["started_at"].as_str().map(str::to_owned))
-   .and_then(|s| uptime_text(&s)).unwrap_or_default(),
-  Err(_) => String::new(),
- };
+ let mut uptime = String::new();
+ if let Ok(token) = oauth::token(&rt.http, p, "channel").await {
+  if let Ok(r) = rt.http.get("https://api.twitch.tv/helix/streams").query(&[("user_id", p.channel_id.as_str())])
+   .header("Client-Id", &p.client_id).bearer_auth(&token).send().await {
+   if let Ok(v) = r.json::<Value>().await {
+    if let Some(s) = v["data"][0]["started_at"].as_str() {
+     uptime = uptime_text(s).unwrap_or_default();
+    }
+   }
+  }
+ }
  (followers, subs, uptime)
 }
 fn stale(d: &Value, now: i64) -> bool {
@@ -311,7 +314,7 @@ async fn bot_login(rt: &Arc<Runtime>, p: &Profile) -> Option<String> {
  let token = oauth::token(&rt.http, p, "bot").await.ok()?;
  rt.http.get("https://id.twitch.tv/oauth2/validate").header("Authorization", format!("OAuth {token}"))
   .send().await.ok()?.json::<Value>().await.ok()
-  .and_then(|v| v["login"].as_str().map(str::to_owned))
+  .and_then(|v| v["login"].as_str().map(|s| s.to_owned()))
 }
 fn validate_save(v: &Value) -> Result<Config, String> {
  let enabled = v["enabled"] == true;
