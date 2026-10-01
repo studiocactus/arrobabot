@@ -11,7 +11,7 @@ const chapters = [
  ['06-PRESETS-E-APARENCIA.md','Presets e aparência'],['07-OPERACAO-E-BACKUP.md','Acesso e backup'],
  ['API-LOCAL.md','OBS e API local'],['08-SOLUCAO-DE-PROBLEMAS.md','Solução de problemas'],
  ['README.md','Glossário e índice'],['ARQUITETURA.md','Arquitetura'],
- ['DISTRIBUICAO.md','Desenvolvimento'],['VALIDACAO.md','Validação'],['MATRIZ-DE-ACEITE.md','Pendências'],['VARIAVEIS.md','Variáveis'],['ATUALIZACOES.md','Atualizações e commits'],['RESPOSTAS-E-SONS.md','Respostas TXT e sons'],['TIMERS-E-CONTADORES.md','Timers e contadores'],['EXEMPLOS-DE-USO.md','Exemplos práticos'],['09-DISCORD.md','Discord']
+ ['DISTRIBUICAO.md','Desenvolvimento'],['VALIDACAO.md','Validação'],['MATRIZ-DE-ACEITE.md','Pendências'],['VARIAVEIS.md','Variáveis'],['ATUALIZACOES.md','Atualizações e commits'],['RESPOSTAS-E-SONS.md','Respostas TXT e sons'],['TIMERS-E-CONTADORES.md','Timers e contadores'],['EXEMPLOS-DE-USO.md','Exemplos práticos'],['09-DISCORD.md','Discord'],['10-ROTULOS-OBS.md','Rótulos OBS']
 ].map(([file,title],i)=>({file,title,id:'capitulo-'+(i+1)}));
 const groups=[{name:'Comece aqui',ids:[1,20,2,3]},{name:'Configure o bot',ids:[4,19,16,5,18,6,21,9,7]},{name:'Cuide da sua live',ids:[8,17,10,11]},{name:'Referência técnica',ids:[12,13,14,15]}];
 const readingOrder=groups.flatMap(g=>g.ids.map(id=>chapters.find(c=>c.id==='capitulo-'+id)));

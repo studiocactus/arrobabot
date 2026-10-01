@@ -58,6 +58,7 @@ impl Runtime {
  self.disconnect(id);
  if p.platform=="kick"{return Err("A recepção de eventos Kick exige um webhook público. Configure uma ponte que encaminhe eventos para a API local; o envio de mensagens já está disponível após OAuth.".into())}
  let _=oauth::token(&self.http,&p,"bot").await?;
+ crate::labels::session_reset(&self.db,&p);
  self.status(id,"connecting");
  let rt=self.clone();let key=id.to_string();
  let task=tokio::spawn(async move{
@@ -183,6 +184,13 @@ pub async fn process(rt:Arc<Runtime>,e:Event){
  crate::discord::mirror_chat(&rt,&p,&e);
  }
  if matches!(e.kind.as_str(),"follow"|"subscription"|"resub"|"gift"|"cheer"|"raid"){crate::discord::notify(&rt,&p,&e.kind,&e);}
+ if matches!(e.kind.as_str(),"follow"|"subscription"|"resub"|"gift"|"cheer"|"raid")&&!e.simulated{
+  let (rt2,p2,e2)=(rt.clone(),p.clone(),e.clone());
+  tokio::spawn(async move{
+   let amount=e2.data["viewers"].as_i64().or(e2.data["bits"].as_i64()).or(e2.data["total"].as_i64()).unwrap_or(e2.data["cumulative_months"].as_i64().unwrap_or(1));
+   crate::labels::on_event(&rt2,&p2,&e2.kind,&e2.user,amount,e2.data["cumulative_months"].as_i64().unwrap_or(0)).await;
+  });
+ }
  let history=rt.conversation.lock().unwrap().receive(&e);
  rt.live.record(&p.id,&e);
  crate::chat_extras::sound(&rt,&p,&e);

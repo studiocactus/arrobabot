@@ -18,6 +18,7 @@ impl Db {
  CREATE TABLE IF NOT EXISTS kv(key TEXT PRIMARY KEY,data TEXT NOT NULL);
  CREATE TABLE IF NOT EXISTS module_state(profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,key TEXT NOT NULL,data TEXT NOT NULL,PRIMARY KEY(profile_id,key));
  CREATE TABLE IF NOT EXISTS points(profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,user_id TEXT NOT NULL,balance INTEGER NOT NULL CHECK(balance>=0),PRIMARY KEY(profile_id,user_id));
+ CREATE TABLE IF NOT EXISTS watch_time(profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,user_login TEXT NOT NULL,seconds INTEGER NOT NULL DEFAULT 0 CHECK(seconds>=0),PRIMARY KEY(profile_id,user_login));
  CREATE TABLE IF NOT EXISTS variables(profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,scope TEXT NOT NULL,user_id TEXT NOT NULL,name TEXT NOT NULL,data TEXT NOT NULL,PRIMARY KEY(profile_id,scope,user_id,name));
  CREATE TEMP TABLE session_variables(profile_id TEXT NOT NULL,scope TEXT NOT NULL,user_id TEXT NOT NULL,name TEXT NOT NULL,data TEXT NOT NULL,PRIMARY KEY(profile_id,scope,user_id,name));
  PRAGMA user_version=3;").map_err(|e|e.to_string())?;

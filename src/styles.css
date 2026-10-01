@@ -78,3 +78,7 @@
 @keyframes pulse-dot{0%,100%{opacity:1}50%{opacity:.45}}
 .profile-card.is-online{border-color:#58c47244}
 .profile-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;border-top:1px solid var(--border);padding-top:14px;margin-top:14px}
+
+/* Rótulos OBS 0.1.52: lista de espectadores no chat. */
+.viewer-list{display:flex;flex-wrap:wrap;gap:6px;max-height:220px;overflow:auto;margin-top:8px}
+.viewer-list span{font-size:11px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--r-pill);padding:4px 10px;white-space:nowrap}

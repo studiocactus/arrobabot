@@ -28,6 +28,7 @@ mod listen;
 mod speech;
 mod access;
 mod stats;
+mod labels;
 mod scheduler;
 mod obsidian;
 mod discord;
@@ -49,6 +50,7 @@ pub async fn dispatch(rt:Arc<Runtime>,op:&str,args:Value)->R<Value>{
  if op.starts_with("access."){return access::operation(&rt,op,&args)}
  let p=args["profileId"].as_str().unwrap_or("").to_owned();
  if op.starts_with("chatExtras."){return chat_extras::operation(&rt,&p,op,&args)}
+ if op.starts_with("labels."){return labels::operation(&rt,&p,op,&args).await}
  if op.starts_with("discord."){return discord_admin::operation(&rt,&p,op,&args).await}
  match op{
  "snapshot"=>Ok(json!({"profiles":rt.db.profiles()?.into_iter().filter(|p|access::allowed(&rt,p)).collect::<Vec<_>>(),"logs":rt.db.logs("")?.into_iter().filter(|l|access::current(&rt)=="owner"||rt.db.profile(&l.profile_id).is_ok_and(|p|access::allowed(&rt,&p))).collect::<Vec<_>>(),"statuses":*rt.statuses.lock().unwrap(),"theme":rt.db.get("theme"),"accent":rt.db.get("accent"),"apiPort":*rt.api_port.lock().unwrap(),"dataDir":rt.base.to_string_lossy()})),
