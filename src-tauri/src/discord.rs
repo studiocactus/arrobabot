@@ -463,7 +463,7 @@ pub fn live_alert(rt:&Arc<Runtime>,p:&Profile,online:bool){
  let rt2=rt.clone();let p2=p.clone();let ch=channel.to_owned();
  tokio::spawn(async move{
   match live_rich(&rt2,&p2,online,false).await{
-   Some(rich)=>{if let Err(err)=post_rich(&rt2,&p2,&ch,rich).await{rt2.log(&p2.id,"discord",&err,"error");}else{rt2.log(&p2.id,"discord",if online{"Aviso de live ligada enviado":"Aviso de live encerrada enviado"},"success");}}
+   Some(rich)=>{if let Err(err)=post_rich(&rt2,&p2,&ch,rich).await{rt2.log(&p2.id,"discord",&err,"error");}else if online{rt2.log(&p2.id,"discord","Aviso de live ligada enviado","success");}else{rt2.log(&p2.id,"discord","Aviso de live encerrada enviado","success");}}
    None=>rt2.log(&p2.id,"discord","Sem dados da live para avisar","info"),
   }
  });
