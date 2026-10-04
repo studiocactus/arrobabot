@@ -1,5 +1,27 @@
 # Histórico de atualizações
 
+# BotLive 0.1.57
+
+## O que mudou
+
+- Avisos do Discord em acordeão: os 8 tipos de notificação (seguidor, inscrição, re-inscrição, presente, bits, raid, live ligada e encerrada) viram linhas recolhíveis no padrão de Respostas e sons, com busca, Expandir/Recolher todos, pastilha Ativo/Pausado e o texto + Testar dentro de cada item.
+
+## Como usar
+
+- Discord → Entrada, saída e espelho → abra cada aviso para ajustar texto e testar. Nada muda nos valores salvos.
+
+## Validação
+
+- `npm run check` (tsc), `npm test` (vitest 31/31) e `npm run test:updates` (8/8) executados antes do push.
+- `cargo test` não executado localmente (toolchain Rust indisponível); sem mudança em Rust e a CI compila e testa de verdade.
+- Teste visual do acordeão ainda pendente.
+
+## Limitações
+
+- Nenhuma limitação nova.
+
+---
+
 # BotLive 0.1.56
 
 ## O que mudou

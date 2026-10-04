@@ -2,7 +2,7 @@ import {useCallback,useEffect,useState} from 'react';
 import {RefreshCw,Save,Search,Download,Plug,Power,Gift,Cake,Link2,Terminal,ShieldAlert,Undo2,Send,Unlink} from 'lucide-react';
 import {api,errorText} from './api';
 import {minutesToSeconds,secondsToMinutes} from './types';
-import {Card,Field,Tag,Toggle,Busy,Empty} from './components';
+import {Card,Field,Tag,Toggle,Busy,Empty,AccordionItem,ItemStack,ListTools} from './components';
 
 type Any=Record<string,any>;
 type Opt={id:string;label:string};
@@ -20,6 +20,7 @@ const merge=(base:Any,over:Any|undefined):Any=>{
 const arr=(v:Any|null|undefined):Any[]=>Array.isArray(v)?v:[];
 const NOTIFY_KINDS:[string,string,string][]=[['follow','Seguidor','Quem começou a seguir.'],['subscription','Inscrição','Primeira vez assinando.'],['resub','Re-inscrição','Meses e sequência.'],['gift','Presente','Quem presenteou e quantos.'],['cheer','Bits','Quem enviou e quantos.'],['raid','Raid','Quem chegou e com quantos.'],['live','Live ligada','Título, jogo e prévia.'],['offline','Live encerrada','Texto curto de tchau.']];
 const NOTIFY_PLACEHOLDER:Record<string,string>={follow:'{user} começou a seguir o canal.',subscription:'{user} assinou o canal.',resub:'{user} renovou por {months} meses.',gift:'{user} presenteou {gifts} subs.',cheer:'{user} enviou {bits} bits.',raid:'{user} chegou com {viewers} pessoas.',live:'{game} com {viewers} assistindo',offline:'Obrigado pela companhia!'};
+const NOTIFY_TOKENS:Record<string,string>={follow:'{user}',subscription:'{user}',resub:'{user} {months} {streak}',gift:'{user} {gifts}',cheer:'{user} {bits} {message}',raid:'{user} {viewers}',live:'{title} {game} {viewers} {url}',offline:'{channel}'};
 const texts=(v:Any[])=>v.filter(c=>Number(c.type)===0||Number(c.type)===5);
 function download(name:string,text:string){
  const blob=new Blob([text],{type:'text/csv;charset=utf-8'});
@@ -52,6 +53,8 @@ export default function Discord({profileId,blocklist,notify}:{profileId:string;b
  const [links,setLinks]=useState<Any[]>([]);
  const [linkTarget,setLinkTarget]=useState('');
  const [lastCode,setLastCode]=useState('');
+ const [notifyOpen,setNotifyOpen]=useState<Record<string,boolean>>({});
+ const [notifyQuery,setNotifyQuery]=useState('');
 
  const call=useCallback(async(op:string,args:Any={},ok?:string):Promise<Any|null>=>{
   setBusy(op);
@@ -88,6 +91,7 @@ export default function Discord({profileId,blocklist,notify}:{profileId:string;b
  const nkind=(k:string)=>({enabled:true,text:'',...(((sub('notify').kinds||{}) as Any)[k]||{})});
  const setKind=(k:string,patch:Partial<{enabled:boolean;text:string}>)=>nest('notify','kinds',{...((sub('notify').kinds||{}) as Any),[k]:{...nkind(k),...patch}});
  const nameOf=(m:Any)=>String(m.nick||m.user?.global_name||m.user?.username||m.user?.id||'');
+ const notifyVisible=NOTIFY_KINDS.filter(([k,label,hint])=>(k+' '+label+' '+hint).toLowerCase().includes(notifyQuery.toLowerCase()));
 
  async function saveToken(){await call('secret.save',{key:'discord_token',value:token},'Token do bot salvo no cofre do sistema.');setToken('')}
  async function saveCfg(){const r=await call('discord.save',{config:cfg},'Configuração do Discord salva.');if(r!==null)await refresh()}
@@ -206,11 +210,13 @@ export default function Discord({profileId,blocklist,notify}:{profileId:string;b
    <div className="list-row"><div><strong>Notificações da Twitch</strong><small>Seguidores, inscrições, bits, raids e live no canal abaixo.</small></div><Toggle label="Notificações da Twitch" checked={sub('notify').enabled===true} onChange={v=>nest('notify','enabled',v)}/></div>
    <Pick label="Canal de notificações" value={String(sub('notify').channelId||'')} options={channels} onChange={v=>nest('notify','channelId',v)}/>
    <div className="list-row"><div><strong>Fotos nos cartões</strong><small>Avatar de quem agiu, capa do jogo e prévia da live.</small></div><Toggle label="Fotos nos cartões" checked={sub('notify').thumbs!==false} onChange={v=>nest('notify','thumbs',v)}/></div>
-   {NOTIFY_KINDS.map(([k,label,hint])=><div key={k}>
-    <div className="list-row"><div><strong>{label}</strong><small>{hint}</small></div><div className="row"><button disabled={busy==='discord.action'} onClick={()=>{void action({action:'notifySample',kind:k},'Exemplo enviado ao canal.')}}>Testar</button><Toggle label={label} checked={nkind(k).enabled} onChange={v=>setKind(k,{enabled:v})}/></div></div>
+   <ListTools count={notifyVisible.length+(notifyVisible.length===1?' aviso':' avisos')} total={NOTIFY_KINDS.length} shown={notifyVisible.length} search={notifyQuery} onSearch={setNotifyQuery} searchLabel="Filtrar avisos" onExpandAll={()=>setNotifyOpen(Object.fromEntries(NOTIFY_KINDS.map(([k])=>[k,true])))} onCollapseAll={()=>setNotifyOpen({})}/>
+   <ItemStack>{notifyVisible.map(([k,label,hint])=><AccordionItem key={k} id={'notify-'+k} open={!!notifyOpen[k]} enabled={nkind(k).enabled} enabledLabel={label} title={label} meta={[nkind(k).enabled?'Ativo':'Pausado']} onToggle={()=>setNotifyOpen(o=>({...o,[k]:!o[k]}))} onEnabled={v=>setKind(k,{enabled:v})}>
+    <p className="help">{hint} Tokens: {NOTIFY_TOKENS[k]}</p>
     <Field label={'Texto do '+label.toLowerCase()}><input value={nkind(k).text} maxLength={1000} placeholder={NOTIFY_PLACEHOLDER[k]} onChange={e=>setKind(k,{text:e.target.value})}/></Field>
-   </div>)}
-   <Field label="Texto fora do cartão (live ligada)" hint="Sai acima do cartão. Vazio envia só o cartão."><input value={nkind('live_content').text} maxLength={1000} placeholder="Estamos ao vivo!" onChange={e=>setKind('live_content',{text:e.target.value})}/></Field>
+    {k==='live'&&<Field label="Texto fora do cartão (live ligada)" hint="Sai acima do cartão. Vazio envia só o cartão."><input value={nkind('live_content').text} maxLength={1000} placeholder="Estamos ao vivo!" onChange={e=>setKind('live_content',{text:e.target.value})}/></Field>}
+    <div className="item-actions"><button disabled={busy==='discord.action'} onClick={()=>{void action({action:'notifySample',kind:k},'Exemplo enviado ao canal.')}}>Testar</button></div>
+   </AccordionItem>)}</ItemStack>
   </Card>
  </div>
 
