@@ -160,7 +160,9 @@ async fn twitch_session(rt:Arc<Runtime>,p:Profile,account:&str)->Result<(),Strin
  ("channel.cheer","1",json!({"broadcaster_user_id":p.channel_id})),
  ("channel.raid","1",json!({"to_broadcaster_user_id":p.channel_id})),
  ("channel.channel_points_custom_reward_redemption.add","1",json!({"broadcaster_user_id":p.channel_id})),
- ("channel.update","2",json!({"broadcaster_user_id":p.channel_id}))
+ ("channel.update","2",json!({"broadcaster_user_id":p.channel_id})),
+ ("stream.online","1",json!({"broadcaster_user_id":p.channel_id})),
+ ("stream.offline","1",json!({"broadcaster_user_id":p.channel_id}))
  ] {
  if let Err(err)=subscribe(&rt,&p,&channel,session,kind,version,condition).await{rt.log(&p.id,"subscription",&format!("{kind}: {err}"),"error");}
  }
@@ -199,7 +201,7 @@ async fn subscribe(rt:&Runtime,p:&Profile,token:&str,session:&str,kind:&str,vers
 pub fn normalize_twitch(p:&Profile,v:&Value)->Option<Event>{
  let payload=&v["payload"]["event"];
  let kind=match v["metadata"]["subscription_type"].as_str()?{
- "channel.chat.message"=>"chat","channel.follow"=>"follow","channel.subscribe"=>"subscription","channel.subscription.message"=>"resub","channel.subscription.gift"=>"gift","channel.cheer"=>"cheer","channel.raid"=>"raid","channel.channel_points_custom_reward_redemption.add"=>"redemption","channel.update"=>"category",_=>return None};
+ "channel.chat.message"=>"chat","channel.follow"=>"follow","channel.subscribe"=>"subscription","channel.subscription.message"=>"resub","channel.subscription.gift"=>"gift","channel.cheer"=>"cheer","channel.raid"=>"raid","channel.channel_points_custom_reward_redemption.add"=>"redemption","channel.update"=>"category","stream.online"=>"live","stream.offline"=>"unlive",_=>return None};
  let user_id=payload["chatter_user_id"].as_str().or(payload["user_id"].as_str()).or(payload["from_broadcaster_user_id"].as_str()).or(payload["broadcaster_user_id"].as_str()).unwrap_or("");
  if kind!="category"&&user_id==p.bot_id{return None}
  let mut role="everyone";
@@ -256,6 +258,15 @@ pub async fn youtube(rt:Arc<Runtime>,p:Profile)->Result<(),String>{
   let e=normalize_twitch(&p,&g).unwrap();
   assert_eq!((e.kind.as_str(),e.user.as_str()),("gift","Clau"));
   assert_eq!(e.data["total"],3);
+ }
+ #[test] fn stream_online_and_offline_become_live_events() {
+  let p=profile();
+  let v=json!({"metadata":{"subscription_type":"stream.online","message_id":"m11"},"payload":{"event":{"broadcaster_user_id":"123","broadcaster_user_login":"thenees","broadcaster_user_name":"Thenees","started_at":"2026-10-04T20:00:00Z"}}});
+  let e=normalize_twitch(&p,&v).unwrap();
+  assert_eq!((e.kind.as_str(),e.user.as_str(),e.role.as_str()),("live","Thenees","broadcaster"));
+  let v=json!({"metadata":{"subscription_type":"stream.offline","message_id":"m12"},"payload":{"event":{"broadcaster_user_id":"123","broadcaster_user_login":"thenees","broadcaster_user_name":"Thenees"}}});
+  let e=normalize_twitch(&p,&v).unwrap();
+  assert_eq!((e.kind.as_str(),e.user.as_str()),("unlive","Thenees"));
  }
  #[test] fn channel_update_tells_the_live_state_which_category_is_on() {
   let p=profile();

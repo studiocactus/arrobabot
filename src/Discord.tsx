@@ -18,6 +18,8 @@ const merge=(base:Any,over:Any|undefined):Any=>{
  return out;
 };
 const arr=(v:Any|null|undefined):Any[]=>Array.isArray(v)?v:[];
+const NOTIFY_KINDS:[string,string,string][]=[['follow','Seguidor','Quem começou a seguir.'],['subscription','Inscrição','Primeira vez assinando.'],['resub','Re-inscrição','Meses e sequência.'],['gift','Presente','Quem presenteou e quantos.'],['cheer','Bits','Quem enviou e quantos.'],['raid','Raid','Quem chegou e com quantos.'],['live','Live ligada','Título, jogo e prévia.'],['offline','Live encerrada','Texto curto de tchau.']];
+const NOTIFY_PLACEHOLDER:Record<string,string>={follow:'{user} começou a seguir o canal.',subscription:'{user} assinou o canal.',resub:'{user} renovou por {months} meses.',gift:'{user} presenteou {gifts} subs.',cheer:'{user} enviou {bits} bits.',raid:'{user} chegou com {viewers} pessoas.',live:'{game} com {viewers} assistindo',offline:'Obrigado pela companhia!'};
 const texts=(v:Any[])=>v.filter(c=>Number(c.type)===0||Number(c.type)===5);
 function download(name:string,text:string){
  const blob=new Blob([text],{type:'text/csv;charset=utf-8'});
@@ -83,6 +85,8 @@ export default function Discord({profileId,blocklist,notify}:{profileId:string;b
  const set=(k:string,v:any)=>setCfg((c:Any)=>({...c,[k]:v}));
  const nest=(k:string,sub:string,v:any)=>setCfg((c:Any)=>({...c,[k]:{...(c[k]||{}),[sub]:v}}));
  const sub=(k:string)=>({...blank[k],...(cfg[k]||{})});
+ const nkind=(k:string)=>({enabled:true,text:'',...(((sub('notify').kinds||{}) as Any)[k]||{})});
+ const setKind=(k:string,patch:Partial<{enabled:boolean;text:string}>)=>nest('notify','kinds',{...((sub('notify').kinds||{}) as Any),[k]:{...nkind(k),...patch}});
  const nameOf=(m:Any)=>String(m.nick||m.user?.global_name||m.user?.username||m.user?.id||'');
 
  async function saveToken(){await call('secret.save',{key:'discord_token',value:token},'Token do bot salvo no cofre do sistema.');setToken('')}
@@ -199,8 +203,14 @@ export default function Discord({profileId,blocklist,notify}:{profileId:string;b
    <Pick label="Canal do espelho" value={String(sub('mirror').channelId||'')} options={channels} onChange={v=>nest('mirror','channelId',v)}/>
    <div className="list-row"><div><strong>Espelhar Twitch para o Discord</strong></div><Toggle label="Espelhar Twitch para o Discord" checked={sub('mirror').toDiscord===true} onChange={v=>nest('mirror','toDiscord',v)}/></div>
    <div className="list-row"><div><strong>Espelhar Discord para a Twitch</strong></div><Toggle label="Espelhar Discord para a Twitch" checked={sub('mirror').toTwitch===true} onChange={v=>nest('mirror','toTwitch',v)}/></div>
-   <div className="list-row"><div><strong>Notificações da Twitch</strong><small>Seguidores, inscrições, bits e raids.</small></div><Toggle label="Notificações da Twitch" checked={sub('notify').enabled===true} onChange={v=>nest('notify','enabled',v)}/></div>
+   <div className="list-row"><div><strong>Notificações da Twitch</strong><small>Seguidores, inscrições, bits, raids e live no canal abaixo.</small></div><Toggle label="Notificações da Twitch" checked={sub('notify').enabled===true} onChange={v=>nest('notify','enabled',v)}/></div>
    <Pick label="Canal de notificações" value={String(sub('notify').channelId||'')} options={channels} onChange={v=>nest('notify','channelId',v)}/>
+   <div className="list-row"><div><strong>Fotos nos cartões</strong><small>Avatar de quem agiu, capa do jogo e prévia da live.</small></div><Toggle label="Fotos nos cartões" checked={sub('notify').thumbs!==false} onChange={v=>nest('notify','thumbs',v)}/></div>
+   {NOTIFY_KINDS.map(([k,label,hint])=><div key={k}>
+    <div className="list-row"><div><strong>{label}</strong><small>{hint}</small></div><div className="row"><button disabled={busy==='discord.action'} onClick={()=>{void action({action:'notifySample',kind:k},'Exemplo enviado ao canal.')}}>Testar</button><Toggle label={label} checked={nkind(k).enabled} onChange={v=>setKind(k,{enabled:v})}/></div></div>
+    <Field label={'Texto do '+label.toLowerCase()}><input value={nkind(k).text} maxLength={1000} placeholder={NOTIFY_PLACEHOLDER[k]} onChange={e=>setKind(k,{text:e.target.value})}/></Field>
+   </div>)}
+   <Field label="Texto fora do cartão (live ligada)" hint="Sai acima do cartão. Vazio envia só o cartão."><input value={nkind('live_content').text} maxLength={1000} placeholder="Estamos ao vivo!" onChange={e=>setKind('live_content',{text:e.target.value})}/></Field>
   </Card>
  </div>
 

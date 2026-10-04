@@ -1,6 +1,6 @@
 use crate::{engine::Runtime,model::*,moderation};
 use serde_json::{json,Value};
-use std::{sync::Arc,time::{Duration,Instant}};
+use std::{collections::HashMap,sync::Arc,time::{Duration,Instant}};
 use futures_util::{StreamExt,SinkExt};
 use tokio_tungstenite::{connect_async,tungstenite::Message};
 
@@ -128,6 +128,31 @@ pub async fn post_embed(rt:&Runtime,p:&Profile,channel:&str,title:&str,descripti
  let embed=json!({"title":truncate(title,256),"description":truncate(description,4096),"color":color.clamp(0,0xFFFFFF),"fields":fields,"timestamp":chrono::Utc::now().to_rfc3339()});
  let body=json!({"embeds":[embed],"allowed_mentions":{"parse":[]}});
  rest(rt,p,"POST",&format!("/channels/{channel}/messages"),Some(body)).await
+}
+/// Cartão rico estilo aviso de live: autor, link, thumb, imagem e rodapé.
+/// Campos vazios somem do cartão; `content` é o texto fora do cartão.
+#[derive(Default,Clone)]
+pub struct Rich{pub content:String,pub title:String,pub url:String,pub description:String,pub color:i64,pub author_name:String,pub author_url:String,pub author_icon:String,pub thumbnail:String,pub image:String,pub footer:String}
+pub async fn post_rich(rt:&Runtime,p:&Profile,channel:&str,r:Rich)->Result<Value,String>{
+ if channel.trim().is_empty(){return Err("Canal do Discord não configurado".into())}
+ let mut embed=json!({"description":truncate(&r.description,4096),"color":r.color.clamp(0,0xFFFFFF),"timestamp":chrono::Utc::now().to_rfc3339()});
+ if !r.title.trim().is_empty(){embed["title"]=json!(truncate(&r.title,256));}
+ if !r.url.trim().is_empty(){embed["url"]=json!(r.url.trim());}
+ if !r.author_name.trim().is_empty(){embed["author"]=json!({"name":truncate(&r.author_name,256)});if !r.author_url.trim().is_empty(){embed["author"]["url"]=json!(r.author_url.trim());}if !r.author_icon.trim().is_empty(){embed["author"]["icon_url"]=json!(r.author_icon.trim());}}
+ if !r.thumbnail.trim().is_empty(){embed["thumbnail"]=json!({"url":r.thumbnail.trim()});}
+ if !r.image.trim().is_empty(){embed["image"]=json!({"url":r.image.trim()});}
+ if !r.footer.trim().is_empty(){embed["footer"]=json!({"text":truncate(&r.footer,2048)});}
+ let mut body=json!({"embeds":[embed],"allowed_mentions":{"parse":[]}});
+ if !r.content.trim().is_empty(){body["content"]=json!(truncate(&r.content,2000));}
+ rest(rt,p,"POST",&format!("/channels/{channel}/messages"),Some(body)).await
+}
+/// Troca `{largura}x{altura}` do modelo de arte da Twitch por um tamanho real.
+pub fn art(url:&str,w:u32,h:u32)->String{url.replace("{width}",&w.to_string()).replace("{height}",&h.to_string())}
+/// Perfil público da Twitch (login, nome e avatar) pelo id ou login.
+pub async fn twitch_user(rt:&Runtime,p:&Profile,token:&str,id:&str,login:&str)->Value{
+ let mut req=rt.http.get("https://api.twitch.tv/helix/users").header("Client-Id",&p.client_id).bearer_auth(token);
+ if !id.is_empty(){req=req.query(&[("id",id)]);}else if !login.is_empty(){req=req.query(&[("login",login)]);}else{return Value::Null}
+ req.send().await.ok().and_then(|r|r.json::<Value>().ok()).map(|v|v["data"][0].clone()).unwrap_or(Value::Null)
 }
 pub async fn identity(rt:&Runtime,p:&Profile)->Result<Value,String>{
  let me=rest(rt,p,"GET","/users/@me",None).await?;
@@ -412,17 +437,122 @@ pub fn notify(rt:&Arc<Runtime>,p:&Profile,kind:&str,e:&Event){
  if cfg["enabled"]!=true{return}
  let channel=cfg["notify"]["channelId"].as_str().unwrap_or("");
  if channel.is_empty()||cfg["notify"]["enabled"]!=true{return}
- let (title,color,description)=match kind{
- "follow"=>("Novo seguidor",0x9146FF,format!("{} começou a seguir o canal.",e.user)),
- "subscription"=>("Nova inscrição",0x00F593,format!("{} assinou o canal.",e.user)),
- "resub"=>("Nova re-inscrição",0x00F593,format!("{} renovou a inscrição.",e.user)),
- "gift"=>("Sub de presente",0x00F593,format!("{} presenteou subs.",e.user)),
- "cheer"=>("Bits",0xFFB300,format!("{} enviou {} bits.",e.user,e.message)),
- "raid"=>("Raid",0xE91E63,format!("{} invadiu a transmissão.",e.user)),
- _=>return
- };
+ if cfg["notify"]["kinds"][kind]["enabled"].as_bool().unwrap_or(true)!=true{return}
+ let rt2=rt.clone();let p2=p.clone();let ch=channel.to_owned();let k=kind.to_owned();let ev=e.clone();
+ tokio::spawn(async move{
+  match rich_for(&rt2,&p2,&k,&ev,false).await{
+   Some(rich)=>{if let Err(err)=post_rich(&rt2,&p2,&ch,rich).await{rt2.log(&p2.id,"discord",&err,"error");}}
+   None=>rt2.log(&p2.id,"discord",&format!("Sem dados para o aviso de {k}"),"info"),
+  }
+ });
+}
+/// Alerta de live ligada/desligada no canal de avisos (tipo de evento `live`).
+pub fn live_alert(rt:&Arc<Runtime>,p:&Profile,online:bool){
+ let cfg=config(rt,&p.id);
+ if cfg["enabled"]!=true{return}
+ let channel=cfg["notify"]["channelId"].as_str().unwrap_or("");
+ if channel.is_empty()||cfg["notify"]["enabled"]!=true{return}
+ let key=if online{"live"}else{"offline"};
+ if cfg["notify"]["kinds"][key]["enabled"].as_bool().unwrap_or(true)!=true{return}
  let rt2=rt.clone();let p2=p.clone();let ch=channel.to_owned();
- tokio::spawn(async move{if let Err(err)=post_embed(&rt2,&p2,&ch,&title,&description,color,vec![]).await{rt2.log(&p2.id,"discord",&err,"error")}});
+ tokio::spawn(async move{
+  match live_rich(&rt2,&p2,online,false).await{
+   Some(rich)=>{if let Err(err)=post_rich(&rt2,&p2,&ch,rich).await{rt2.log(&p2.id,"discord",&err,"error");}else{rt2.log(&p2.id,"discord",if online{"Aviso de live ligada enviado":"Aviso de live encerrada enviado"},"success");}}
+   None=>rt2.log(&p2.id,"discord","Sem dados da live para avisar","info"),
+  }
+ });
+}
+/// Envia um cartão de exemplo do tipo pedido, para conferir layout sem esperar o evento.
+pub async fn notify_sample(rt:&Arc<Runtime>,p:&Profile,kind:&str)->Result<Value,String>{
+ let cfg=config(rt,&p.id);
+ let channel=cfg["notify"]["channelId"].as_str().unwrap_or("").to_owned();
+ if channel.is_empty(){return Err("Escolha o canal de notificações primeiro.".into())}
+ if kind=="live"||kind=="offline"{
+  let rich=live_rich(rt,p,kind=="live",true).await.ok_or("Não foi possível montar o exemplo.".to_string())?;
+  post_rich(rt,p,&channel,rich).await?;
+  return Ok(Value::Null);
+ }
+ let e:Event=serde_json::from_value(json!({"id":"sample","profileId":p.id,"kind":kind,"user":"Exemplo","user_id":"123","role":"everyone","message":"Exemplo de mensagem","data":{"tier":"1000","cumulative_months":3,"streak_months":2,"message":{"text":"Exemplo"},"bits":100,"total":2,"viewers":6},"simulated":true})).map_err(|_|"Exemplo inválido".to_string())?;
+ let rich=rich_for(rt,p,kind,&e,true).await.ok_or("Tipo de aviso desconhecido.".to_string())?;
+ post_rich(rt,p,&channel,rich).await?;
+ Ok(Value::Null)
+}
+const KIND_META:[(&str,&str,i64,&str);6]=[
+ ("follow","Novo seguidor",0x9146FF,"{user} começou a seguir o canal."),
+ ("subscription","Nova inscrição",0x00F593,"{user} assinou o canal."),
+ ("resub","Nova re-inscrição",0x00F593,"{user} renovou por {months} meses."),
+ ("gift","Sub de presente",0x00F593,"{user} presenteou {gifts} subs."),
+ ("cheer","Bits",0xFFB300,"{user} enviou {bits} bits."),
+ ("raid","Raid",0xE91E63,"{user} chegou com {viewers} pessoas."),
+];
+fn kind_text(cfg:&Value,kind:&str,fallback:&str)->String{
+ cfg["notify"]["kinds"][kind]["text"].as_str().filter(|s|!s.trim().is_empty()).unwrap_or(fallback).chars().take(1000).collect()
+}
+fn event_tokens(p:&Profile,e:&Event)->HashMap<String,String>{
+ let mut m=HashMap::new();
+ m.insert("user".into(),e.user.clone());
+ m.insert("months".into(),e.data["cumulative_months"].as_i64().unwrap_or(0).to_string());
+ m.insert("streak".into(),e.data["streak_months"].as_i64().unwrap_or(0).to_string());
+ m.insert("bits".into(),e.data["bits"].as_i64().unwrap_or(0).to_string());
+ m.insert("message".into(),e.data["message"]["text"].as_str().unwrap_or(e.message.as_str()).into());
+ m.insert("viewers".into(),e.data["viewers"].as_i64().unwrap_or(0).to_string());
+ m.insert("gifts".into(),e.data["total"].as_i64().unwrap_or(1).to_string());
+ m.insert("tier".into(),e.data["tier"].as_str().unwrap_or("").into());
+ m.insert("channel".into(),p.channel.clone());
+ m.insert("url".into(),format!("https://twitch.tv/{}",p.channel));
+ m
+}
+async fn actor_avatar(rt:&Arc<Runtime>,p:&Profile,cfg:&Value,e:&Event,sample:bool)->String{
+ if sample||cfg["notify"]["thumbs"].as_bool().unwrap_or(true)!=true{return String::new()}
+ let Ok(token)=crate::oauth::token(&rt.http,p,"channel").await else{return String::new()};
+ twitch_user(rt,p,&token,&e.user_id,"").await["profile_image_url"].as_str().unwrap_or("").into()
+}
+async fn rich_for(rt:&Arc<Runtime>,p:&Profile,kind:&str,e:&Event,sample:bool)->Option<Rich>{
+ let (title,color,fallback)=KIND_META.iter().find(|(k,_,_,_)|*k==kind).map(|(_,t,c,f)|(*t,*c,*f))?;
+ let cfg=config(rt,&p.id);
+ let description=crate::labels::render(&kind_text(&cfg,kind,fallback),&event_tokens(p,e));
+ let thumb=actor_avatar(rt,p,&cfg,e,sample).await;
+ let url=format!("https://twitch.tv/{}",p.channel);
+ Some(Rich{title:title.into(),url:url.clone(),description,color,author_name:"Twitch".into(),author_url:url,author_icon:String::new(),thumbnail:thumb,image:String::new(),footer:"BotLive".into(),content:String::new()})
+}
+async fn live_rich(rt:&Arc<Runtime>,p:&Profile,online:bool,sample:bool)->Option<Rich>{
+ let cfg=config(rt,&p.id);
+ let url=format!("https://twitch.tv/{}",p.channel);
+ if !online{
+  let description=kind_text(&cfg,"offline","Obrigado pela companhia! Até a próxima.");
+  let tokens=event_tokens(p,&Event{id:String::new(),profile_id:p.id.clone(),kind:"unlive".into(),user:p.channel.clone(),user_id:String::new(),role:"broadcaster".into(),message:String::new(),data:Value::Null,simulated:true});
+  return Some(Rich{title:"Live encerrada".into(),url: url.clone(),description:crate::labels::render(&description,&tokens),color:0x555555,author_name:"Twitch".into(),author_url:url,author_icon:String::new(),thumbnail:String::new(),image:String::new(),footer:"BotLive".into(),content:String::new()});
+ }
+ if sample{
+  let mut m=HashMap::new();
+  m.insert("title".into(),"Exemplo de live".into());m.insert("game".into(),"Exemplo".into());m.insert("viewers".into(),"0".into());m.insert("url".into(),url.clone());m.insert("channel".into(),p.channel.clone());
+  return Some(Rich{title:"Exemplo de live".into(),url:url.clone(),description:crate::labels::render(&kind_text(&cfg,"live","{game} com {viewers} assistindo"),&m),color:0x9146FF,author_name:p.channel.clone(),author_url:url,author_icon:String::new(),thumbnail:String::new(),image:String::new(),footer:"BotLive".into(),content:"Exemplo de aviso de live".into()});
+ }
+ let Ok(token)=crate::oauth::token(&rt.http,p,"channel").await else{return None};
+ let info:Value=rt.http.get("https://api.twitch.tv/helix/channels").query(&[("broadcaster_id",p.channel_id.as_str())]).header("Client-Id",&p.client_id).bearer_auth(&token).send().await.ok().and_then(|r|r.json::<Value>().ok()).map(|v|v["data"][0].clone()).unwrap_or(Value::Null);
+ let stream:Value=rt.http.get("https://api.twitch.tv/helix/streams").query(&[("user_id",p.channel_id.as_str())]).header("Client-Id",&p.client_id).bearer_auth(&token).send().await.ok().and_then(|r|r.json::<Value>().ok()).map(|v|v["data"][0].clone()).unwrap_or(Value::Null);
+ if stream.is_null(){return None}
+ let game_id=info["game_id"].as_str().unwrap_or("");
+ let game:Value=if game_id.is_empty(){Value::Null}else{rt.http.get("https://api.twitch.tv/helix/games").query(&[("id",game_id)]).header("Client-Id",&p.client_id).bearer_auth(&token).send().await.ok().and_then(|r|r.json::<Value>().ok()).map(|v|v["data"][0].clone()).unwrap_or(Value::Null)};
+ let me=twitch_user(rt,p,&token,&p.channel_id,"").await;
+ let mut m=HashMap::new();
+ m.insert("title".into(),info["title"].as_str().or(stream["title"].as_str()).unwrap_or("Ao vivo agora").into());
+ m.insert("game".into(),info["game_name"].as_str().unwrap_or("").into());
+ m.insert("viewers".into(),stream["viewer_count"].as_i64().unwrap_or(0).to_string());
+ m.insert("url".into(),url.clone());
+ m.insert("channel".into(),p.channel.clone());
+ let thumbs=cfg["notify"]["thumbs"].as_bool().unwrap_or(true);
+ Some(Rich{
+  title:info["title"].as_str().or(stream["title"].as_str()).unwrap_or("Ao vivo agora").into(),
+  url:url.clone(),
+  description:crate::labels::render(&kind_text(&cfg,"live","{game} com {viewers} assistindo"),&m),
+  color:0x9146FF,
+  author_name:p.channel.clone(),author_url:url.clone(),author_icon:me["profile_image_url"].as_str().unwrap_or("").into(),
+  thumbnail:if thumbs{art(game["box_art_url"].as_str().unwrap_or(""),144,192)}else{String::new()},
+  image:if thumbs{art(stream["thumbnail_url"].as_str().unwrap_or(""),1280,720)}else{String::new()},
+  footer:"BotLive".into(),
+  content:crate::labels::render(&kind_text(&cfg,"live_content",""),&m),
+ })
 }
 pub fn mirror_chat(rt:&Arc<Runtime>,p:&Profile,e:&Event){
  let cfg=config(rt,&p.id);
@@ -439,6 +569,23 @@ pub fn mirror_chat(rt:&Arc<Runtime>,p:&Profile,e:&Event){
 mod tests {
  use super::*;
  fn cfg(v:Value)->Value{v}
+ #[test]
+ fn rich_art_sizes_thumbnails_and_keeps_plain_urls(){
+  assert_eq!(art("https://x/{width}x{height}.jpg",144,192),"https://x/144x192.jpg");
+  assert_eq!(art("https://x/plain.png",144,192),"https://x/plain.png");
+ }
+ #[test]
+ fn notify_templates_fall_back_and_cap_length(){
+  let c=cfg(json!({"notify":{"kinds":{"follow":{"enabled":false},"cheer":{"text":""},"live":{"text":"  "}}}}));
+  assert_eq!(kind_text(&c,"follow","D"),"D");
+  assert_eq!(kind_text(&c,"cheer","D"),"D");
+  assert_eq!(kind_text(&c,"raid","D"),"D");
+  assert_eq!(kind_text(&c,"live","D"),"D");
+  assert_eq!(kind_text(&c,"live_content","C"),"C");
+  let long="x".repeat(1500);
+  assert_eq!(kind_text(&cfg(json!({"notify":{"kinds":{"follow":{"text":long}}}})),"follow","D").chars().count(),1000);
+  assert_eq!(KIND_META.len(),6);
+ }
  #[test]
  fn intents_and_privileged_toggle() {
  let on=intents(&Value::Null);

@@ -78,7 +78,13 @@ Com **Espelho do chat** ativo e um canal escolhido, a conversa circula nos dois 
 
 Os interruptores **Espelhar Twitch para o Discord** e **Espelhar Discord para a Twitch** controlam cada sentido separadamente, para você espelhar só a direção que interessa.
 
-**Notificações da Twitch** publica seguidores, inscrições, bits e raids no canal escolhido, usando o mesmo formato já usado nos demais canais do bot.
+**Notificações da Twitch** publica no canal escolhido cartões ricos com autor, link, avatar de quem agiu, capa do jogo e prévia da live:
+
+- Seguidor, inscrição, re-inscrição, presente, bits e raid, cada um com interruptor, texto e botão **Testar** próprios. O texto aceita `{user}`, `{months}`, `{streak}`, `{bits}`, `{message}`, `{viewers}`, `{gifts}`, `{tier}`, `{channel}` e `{url}`.
+- **Live ligada** publica título, jogo, espectadores, capa e prévia ao abrir a live; **Live encerrada** publica um tchau curto. O campo **Texto fora do cartão** sai acima do cartão da live.
+- **Fotos nos cartões** liga e desliga avatar, capa e prévia de uma vez.
+
+O alerta de live usa os dados da Twitch na hora; o exemplo sai com dados de mentira para conferir o layout.
 
 ## Auto-moderação
 

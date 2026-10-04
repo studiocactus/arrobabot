@@ -1,5 +1,32 @@
 # Histórico de atualizações
 
+# BotLive 0.1.54
+
+## O que mudou
+
+- Cartões ricos no Discord estilo aviso de live: autor com link, avatar de quem agiu, capa do jogo e prévia da transmissão, com a cor da plataforma. Vale para seguidor, inscrição, re-inscrição, presente, bits, raid e live.
+- Alerta de **live ligada e encerrada**: publica título, jogo, espectadores, capa e prévia ao abrir a live (eventos novos `stream.online`/`stream.offline` da Twitch).
+- Customização por tipo: cada aviso tem interruptor, texto com tokens (`{user}`, `{months}`, `{bits}`, `{viewers}`, `{game}`, `{title}`, `{url}` e outros) e botão **Testar** que envia um exemplo no canal. **Fotos nos cartões** liga/desliga as imagens de uma vez; **Texto fora do cartão** sai acima do cartão da live.
+
+## Como usar
+
+- Discord → Entrada, saída e espelho → escolha o **Canal de notificações**, ajuste textos e aperte **Testar** em cada tipo.
+- O alerta de live sai sozinho ao abrir/encerrar na Twitch; o exemplo usa dados de mentira só para o layout.
+
+## Validação
+
+- `npm run check` (tsc), `npm test` (vitest 31/31), `npm run docs` (manual 22 capítulos) e `npm run test:updates` (8/8) executados antes do push.
+- `cargo test` não executado localmente (toolchain Rust indisponível); inclui testes de modelos, eventos de live e tamanhos de arte; a CI compila e testa de verdade.
+- Teste ao vivo (cartões reais e alerta de live) ainda pendente.
+
+## Limitações
+
+- Só Twitch; Kick não tem esses eventos na ponte atual.
+- A contagem individual por comando (!lurk por pessoa) continua pendente para a próxima versão.
+- Sem rede com a Twitch na hora, o cartão sai sem foto em vez de falhar.
+
+---
+
 # BotLive 0.1.53
 
 ## O que mudou
