@@ -24,7 +24,7 @@ pub fn valid_config(v:&Value)->bool{
  if v["enabled"]==true&&v["guildId"].as_str().unwrap_or("").is_empty(){return false}
  if v["mirror"]["enabled"]==true&&v["mirror"]["toDiscord"]==true&&v["mirror"]["channelId"].as_str().unwrap_or("").is_empty(){return false}
  for (key,limit) in [("welcome",600usize),("goodbye",600usize),("birthday",600usize)]{if v[key]["text"].as_str().unwrap_or("").chars().count()>limit{return false}}
- for (key,limit) in ["follow","subscription","resub","gift","cheer","raid","live","offline","live_content"]{if v["notify"]["kinds"][key]["text"].as_str().unwrap_or("").chars().count()>1000{return false}}
+ for key in ["follow","subscription","resub","gift","cheer","raid","live","offline","live_content"]{if v["notify"]["kinds"][key]["text"].as_str().unwrap_or("").chars().count()>1000{return false}}
  if v["slowmodeSeconds"].as_u64().is_some_and(|s|s>21600){return false}
  if v["giveaway"]["minutes"].as_u64().is_some_and(|m|m>10080){return false}
  true

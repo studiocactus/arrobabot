@@ -148,11 +148,17 @@ pub async fn post_rich(rt:&Runtime,p:&Profile,channel:&str,r:Rich)->Result<Value
 }
 /// Troca `{largura}x{altura}` do modelo de arte da Twitch por um tamanho real.
 pub fn art(url:&str,w:u32,h:u32)->String{url.replace("{width}",&w.to_string()).replace("{height}",&h.to_string())}
+/// GET na Helix que nunca falha para fora: erro vira Null.
+async fn twitch_get(rt:&Runtime,p:&Profile,token:&str,path:&str,query:&[(&str,&str)])->Value{
+ let mut req=rt.http.get(format!("https://api.twitch.tv/helix/{path}")).header("Client-Id",&p.client_id).bearer_auth(token);
+ for (k,v) in query{req=req.query(&[(*k,*v)]);}
+ match req.send().await{Ok(r)=>r.json::<Value>().await.unwrap_or(Value::Null),Err(_)=>Value::Null}
+}
 /// Perfil público da Twitch (login, nome e avatar) pelo id ou login.
 pub async fn twitch_user(rt:&Runtime,p:&Profile,token:&str,id:&str,login:&str)->Value{
- let mut req=rt.http.get("https://api.twitch.tv/helix/users").header("Client-Id",&p.client_id).bearer_auth(token);
- if !id.is_empty(){req=req.query(&[("id",id)]);}else if !login.is_empty(){req=req.query(&[("login",login)]);}else{return Value::Null}
- req.send().await.ok().and_then(|r|r.json::<Value>().ok()).map(|v|v["data"][0].clone()).unwrap_or(Value::Null)
+ if id.is_empty()&&login.is_empty(){return Value::Null}
+ let q=if !id.is_empty(){("id",id)}else{("login",login)};
+ twitch_get(rt,p,token,"users",&[q]).await["data"][0].clone()
 }
 pub async fn identity(rt:&Runtime,p:&Profile)->Result<Value,String>{
  let me=rest(rt,p,"GET","/users/@me",None).await?;
@@ -529,11 +535,11 @@ async fn live_rich(rt:&Arc<Runtime>,p:&Profile,online:bool,sample:bool)->Option<
   return Some(Rich{title:"Exemplo de live".into(),url:url.clone(),description:crate::labels::render(&kind_text(&cfg,"live","{game} com {viewers} assistindo"),&m),color:0x9146FF,author_name:p.channel.clone(),author_url:url,author_icon:String::new(),thumbnail:String::new(),image:String::new(),footer:"BotLive".into(),content:"Exemplo de aviso de live".into()});
  }
  let Ok(token)=crate::oauth::token(&rt.http,p,"channel").await else{return None};
- let info:Value=rt.http.get("https://api.twitch.tv/helix/channels").query(&[("broadcaster_id",p.channel_id.as_str())]).header("Client-Id",&p.client_id).bearer_auth(&token).send().await.ok().and_then(|r|r.json::<Value>().ok()).map(|v|v["data"][0].clone()).unwrap_or(Value::Null);
- let stream:Value=rt.http.get("https://api.twitch.tv/helix/streams").query(&[("user_id",p.channel_id.as_str())]).header("Client-Id",&p.client_id).bearer_auth(&token).send().await.ok().and_then(|r|r.json::<Value>().ok()).map(|v|v["data"][0].clone()).unwrap_or(Value::Null);
+ let info:Value=twitch_get(rt,p,&token,"channels",&[("broadcaster_id",p.channel_id.as_str())]).await["data"][0].clone();
+ let stream:Value=twitch_get(rt,p,&token,"streams",&[("user_id",p.channel_id.as_str())]).await["data"][0].clone();
  if stream.is_null(){return None}
  let game_id=info["game_id"].as_str().unwrap_or("");
- let game:Value=if game_id.is_empty(){Value::Null}else{rt.http.get("https://api.twitch.tv/helix/games").query(&[("id",game_id)]).header("Client-Id",&p.client_id).bearer_auth(&token).send().await.ok().and_then(|r|r.json::<Value>().ok()).map(|v|v["data"][0].clone()).unwrap_or(Value::Null)};
+ let game:Value=if game_id.is_empty(){Value::Null}else{twitch_get(rt,p,&token,"games",&[("id",game_id)]).await["data"][0].clone()};
  let me=twitch_user(rt,p,&token,&p.channel_id,"").await;
  let mut m=HashMap::new();
  m.insert("title".into(),info["title"].as_str().or(stream["title"].as_str()).unwrap_or("Ao vivo agora").into());
