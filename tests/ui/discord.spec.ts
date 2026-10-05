@@ -52,7 +52,8 @@ test('tela do Discord configura servidor, canais, engajamento e auditoria',async
  await page.getByRole('button',{name:'Desfazer warn de Apoiador',exact:true}).click();
  await expect(page.getByText('Ação desfeita no Discord.',{exact:true})).toBeVisible();
 
- await page.getByLabel('ID do membro vinculado',{exact:true}).fill('999999999999999999');
+ await page.getByRole('button',{name:'Carregar membros',exact:true}).first().click();
+ await page.getByRole('combobox',{name:'Membro vinculado',exact:true}).selectOption({label:'Apoiador · 999999999999999999'});
  await page.getByRole('button',{name:'Gerar código',exact:true}).click();
  await expect(page.getByText('482913',{exact:true})).toBeVisible();
  await expect(page.getByRole('button',{name:'Remover vínculo 999999999999999999',exact:true})).toBeVisible();
