@@ -143,7 +143,7 @@ pub async fn action(rt:&Arc<Runtime>,p:&str,args:&Value)->Result<Value,String>{
    m["user"]["username"].as_str().unwrap_or("").to_lowercase().contains(&q)
    ||m["nick"].as_str().unwrap_or("").to_lowercase().contains(&q)
    ||m["user"]["id"].as_str().unwrap_or("")==q
-  }).take(50).collect();
+  }).take(args["limit"].as_u64().unwrap_or(50).clamp(1,1000) as usize).collect();
   Ok(Value::Array(out))
  },
  "member"=>{if guild.is_empty()||target.is_empty(){return Err("Informe o servidor e o membro".into())}discord::rest(rt,&profile,"GET",&format!("/guilds/{guild}/members/{target}"),None).await},

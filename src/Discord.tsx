@@ -1,5 +1,5 @@
 import {useCallback,useEffect,useState} from 'react';
-import {RefreshCw,Save,Search,Download,Plug,Power,Gift,Cake,Link2,Terminal,ShieldAlert,Undo2,Send,Unlink} from 'lucide-react';
+import {RefreshCw,Save,Search,Download,Plug,Power,Gift,Cake,Link2,Terminal,ShieldAlert,Undo2,Send,Unlink,Users} from 'lucide-react';
 import {api,errorText} from './api';
 import {minutesToSeconds,secondsToMinutes} from './types';
 import {Card,Field,Tag,Toggle,Busy,Empty,AccordionItem,ItemStack,ListTools} from './components';
@@ -40,6 +40,7 @@ export default function Discord({profileId,blocklist,notify}:{profileId:string;b
  const [token,setToken]=useState('');
  const [busy,setBusy]=useState('');
  const [members,setMembers]=useState<Any[]>([]);
+ const [allMembers,setAllMembers]=useState<Any[]>([]);
  const [q,setQ]=useState('');
  const [target,setTarget]=useState<Any|null>(null);
  const [reason,setReason]=useState('');
@@ -83,6 +84,7 @@ export default function Discord({profileId,blocklist,notify}:{profileId:string;b
  useEffect(()=>{void refresh();void loadLists();},[refresh,loadLists]);
 
  const channels:Opt[]=texts(arr(st&&st.channels)).map(c=>({id:String(c.id),label:'#'+String(c.name)}));
+ const allChannels:Opt[]=arr(st&&st.channels).map(c=>({id:String(c.id),label:'#'+String(c.name)+(Number(c.type)===2?' (voz)':'')}));
  const roleOptions:Opt[]=arr(st&&st.roles).map(r=>({id:String(r.id),label:String(r.name)}));
  const guildOptions:Opt[]=arr(st&&st.guilds).map(g=>({id:String(g.id),label:String(g.name)}));
  const set=(k:string,v:any)=>setCfg((c:Any)=>({...c,[k]:v}));
@@ -91,6 +93,8 @@ export default function Discord({profileId,blocklist,notify}:{profileId:string;b
  const nkind=(k:string)=>({enabled:true,text:'',...(((sub('notify').kinds||{}) as Any)[k]||{})});
  const setKind=(k:string,patch:Partial<{enabled:boolean;text:string}>)=>nest('notify','kinds',{...((sub('notify').kinds||{}) as Any),[k]:{...nkind(k),...patch}});
  const nameOf=(m:Any)=>String(m.nick||m.user?.global_name||m.user?.username||m.user?.id||'');
+ const memberOptions:Opt[]=allMembers.map(m=>({id:String(m.user.id),label:nameOf(m)+' · '+String(m.user.id)}));
+ const memberName=(id:string)=>{const m=allMembers.find(x=>String(x.user.id)===id);return m?nameOf(m):id};
  const notifyVisible=NOTIFY_KINDS.filter(([k,label,hint])=>(k+' '+label+' '+hint).toLowerCase().includes(notifyQuery.toLowerCase()));
 
  async function saveToken(){await call('secret.save',{key:'discord_token',value:token},'Token do bot salvo no cofre do sistema.');setToken('')}
@@ -98,6 +102,7 @@ export default function Discord({profileId,blocklist,notify}:{profileId:string;b
  async function discover(){const d=await call('discord.discover',{},'Servidor, canais e cargos carregados.');if(d)setSt(s=>s?{...s,guilds:arr(d.guilds),channels:arr(d.channels),roles:arr(d.roles)}:s)}
  async function invite(){const r=await action({action:'invite'});if(r&&r.url)await call('url.open',{url:String(r.url)})}
  async function searchMembers(){setMembers(arr(await action({action:'members',q})))}
+ async function loadMembers(){const list=arr(await action({action:'members',q:'',limit:1000}));setAllMembers(list);if(!list.length)notify('Nenhum membro carregado. Confira o servidor.');}
  async function punish(act:string){
   if(!target)return notify('Escolha um membro primeiro.');
   await action({action:act,target:String(target.user.id),targetName:nameOf(target),reason},'Ação aplicada e registrada na auditoria.');
@@ -124,7 +129,7 @@ export default function Discord({profileId,blocklist,notify}:{profileId:string;b
   setGives(arr(await action({action:'giveawayList'})));
  }
  async function addBirthday(){
-  await action({action:'birthdayAdd',target:bday.target,targetName:bday.target,date:bday.date},'Aniversário registrado.');
+  await action({action:'birthdayAdd',target:bday.target,targetName:memberName(bday.target),date:bday.date},'Aniversário registrado.');
   setBday({target:'',date:''});
   setBirthdays(arr(await action({action:'birthdayList'})));
  }
@@ -180,7 +185,7 @@ export default function Discord({profileId,blocklist,notify}:{profileId:string;b
    <Pick label="Canal de logs de auditoria" hint="Entradas, saídas, banimentos e ações do bot." value={String(cfg.logChannelId||'')} options={channels} onChange={v=>set('logChannelId',v)}/>
    <Pick label="Cargo automático na entrada" value={String(cfg.autoroleId||'')} options={roleOptions} onChange={v=>set('autoroleId',v)}/>
    <div className="row">
-    <Field label="Canal do contador de membros" hint="O nome do canal passa a ser membros-1234."><input value={String(cfg.counterChannelId||'')} placeholder="ID do canal" onChange={e=>set('counterChannelId',e.target.value)}/></Field>
+    <Pick label="Canal do contador de membros" hint="O nome do canal passa a ser membros-1234. Vale canal de voz." value={String(cfg.counterChannelId||'')} options={allChannels} onChange={v=>set('counterChannelId',v)}/>
     <Field label="Rótulo do contador"><input value={String(cfg.counterLabel||'membros')} onChange={e=>set('counterLabel',e.target.value)}/></Field>
    </div>
    <div className="row">
@@ -262,10 +267,13 @@ export default function Discord({profileId,blocklist,notify}:{profileId:string;b
    <Field label="Texto do cumprimento"><input value={String(sub('birthday').text||'')} placeholder="Feliz aniversário, {name}! Você está com {age} anos." onChange={e=>nest('birthday','text',e.target.value)}/></Field>
    <div className="list-row"><div><strong>Pedir a data na entrada</strong><small>Quem entra sem data registrada recebe um pedido com o comando /aniversario.</small></div><Toggle label="Pedir a data na entrada" checked={sub('birthday').askOnJoin===true} onChange={v=>nest('birthday','askOnJoin',v)}/></div>
    <div className="row">
-    <Field label="ID do aniversariante"><input value={bday.target} placeholder="ID no Discord" onChange={e=>setBday(b=>({...b,target:e.target.value}))}/></Field>
+    <Pick label="Aniversariante" hint="Sem a lista, vale colar o ID. Use Carregar membros para escolher pelo nome." value={bday.target} options={memberOptions} onChange={v=>setBday(b=>({...b,target:v}))}/>
     <Field label="Data do aniversário" hint="DD/MM ou DD/MM/AAAA."><input value={bday.date} placeholder="25/12/1990" onChange={e=>setBday(b=>({...b,date:e.target.value}))}/></Field>
    </div>
-   <button disabled={!bday.target.trim()||!bday.date.trim()} onClick={addBirthday}><Cake size={15}/>Registrar aniversário</button>
+   <div className="row">
+    <button onClick={loadMembers}><Users size={15}/>Carregar membros{allMembers.length?` (${allMembers.length})`:''}</button>
+    <button disabled={!bday.target.trim()||!bday.date.trim()} onClick={addBirthday}><Cake size={15}/>Registrar aniversário</button>
+   </div>
    {birthdays.length?birthdays.map((b,i)=><div className="list-row" key={String(b.user)+i}>
     <div><span>{String(b.name||b.user)}</span><small>{String(b.day).padStart(2,'0')}/{String(b.month).padStart(2,'0')}{b.year?' · '+String(b.year):''}</small></div>
     <button aria-label={'Remover aniversário de '+String(b.name||b.user)} onClick={()=>{void removeBirthday(String(b.user))}}>Remover</button>
@@ -277,7 +285,8 @@ export default function Discord({profileId,blocklist,notify}:{profileId:string;b
   <Card title="Identidade unificada Twitch e Discord">
    <p className="help">Um código de seis dígitos liga quem fala na Twitch a quem reage no Discord. Depois do vínculo, avisos, punições e reconhecimento valem nas duas casas.</p>
    <div className="row end">
-    <Field label="ID do membro vinculado"><input value={linkTarget} placeholder="ID no Discord" onChange={e=>setLinkTarget(e.target.value)}/></Field>
+    <Pick label="Membro vinculado" hint="Sem a lista, vale colar o ID." value={linkTarget} options={memberOptions} onChange={v=>setLinkTarget(v)}/>
+    <button onClick={loadMembers}><Users size={15}/>Carregar membros</button>
     <button disabled={!linkTarget.trim()} onClick={createLink}><Link2 size={15}/>Gerar código</button>
    </div>
    {lastCode&&<p className="help">Código gerado: <strong>{lastCode}</strong> — peça para digitar <code>!vincular {lastCode}</code> no chat da Twitch.</p>}

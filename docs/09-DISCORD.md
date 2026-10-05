@@ -32,6 +32,8 @@ O token é salvo no cofre do sistema e sai da gravação em texto: ele não apar
 
 ## Servidor, canais e cargos
 
+Servidor, canais e cargos saem em listas: escolha pelo nome, sem colar número. O contador de membros aceita canal de voz. Aniversariante e membro vinculado usam a lista de membros: clique em **Carregar membros** para escolher pelo nome (sem a lista, vale colar o ID).
+
 ### Exemplo: moderar o canal #geral
 
 Convide o bot para o **servidor** que contém `#geral`; não existe convite separado para cada canal de texto. Nas permissões de `#geral`, permita ao cargo do bot ver o canal, enviar mensagens, ler o histórico e gerenciar mensagens. Para timeout, expulsão e banimento, mantenha as permissões correspondentes do convite e a hierarquia de cargos adequada. Não é necessário conceder Administrador. O dono do servidor e membros acima do bot não podem ser moderados por ele.

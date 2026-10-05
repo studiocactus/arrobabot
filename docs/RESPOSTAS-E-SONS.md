@@ -36,6 +36,8 @@ São permitidas 100 regras por perfil. **Remover regra** remove a configuração
 
 ## Cadastrar um som para uma pessoa
 
+A tela **Sons** é a biblioteca central de áudios: adicione WAV, MP3 ou OGG (até 5 MiB), ouça para conferir e apague quando não servir mais. Tudo que usa som (comandos, timers, automações e sons por pessoa) escolhe dessa biblioteca. Apagar um som em uso deixa os cadastros sem áudio até escolher outro.
+
 Clique em **Adicionar pessoa** e preencha:
 
 - **Nome no chat**: nome exato recebido da plataforma, sem depender de maiúsculas ou do @ inicial.

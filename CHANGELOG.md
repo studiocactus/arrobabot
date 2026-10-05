@@ -1,5 +1,31 @@
 # Histórico de atualizações
 
+# BotLive 0.1.59
+
+## O que mudou
+
+- Discord sem números colados: canal do contador (vale voz), aniversariante e membro vinculado viraram dropdowns com os dados do servidor; membros carregam pelo botão **Carregar membros** (sem a lista, ainda vale colar o ID).
+- Cartões do Discord empilhados em coluna única, sem lado a lado, com fileiras alinhadas pela base.
+- Nova tela **Sons**: biblioteca central de áudios (adicionar, ouvir, apagar) usada por comandos, timers, automações e sons por pessoa. Apagar soma nova operação `chatExtras.remove` (apaga registro e cópia). Dica do seletor de áudio aponta para a biblioteca.
+
+## Como usar
+
+- Discord → Servidor e canais / Aniversariantes / Identidade: escolha pelas listas e salve.
+- Sons → Adicionar som → Ouvir para conferir → escolha nos fluxos e pessoas.
+
+## Validação
+
+- `npm run check` (tsc), `npm test` (vitest 31/31), `npm run docs` (manual 22 capítulos) e `npm run test:updates` (8/8) executados antes do push.
+- `cargo test` não executado localmente (toolchain Rust indisponível); inclui testes de limite de membros e de remoção de som; a CI compila e testa de verdade.
+- Teste visual das telas ainda pendente.
+
+## Limitações
+
+- A lista de membros carrega até 1000 por vez; servidor maior exige busca por nome na moderação.
+- Apagar um som em uso deixa os cadastros sem áudio até escolher outro.
+
+---
+
 # BotLive 0.1.58
 
 ## O que mudou

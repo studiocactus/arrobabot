@@ -55,7 +55,7 @@ export function AudioPicker({profileId,value,volume,onChange,onVolume}:{profileI
  const test=()=>run(async()=>{await playViewerSound({profileId,asset:value,volume,deviceId:device})});
  return <>
  <div className="form-grid">
-  <Field label="Tocar áudio ao disparar" hint="Escolha um som já importado em Respostas e sons. Ele toca na saída de áudio do BotLive quando o comando, o timer ou a automação executar; capture essa saída no OBS para a live ouvir.">
+  <Field label="Tocar áudio ao disparar" hint="Escolha um som da biblioteca em Sons. Ele toca na saída de áudio do BotLive quando o comando, o timer ou a automação executar; capture essa saída no OBS para a live ouvir.">
    <select value={value} onChange={e=>onChange(e.target.value)}>
     <option value="">Nenhum áudio</option>
     {assets.map(a=><option key={a.id} value={a.id}>{a.name}</option>)}

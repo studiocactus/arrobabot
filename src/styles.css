@@ -82,3 +82,9 @@
 /* Rótulos OBS 0.1.52: lista de espectadores no chat. */
 .viewer-list{display:flex;flex-wrap:wrap;gap:6px;max-height:220px;overflow:auto;margin-top:8px}
 .viewer-list span{font-size:11px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--r-pill);padding:4px 10px;white-space:nowrap}
+/* Discord 0.1.59: cartões empilhados em coluna única e fileiras alinhadas pela base. */
+.discord-screen>.two-columns{grid-template-columns:minmax(0,1fr)}
+.discord-screen .row.end{align-items:flex-end}
+.discord-screen .row.end>button{margin-bottom:6px}
+.discord-screen .card .row{margin-top:4px}
+.discord-screen .list-row>div{min-width:0}

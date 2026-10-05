@@ -93,6 +93,15 @@ pub fn operation(rt:&Runtime,p:&str,op:&str,args:&Value)->R<Value>{
  let a=asset(rt,p,args["asset"].as_str().unwrap_or(""),"sound")?;let path=audio_path(rt,p,&a)?;let bytes=read_file(&path,5*1024*1024)?;let mime=audio_kind(&path,&bytes)?;
  Ok(json!(format!("data:{mime};base64,{}",base64::engine::general_purpose::STANDARD.encode(bytes))))
  },
+ "chatExtras.remove"=>{
+ let id=args["asset"].as_str().ok_or("Arquivo ausente")?;
+ let mut list=assets(rt,p);
+ let pos=list.iter().position(|a|a.id==id).ok_or("Arquivo não encontrado")?;
+ let gone=list.remove(pos);
+ // Só apaga arquivo físico quando é cópia guardada pelo app (sons em media/).
+ if gone.kind=="sound"{if let Ok(path)=audio_path(rt,p,&gone){let _=std::fs::remove_file(path);}}
+ rt.db.set_module(p,"chatAssets",&json!(list))?;Ok(Value::Null)
+ },
  "chatExtras.reset"=>{let prefix=format!("{p}:sound:");let mut s=rt.chat_extras.lock().unwrap();s.seen.retain(|k|!k.starts_with(&prefix));s.last.retain(|k,_|!k.starts_with(&prefix));Ok(Value::Null)},
  _=>Err("Operação desconhecida".into())
  }
@@ -158,6 +167,13 @@ fn available(s:&State,key:&str,seconds:u64)->bool{!s.last.get(key).is_some_and(|
   c.people[0].enabled=true;c.sounds_enabled=false;save(&rt,&p,&c);sound(&rt,&p,&event);assert!(rx.try_recv().is_err());
   c.sounds_enabled=true;c.people[0].user_id="".into();c.people[0].name="@ana".into();save(&rt,&p,&c);event.kind="join".into();sound(&rt,&p,&event);assert_eq!(rx.try_recv().unwrap()["type"],"viewer-sound");
   c.people.push(c.people[0].clone());assert!(operation(&rt,&p.id,"chatExtras.save",&json!({"config":c})).is_err());
+ }
+ #[tokio::test] async fn sound_remove_deletes_record_and_copy(){
+  let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().join("app")).unwrap();let p=p();rt.db.save_profile(&p).unwrap();let path=dir.path().join("sair.wav");std::fs::write(&path,b"RIFF0000WAVEfmt ").unwrap();let id=register(&rt,&p,&path,"sound");
+  assert!(operation(&rt,&p.id,"chatExtras.remove",&json!({"asset":"inexistente"})).is_err());
+  operation(&rt,&p.id,"chatExtras.remove",&json!({"asset":id})).unwrap();
+  assert!(operation(&rt,&p.id,"chatExtras.audio",&json!({"asset":id})).is_err(),"registro sumiu");
+  assert!(!dir.path().join("app").join("media").join(&p.id).exists()||std::fs::read_dir(dir.path().join("app").join("media").join(&p.id)).unwrap().next().is_none(),"cópia apagada");
  }
 }
 pub fn trigger_matches(trigger:&str,kind:&str)->bool{match trigger{"message"=>kind=="chat","join"=>kind=="join","either"=>kind=="chat"||kind=="join",_=>false}}
