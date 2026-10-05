@@ -1,5 +1,30 @@
 # Histórico de atualizações
 
+# BotLive 0.1.58
+
+## O que mudou
+
+- Criar segundo perfil sem travar: os botões de autorização explicam que liberam após nome + Client ID, e o campo Client ID ganhou o seletor **Copiar Client ID de outro perfil**. Pode repetir o Client ID: o aplicativo é o mesmo, só as contas mudam (OAuth e segredos são por perfil).
+- Duas lives simultâneas suportadas e documentadas: cada perfil mantém sessão, comandos, memórias, rótulos e Discord próprios; basta conectar os dois cartões. Seção nova **Duas lives ao mesmo tempo** no capítulo de integrações (qual conta usar em cada autorização, voz no perfil selecionado).
+- Rótulos com pasta exclusiva por live: salvar a mesma pasta em dois perfis ativos agora é recusado, porque os `.txt` têm nomes iguais e se misturariam.
+
+## Como usar
+
+- Rubisvau: Configurar → copie o Client ID do ArrobaSrv → **Autorizar conta do bot** (mesma conta, moderadora nos dois canais) → **Autorizar conta do canal** (logado como tijolinhopray) → Conectar os dois.
+
+## Validação
+
+- `npm run check` (tsc), `npm test` (vitest 31/31), `npm run docs` (manual 22 capítulos) e `npm run test:updates` (8/8) executados antes do push.
+- `cargo test` não executado localmente (toolchain Rust indisponível); inclui teste de pasta repetida entre perfis; a CI compila e testa de verdade.
+- Teste ao vivo com as duas lives ainda pendente.
+
+## Limitações
+
+- Comandos de voz valem para o perfil selecionado; o resto é independente por live.
+- A contagem individual por comando continua pendente para a próxima versão.
+
+---
+
 # BotLive 0.1.57
 
 ## O que mudou

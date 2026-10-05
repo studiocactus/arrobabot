@@ -142,6 +142,19 @@ fn values(d: &Value) -> HashMap<String, HashMap<String, String>> {
  m.insert("uptime".into(), one);
  m
 }
+/// Normaliza pasta para comparar: minúsculas, barras e sem barra no fim.
+fn norm_folder(s: &str) -> String {
+ s.trim().replace('\\', "/").trim_end_matches('/').to_ascii_lowercase()
+}
+/// Diz se outro perfil com rótulos ativos já grava na mesma pasta (arquivos colidiriam).
+pub fn folder_taken(db: &Db, self_id: &str, folder: &str) -> bool {
+ let want = norm_folder(folder);
+ if want.is_empty() { return false; }
+ db.profiles().unwrap_or_default().iter().any(|p| {
+  p.id != self_id
+   && serde_json::from_value::<Config>(db.module(&p.id, MODULE)).is_ok_and(|c| c.enabled && norm_folder(&c.folder) == want)
+ })
+}
 fn folder(c: &Config) -> Result<std::path::PathBuf, String> {
  let f = c.folder.trim();
  if f.is_empty() { return Err("Escolha a pasta dos arquivos.".into()); }
@@ -354,6 +367,9 @@ pub async fn operation(rt: &Arc<Runtime>, p: &str, op: &str, args: &Value) -> Re
   }
   "labels.save" => {
    let c = validate_save(&args["config"])?;
+   if c.enabled && folder_taken(&rt.db, p, &c.folder) {
+    return Err("Essa pasta já é usada pelos rótulos de outro perfil. Escolha uma pasta diferente para cada live.".into());
+   }
    rt.db.set_module(p, MODULE, &serde_json::to_value(&c).map_err(|e| e.to_string())?)?;
    let d = data(rt, p);
    if c.enabled { write_all(rt, &profile, &c, &d)?; }
@@ -423,5 +439,21 @@ mod tests {
   let c = validate_save(&json!({"enabled": false, "folder": "", "labels": {}})).unwrap();
   assert!(!c.enabled);
   assert_eq!(template_of(&c, "follower_total"), "{total}");
+ }
+ #[test]
+ fn same_labels_folder_is_refused_for_two_profiles() {
+  let dir = tempfile::tempdir().unwrap();
+  let db = Db::open(&dir.path().join("t.sqlite")).unwrap();
+  let a: Profile = serde_json::from_value(json!({"id": "00000000-0000-4000-8000-000000000011", "name": "A", "platform": "twitch", "channel": "a"})).unwrap();
+  let b: Profile = serde_json::from_value(json!({"id": "00000000-0000-4000-8000-000000000012", "name": "B", "platform": "twitch", "channel": "b"})).unwrap();
+  db.save_profile(&a).unwrap();
+  db.save_profile(&b).unwrap();
+  assert!(!folder_taken(&db, &a.id, "C:/Live/rotulos"));
+  db.set_module(&a.id, MODULE, &json!({"enabled": true, "folder": "C:/Live/rotulos/", "labels": {}})).unwrap();
+  assert!(folder_taken(&db, &b.id, "c:\\live\\ROTULOS"), "barra e caixa diferente, mesma pasta");
+  assert!(!folder_taken(&db, &a.id, "C:/Live/rotulos"), "o próprio perfil não conta");
+  assert!(!folder_taken(&db, &b.id, "C:/Live/outra"));
+  db.set_module(&a.id, MODULE, &json!({"enabled": false, "folder": "C:/Live/rotulos/", "labels": {}})).unwrap();
+  assert!(!folder_taken(&db, &b.id, "C:/Live/rotulos"), "desativado libera a pasta");
  }
 }

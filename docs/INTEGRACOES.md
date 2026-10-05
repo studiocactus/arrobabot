@@ -43,6 +43,17 @@ As autorizações também concedem as permissões usadas por **Anúncio**, **Men
 
 Referências oficiais: [registro e aplicativos](https://dev.twitch.tv/docs/authentication/register-app/), [fluxos OAuth](https://dev.twitch.tv/docs/authentication/getting-tokens-oauth/) e [EventSub WebSocket](https://dev.twitch.tv/docs/eventsub/handling-websocket-events/).
 
+## Duas lives ao mesmo tempo
+
+Cada perfil é uma live independente: conexão, comandos, memórias, rótulos e Discord próprios. Para rodar em dois canais juntos:
+
+1. Crie o segundo perfil com o nome do outro canal. No campo **Client ID**, copie o do primeiro perfil pelo seletor **Copiar Client ID de outro perfil**: o aplicativo é o mesmo, só as contas mudam. Os botões de autorização liberam após preencher nome e Client ID.
+2. Em **Autorizar conta do bot**, entre com a conta do bot (pode ser a mesma nos dois, mas ela precisa ser moderadora nos dois canais).
+3. Em **Autorizar conta do canal**, entre com a conta dona do outro canal, no navegador, antes de clicar em **Já autorizei**.
+4. Clique em **Conectar** nos dois cartões. Cada um mantém sua sessão EventSub, seus intervalos e seus arquivos.
+5. Se usar **Rótulos OBS**, escolha uma pasta diferente por perfil: os nomes dos `.txt` são iguais e a mesma pasta misturaria as lives. O BotLive recusa a pasta repetida.
+6. Comandos de voz e escuta valem para o perfil selecionado no momento; o resto roda sozinho em cada live.
+
 ## YouTube — preparação e autorização
 
 1. Prepare um projeto com YouTube Data API habilitada e uma configuração OAuth compatível com aplicativo local.
