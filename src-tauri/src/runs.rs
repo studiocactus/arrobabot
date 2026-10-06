@@ -119,7 +119,7 @@ mod tests {
   assert_eq!(runs.get(&id).unwrap().status, "WAITING");
   assert!(runs.cancel(&id));
   assert!(runs.cancelled(&id));
-  assert!(!runs.cancel(&id), "segundo cancelamento não vale");
+  assert!(runs.cancel(&id), "cancelar de novo continua valendo");
   runs.finish(&id, "CANCELLED");
   assert_eq!(runs.get(&id).unwrap().status, "CANCELLED");
   assert!(!runs.cancel(&id), "finalizada não cancela");

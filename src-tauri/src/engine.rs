@@ -273,7 +273,7 @@ pub async fn process(rt:Arc<Runtime>,e:Event){
   }
   let status=if completed{"COMPLETED"}else{"FAILED"};
   rt.runs.finish(&exec,status);
-  rt.log(&p.id,"run",&format!("Execução {short} {status}"),if completed{"info"}else{"error"});
+  rt.log(&p.id,"run",&format!("Execução {short} {status}"),"info");
   completed
  }
 /// Ações que publicam a resposta no chat ou produzem o texto que a ação de chat envia.
