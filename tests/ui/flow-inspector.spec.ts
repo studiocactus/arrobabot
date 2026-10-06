@@ -42,7 +42,7 @@ test('editor de automações agrupa campos em seções, avisa a troca para o vis
 
  // ação: conteúdo visível, condição recolhida em Comportamento
  await page.getByRole('button',{name:'Novo fluxo',exact:true}).click();
- await page.getByRole('button',{name:'Adicionar ação',exact:true}).click();
+ await page.getByRole('button',{name:'Adicionar etapa',exact:true}).click();
  await expect(page.getByRole('textbox',{name:'Mensagem / conteúdo',exact:true})).toBeVisible();
  await expect(page.getByLabel('Executar só se a mensagem contiver',{exact:true})).toBeHidden();
  await page.getByText('Comportamento',{exact:true}).click();

@@ -1,5 +1,40 @@
 # Histórico de atualizações
 
+# BotLive 0.1.87
+
+## O que mudou
+
+- **Seção do inspector de ação renomeada**: a configuração de cada etapa agora abre em **Configurar etapa** (antes "Como sai"), nome que descreve melhor o painel. A seção do gatilho continua **Quando** / **Como sai** / **Comportamento**.
+- **Botão "Adicionar etapa"**: no lugar de "Adicionar ação", seguindo a linguagem de etapas usada no resto do editor. Continua acrescentando ao final da cadeia, com o mesmo comportamento.
+- **Correção de registro (0.1.85/0.1.86)**: as notas de 0.1.86 anunciaram o cabeçalho "Configurar etapa" e um "teste manual" do fluxo Channel Points → Condição → OBS → Wait antes de acontecerem; as notas de 0.1.85 anunciaram "Adicionar etapa" e um inspector "Configuração" que não chegaram a entrar. O código de 0.1.87 implementa esses itens de verdade, e esta versão descreve apenas validação executada.
+- **Capítulo 03 do manual atualizado**: "Montar uma cadeia visual" passa a usar **Adicionar etapa** e **Configurar etapa**, e explica que cada bloco mostra um resumo legível (◆ CONDIÇÃO com variável/operador/valor, ◉ OBS · Mostrar fonte · alvo, ◷ 3,0 s) com a cadeia empilhada de cima para baixo.
+- **Preservação total**: motor, serialização, `actions[]`, reorder, enabled, cancelamento, fulfillment, cooldown, `execution_id` e execuções não mudaram. Twitch Triggers v0.1.84 (Channel Points, Bits, Subscription, Gift Sub, Raid, Follow), Condições, Variáveis em execução, WAIT e OBS intactos. A mudança é só de rótulo na UI.
+
+## Como usar
+
+- Abra **Automações** e selecione um bloco de ação: o painel direito abre em **Configurar etapa**, com **Tipo de etapa** no topo, os campos específicos no meio e **Comportamento** recolhido embaixo.
+- Use **＋ Adicionar etapa** para criar o próximo bloco no fim da cadeia e arraste dos pontos de conexão para ligar.
+- Para reordenar, use **↑ Subir** / **↓ Descer**; a ordem efetiva é sempre a das setas, não a posição na tela.
+
+## Validação
+
+- `npm run check` (tsc) — compilação limpa.
+- `npm test` (vitest) — 36/36.
+- `npm run test:updates` — 8/8.
+- `npx playwright test` — suíte completa (24 specs) executada localmente, incluindo flow-inspector (que passa a esperar "Adicionar etapa"), app, punish-and-backup e random-reply-mention. Uma execução teve 1 falha intermitente em random-reply-mention ("quadro de instrução da IA cresce com o texto", sem relação com esta mudança); o spec passou sozinho e a execução seguinte da suíte inteira terminou 24/24.
+- `npm run docs` — manual regenerado (22 capítulos).
+- `npm run update:check` — manifesto e notas coerentes antes do push.
+- `cargo test` não executado localmente (sem toolchain Rust); o motor Rust não foi tocado — apenas rótulos em `FlowEditor.tsx`.
+
+## Limitações
+
+- Itens grandes do Fluxo Editor UX 2.0 continuam pendentes e não são afirmados aqui: variável picker pesquisável, `▸ Avançado` para campos técnicos, menu `•••` com Subir/Descer, Testar fluxo em modal dedicado, Minimap menor/recolhível e banner superior virando tooltip.
+- Inserção de etapa no meio da cadeia (hover "+" entre dois nodes) não existe: a inclusão continua sendo no fim, com reordenação manual.
+- Nós novos continuam caindo em y=260 (linha horizontal) até a primeira conexão; o empilhamento vertical vale para os fluxos reabertos, que vêm do `layout` salvo ou do cálculo vertical.
+- O registro de 0.1.85/0.1.86 nas notas anteriores não pode ser reescrito (release publicada não se refaz); esta versão corrige o código e o capítulo de uso.
+
+---
+
 # BotLive 0.1.86
 
 ## O que mudou

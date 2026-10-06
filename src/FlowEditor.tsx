@@ -97,7 +97,7 @@ function switchKind(current:Action,next:string){const base:Action={...current,ki
  async function save(){try{setBusy(true);setError(null);const ordered=orderedActions(nodes,edges);await onSave({...flow,name,trigger:trigger.kind==='timer'?{...trigger,permission:'everyone',cooldown:0,userCooldown:0,pattern:''}:keepText(trigger.kind)?trigger:{...trigger,pattern:''},counter:trigger.kind==='command'&&counter,timerSeconds,sendType,sendColor,replyTo,audio,audioVolume,actions:ordered,layout:{nodes,edges}})}catch(e){setError(friendlyError(e))}finally{setBusy(false)}}
  return <div className="flow-editor">
  {intro&&<p className="notice flow-intro">{intro}</p>}
- <div className="flow-toolbar"><input aria-label="Nome do fluxo" value={name} onChange={e=>setName(e.target.value)}/>{onTest&&<button type="button" disabled={busy} onClick={()=>{try{onTest({...flow,name,trigger,counter:trigger.kind==='command'&&counter,timerSeconds,sendType,sendColor,replyTo,audio,audioVolume,actions:orderedActions(nodes,edges),layout:{nodes,edges}})}catch(e){setError(friendlyError(e))}}}><Play size={16}/>Testar fluxo</button>}<button onClick={()=>{const id=crypto.randomUUID();setNodes(ns=>ns.concat({id,position:{x:300+ns.length*70,y:260},data:{label:actions.chat,action:newAction()}}));setSelected(id)}}><Plus size={16}/>Adicionar ação</button><button className="primary" disabled={busy} onClick={save}><Save size={16}/>Salvar fluxo</button></div>
+ <div className="flow-toolbar"><input aria-label="Nome do fluxo" value={name} onChange={e=>setName(e.target.value)}/>{onTest&&<button type="button" disabled={busy} onClick={()=>{try{onTest({...flow,name,trigger,counter:trigger.kind==='command'&&counter,timerSeconds,sendType,sendColor,replyTo,audio,audioVolume,actions:orderedActions(nodes,edges),layout:{nodes,edges}})}catch(e){setError(friendlyError(e))}}}><Play size={16}/>Testar fluxo</button>}<button onClick={()=>{const id=crypto.randomUUID();setNodes(ns=>ns.concat({id,position:{x:300+ns.length*70,y:260},data:{label:actions.chat,action:newAction()}}));setSelected(id)}}><Plus size={16}/>Adicionar etapa</button><button className="primary" disabled={busy} onClick={save}><Save size={16}/>Salvar fluxo</button></div>
  {error&&<div role="alert" className="inline-error">{error.message}{error.detail&&<details><summary>Detalhes técnicos</summary><code>{error.detail}</code></details>}</div>}
  <div className="flow-workspace">
  <div className="canvas">
@@ -137,7 +137,7 @@ function switchKind(current:Action,next:string){const base:Action={...current,ki
  </Section>{['command','timer'].includes(trigger.kind)&&<Section title="Comportamento">
  <CommandOptions timer={trigger.kind==='timer'} seconds={timerSeconds} counter={counter} onSeconds={setTimerSeconds} onCounter={setCounter}/>
  </Section>}</>:action?<>
- <Section title="Como sai" open>
+ <Section title="Configurar etapa" open>
  <Field label="Tipo de ação">
  <select value={action.kind} onChange={e=>switchKind(action,e.target.value)}>{Object.entries(actions).map(([k,n])=>
  <option key={k} value={k}>{n}</option>)}</select>
