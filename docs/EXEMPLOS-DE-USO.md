@@ -230,6 +230,24 @@ Gatilho Nova inscrição com mensagem para a primeira vez, gatilho Nova re-inscr
 
 Gatilho Raid com duas ações: destaque de canal com `{{raiderLogin}}` e mensagem como `Chegou raid de {{user}} com {{raidViewers}} pessoas! Sigam de volta!`.
 
+## Eventos com condição e OBS
+
+### A. Bits grandes com efeito
+
+Gatilho Bits + condição `bits.amount` maior ou igual a `500` + ação no OBS (efeito). Dica: sem condição, qualquer bit dispara; com condição alta demais, nada dispara — confira no teste com 500 e com 100.
+
+### B. Raid grande com efeito especial
+
+Gatilho Raid + condição `raid.viewers` maior ou igual a `20` + ação no OBS. Dica: raid pequena cai no `para o fluxo` do Histórico, sem erro; é o comportamento certo, não falha.
+
+### C. Inscrição com boas-vindas
+
+Gatilho Nova inscrição + Enviar mensagem `{{user}} assinou no nível {{subscription.tier}}!`. Dica: presente aparece em outro gatilho (Sub de presente); não duplique a mensagem.
+
+### D. Resgate que sobreviveu (compatibilidade)
+
+Gatilho Resgate de pontos na recompensa de sempre + condição `reward.cost` maior ou igual a `5000` + mostrar, esperar 3s e esconder + `{{viewer.name}} ativou {{reward.title}}!`. Dica: renomear a recompensa na Twitch não quebra, porque a identidade é o ID.
+
 ## Checklist de uma live de exemplo
 
 1. Abra o perfil certo e conecte o canal.

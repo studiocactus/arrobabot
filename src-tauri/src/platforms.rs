@@ -268,6 +268,24 @@ pub async fn youtube(rt:Arc<Runtime>,p:Profile)->Result<(),String>{
   let e=normalize_twitch(&p,&v).unwrap();
   assert_eq!((e.kind.as_str(),e.user.as_str()),("unlive","Thenees"));
  }
+ #[test] fn cheer_raid_follow_and_sub_carry_their_data() {
+  let p=profile();
+  let v=json!({"metadata":{"subscription_type":"channel.cheer","message_id":"m20"},"payload":{"event":{"user_id":"77","user_name":"Ana","broadcaster_user_id":"123","bits":500,"message":{"text":"toma"}}}});
+  let e=normalize_twitch(&p,&v).unwrap();
+  assert_eq!((e.kind.as_str(),e.user.as_str()),("cheer","Ana"));
+  assert_eq!(e.data["bits"],500);
+  let v=json!({"metadata":{"subscription_type":"channel.raid","message_id":"m21"},"payload":{"event":{"from_broadcaster_user_id":"78","from_broadcaster_user_name":"RaidMan","broadcaster_user_id":"123","viewers":42}}});
+  let e=normalize_twitch(&p,&v).unwrap();
+  assert_eq!((e.kind.as_str(),e.user.as_str()),("raid","RaidMan"));
+  assert_eq!(e.data["viewers"],42);
+  let v=json!({"metadata":{"subscription_type":"channel.follow","message_id":"m22"},"payload":{"event":{"user_id":"79","user_name":"Seguidor","broadcaster_user_id":"123"}}});
+  let e=normalize_twitch(&p,&v).unwrap();
+  assert_eq!((e.kind.as_str(),e.user.as_str()),("follow","Seguidor"));
+  let v=json!({"metadata":{"subscription_type":"channel.subscribe","message_id":"m23"},"payload":{"event":{"user_id":"80","user_name":"Subzado","broadcaster_user_id":"123","tier":"2000","is_gift":false}}});
+  let e=normalize_twitch(&p,&v).unwrap();
+  assert_eq!((e.kind.as_str(),e.user.as_str()),("subscription","Subzado"));
+  assert_eq!(e.data["tier"],"2000");
+ }
  #[test] fn channel_update_tells_the_live_state_which_category_is_on() {
   let p=profile();
   let v=json!({"metadata":{"subscription_type":"channel.update","message_id":"m1"},"payload":{"event":{"broadcaster_user_id":"123","broadcaster_user_name":"Thenees","title":"Ranked","category_name":"Counter-Strike 2"}}});

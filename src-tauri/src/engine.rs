@@ -49,6 +49,7 @@ impl Runtime {
  if e.message.len()>16000||e.id.len()>200{return Err("Evento muito grande".into())}
  {
  let mut seen=self.seen.lock().unwrap();seen.retain(|_,t|t.elapsed()<Duration::from_secs(600));
+ if seen.len()>5000{seen.clear();}
  let key=format!("{}:{}",e.profile_id,e.id);if seen.contains_key(&key){return Ok(())}
  self.tx.try_send(e).map_err(|_|"Fila cheia. Aguarde e tente novamente.".to_string())?;
  seen.insert(key,Instant::now());
@@ -244,7 +245,7 @@ pub async fn process(rt:Arc<Runtime>,e:Event){
   let kinds=f.actions.iter().map(|a|a.kind.clone()).collect::<Vec<_>>();
   let exec=rt.runs.start(&p.id,&f.id,&f.name,&kinds,test);
   let short=rt.runs.short_of(&exec);
-  rt.log(&p.id,"run",&format!("Execução {short} iniciada ({})",f.name),"info");
+  rt.log(&p.id,"run",&format!("Execução {short} iniciada ({} · {})",f.name,e.kind),"info");
   let testing=test||e.data["botliveTest"]==true;
   let mut ev=e.clone();ev.data["botliveTest"]=json!(testing);ev.data["execId"]=json!(exec.clone());
   let e=&ev;

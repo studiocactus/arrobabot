@@ -85,6 +85,13 @@ Para escrever marcadores literalmente, acrescente uma barra invertida: `\{{user}
 | {{redeemer}} | Quem resgatou |
 | {{redeemerId}} | ID de quem resgatou |
 | {{userInput}} | Texto enviado junto do resgate (vazio se não pediu) |
+| {{bits.amount}} | Bits do cheer |
+| {{subscription.tier}} | Nível da inscrição |
+| {{subscription.is_gift}} | `true` se a inscrição foi presenteada |
+| {{subscription.message}} | Mensagem da inscrição |
+| {{gifter.name}} | Quem presenteou subs |
+| {{raider.name}} | Quem fez a raid (nome exibido) |
+| {{raid.viewers}} | Espectadores trazidos pela raid |
 | {{lastSpeech}} | Última fala reconhecida na escuta contínua (vazia se nenhuma) |
 | {{liveSpeech}} | Todas as falas da sessão de escuta, separadas por ` \| ` |
 

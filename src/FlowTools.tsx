@@ -36,7 +36,7 @@ export function TimerVariants({variants,onChange}:{variants:string[];onChange:(v
 type TestStep={index:number;kind:string;status:string};
 type TestRun={id:string;flow:string;status:string;test:boolean;steps:TestStep[]};
 const STEP_ICON:Record<string,string>={SUCCESS:'✓',FAILED:'✕',CANCELLED:'■',SKIPPED:'–',RUNNING:'▶',WAITING:'⏳',PENDING:'○',TRUE:'✓',FALSE:'○'};
-const TEST_SAMPLES:Record<string,string>={'viewer.name':'TesteViewer',user:'Teste',message:'!teste','reward.title':'Flashbang',rewardTitle:'Flashbang','reward.cost':'5000',rewardCost:'5000','redemption.input':'hello',userInput:'hello',redeemer:'TesteViewer'};
+const TEST_SAMPLES:Record<string,string>={'viewer.name':'TesteViewer',user:'Teste',message:'!teste','reward.title':'Flashbang',rewardTitle:'Flashbang','reward.cost':'5000',rewardCost:'5000','redemption.input':'hello',userInput:'hello',redeemer:'TesteViewer','bits.amount':'500','raid.viewers':'42','raider.name':'TesteRaider','subscription.tier':'1000','gifter.name':'TesteGifter'};
 export function TestFlowDialog({flow,profileId,notify,onClose}:{flow:Flow;profileId:string;notify:Notify;onClose:()=>void}){
  const [exec,setExec]=useState<string|null>(null);const [run,setRun]=useState<TestRun|null>(null);const [error,setError]=useState('');
  const keys=testVarKeys(flow);

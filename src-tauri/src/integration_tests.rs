@@ -457,6 +457,24 @@ async fn condition_false_stops_and_skip_jumps_one(){
  assert!(logs.iter().any(|l|l.message.contains("→ falso")),"falso mostra resolvido e esperado");
  assert!(rt.runs.list(&p.id).iter().any(|r|r.status=="STOPPED_BY_CONDITION"));
 }
+async fn duplicate_events_submit_once_and_run_once(){
+ let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();let p=profile("Duplicado");rt.db.save_profile(&p).unwrap();
+ let mut f=flow(&p);f.name="Eco".into();f.trigger.pattern="!eco".into();
+ f.actions=vec![Action{kind:"overlay".into(),text:"eco".into(),target:String::new(),value:0,condition:String::new(),..Default::default()}];rt.db.save_flow(&f).unwrap();
+ let mut rx=rt.broadcast.subscribe();
+ let e=event(&p,"!eco",false);
+ assert!(rt.submit(e.clone()).await.is_ok());
+ assert!(rt.submit(e.clone()).await.is_ok(),"duplicata entra como ok, mas a fila ignora");
+ let deadline=tokio::time::Instant::now()+Duration::from_secs(5);
+ loop{
+  let got:Vec<String>=std::iter::from_fn(||rx.try_recv().ok()).filter(|v|v["type"]=="overlay").map(|v|v["payload"]["text"].as_str().unwrap_or("").into()).collect();
+  if !got.is_empty(){assert_eq!(got,vec!["eco"],"um evento, uma execução");break}
+  assert!(tokio::time::Instant::now()<deadline,"o worker não entregou");
+  tokio::time::sleep(Duration::from_millis(50)).await;
+ }
+ tokio::time::sleep(Duration::from_millis(500)).await;
+ assert!(std::iter::from_fn(||rx.try_recv().ok()).all(|v|v["type"]!="overlay"),"nada duplicado depois");
+}
 async fn disabled_steps_skip_and_wait_runs_without_blocking(){
  let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();let p=profile("Sequência");rt.db.save_profile(&p).unwrap();
  let mut f=flow(&p);f.name="Flash".into();f.trigger.pattern="!flash".into();

@@ -91,7 +91,7 @@ const EXTRA:[&str;20]=["followerCount","subCount","subTier","subMonths","subStre
 const SCOPES:[&str;5]=["local","global","user","session","sessionUser"];
 /// Nomes pontuados de leitura (apelidos do contexto da execução). Vão para o
 /// catálogo, nunca para `$` legado, e nunca aceitam escrita por variável.
-const DOTTED:[&str;10]=["execution.id","viewer.id","viewer.login","viewer.name","reward.id","reward.title","reward.cost","redemption.id","redemption.input","time.timestamp"];
+const DOTTED:[&str;17]=["execution.id","viewer.id","viewer.login","viewer.name","reward.id","reward.title","reward.cost","redemption.id","redemption.input","time.timestamp","bits.amount","subscription.tier","subscription.is_gift","subscription.message","gifter.name","raider.name","raid.viewers"];
 fn levenshtein(a:&str,b:&str)->usize{
  let (a,b)=(a.as_bytes(),b.as_bytes());let mut prev:Vec<usize>=(0..=b.len()).collect();
  for i in 1..=a.len(){let mut cur=vec![i];for j in 1..=b.len(){cur.push((prev[j]+1).min(cur[j-1]+1).min(prev[j-1]+usize::from(a[i-1]!=b[j-1])));}prev=cur;}
@@ -266,7 +266,7 @@ impl Context {
      values.insert("userInput".into(),json!(e.data["user_input"].as_str().unwrap_or("")));
      // Apelidos pontuados do contexto da execução (leitura; sem escrita por variável).
      let login=e.data["chatter_user_login"].as_str().filter(|s|!s.is_empty()).map(str::to_owned).unwrap_or_else(||e.user.to_lowercase());
-     for (key,value) in [("viewer.id",json!(e.user_id)),("viewer.login",json!(login)),("viewer.name",json!(e.user)),("time.timestamp",json!(now.timestamp())),("reward.id",json!(e.data["reward"]["id"].as_str().unwrap_or(""))),("reward.title",json!(e.data["reward"]["title"].as_str().unwrap_or(""))),("reward.cost",json!(e.data["reward"]["cost"].as_u64().unwrap_or(0))),("redemption.id",json!(e.id)),("redemption.input",json!(e.data["user_input"].as_str().unwrap_or("")))] { values.insert(key.into(),value); }
+     for (key,value) in [("viewer.id",json!(e.user_id)),("viewer.login",json!(login)),("viewer.name",json!(e.user)),("time.timestamp",json!(now.timestamp())),("reward.id",json!(e.data["reward"]["id"].as_str().unwrap_or(""))),("reward.title",json!(e.data["reward"]["title"].as_str().unwrap_or(""))),("reward.cost",json!(e.data["reward"]["cost"].as_u64().unwrap_or(0))),("redemption.id",json!(e.id)),("redemption.input",json!(e.data["user_input"].as_str().unwrap_or(""))),("bits.amount",json!(e.data["bits"].as_u64().unwrap_or(0))),("subscription.tier",json!(e.data["tier"].as_str().unwrap_or(""))),("subscription.is_gift",json!(e.data["is_gift"]==true||e.kind=="gift")),("subscription.message",json!(e.data["message"]["text"].as_str().unwrap_or(e.message.as_str()))),("gifter.name",json!(e.data["user_name"].as_str().filter(|s|!s.is_empty()).unwrap_or("Anônimo"))),("raider.name",json!(e.user)),("raid.viewers",json!(e.data["viewers"].as_u64().unwrap_or(0)))] { values.insert(key.into(),value); }
         if let Some(f)=flow { values.insert("commandCount".into(),json!(crate::command_counter::get(db,&p.id,&f.id)?)); values.insert("actionId".into(),json!(f.id)); values.insert("actionName".into(),json!(f.name)); }
         // O que o microfone acabou de ouvir. Sem fala ainda as duas existem vazias:
         // uma automação que usa {{lastSpeech}} não pode quebrar por o streamer estar calado.
@@ -431,6 +431,26 @@ impl Context {
         assert!(c.eval_rule("rewardCost","maior_que","5").is_err());
         assert!(is_known("viewer.name")&&is_known("time.timestamp")&&!is_known("viewer.nome"));
         assert_eq!(suggest_variable("viewer.nam"),Some("viewer.name".into()));
+    #[test] fn triggers_twitch_expoem_bits_sub_raid_e_follow(){
+        use crate::model::{Event, Profile};
+        let dir=tempfile::tempdir().unwrap();let db=Db::open(&dir.path().join("t.sqlite")).unwrap();
+        let p:Profile=serde_json::from_value(serde_json::json!({"id":"00000000-0000-4000-8000-000000000033","name":"P","platform":"twitch","channel":"canal"})).unwrap();
+        db.save_profile(&p).unwrap();
+        let cheer:Event=serde_json::from_value(serde_json::json!({"id":"c1","profileId":p.id,"kind":"cheer","user":"Ana","user_id":"77","role":"everyone","message":"toma","data":{"bits":500,"message":{"text":"toma"}}})).unwrap();
+        let c=Context::new(&db,&p,&cheer,None).unwrap();
+        assert_eq!(c.render("{{bits.amount}} bits de {{viewer.name}}").unwrap(),"500 bits de Ana");
+        assert_eq!(c.eval_rule("bits.amount","greater_or_equal","500").unwrap(),(true,"500".into()));
+        assert_eq!(c.eval_rule("bits.amount","greater_than","500").unwrap().0,false);
+        let raid:Event=serde_json::from_value(serde_json::json!({"id":"r1","profileId":p.id,"kind":"raid","user":"RaidMan","user_id":"78","role":"everyone","message":"","data":{"viewers":42,"from_broadcaster_user_login":"raidman"}})).unwrap();
+        let c=Context::new(&db,&p,&raid,None).unwrap();
+        assert_eq!(c.render("{{raider.name}} com {{raid.viewers}}").unwrap(),"RaidMan com 42");
+        assert_eq!(c.eval_rule("raid.viewers","greater_or_equal","20").unwrap().0,true);
+        let sub:Event=serde_json::from_value(serde_json::json!({"id":"s1","profileId":p.id,"kind":"subscription","user":"Subzado","user_id":"80","role":"subscriber","message":"","data":{"tier":"2000","is_gift":false}}})).unwrap();
+        let c=Context::new(&db,&p,&sub,None).unwrap();
+        assert_eq!(c.render("{{subscription.tier}} presente? {{subscription.is_gift}}").unwrap(),"2000 presente? false");
+        assert!(is_known("bits.amount")&&is_known("raid.viewers")&&is_known("gifter.name"));
+        assert_eq!(suggest_variable("bits.amout"),Some("bits.amount".into()));
+    }
     }
     }
 }
