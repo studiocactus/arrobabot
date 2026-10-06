@@ -16,7 +16,7 @@ export const newFlow=(profileId:string):Flow=>({id:crypto.randomUUID(),profileId
 export const platforms={twitch:'Twitch',youtube:'YouTube',kick:'Kick'};
 export const actions:Record<string,string>={chat:'Enviar mensagem',ai:'Responder com IA','ai.generate':'Gerar resposta da IA (variável)',punish:'Punir na Twitch',twitch:'Ação na Twitch',memory:'Registrar memória',delay:'Esperar',overlay:'Atualizar overlay',webhook:'Chamar webhook',discord:'Enviar ao Discord',tts:'Ler em voz alta',points:'Ajustar pontos',script:'Executar script Rhai','variable.set':'Definir variável','variable.increment':'Incrementar variável','variable.delete':'Apagar variável'};
 export const punishModes:Record<string,string>={timeout:'Silenciar por um tempo',ban:'Banir',warn:'Avisar'};
-export const punishTargets:Record<string,string>={sender:'Quem enviou a mensagem',first:'Primeiro argumento do comando'};
+export const punishTargets:Record<string,string>={sender:'Quem enviou a mensagem',first:'Primeiro argumento do comando',random:'Sorteado no chat'};
 export const triggers:Record<string,string>={timer:'Timer periódico',command:'Comando de chat',contains:'Mensagem contém',mention:'Chamada pelo nome do bot',chat:'Toda mensagem',follow:'Novo seguidor',subscription:'Nova inscrição',resub:'Nova re-inscrição',gift:'Sub de presente',cheer:'Bits / Super Chat',raid:'Raid',redemption:'Resgate de pontos',custom:'Evento externo',voice:'Comando de voz'};
 export const sendTypes:Record<string,string>={chat:'Mensagem normal',announce:'Anúncio',pin:'Mensagem fixada',shoutout:'Destaque de canal'};
 export const sendColors:Record<string,string>={primary:'Cor do canal',blue:'Azul',green:'Verde',orange:'Laranja',purple:'Roxo'};

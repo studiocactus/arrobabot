@@ -271,7 +271,7 @@ async fn action(rt:&Arc<Runtime>,p:&Profile,e:&Event,a:&Action,variables:&mut cr
  // Simulations never perform external effects or change persistent module/vault state.
  if e.simulated && a.kind!="chat" {if matches!(a.kind.as_str(),"ai"|"ai.generate"){crate::ai::save_response(variables,rt,p,e,a,"[Prévia: resposta contextual da IA]",false)?;}rt.log(&p.id,"simulation",&format!("Executaria {}: {}",a.kind,text.chars().take(200).collect::<String>()),"success");return Ok(())}
  match a.kind.as_str(){
- "punish"=>crate::moderation::punish(rt,p,e,a,&text).await,
+ "punish"=>crate::moderation::punish(rt,p,e,a,&text,Some(&mut *variables)).await,
  "twitch"=>crate::twitch_ops::run(rt,p,e,a,&text,&f.trigger.pattern,Some(variables)).await.map(|_|()),
  "chat"=>rt.send_with(p,e,&text,Some(f)).await,
  "ai"|"ai.generate"=>{

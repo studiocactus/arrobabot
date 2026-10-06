@@ -1,5 +1,30 @@
 # Histórico de atualizações
 
+# BotLive 0.1.61
+
+## O que mudou
+
+- Punir sorteado no chat: **Quem leva a punição** ganhou **Sorteado no chat**. O bot escolhe entre quem já falou (nunca o streamer; pula streamer e bot em até 5 tentativas) e guarda o nome em `{{local.punished}}` para a mensagem seguinte. Receita: comando `!sorteio` → ação 1 Punir (silenciar, sorteado) → ação 2 mensagem como `{{local.punished}} rodou feio!`.
+- `{{local.punished}}` entra no catálogo e no aviso de variável local.
+
+## Como usar
+
+- Edite o `!sorteio`: troque o alvo para Sorteado no chat e adicione a mensagem engraçada com `{{local.punished}}`. Restrinja a **Quem pode usar** para não virar arma do chat.
+
+## Validação
+
+- `npm run check` (tsc), `npm test` (vitest 32/32), `npm run docs` e `npm run test:updates` (8/8) executados antes do push.
+- `cargo test` não executado localmente (toolchain Rust indisponível); inclui testes de sorteio (exclui streamer, exige multidão) e validação do alvo; a CI compila e testa de verdade.
+- Teste ao vivo do timeout sorteado ainda pendente.
+
+## Limitações
+
+- Se cair em moderador/VIP acima do bot, a Twitch recusa e o Histórico explica.
+- Sem ninguém no cadastro além do streamer, a ação orienta a aguardar o chat.
+- Prévia/simulação não pune nem sorteia: `{{local.punished}}` sai vazio (use `|default:`).
+
+---
+
 # BotLive 0.1.60
 
 ## O que mudou

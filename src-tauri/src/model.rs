@@ -61,7 +61,7 @@ pub const SEND_COLORS:[&str;5]=["primary","blue","green","orange","purple"];
 pub const ANCHORS:[&str;4]=["all","message","chat","fixed"];
 /// Modos aceitos pela ação de punição e os dois modos de escolher quem leva ela.
 pub const PUNISH_MODES:[&str;3]=["timeout","ban","warn"];
-pub const PUNISH_TARGETS:[&str;2]=["sender","first"];
+pub const PUNISH_TARGETS:[&str;3]=["sender","first","random"];
 pub const LENGTHS:[&str;3]=["short","medium","free"];
 pub const KNOWLEDGE_DEPTHS:[&str;3]=["light","standard","full"];
 /// True when the flow needs a message-sending action to make this delivery useful.
@@ -239,7 +239,7 @@ pub fn validate_flow(f:&Flow)->Result<(),String> {
  if a.kind=="delay" && !(0..=30000).contains(&a.value) {return Err("Espera máxima: 30 segundos".into())}
  if a.kind=="punish" {
   if !PUNISH_MODES.contains(&a.punish.as_str()){return Err("Punição: escolha silenciar, banir ou avisar".into())}
-  if !PUNISH_TARGETS.contains(&a.target.as_str()){return Err("Punição: escolha quem leva a ação, quem enviou ou o primeiro argumento".into())}
+  if !PUNISH_TARGETS.contains(&a.target.as_str()){return Err("Punição: escolha quem leva a ação, quem enviou, o primeiro argumento ou um sorteado".into())}
   if a.punish=="timeout"&&!(1..=1209600).contains(&a.value){return Err("Punição: duração de 1 segundo a 14 dias".into())}
   if a.text.len()>500{return Err("Punição: o motivo pode ter até 500 caracteres".into())}
  }
@@ -379,7 +379,7 @@ pub fn validate_flow(f:&Flow)->Result<(),String> {
   f.actions[0].target="first".into();f.actions[0].punish="ban".into();f.actions[0].value=0;
   assert!(validate_flow(&f).is_ok(),"ban e aviso não usam duração");
   assert_eq!(PUNISH_MODES,["timeout","ban","warn"]);
-  assert_eq!(PUNISH_TARGETS,["sender","first"]);
+  assert_eq!(PUNISH_TARGETS,["sender","first","random"]);
   // Ações salvas antes da punição existir continuam recebendo o campo vazio.
   let mut saved=serde_json::to_value(&f.actions[0]).unwrap();saved.as_object_mut().unwrap().remove("punish");
   let back:Action=serde_json::from_value(saved).unwrap();assert_eq!(back.punish,"");

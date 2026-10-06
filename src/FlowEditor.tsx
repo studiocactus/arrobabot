@@ -31,7 +31,7 @@ export default function FlowEditor({flow,platform='twitch',ai,onSave,intro}:{flo
  const keepText=(kind:string)=>["command","contains","voice","mention"].includes(kind);
 function switchKind(current:Action,next:string){const base:Action={...current,kind:next};
   if(next==='ai.generate'&&!base.target.startsWith('local.'))base.target='local.aiResponse';
-  if(next==='punish'){if(!['sender','first'].includes(base.target))base.target='sender';if(!base.punish)base.punish='timeout';if(base.value<1)base.value=60}
+  if(next==='punish'){if(!['sender','first','random'].includes(base.target))base.target='sender';if(!base.punish)base.punish='timeout';if(base.value<1)base.value=60}
   if(next==='twitch'){if(!base.twOp)base.twOp='game';if(base.value<1)base.value=60}
   update(base)}
  async function save(){try{setBusy(true);setError(null);const ordered=orderedActions(nodes,edges);await onSave({...flow,name,trigger:trigger.kind==='timer'?{...trigger,permission:'everyone',cooldown:0,userCooldown:0,pattern:''}:keepText(trigger.kind)?trigger:{...trigger,pattern:''},counter:trigger.kind==='command'&&counter,timerSeconds,sendType,sendColor,replyTo,audio,audioVolume,actions:ordered,layout:{nodes,edges}})}catch(e){setError(friendlyError(e))}finally{setBusy(false)}}

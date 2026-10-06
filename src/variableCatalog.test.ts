@@ -66,4 +66,9 @@ describe('aviso de variável local sem origem no fluxo',()=>{
   expect(missingLocals('{{local.twitchTitle}}',[chat,jogo])).toEqual(['local.twitchTitle']);
   expect(missingLocals('{{local.twitchTarget}}',[chat,{kind:'twitch',target:'',twOp:'ban'}])).toEqual([]);
  });
+ it('ação Punir define o sorteado',()=>{
+  const roleta={kind:'punish',target:'random'};
+  expect(missingLocals('{{local.punished}}',[chat,roleta])).toEqual([]);
+  expect(missingLocals('{{local.punished}}',[chat])).toEqual(['local.punished']);
+ });
 });

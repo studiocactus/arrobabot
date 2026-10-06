@@ -50,6 +50,7 @@ export const variableCatalog:VariableChoice[]=[
  {key:'local.twitchGameId',label:'ID do jogo resolvido',group:'Twitch'},
  {key:'local.twitchTitle',label:'Título aplicado pela ação Twitch',group:'Twitch'},
  {key:'local.twitchTarget',label:'Alvo da ação Twitch',group:'Twitch',example:'maria'},
+ {key:'local.punished',label:'Sorteado da punição',group:'Moderação',example:'ana — vale nas ações seguintes'},
 ];
 export const scopeNames:Record<string,string>={local:'Só nesta execução',global:'Salva no perfil',user:'Salva por pessoa',session:'Perfil, até fechar o app',sessionUser:'Pessoa, até fechar o app',data:'Dados do evento'};
 // `random:min,max` traz a faixa dentro do próprio código, por isso não é um nome de variável.
@@ -80,6 +81,7 @@ export function missingLocals(text:string,actions:{kind:string;target:string;twO
  const defined=new Set<string>();
  for(const a of actions){
   if(a.kind==='ai'||a.kind==='ai.generate'){defined.add('local.aiResponse');defined.add('local.aiSuccess')}
+  if(a.kind==='punish'){defined.add('local.punished')}
   if(a.kind==='twitch'){
    if(a.twOp==='game'){defined.add('local.twitchGame');defined.add('local.twitchGameId')}
    else if(a.twOp==='title'){defined.add('local.twitchTitle')}
