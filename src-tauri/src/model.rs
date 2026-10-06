@@ -276,7 +276,7 @@ pub fn validate_flow(f:&Flow)->Result<(),String> {
  if !f.audio.is_empty()&&(f.audio.len()>64||f.audio.contains(char::is_whitespace)){return Err("Áudio inválido: escolha um som da biblioteca".into())}
  if !f.audio_volume.is_finite()||!(0.0..=1.0).contains(&f.audio_volume){return Err("Volume do áudio: escolha de 0% a 100%".into())}
  for a in &f.actions {
- if !["chat","ai","ai.generate","memory","webhook","discord","overlay","delay","script","points","tts","variable.set","variable.increment","variable.delete","punish","twitch","obs","wait"].contains(&a.kind.as_str()) {return Err("Tipo de ação inválido".into())}
+ if !["chat","ai","ai.generate","memory","webhook","discord","overlay","delay","script","points","tts","variable.set","variable.increment","variable.delete","punish","twitch","obs","wait","condition"].contains(&a.kind.as_str()) {return Err("Tipo de ação inválido".into())}
  if a.kind=="wait"&&!(1..=3600000).contains(&a.value){return Err("Espera de 1 milissegundo a 1 hora".into())}
  if a.kind=="obs" {
   if !crate::obs::OPS.contains(&a.obs_op.as_str()){return Err("Ação do OBS: escolha uma operação válida".into())}
