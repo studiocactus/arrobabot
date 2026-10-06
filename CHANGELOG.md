@@ -1,5 +1,27 @@
 # Histórico de atualizações
 
+# BotLive 0.1.63
+
+## O que mudou
+
+- Corrige o teste do clipe da 0.1.62 (linha de abertura perdida deixava o corpo órfão). Nenhuma mudança de comportamento.
+
+## Como usar
+
+- Vale o manual da 0.1.62: `!clipe`/`!clip` com `{{local.clipUrl}}` e sorteio com `{{local.punished}}`.
+
+## Validação
+
+- `npm run test:updates` (8/8) executado antes do push.
+- `cargo test` não executado localmente (toolchain Rust indisponível); erro de sintaxe apontado pelo compilador da CI, estrutura conferida; a CI testa de verdade.
+- A 0.1.62 não gerou build (CI reprovou na compilação); esta 0.1.63 a substitui sem reescrever release, pois nenhuma release 0.1.62 chegou a existir.
+
+## Limitações
+
+- As mesmas da 0.1.62.
+
+---
+
 # BotLive 0.1.62
 
 ## O que mudou

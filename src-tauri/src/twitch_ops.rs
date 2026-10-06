@@ -390,6 +390,7 @@ pub async fn run(rt:&Arc<Runtime>,p:&Profile,e:&Event,a:&Action,text:&str,trigge
  #[test] fn o_link_do_clipe_usa_o_id_da_twitch(){
   assert_eq!(clip_url("AbC123xYz"),"https://clips.twitch.tv/AbC123xYz");
  }
+ #[test] fn o_primeiro_numero_vira_duracao(){
   assert_eq!(first_number("timeout 300 por favor"),Some(300));
   assert_eq!(first_number("sem numero"),None);
  }
