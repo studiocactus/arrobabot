@@ -29,6 +29,7 @@ mod speech;
 mod access;
 mod stats;
 mod labels;
+mod obs;
 mod scheduler;
 mod obsidian;
 mod discord;
@@ -51,6 +52,7 @@ pub async fn dispatch(rt:Arc<Runtime>,op:&str,args:Value)->R<Value>{
  let p=args["profileId"].as_str().unwrap_or("").to_owned();
  if op.starts_with("chatExtras."){return chat_extras::operation(&rt,&p,op,&args)}
  if op.starts_with("labels."){return labels::operation(&rt,&p,op,&args).await}
+ if op.starts_with("obs."){return obs::operation(&rt,&p,op,&args).await}
  if op.starts_with("discord."){return discord_admin::operation(&rt,&p,op,&args).await}
  match op{
  "snapshot"=>Ok(json!({"profiles":rt.db.profiles()?.into_iter().filter(|p|access::allowed(&rt,p)).collect::<Vec<_>>(),"logs":rt.db.logs("")?.into_iter().filter(|l|access::current(&rt)=="owner"||rt.db.profile(&l.profile_id).is_ok_and(|p|access::allowed(&rt,&p))).collect::<Vec<_>>(),"statuses":*rt.statuses.lock().unwrap(),"theme":rt.db.get("theme"),"accent":rt.db.get("accent"),"apiPort":*rt.api_port.lock().unwrap(),"dataDir":rt.base.to_string_lossy()})),
@@ -103,7 +105,7 @@ pub async fn dispatch(rt:Arc<Runtime>,op:&str,args:Value)->R<Value>{
  "disconnect"=>{rt.disconnect(&p);Ok(Value::Null)},
  "simulate"=>{let mut e:Event=serde_json::from_value(args["event"].clone()).map_err(|_|"Evento inválido")?;e.simulated=true;e.id=uuid::Uuid::new_v4().to_string();rt.submit(e).await?;Ok(Value::Null)},
  "chat.send"=>{let profile=rt.db.profile(&p)?;let e=Event{id:uuid::Uuid::new_v4().to_string(),profile_id:p,kind:"manual".into(),user:"".into(),user_id:"".into(),role:"broadcaster".into(),message:"".into(),data:Value::Null,simulated:false};rt.send(&profile,&e,args["text"].as_str().ok_or("Escreva uma mensagem")?).await?;Ok(Value::Null)},
- "secret.save"=>{rt.db.profile(&p)?;let key=args["key"].as_str().ok_or("Chave inválida")?;if !["ai_key","client_secret","discord_webhook","discord_token","obsidian_key"].contains(&key){return Err("Tipo de credencial não permitido".into())}secrets::set(&p,key,args["value"].as_str().ok_or("Credencial inválida")?)?;
+ "secret.save"=>{rt.db.profile(&p)?;let key=args["key"].as_str().ok_or("Chave inválida")?;if !["ai_key","client_secret","discord_webhook","discord_token","obsidian_key","obs_password"].contains(&key){return Err("Tipo de credencial não permitido".into())}secrets::set(&p,key,args["value"].as_str().ok_or("Credencial inválida")?)?;
  if key=="ai_key"{let profile=rt.db.profile(&p)?;let origin=url::Url::parse(&profile.ai.endpoint).map_err(|_|"Endpoint inválido")?.origin().ascii_serialization();secrets::set(&p,"ai_origin",&origin)?;}
  Ok(Value::Null)},
  "secret.status"=>Ok(json!({"ai":secrets::get(&p,"ai_key").is_ok(),"bot":secrets::get(&p,"bot_token").is_ok(),"channel":secrets::get(&p,"channel_token").is_ok()})),

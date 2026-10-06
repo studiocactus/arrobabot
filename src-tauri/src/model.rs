@@ -102,6 +102,14 @@ pub struct Action {
  /// vip, unvip, slow, slowoff, followers, followersoff, subsonly, subsonlyoff,
  /// emoteonly, emoteonlyoff, shoutout ou mention. Só é usado por "twitch".
  #[serde(default)] pub tw_op:String,
+ /// Operação do OBS local: mute, unmute, toggle_mute, volume, show, hide,
+ /// toggle_item ou scene. Só é usado por "obs".
+ #[serde(default)] pub obs_op:String,
+ /// Alvo da ação do OBS: nome da entrada, da fonte ou da cena.
+ #[serde(default)] pub obs_target:String,
+ /// Duração temporária em segundos (0 = permanente). Só mutar, volume,
+ /// mostrar e esconder restauram o estado anterior.
+ #[serde(default)] pub obs_duration:u64,
  /// Controles da resposta com IA. Vazio ou ausente herda o padrão do perfil.
  #[serde(default)] pub ai_anchor:String,
  #[serde(default)] pub ai_knowledge:String,
@@ -110,7 +118,7 @@ pub struct Action {
  #[serde(default)] pub ai_no_repeat:Option<bool>,
 }
 impl Default for Action {
- fn default()->Self { Self{kind:"chat".into(),text:String::new(),target:String::new(),value:0,condition:String::new(),punish:String::new(),tw_op:String::new(),ai_anchor:String::new(),ai_knowledge:String::new(),ai_length:String::new(),ai_style:String::new(),ai_no_repeat:None} }
+ fn default()->Self { Self{kind:"chat".into(),text:String::new(),target:String::new(),value:0,condition:String::new(),punish:String::new(),tw_op:String::new(),obs_op:String::new(),obs_target:String::new(),obs_duration:0,ai_anchor:String::new(),ai_knowledge:String::new(),ai_length:String::new(),ai_style:String::new(),ai_no_repeat:None} }
 }
 impl Action {
  pub fn anchor<'a>(&'a self,ai:&'a AiConfig)->&'a str { self.pick(&self.ai_anchor,&ai.anchor,"all") }
@@ -259,7 +267,14 @@ pub fn validate_flow(f:&Flow)->Result<(),String> {
  if !f.audio.is_empty()&&(f.audio.len()>64||f.audio.contains(char::is_whitespace)){return Err("Áudio inválido: escolha um som da biblioteca".into())}
  if !f.audio_volume.is_finite()||!(0.0..=1.0).contains(&f.audio_volume){return Err("Volume do áudio: escolha de 0% a 100%".into())}
  for a in &f.actions {
- if !["chat","ai","ai.generate","memory","webhook","discord","overlay","delay","script","points","tts","variable.set","variable.increment","variable.delete","punish","twitch"].contains(&a.kind.as_str()) {return Err("Tipo de ação inválido".into())}
+ if !["chat","ai","ai.generate","memory","webhook","discord","overlay","delay","script","points","tts","variable.set","variable.increment","variable.delete","punish","twitch","obs"].contains(&a.kind.as_str()) {return Err("Tipo de ação inválido".into())}
+ if a.kind=="obs" {
+  if !crate::obs::OPS.contains(&a.obs_op.as_str()){return Err("Ação do OBS: escolha uma operação válida".into())}
+  if a.obs_target.trim().is_empty()||a.obs_target.chars().count()>200{return Err("Ação do OBS: escolha o alvo".into())}
+  if a.obs_duration>3600{return Err("Ação do OBS: duração de até 1 hora".into())}
+  if a.obs_duration>0&&!crate::obs::temp_ok(&a.obs_op){return Err("Ação do OBS: duração só vale para mutar, volume, mostrar e esconder".into())}
+  if a.obs_op=="volume"&&a.text.trim().parse::<f64>().map_or(true,|n|!n.is_finite()||n<-100.0||n>30.0){return Err("Ação do OBS: volume em dB entre -100 e 30".into())}
+ }
  if a.kind=="ai.generate" {let (scope,name)=crate::variables::target(crate::ai::response_target(a))?;if scope!="local"||name=="aiSuccess"{return Err("Guarde a resposta da IA numa variável local de texto".into())}}
  if a.kind.starts_with("variable."){crate::variables::target(&a.target)?;}
  if a.text.len()>32768 {return Err("Ação muito longa".into())}
@@ -403,6 +418,17 @@ pub fn validate_flow(f:&Flow)->Result<(),String> {
   m.kind="follow".into();assert!(!matches(&t,&m),"só mensagem de chat");
   t.pattern.clear();m.kind="chat".into();assert!(!matches(&t,&m),"lista vazia não dispara nada");
   t.pattern="!whislist, , !wishlist".into();m.message="!whislist".into();assert!(matches(&t,&m),"opção vazia no meio é ignorada");
+ }
+ #[test] fn obs_action_validates_op_target_and_temp() {
+  let mut a=Action{kind:"obs".into(),obs_op:"mute".into(),obs_target:"Mic".into(),..Default::default()};
+  let mut f=Flow{counter:false,timer_seconds:300,timer_category:"personalizado".into(),timer_priority:"normal".into(),timer_variants:vec![],timer_min_messages:0,timer_window_secs:900,timer_max_session:0,timer_start_delay_secs:0,audio:String::new(),audio_volume:1.0,send_type:"chat".into(),send_color:"primary".into(),reply_to:false,id:uuid::Uuid::new_v4().to_string(),profile_id:uuid::Uuid::new_v4().to_string(),name:"OBS".into(),enabled:true,trigger:Trigger{kind:"command".into(),pattern:"!x".into(),permission:"everyone".into(),cooldown:0,user_cooldown:0},actions:vec![a.clone()],layout:Value::Null};
+  assert!(validate_flow(&f).is_ok());
+  f.actions[0].obs_op="explodir".into();assert!(validate_flow(&f).is_err());
+  f.actions[0].obs_op="scene".into();f.actions[0].obs_target=" ".into();assert!(validate_flow(&f).is_err());
+  f.actions[0].obs_target="Jogo".into();f.actions[0].obs_duration=1;assert!(validate_flow(&f).is_err(),"cena não aceita duração");
+  f.actions[0].obs_duration=0;assert!(validate_flow(&f).is_ok());
+  f.actions[0].obs_op="volume".into();f.actions[0].text="alto".into();assert!(validate_flow(&f).is_err());
+  f.actions[0].text="-6.5".into();assert!(validate_flow(&f).is_ok());
  }
  #[test] fn command_variations_and_punish_rules_are_validated() {
   let mut f=Flow{counter:false,timer_seconds:300,timer_category:"personalizado".into(),timer_priority:"normal".into(),timer_variants:vec![],timer_min_messages:0,timer_window_secs:900,timer_max_session:0,timer_start_delay_secs:0,audio:String::new(),audio_volume:1.0,send_type:"chat".into(),send_color:"primary".into(),reply_to:false,id:uuid::Uuid::new_v4().to_string(),profile_id:uuid::Uuid::new_v4().to_string(),name:"Lista".into(),enabled:true,trigger:Trigger{kind:"command".into(),pattern:"!whislist, !whishlist".into(),permission:"everyone".into(),cooldown:0,user_cooldown:0},actions:vec![Action{kind:"chat".into(),text:"Pronto".into(),target:String::new(),value:0,condition:String::new(),..Default::default()}],layout:Value::Null};

@@ -2,7 +2,7 @@ import CommandOptions from './CommandOptions';
 import {useState,useCallback,useEffect,type ReactNode} from 'react';
 import {ReactFlow,Background,Controls,MiniMap,addEdge,useNodesState,useEdgesState,type Connection,type Node,type Edge} from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import {Plus,Save,Trash2,Zap} from 'lucide-react';
+import {Plus,Save,Trash2,Zap,Play} from 'lucide-react';
 import {actions,triggers,newAction,punishModes,punishTargets,twOps,minutesToSeconds,secondsToMinutes,type Flow,type Action,type AIConfig} from './types';
 import {orderedActions} from './flow';
 import {Field} from './components';
@@ -11,8 +11,18 @@ import MessageEditor from './MessageEditor';
 import {SendPicker,AudioPicker} from './FlowOptions';
 import {AIResponseTest} from './AIConversation';
 import AIActionOptions from './AIActionOptions';
-import {friendlyError,type FriendlyError} from './errors';
+import {friendlyError,friendlyMessage,type FriendlyError} from './errors';
 import {api,desktop} from './api';
+const OBS_OPS:Record<string,string>={mute:'Mutar entrada',unmute:'Desmutar entrada',toggle_mute:'Alternar mudo',volume:'Volume da entrada',show:'Mostrar fonte',hide:'Esconder fonte',toggle_item:'Alternar fonte',scene:'Trocar de cena'};
+const OBS_TEMP=['mute','unmute','volume','show','hide'];
+type ObsDisco={scenes:string[];current:string;inputs:string[];sources:string[]};
+function ObsTarget({profileId,op,value,onChange}:{profileId:string;op:string;value:string;onChange:(v:string)=>void}){
+ const [disco,setDisco]=useState<ObsDisco|null>(null);const [error,setError]=useState('');
+ useEffect(()=>{if(!desktop){return}api<ObsDisco>('obs.discover',{profileId}).then(setDisco).catch(()=>setError('Abra o OBS e confira a integração na tela OBS Studio.'))},[profileId]);
+ const options=op==='scene'?(disco?.scenes||[]):['mute','unmute','toggle_mute','volume'].includes(op)?(disco?.inputs||[]):(disco?.sources||[]);
+ const label=op==='scene'?'Cena':['mute','unmute','toggle_mute','volume'].includes(op)?'Entrada de áudio':'Fonte (cena atual)';
+ return <><Field label={label}><select value={value} onChange={e=>onChange(e.target.value)}><option value="">Escolha…</option>{options.map(o=><option key={o} value={o}>{o}</option>)}{value&&!options.includes(value)&&<option value={value}>{value}</option>}</select></Field>{error&&<p className="help">{error}</p>}</>;
+}
 type Data={label:string;action?:Action;[key:string]:unknown};
 /** Seção recolhível do painel lateral: agrupa campos parecidos e sai do caminho quando fechada. */
 type Reward={id:string;title:string;cost:number;enabled:boolean;paused:boolean};
@@ -27,7 +37,7 @@ function Section({title,open=false,children}:{title:string;open?:boolean;childre
 export default function FlowEditor({flow,platform='twitch',ai,onSave,intro}:{flow:Flow;platform?:string;ai?:AIConfig;onSave:(f:Flow)=>Promise<void>;intro?:string}){
  const [counter,setCounter]=useState(!!flow.counter);const [timerSeconds,setTimerSeconds]=useState(flow.timerSeconds||300);
  const [sendType,setSendType]=useState(flow.sendType||'chat');const [sendColor,setSendColor]=useState(flow.sendColor||'primary');const [replyTo,setReplyTo]=useState(!!flow.replyTo);
- const [audio,setAudio]=useState(flow.audio||'');const [audioVolume,setAudioVolume]=useState(flow.audioVolume??1);
+ const [audio,setAudio]=useState(flow.audio||'');const [audioVolume,setAudioVolume]=useState(flow.audioVolume??1);const [obsTest,setObsTest]=useState('');
  const layout=flow.layout as {nodes?:Node<Data>[];edges?:Edge[]}|undefined;
  const startNodes:Node<Data>[]=layout?.nodes||[{id:'trigger',position:{x:60,y:140},data:{label:'⚡ '+(triggers[flow.trigger.kind]||flow.trigger.kind)},type:'input'},...flow.actions.map((action,i)=>({id:'action-'+i,position:{x:340+i*280,y:140},data:{label:actions[action.kind],action}}))];
  const startEdges:Edge[]=layout?.edges||flow.actions.map((_,i)=>({id:'e'+i,source:i===0?'trigger':'action-'+(i-1),target:'action-'+i,animated:true}));
@@ -42,6 +52,7 @@ function switchKind(current:Action,next:string){const base:Action={...current,ki
   if(next==='ai.generate'&&!base.target.startsWith('local.'))base.target='local.aiResponse';
   if(next==='punish'){if(!['sender','first','random'].includes(base.target))base.target='sender';if(!base.punish)base.punish='timeout';if(base.value<1)base.value=60}
   if(next==='twitch'){if(!base.twOp)base.twOp='game';if(base.value<1)base.value=60}
+  if(next==='obs'){if(!base.obsOp)base.obsOp='mute';if(!base.obsTarget)base.obsTarget=''}
   update(base)}
  async function save(){try{setBusy(true);setError(null);const ordered=orderedActions(nodes,edges);await onSave({...flow,name,trigger:trigger.kind==='timer'?{...trigger,permission:'everyone',cooldown:0,userCooldown:0,pattern:''}:keepText(trigger.kind)?trigger:{...trigger,pattern:''},counter:trigger.kind==='command'&&counter,timerSeconds,sendType,sendColor,replyTo,audio,audioVolume,actions:ordered,layout:{nodes,edges}})}catch(e){setError(friendlyError(e))}finally{setBusy(false)}}
  return <div className="flow-editor">
@@ -128,7 +139,15 @@ function switchKind(current:Action,next:string){const base:Action={...current,ki
  </Field>}
  <p className="help">O alvo sai da fala: @menção primeiro, depois nome de quem está no chat, depois o alvo fixo. Sem nenhum, o bot avisa no Histórico e não executa.</p>
  <p className="help">Categoria, título e VIP executam com a conta do canal (reautorize o canal após atualizar); o resto executa com a conta do bot, que precisa ser moderadora. A prévia não executa.</p>
- </>}</Section>
+ </>}{action.kind==='obs'&&<>
+  <Field label="Operação no OBS"><select value={action.obsOp||'mute'} onChange={e=>update({...action,obsOp:e.target.value,obsTarget:''})}>{Object.entries(OBS_OPS).map(([k,n])=><option key={k} value={k}>{n}</option>)}</select></Field>
+  <ObsTarget profileId={flow.profileId} op={action.obsOp||'mute'} value={action.obsTarget||''} onChange={obsTarget=>update({...action,obsTarget})}/>
+  {(action.obsOp||'mute')==='volume'&&<Field label="Volume (dB)" hint="Ex.: -6. Entre -100 e 30."><input type="number" min={-100} max={30} step="any" value={action.text} onChange={e=>update({...action,text:e.target.value})}/></Field>}
+  {OBS_TEMP.includes(action.obsOp||'mute')&&<Field label="Duração (segundos)" hint="0 = permanente. Temporário restaura o estado anterior no fim."><input type="number" min={0} max={3600} step={1} value={action.obsDuration??0} onChange={e=>update({...action,obsDuration:Math.max(0,Math.round(Number(e.target.value)||0))})}/></Field>}
+  <div className="row"><button type="button" disabled={busy||!desktop} onClick={async()=>{setBusy(true);setObsTest('');try{const done=await api<string>('obs.execute',{profileId:flow.profileId,op:action.obsOp||'mute',target:action.obsTarget||'',num:action.obsOp==='volume'?Number(action.text)||0:0,secs:action.obsDuration??0});setObsTest(String(done))}catch(e){setObsTest('Falhou: '+friendlyMessage(e))}finally{setBusy(false)}}}><Play size={15}/>Testar no OBS</button></div>
+  {obsTest&&<p className="help">{obsTest}</p>}
+  <p className="help">Executa no OBS desta máquina, sem nuvem. Temporário com o mesmo alvo soma o tempo; alvo ocupado por outro efeito é recusado no Histórico.</p>
+  </>}</Section>
  <Section title="Comportamento">
  <Field label="Executar só se a mensagem contiver">
  <input value={action.condition} onChange={e=>update({...action,condition:e.target.value})}/>

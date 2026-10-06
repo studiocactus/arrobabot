@@ -2,7 +2,17 @@
 
 ## Visão geral
 
-O BotLive expõe um WebSocket em 127.0.0.1, somente neste computador. Ele serve para receber eventos de ferramentas externas e emitir atividade para overlays.
+O BotLive expõe um WebSocket em 127.0.0.1, somente neste computador. Ele serve para receber eventos de ferramentas externas e emitir atividade para overlays. No outro sentido, o BotLive também fala com o OBS Studio desta máquina pelo WebSocket do OBS (ação **Ação no OBS** e tela **OBS Studio**).
+
+## Controlar o OBS pelo BotLive
+
+Na tela **OBS Studio**: ative a integração, confira endereço (padrão `127.0.0.1`) e porta (padrão `4455`) e salve a senha se o OBS pedir (fica no cofre, nunca em log). **Testar conexão** mostra versão do OBS, versão do WebSocket e cena atual, além das listas de cenas, entradas e fontes.
+
+No OBS, ative em Ferramentas → WebSocket do OBS. A porta 4455 nunca é exposta à internet: tudo acontece nesta máquina.
+
+Nas automações, a ação **Ação no OBS** oferece mutar/desmutar/alternar entrada, volume, mostrar/esconder/alternar fonte e trocar de cena, com alvos em dropdown vindos do próprio OBS. Duração em segundos torna o efeito temporário e restaura o estado anterior no fim (se já estava mutado, continua mutado). Alvo ocupado por outro efeito é recusado no Histórico; o botão **Testar no OBS** executa na hora.
+
+Dicas de uso: use nomes estáveis nas fontes; temporário curto (5–15 s) para zoeiras de resgate; intervalo no gatilho para não empilhar efeitos; confira o Histórico (tipo `obs`) a cada teste.
 
 Abra **Configurações → API local & overlays** para consultar porta e chave. A porta padrão é 9876. Alterar a porta exige reiniciar o app. A chave muda a cada abertura.
 
