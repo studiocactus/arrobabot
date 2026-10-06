@@ -227,7 +227,7 @@ pub async fn process(rt:Arc<Runtime>,e:Event){
  let mut any_ok=false;
  for f in ready {
   let answers=publisher.as_ref().is_none_or(|id|id==&f.id);
-  if execute_flow(rt,&p,&e,&f,answers,&history,counts.as_ref(),false).await{any_ok=true;}
+  if execute_flow(&rt,&p,&e,&f,answers,&history,counts.as_ref(),false).await{any_ok=true;}
  }
 
  // Resgate cumprido só quando ao menos uma automação terminou tudo: sem
