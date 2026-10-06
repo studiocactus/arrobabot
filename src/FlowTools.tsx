@@ -32,9 +32,29 @@ export function TimerVariants({variants,onChange}:{variants:string[];onChange:(v
  {variants.length<10&&<button type="button" onClick={()=>onChange([...variants,''])}>+ Adicionar resposta</button>}
  </div>;
 }
+type TestStep={index:number;kind:string;status:string};
+type TestRun={id:string;flow:string;status:string;test:boolean;steps:TestStep[]};
+const STEP_ICON:Record<string,string>={SUCCESS:'✓',FAILED:'✕',CANCELLED:'■',SKIPPED:'–',RUNNING:'▶',WAITING:'⏳',PENDING:'○'};
+export function TestFlowDialog({flow,profileId,notify,onClose}:{flow:Flow;profileId:string;notify:Notify;onClose:()=>void}){
+ const [exec,setExec]=useState<string|null>(null);const [run,setRun]=useState<TestRun|null>(null);const [error,setError]=useState('');
+ const terminal=!!run&&(run.status==='COMPLETED'||run.status==='FAILED'||run.status==='CANCELLED');
+ useEffect(()=>{let stop=false;api<{executionId:string}>('flow.test',{flow}).then(r=>{if(!stop)setExec(r.executionId)}).catch(e=>{if(!stop)setError(friendlyMessage(e))});return ()=>{stop=true};
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+ },[]);
+ useEffect(()=>{if(!exec||terminal)return;const timer=setInterval(async()=>{try{const list=await api<TestRun[]>('flow.runs',{profileId});const found=list.find(r=>r.id===exec);if(found)setRun(found)}catch{}},500);return ()=>clearInterval(timer)},[exec,terminal,profileId]);
+ return <Modal title={'Testar '+flow.name} onClose={onClose}><div className="form-pad">
+  {error&&<p role="alert" className="inline-error">{error}</p>}
+  {!run&&!error&&<p className="help">Executando…</p>}
+  {run&&<><p className="help">Execução {run.id.slice(0,8)} · {run.status==='COMPLETED'?'CONCLUÍDA':run.status==='FAILED'?'FALHOU':run.status==='CANCELLED'?'CANCELADA':run.status==='WAITING'?'AGUARDANDO':'RODANDO'}</p>
+  {run.steps.map(st=><div className="list-row" key={st.index}><div><span>{st.index+1}. {st.kind}</span></div><strong>{STEP_ICON[st.status]||'?'} {st.status}</strong></div>)}
+  {!terminal&&<button disabled={!exec} onClick={async()=>{try{if(exec)await api('flow.cancel',{profileId,executionId:exec})}catch(e){notify(friendlyMessage(e))}}}>Cancelar execução</button>}
+  {terminal&&<button onClick={onClose}>Fechar</button>}</>}
+ </div></Modal>;
+}
 export function FlowDialog({flow,mode,profile,notify,onSaved,onClose}:{flow:Flow;mode:FlowMode;profile:Profile;notify:Notify;onSaved:()=>Promise<void>|void;onClose:()=>void}){
  const [editing,setEditing]=useState<Flow>(flow);
  const [forceVisual,setForceVisual]=useState(false);
+ const [testing,setTesting]=useState<Flow|null>(null);
  const kind=mode==='timer'?'timer':'comando';
  const editor=mode==='flow'||editing.actions.length>1||forceVisual||editing.actions.some(a=>!['chat','ai'].includes(a.kind));
  const intro=mode!=='flow'&&(forceVisual||editing.actions.length>1)?'Trocou para o editor visual: a ordem das ações é a das conexões entre os blocos, não pela posição deles na tela. Ao salvar, este '+kind+' mantém o mesmo nome, gatilho e ativação.':'';
@@ -46,7 +66,7 @@ export function FlowDialog({flow,mode,profile,notify,onSaved,onClose}:{flow:Flow
   onClose();
  }
  return <Modal wide={editor} title={title} onClose={onClose}>
- {editor?<FlowEditor flow={editing} platform={profile.platform} ai={profile.ai} onSave={save} intro={intro}/>:<form className="form-pad" onSubmit={e=>{e.preventDefault();save(editing).catch(err=>notify(friendlyMessage(err)))}}>
+ {editor?<FlowEditor flow={editing} platform={profile.platform} ai={profile.ai} onSave={save} onTest={f=>setTesting(f)} intro={intro}/>:<form className="form-pad" onSubmit={e=>{e.preventDefault();save(editing).catch(err=>notify(friendlyMessage(err)))}}>
   <div className="form-grid">
    <Field label="Nome"><input required value={editing.name} onChange={e=>setEditing({...editing,name:e.target.value})}/></Field>
    {mode!=='timer'&&<Field label="Comando" hint="Variações com vírgula valem aqui: !whislist, !whishlist — quem erra o comando também dispara."><input required pattern="!\S+(\s*,\s*!\S+)*" title="Comece com ! e separe variações com vírgula, sem espaços dentro de cada um." value={editing.trigger.pattern} onChange={e=>setEditing({...editing,trigger:{...editing.trigger,pattern:e.target.value}})}/></Field>}
@@ -72,7 +92,8 @@ export function FlowDialog({flow,mode,profile,notify,onSaved,onClose}:{flow:Flow
    <Field label="Intervalo entre usos (minutos)"><input type="number" min="0" max="1440" step="any" value={secondsToMinutes(editing.trigger.cooldown)} onChange={e=>setEditing({...editing,trigger:{...editing.trigger,cooldown:minutesToSeconds(Number(e.target.value)||0)}})}/></Field>
    <Field label="Intervalo por pessoa (minutos)"><input type="number" min="0" max="1440" step="any" value={secondsToMinutes(editing.trigger.userCooldown)} onChange={e=>setEditing({...editing,trigger:{...editing.trigger,userCooldown:minutesToSeconds(Number(e.target.value)||0)}})}/></Field>
   </div>}
-  <footer className="form-footer"><span className="help">{mode==='timer'?'Ao pausar, desconectar ou editar, o intervalo começa novamente.':'Vá para o editor visual quando quiser conectar várias ações em sequência.'}</span><button type="button" onClick={()=>setForceVisual(true)}><Workflow size={15}/>Abrir no editor visual</button><button className="primary"><Save size={16}/>{mode==='timer'?'Salvar timer':'Salvar comando'}</button></footer>
+  <footer className="form-footer"><span className="help">{mode==='timer'?'Ao pausar, desconectar ou editar, o intervalo começa novamente.':'Vá para o editor visual quando quiser conectar várias ações em sequência.'}</span><button type="button" onClick={()=>setForceVisual(true)}><Workflow size={15}/>Abrir no editor visual</button><button type="button" onClick={()=>setTesting(editing)}><Play size={15}/>Testar fluxo</button><button className="primary"><Save size={16}/>{mode==='timer'?'Salvar timer':'Salvar comando'}</button></footer>
+  {testing&&<TestFlowDialog flow={testing} profileId={profile.id} notify={notify} onClose={()=>setTesting(null)}/>}
  </form>}
  </Modal>
 }

@@ -1,5 +1,32 @@
 # Histórico de atualizações
 
+# BotLive 0.1.69
+
+## O que mudou
+
+- Sequências no motor existente (sem segundo executor): cada etapa tem **Etapa ativa** (desligada pula com registro, sem erro), botões **Subir/Descer** e nova ação **Aguardar** (ms/s/min até 1 hora, assíncrona e cancelável, sem travar UI, Twitch, OBS ou outras automações).
+- Toda execução ganha identidade (`Execução abc12345` no início/fim do Histórico) com estados (rodando, aguardando, concluída, falhou, cancelada).
+- **Testar fluxo**: executa de verdade OBS, espera, overlay e variáveis locais, pulando envios e efeitos externos com aviso; progresso por etapa (✓/⏳) e **Cancelar** só daquela execução. Concorrência liberada, sem fila global.
+- Falha mantém o comportamento (para as seguintes); cancelamento no WAIT não cria restauração paralela (temporário do OBS segue o próprio ciclo).
+
+## Como usar
+
+- No bloco da ação: Etapa ativa, Subir/Descer; ação Aguardar com duração e unidade. Testar fluxo no rodapé do editor ou na barra do visual.
+- Dicas: waits de minutos pedem o botão Cancelar por perto; combine temporário do OBS (restaura estado) com WAIT (só pausa) sem misturar os conceitos.
+
+## Validação
+
+- `npm run check` (tsc), `npm test` (vitest), `npm run docs`, `npm run test:updates` (8/8) executados antes do push.
+- `cargo test` não executado localmente (toolchain Rust indisponível); inclui testes de ciclo de execução, poda, validação do wait, skip + espera ponta a ponta e reordenação; a CI compila e testa de verdade.
+- Teste visual do editor e do diálogo de teste ainda pendente.
+
+## Limitações
+
+- Sem fila global, limite por live e condições/loops (próximas releases).
+- No teste, envios e efeitos externos são pulados de propósito.
+
+---
+
 # BotLive 0.1.68
 
 ## O que mudou

@@ -65,6 +65,7 @@ fn timer_default()->u64{300}
 fn timer_category_default()->String{"personalizado".into()}
 fn timer_priority_default()->String{"normal".into()}
 fn timer_window_default()->u64{900}
+fn enabled_true()->bool{true}
 /// Categorias e prioridades aceitas pelos timers inteligentes.
 pub const TIMER_CATEGORIES:[&str;7]=["interacao","comunidade","divulgacao","monetizacao","informacao","bemestar","personalizado"];
 pub const TIMER_PRIORITIES:[&str;3]=["baixa","normal","alta"];
@@ -110,6 +111,8 @@ pub struct Action {
  /// Duração temporária em segundos (0 = permanente). Só mutar, volume,
  /// mostrar e esconder restauram o estado anterior.
  #[serde(default)] pub obs_duration:u64,
+ /// Etapa ligada ou pulada. Ausente em fluxos antigos vale ligada.
+ #[serde(default="enabled_true")] pub enabled:bool,
  /// Controles da resposta com IA. Vazio ou ausente herda o padrão do perfil.
  #[serde(default)] pub ai_anchor:String,
  #[serde(default)] pub ai_knowledge:String,
@@ -118,7 +121,7 @@ pub struct Action {
  #[serde(default)] pub ai_no_repeat:Option<bool>,
 }
 impl Default for Action {
- fn default()->Self { Self{kind:"chat".into(),text:String::new(),target:String::new(),value:0,condition:String::new(),punish:String::new(),tw_op:String::new(),obs_op:String::new(),obs_target:String::new(),obs_duration:0,ai_anchor:String::new(),ai_knowledge:String::new(),ai_length:String::new(),ai_style:String::new(),ai_no_repeat:None} }
+ fn default()->Self { Self{kind:"chat".into(),text:String::new(),target:String::new(),value:0,condition:String::new(),punish:String::new(),tw_op:String::new(),obs_op:String::new(),obs_target:String::new(),obs_duration:0,ai_anchor:String::new(),ai_knowledge:String::new(),ai_length:String::new(),ai_style:String::new(),ai_no_repeat:None,enabled:true} }
 }
 impl Action {
  pub fn anchor<'a>(&'a self,ai:&'a AiConfig)->&'a str { self.pick(&self.ai_anchor,&ai.anchor,"all") }
@@ -267,7 +270,8 @@ pub fn validate_flow(f:&Flow)->Result<(),String> {
  if !f.audio.is_empty()&&(f.audio.len()>64||f.audio.contains(char::is_whitespace)){return Err("Áudio inválido: escolha um som da biblioteca".into())}
  if !f.audio_volume.is_finite()||!(0.0..=1.0).contains(&f.audio_volume){return Err("Volume do áudio: escolha de 0% a 100%".into())}
  for a in &f.actions {
- if !["chat","ai","ai.generate","memory","webhook","discord","overlay","delay","script","points","tts","variable.set","variable.increment","variable.delete","punish","twitch","obs"].contains(&a.kind.as_str()) {return Err("Tipo de ação inválido".into())}
+ if !["chat","ai","ai.generate","memory","webhook","discord","overlay","delay","script","points","tts","variable.set","variable.increment","variable.delete","punish","twitch","obs","wait"].contains(&a.kind.as_str()) {return Err("Tipo de ação inválido".into())}
+ if a.kind=="wait"&&!(1..=3600000).contains(&a.value){return Err("Espera de 1 milissegundo a 1 hora".into())}
  if a.kind=="obs" {
   if !crate::obs::OPS.contains(&a.obs_op.as_str()){return Err("Ação do OBS: escolha uma operação válida".into())}
   if a.obs_target.trim().is_empty()||a.obs_target.chars().count()>200{return Err("Ação do OBS: escolha o alvo".into())}
@@ -429,6 +433,17 @@ pub fn validate_flow(f:&Flow)->Result<(),String> {
   f.actions[0].obs_duration=0;assert!(validate_flow(&f).is_ok());
   f.actions[0].obs_op="volume".into();f.actions[0].text="alto".into();assert!(validate_flow(&f).is_err());
   f.actions[0].text="-6.5".into();assert!(validate_flow(&f).is_ok());
+ }
+ #[test] fn wait_steps_validate_range_and_default_on() {
+  let a=Action{kind:"wait".into(),value:3000,..Default::default()};
+  assert!(a.enabled,"etapa nasce ligada");
+  let mut f=Flow{counter:false,timer_seconds:300,timer_category:"personalizado".into(),timer_priority:"normal".into(),timer_variants:vec![],timer_min_messages:0,timer_window_secs:900,timer_max_session:0,timer_start_delay_secs:0,audio:String::new(),audio_volume:1.0,send_type:"chat".into(),send_color:"primary".into(),reply_to:false,id:uuid::Uuid::new_v4().to_string(),profile_id:uuid::Uuid::new_v4().to_string(),name:"W".into(),enabled:true,trigger:Trigger{kind:"command".into(),pattern:"!w".into(),permission:"everyone".into(),cooldown:0,user_cooldown:0},actions:vec![a],layout:Value::Null};
+  assert!(validate_flow(&f).is_ok());
+  f.actions[0].value=0;assert!(validate_flow(&f).is_err());
+  f.actions[0].value=3600001;assert!(validate_flow(&f).is_err());
+  f.actions[0].value=300000;assert!(validate_flow(&f).is_ok(),"5 minutos cabem");
+  let old:Action=serde_json::from_value(serde_json::json!({"kind":"chat","text":"oi"})).unwrap();
+  assert!(old.enabled,"fluxo antigo continua ligado");
  }
  #[test] fn command_variations_and_punish_rules_are_validated() {
   let mut f=Flow{counter:false,timer_seconds:300,timer_category:"personalizado".into(),timer_priority:"normal".into(),timer_variants:vec![],timer_min_messages:0,timer_window_secs:900,timer_max_session:0,timer_start_delay_secs:0,audio:String::new(),audio_volume:1.0,send_type:"chat".into(),send_color:"primary".into(),reply_to:false,id:uuid::Uuid::new_v4().to_string(),profile_id:uuid::Uuid::new_v4().to_string(),name:"Lista".into(),enabled:true,trigger:Trigger{kind:"command".into(),pattern:"!whislist, !whishlist".into(),permission:"everyone".into(),cooldown:0,user_cooldown:0},actions:vec![Action{kind:"chat".into(),text:"Pronto".into(),target:String::new(),value:0,condition:String::new(),..Default::default()}],layout:Value::Null};

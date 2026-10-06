@@ -441,6 +441,24 @@ async fn random_viewer_draws_fresh_on_every_occurrence(){
  assert_eq!(seen.len(),2,"um único Context sorteou 120 vezes sem variar o nome");
 }
 #[tokio::test]
+async fn disabled_steps_skip_and_wait_runs_without_blocking(){
+ let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();let p=profile("Sequência");rt.db.save_profile(&p).unwrap();
+ let mut f=flow(&p);f.name="Flash".into();f.trigger.pattern="!flash".into();
+ let mut off=Action{kind:"overlay".into(),text:"nunca".into(),target:String::new(),value:0,condition:String::new(),..Default::default()};
+ off.enabled=false;
+ let wait=Action{kind:"wait".into(),text:String::new(),target:String::new(),value:5,condition:String::new(),..Default::default()};
+ let go=Action{kind:"overlay".into(),text:"fim".into(),target:String::new(),value:0,condition:String::new(),..Default::default()};
+ f.actions=vec![off,wait,go];rt.db.save_flow(&f).unwrap();
+ let mut rx=rt.broadcast.subscribe();
+ engine::process(rt.clone(),event(&p,"!flash",false)).await;
+ let texts:Vec<String>=std::iter::from_fn(||rx.try_recv().ok()).filter(|v|v["type"]=="overlay").map(|v|v["payload"]["text"].as_str().unwrap_or("").into()).collect();
+ assert_eq!(texts,vec!["fim"],"só a etapa ligada entrega, depois da espera");
+ let logs=rt.db.logs(&p.id).unwrap();
+ assert!(logs.iter().any(|l|l.message.contains("pulada")),"etapa desligada registra SKIPPED");
+ assert!(logs.iter().any(|l|l.message.contains("COMPLETED")),"execução concluída com identidade");
+ assert!(rt.runs.list(&p.id).iter().any(|r|r.flow_id==f.id&&r.status=="COMPLETED"));
+}
+#[tokio::test]
 async fn only_one_automation_publishes_when_several_match(){
  let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();let p=profile("Uma resposta");rt.db.save_profile(&p).unwrap();
  let mut comando=flow(&p);comando.name="Comando".into();comando.actions=vec![Action{kind:"overlay".into(),text:"efeito paralelo".into(),target:String::new(),value:0,condition:String::new(),..Default::default()},Action{kind:"chat".into(),text:"resposta do comando".into(),target:String::new(),value:0,condition:String::new(),..Default::default()}];

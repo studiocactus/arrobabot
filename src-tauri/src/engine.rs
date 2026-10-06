@@ -18,6 +18,7 @@ pub struct Runtime {
  pub live:crate::live_state::LiveStates,
  pub listen:crate::listen::Sessions,
  pub chat_extras:Mutex<crate::chat_extras::State>,
+ pub runs:crate::runs::Runs,
  pub obs:crate::obs::Locks,
  pub seen:Mutex<HashMap<String,Instant>>,
  pub seen_chatters:Mutex<HashMap<String,(String,Instant)>>,
@@ -31,7 +32,7 @@ impl Runtime {
  let (tx,rx)=mpsc::channel(512);let (broadcast,_)=broadcast::channel(512);
  let http=reqwest::Client::builder().timeout(Duration::from_secs(30)).redirect(reqwest::redirect::Policy::none()).build().map_err(|e|e.to_string())?;
  let actor=if db.get("accessEnabled")==true{"locked"}else{"owner"}.to_owned();
- let rt=Arc::new(Self{actor:Mutex::new(actor),db,base,http,tx,broadcast,app:Mutex::new(None),connections:Mutex::new(HashMap::new()),statuses:Mutex::new(HashMap::new()),discord_tasks:Mutex::new(HashMap::new()),discord_status:Mutex::new(HashMap::new()),discord_cache:Mutex::new(HashMap::new()),timer_pending:Mutex::new(std::collections::HashSet::new()),cooldowns:Mutex::new(HashMap::new()),conversation:Mutex::new(crate::conversation::History::default()),live:crate::live_state::LiveStates::default(),listen:crate::listen::Sessions::default(),chat_extras:Mutex::new(crate::chat_extras::State::default()),obs:crate::obs::Locks::default(),seen:Mutex::new(HashMap::new()),seen_chatters:Mutex::new(HashMap::new()),module_lock:Mutex::new(()),vault_lock:Mutex::new(()),send_locks:Mutex::new(HashMap::new()),api_token:format!("{}{}",uuid::Uuid::new_v4().simple(),uuid::Uuid::new_v4().simple()),api_port:Mutex::new(0)});
+ let rt=Arc::new(Self{actor:Mutex::new(actor),db,base,http,tx,broadcast,app:Mutex::new(None),connections:Mutex::new(HashMap::new()),statuses:Mutex::new(HashMap::new()),discord_tasks:Mutex::new(HashMap::new()),discord_status:Mutex::new(HashMap::new()),discord_cache:Mutex::new(HashMap::new()),timer_pending:Mutex::new(std::collections::HashSet::new()),cooldowns:Mutex::new(HashMap::new()),conversation:Mutex::new(crate::conversation::History::default()),live:crate::live_state::LiveStates::default(),listen:crate::listen::Sessions::default(),chat_extras:Mutex::new(crate::chat_extras::State::default()),runs:crate::runs::Runs::default(),obs:crate::obs::Locks::default(),seen:Mutex::new(HashMap::new()),seen_chatters:Mutex::new(HashMap::new()),module_lock:Mutex::new(()),vault_lock:Mutex::new(()),send_locks:Mutex::new(HashMap::new()),api_token:format!("{}{}",uuid::Uuid::new_v4().simple(),uuid::Uuid::new_v4().simple()),api_port:Mutex::new(0)});
  tokio::spawn(worker(rt.clone(),rx));Ok(rt)
  }
  pub fn emit(&self,kind:&str,payload:Value){
@@ -225,28 +226,46 @@ pub async fn process(rt:Arc<Runtime>,e:Event){
  let counts=if !ready.is_empty()&&matches!(e.kind.as_str(),"follow"|"subscription"|"resub"|"gift")&&!e.simulated{Some(crate::twitch_ops::channel_counts(&rt,&p).await)}else{None};
  let mut any_ok=false;
  for f in ready {
-  let mut completed=true;
   let answers=publisher.as_ref().is_none_or(|id|id==&f.id);
+  if execute_flow(rt,&p,&e,&f,answers,&history,counts.as_ref(),false).await{any_ok=true;}
+ }
+ /// Executa um fluxo com identidade própria: mesmo caminho para eventos reais e testes.
+ /// Devolve true quando todas as ações terminaram (base do resgate cumprido).
+ pub async fn execute_flow(rt:&Arc<Runtime>,p:&Profile,e:&Event,f:&Flow,answers:bool,history:&[Value],counts:Option<&(Option<i64>,Option<i64>)>,test:bool)->bool{
+  let kinds=f.actions.iter().map(|a|a.kind.clone()).collect::<Vec<_>>();
+  let exec=rt.runs.start(&p.id,&f.id,&f.name,&kinds,test);
+  let short=rt.runs.short_of(&exec);
+  rt.log(&p.id,"run",&format!("Execução {short} iniciada ({})",f.name),"info");
+  let testing=test||e.data["botliveTest"]==true;
+  let mut ev=e.clone();ev.data["botliveTest"]=json!(testing);ev.data["execId"]=json!(exec.clone());
+  let e=&ev;
+  let mut completed=true;
   rt.log(&p.id,"flow",&format!("Iniciando {}",f.name),"info");
   if !answers&&replies(&f){rt.log(&p.id,"action",&format!("{} · Outra automação já respondeu esta mensagem; os demais efeitos continuam",f.name),"info")}
- let count=if f.counter{match if e.simulated{crate::command_counter::get(&rt.db,&p.id,&f.id).and_then(|n|n.checked_add(1).ok_or("Contador excedeu o limite".into()))}else{crate::command_counter::change(&rt.db,&p.id,&f.id,None)}{Ok(n)=>Some(n),Err(err)=>{rt.log(&p.id,"counter",&err,"error");continue}}}else{None};
- if let Some(n)=count{if !e.simulated{rt.emit("command-counter",json!({"profileId":p.id,"id":f.id,"value":n}));}}
- let mut variables=match crate::variables::Context::new(&rt.db,&p,&e,Some(&f)){Ok(v)=>v,Err(err)=>{rt.log(&p.id,"variables",&err,"error");continue}};
- if let Some(n)=count{variables.set_command_count(n);}
- if let Some((followers,subs))=counts{variables.set("followerCount",followers.map_or(serde_json::Value::String(String::new()),|n|serde_json::json!(n)));variables.set("subCount",subs.map_or(serde_json::Value::String(String::new()),|n|serde_json::json!(n)));}
- crate::chat_extras::play_flow(&rt,&p,&f,&e);
- for a in &f.actions {
-  if !answers&&matches!(a.kind.as_str(),"chat"|"ai"|"ai.generate"){continue}
- if e.kind=="timer"&&!e.simulated&&!crate::timers::event_active(&rt,&e){break}
- if !a.condition.is_empty()&&!e.message.to_lowercase().contains(&a.condition.to_lowercase()){continue}
- let result=tokio::time::timeout(Duration::from_secs(65),action(&rt,&p,&e,a,&mut variables,&history,&f)).await;
- match result{
- Ok(Ok(()))=>rt.log(&p.id,"action",&format!("{} · {}",f.name,a.kind),"success"),
- Ok(Err(err))=>{rt.log(&p.id,"action",&format!("{} · {err}",f.name),"error");completed=false;break},
- Err(_)=>{rt.log(&p.id,"action","A ação excedeu o tempo permitido","error");completed=false;break}
- }
- }
- if completed{any_ok=true;}
+  let count=if f.counter{match if e.simulated||testing{crate::command_counter::get(&rt.db,&p.id,&f.id).and_then(|n|n.checked_add(1).ok_or("Contador excedeu o limite".into()))}else{crate::command_counter::change(&rt.db,&p.id,&f.id,None)}{Ok(n)=>Some(n),Err(err)=>{rt.log(&p.id,"counter",&err,"error");rt.runs.finish(&exec,"FAILED");return false}}}else{None};
+  if let Some(n)=count{if !e.simulated&&!testing{rt.emit("command-counter",json!({"profileId":p.id,"id":f.id,"value":n}));}}
+  let mut variables=match crate::variables::Context::new(&rt.db,&p,&e,Some(&f)){Ok(v)=>v,Err(err)=>{rt.log(&p.id,"variables",&err,"error");rt.runs.finish(&exec,"FAILED");return false}};
+  if let Some(n)=count{variables.set_command_count(n);}
+  if let Some((followers,subs))=counts{variables.set("followerCount",followers.map_or(serde_json::Value::String(String::new()),|n|serde_json::json!(n)));variables.set("subCount",subs.map_or(serde_json::Value::String(String::new()),|n|serde_json::json!(n)));}
+  if !testing{crate::chat_extras::play_flow(&rt,&p,&f,&e);}
+  for (i,a) in f.actions.iter().enumerate(){
+   if rt.runs.cancelled(&exec){rt.log(&p.id,"run",&format!("Execução {short} cancelada"),"info");rt.runs.finish(&exec,"CANCELLED");return false;}
+   if !a.enabled{rt.log(&p.id,"action",&format!("{} · etapa {} pulada",f.name,i+1),"info");rt.runs.step(&exec,i,"SKIPPED");continue}
+   if !answers&&matches!(a.kind.as_str(),"chat"|"ai"|"ai.generate"){continue}
+   if e.kind=="timer"&&!e.simulated&&!crate::timers::event_active(&rt,&e){break}
+   if !a.condition.is_empty()&&!e.message.to_lowercase().contains(&a.condition.to_lowercase()){continue}
+   rt.runs.step(&exec,i,"RUNNING");
+   let result=if a.kind=="wait"{Ok(action(&rt,&p,&e,a,&mut variables,&history,&f,&exec,i).await)}else{tokio::time::timeout(Duration::from_secs(65),action(&rt,&p,&e,a,&mut variables,&history,&f,&exec,i)).await};
+   match result{
+   Ok(Ok(()))=>{rt.log(&p.id,"action",&format!("{} · {}",f.name,a.kind),"success");rt.runs.step(&exec,i,"SUCCESS");}
+   Ok(Err(err))=>{rt.log(&p.id,"action",&format!("{} · {err}",f.name),"error");completed=false;if err=="Execução cancelada"{rt.runs.finish(&exec,"CANCELLED");rt.log(&p.id,"run",&format!("Execução {short} cancelada"),"info");return false;}break},
+   Err(_)=>{rt.log(&p.id,"action","A ação excedeu o tempo permitido","error");completed=false;break}
+   }
+  }
+  let status=if completed{"COMPLETED"}else{"FAILED"};
+  rt.runs.finish(&exec,status);
+  rt.log(&p.id,"run",&format!("Execução {short} {status}"),if completed{"info"}else{"error"});
+  completed
  }
  // Resgate cumprido só quando ao menos uma automação terminou tudo: sem
  // permissão nova, o erro pede a reautorização em vez de falhar calado.
@@ -275,9 +294,11 @@ fn responder(flows:&[Flow])->Option<String>{
  }
  best.map(|(_,i)|flows[i].id.clone())
 }
-async fn action(rt:&Arc<Runtime>,p:&Profile,e:&Event,a:&Action,variables:&mut crate::variables::Context,history:&[Value],f:&Flow)->Result<(),String>{
+async fn action(rt:&Arc<Runtime>,p:&Profile,e:&Event,a:&Action,variables:&mut crate::variables::Context,history:&[Value],f:&Flow,exec:&str,step:usize)->Result<(),String>{
+ let testing=e.data["botliveTest"]==true;
+ if testing&&matches!(a.kind.as_str(),"chat"|"ai"|"ai.generate"|"discord"|"webhook"|"memory"|"points"|"punish"|"twitch"|"tts"){rt.log(&p.id,"action",&format!("{} · teste pulou {}",f.name,a.kind),"info");return Ok(())}
  let text=if a.kind=="variable.delete"{String::new()}else if a.kind=="script"{a.text.clone()}else{variables.render(&a.text)?};
- if a.kind.starts_with("variable."){variables.change(&rt.db,p,e,&a.target,a.kind.trim_start_matches("variable."),crate::variables::typed(&text))?;return Ok(())}
+ if a.kind.starts_with("variable."){if testing{let (scope,_)=crate::variables::target(&a.target).map_err(|e|e.to_string())?;if scope!="local"{rt.log(&p.id,"action",&format!("{} · teste pulou {}",f.name,a.kind),"info");return Ok(())}}variables.change(&rt.db,p,e,&a.target,a.kind.trim_start_matches("variable."),crate::variables::typed(&text))?;return Ok(())}
  if blocked(&text,p)&&matches!(a.kind.as_str(),"chat"|"tts"|"overlay"|"discord"){return Err("Conteúdo bloqueado".into())}
  // Simulations never perform external effects or change persistent module/vault state.
  if e.simulated && a.kind!="chat" {if matches!(a.kind.as_str(),"ai"|"ai.generate"){crate::ai::save_response(variables,rt,p,e,a,"[Prévia: resposta contextual da IA]",false)?;}rt.log(&p.id,"simulation",&format!("Executaria {}: {}",a.kind,text.chars().take(200).collect::<String>()),"success");return Ok(())}
@@ -306,6 +327,7 @@ async fn action(rt:&Arc<Runtime>,p:&Profile,e:&Event,a:&Action,variables:&mut cr
  },
  "memory"=>{let _lock=rt.vault_lock.lock().unwrap();rt.db.profile(&p.id)?;vault::write(&rt.base,&p.id,&variables.render(&a.target)?,&text,true)},
  "delay"=>{tokio::time::sleep(Duration::from_millis(a.value.clamp(0,30000) as u64)).await;Ok(())},
+ "wait"=>{let total=a.value.clamp(1,3600000) as u64;rt.runs.step(exec,step,"WAITING");let mut left=total;while left>0{if rt.runs.cancelled(exec){rt.runs.step(exec,step,"CANCELLED");return Err("Execução cancelada".into())}let nap=left.min(250);tokio::time::sleep(Duration::from_millis(nap)).await;left-=nap;}rt.runs.step(exec,step,"SUCCESS");Ok(())},
  "overlay"=>{rt.emit("overlay",json!({"profileId":p.id,"text":text}));Ok(())},
  "tts"=>{if p.modules["tts"]!=true{return Err("Ative o módulo Texto para voz".into())}let config=rt.db.module(&p.id,"tts");rt.emit("tts",json!({"profileId":p.id,"text":text.chars().take(config["limit"].as_u64().unwrap_or(300).clamp(1,500) as usize).collect::<String>(),"voice":config["voice"],"rate":config["rate"]}));Ok(())},
  "points"=>{if p.modules["points"]!=true{return Err("Ative o módulo de pontos".into())}modules::change_points(rt,&p.id,&e.user_id,a.value)?;Ok(())},

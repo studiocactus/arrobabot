@@ -4,8 +4,8 @@ import {ReactFlow,Background,Controls,MiniMap,addEdge,useNodesState,useEdgesStat
 import '@xyflow/react/dist/style.css';
 import {Plus,Save,Trash2,Zap,Play} from 'lucide-react';
 import {actions,triggers,newAction,punishModes,punishTargets,twOps,minutesToSeconds,secondsToMinutes,type Flow,type Action,type AIConfig} from './types';
-import {orderedActions} from './flow';
-import {Field} from './components';
+import {orderedActions,moveAction} from './flow';
+import {Field,Toggle} from './components';
 import {VariableTarget} from './Variables';
 import MessageEditor from './MessageEditor';
 import {SendPicker,AudioPicker} from './FlowOptions';
@@ -34,7 +34,15 @@ function RewardPicker({profileId,value,onChange}:{profileId:string;value:string;
  return <><Field label="Recompensa" hint="Identidade por ID: renomear na Twitch não quebra. Vazio vale qualquer resgate."><select value={value} onChange={e=>onChange(e.target.value)}><option value="">Qualquer resgate</option>{rewards.map(r=><option key={r.id} value={r.id}>{r.title} · {r.cost} pts{r.enabled===false?' (desativada)':''}</option>)}{value&&!found&&<option value={value}>{value}</option>}</select></Field>{error&&<p className="help">{error}</p>}</>;
 }
 function Section({title,open=false,children}:{title:string;open?:boolean;children:ReactNode}){return <details open={open}><summary>{title}</summary>{children}</details>}
-export default function FlowEditor({flow,platform='twitch',ai,onSave,intro}:{flow:Flow;platform?:string;ai?:AIConfig;onSave:(f:Flow)=>Promise<void>;intro?:string}){
+function WaitEditor({value,onChange}:{value:number;onChange:(ms:number)=>void}){
+ const units=[['ms',1,'milissegundos'],['s',1000,'segundos'],['min',60000,'minutos']] as const;
+ const initial=(units.find(([,f])=>value%f===0&&value/f>=1)||units[0]);
+ const [unit,setUnit]=useState<string>(initial[0]);
+ const factor=units.find(([u])=>u===unit)?.[1]||1;
+ const shown=Math.round((value/factor)*100)/100;
+ return <div className="row end"><Field label="Duração"><input type="number" min={0} step="any" value={shown} onChange={e=>onChange(Math.max(0,Math.round((Number(e.target.value)||0)*factor)))}/></Field><Field label="Unidade"><select value={unit} onChange={e=>{const f=units.find(([u])=>u===e.target.value)?.[1]||1;setUnit(e.target.value);onChange(Math.max(0,Math.round((value/f)*f)))}}>{units.map(([u,,n])=><option key={u} value={u}>{n}</option>)}</select></Field></div>;
+}
+export default function FlowEditor({flow,platform='twitch',ai,onSave,onTest,intro}:{flow:Flow;platform?:string;ai?:AIConfig;onSave:(f:Flow)=>Promise<void>;onTest?:(f:Flow)=>void;intro?:string}){
  const [counter,setCounter]=useState(!!flow.counter);const [timerSeconds,setTimerSeconds]=useState(flow.timerSeconds||300);
  const [sendType,setSendType]=useState(flow.sendType||'chat');const [sendColor,setSendColor]=useState(flow.sendColor||'primary');const [replyTo,setReplyTo]=useState(!!flow.replyTo);
  const [audio,setAudio]=useState(flow.audio||'');const [audioVolume,setAudioVolume]=useState(flow.audioVolume??1);const [obsTest,setObsTest]=useState('');
@@ -47,17 +55,19 @@ export default function FlowEditor({flow,platform='twitch',ai,onSave,intro}:{flo
  const node=nodes.find(n=>n.id===selected);const action=node?.data.action;
  const connect=useCallback((c:Connection)=>setEdges(e=>addEdge({...c,animated:true},e)),[setEdges]);
  function update(a:Action){setNodes(ns=>ns.map(n=>n.id===selected?{...n,data:{label:actions[a.kind],action:a}}:n))}
+function move(dir:-1|1){try{const ns=nodes.map(n=>({id:n.id,position:{x:n.position.x,y:n.position.y},data:{action:n.data.action,label:String(n.data.label||'')}}));const es=edges.map(e=>({source:e.source,target:e.target}));const r=moveAction(ns,es,selected,dir);setNodes(cur=>{const pos:Record<string,{x:number;y:number}>={};r.nodes.forEach(n=>{pos[n.id]=n.position});return cur.map(n=>pos[n.id]?{...n,position:pos[n.id]}:n)});setEdges(r.edges.map((e,i)=>({id:'e'+i,source:e.source,target:e.target,animated:true})))}catch(e){setError(friendlyError(e))}}
  const keepText=(kind:string)=>["command","contains","voice","mention","redemption"].includes(kind);
 function switchKind(current:Action,next:string){const base:Action={...current,kind:next};
   if(next==='ai.generate'&&!base.target.startsWith('local.'))base.target='local.aiResponse';
   if(next==='punish'){if(!['sender','first','random'].includes(base.target))base.target='sender';if(!base.punish)base.punish='timeout';if(base.value<1)base.value=60}
   if(next==='twitch'){if(!base.twOp)base.twOp='game';if(base.value<1)base.value=60}
+  if(next==='wait'&&!(base.value>=1))base.value=3000
   if(next==='obs'){if(!base.obsOp)base.obsOp='mute';if(!base.obsTarget)base.obsTarget=''}
   update(base)}
  async function save(){try{setBusy(true);setError(null);const ordered=orderedActions(nodes,edges);await onSave({...flow,name,trigger:trigger.kind==='timer'?{...trigger,permission:'everyone',cooldown:0,userCooldown:0,pattern:''}:keepText(trigger.kind)?trigger:{...trigger,pattern:''},counter:trigger.kind==='command'&&counter,timerSeconds,sendType,sendColor,replyTo,audio,audioVolume,actions:ordered,layout:{nodes,edges}})}catch(e){setError(friendlyError(e))}finally{setBusy(false)}}
  return <div className="flow-editor">
  {intro&&<p className="notice flow-intro">{intro}</p>}
- <div className="flow-toolbar"><input aria-label="Nome do fluxo" value={name} onChange={e=>setName(e.target.value)}/><button onClick={()=>{const id=crypto.randomUUID();setNodes(ns=>ns.concat({id,position:{x:300+ns.length*70,y:260},data:{label:actions.chat,action:newAction()}}));setSelected(id)}}><Plus size={16}/>Adicionar ação</button><button className="primary" disabled={busy} onClick={save}><Save size={16}/>Salvar fluxo</button></div>
+ <div className="flow-toolbar"><input aria-label="Nome do fluxo" value={name} onChange={e=>setName(e.target.value)}/>{onTest&&<button type="button" disabled={busy} onClick={()=>{try{onTest({...flow,name,trigger,counter:trigger.kind==='command'&&counter,timerSeconds,sendType,sendColor,replyTo,audio,audioVolume,actions:orderedActions(nodes,edges),layout:{nodes,edges}})}catch(e){setError(friendlyError(e))}}}><Play size={16}/>Testar fluxo</button>}<button onClick={()=>{const id=crypto.randomUUID();setNodes(ns=>ns.concat({id,position:{x:300+ns.length*70,y:260},data:{label:actions.chat,action:newAction()}}));setSelected(id)}}><Plus size={16}/>Adicionar ação</button><button className="primary" disabled={busy} onClick={save}><Save size={16}/>Salvar fluxo</button></div>
  {error&&<div role="alert" className="inline-error">{error.message}{error.detail&&<details><summary>Detalhes técnicos</summary><code>{error.detail}</code></details>}</div>}
  <div className="flow-workspace">
  <div className="canvas">
@@ -101,7 +111,11 @@ function switchKind(current:Action,next:string){const base:Action={...current,ki
  <Field label="Tipo de ação">
  <select value={action.kind} onChange={e=>switchKind(action,e.target.value)}>{Object.entries(actions).map(([k,n])=>
  <option key={k} value={k}>{n}</option>)}</select>
- </Field>{action.kind==='script'?<Field label="Script Rhai (retorna texto)">
+ </Field>
+ <div className="list-row"><div><strong>Etapa ativa</strong><small>Desligada pula sem erro.</small></div><Toggle label="Etapa ativa" checked={action.enabled!==false} onChange={v=>update({...action,enabled:v})}/></div>
+ {action.kind==='wait'&&<WaitEditor value={action.value||0} onChange={value=>update({...action,value})}/>}
+ <div className="row"><button type="button" onClick={()=>move(-1)}>Subir</button><button type="button" onClick={()=>move(1)}>Descer</button></div>
+ {action.kind==='script'?<Field label="Script Rhai (retorna texto)">
  <textarea rows={5} value={action.text} onChange={e=>update({...action,text:e.target.value})}/>
  </Field>:action.kind==='variable.delete'?<p className="help">Escolha o valor que será apagado.</p>:action.kind==='twitch'&&!['game','title','timeout','ban','warn','mention'].includes(action.twOp||'game')?<p className="help">Esta operação não usa texto: o alvo e a duração vêm da fala ou dos campos abaixo.</p>:<MessageEditor key={selected} profileId={flow.profileId} label={action.kind.startsWith('ai')?'Como a IA deve responder':action.kind==='variable.increment'?'Quanto somar':action.kind==='punish'?'Motivo (vai para a Twitch e para o Histórico)':action.kind==='twitch'?((action.twOp||'game')==='game'?'Nome do jogo fixo (vazio usa o que você falou)':(action.twOp||'game')==='title'?'Novo título fixo (vazio usa o que você falou, até 140 caracteres)':(action.twOp||'game')==='mention'?'Mensagem (o bot marca @alvo na frente)':'Motivo (vai para a Twitch e para o Histórico)'):'Mensagem / conteúdo'} value={action.text} onChange={text=>update({...action,text})} flow={{...flow,name,trigger,actions:(()=>{try{return orderedActions(nodes,edges)}catch{return []}})()}}/>}{action.kind.startsWith('ai')&&<details className="ai-help"><summary>Como a IA monta a resposta</summary><p className="help">A mensagem atual, até 12 falas recentes dos últimos 5 minutos e as memórias entram automaticamente. Defina o tom aqui. {action.kind==='ai.generate'?'Esta ação só guarda a resposta. Conecte Enviar mensagem e clique em + Resposta da IA.':'Esta ação já envia ao chat e guarda a resposta para os próximos blocos.'}</p></details>}{ai&&<AIActionOptions action={action} ai={ai} onChange={update}/>}{action.kind==='ai.generate'&&<Field label="Nome da resposta" hint="Disponível somente nesta execução; evita misturar respostas entre pessoas.">
  <input value={(action.target||'local.aiResponse').replace(/^local\./,'')} onChange={e=>update({...action,target:'local.'+e.target.value})}/>
