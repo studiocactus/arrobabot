@@ -245,6 +245,7 @@ pub async fn process(rt:Arc<Runtime>,e:Event){
  Ok(Err(err))=>{rt.log(&p.id,"action",&format!("{} · {err}",f.name),"error");completed=false;break},
  Err(_)=>{rt.log(&p.id,"action","A ação excedeu o tempo permitido","error");completed=false;break}
  }
+ }
  if completed{any_ok=true;}
  }
  // Resgate cumprido só quando ao menos uma automação terminou tudo: sem
@@ -253,7 +254,6 @@ pub async fn process(rt:Arc<Runtime>,e:Event){
   let (rt2,p2)=(rt.clone(),p.clone());
   let (reward,rid)=(e.data["reward"]["id"].as_str().unwrap_or("").to_owned(),e.id.clone());
   tokio::spawn(async move{if let Err(err)=crate::twitch_ops::fulfill_redemption(&rt2,&p2,&reward,&rid).await{rt2.log(&p2.id,"redemption",&err,"error");}else{rt2.log(&p2.id,"redemption","Resgate marcado como cumprido","success");}});
- }
  }
 }
 /// Ações que publicam a resposta no chat ou produzem o texto que a ação de chat envia.

@@ -332,7 +332,7 @@ pub async fn execute_action(rt: &Arc<Runtime>, p: &Profile, op: &str, target: &s
    }
    rt2.obs.0.lock().unwrap().remove(&key);
   });
-  Ok(format!("{done} por {secs}s"))
+  return Ok(format!("{done} por {secs}s"));
  }
  let mut conn = connect(rt, p).await?;
  let done = apply(&mut conn, op, target, num).await?;

@@ -420,7 +420,7 @@ pub fn validate_flow(f:&Flow)->Result<(),String> {
   t.pattern="!whislist, , !wishlist".into();m.message="!whislist".into();assert!(matches(&t,&m),"opção vazia no meio é ignorada");
  }
  #[test] fn obs_action_validates_op_target_and_temp() {
-  let mut a=Action{kind:"obs".into(),obs_op:"mute".into(),obs_target:"Mic".into(),..Default::default()};
+  let a=Action{kind:"obs".into(),obs_op:"mute".into(),obs_target:"Mic".into(),..Default::default()};
   let mut f=Flow{counter:false,timer_seconds:300,timer_category:"personalizado".into(),timer_priority:"normal".into(),timer_variants:vec![],timer_min_messages:0,timer_window_secs:900,timer_max_session:0,timer_start_delay_secs:0,audio:String::new(),audio_volume:1.0,send_type:"chat".into(),send_color:"primary".into(),reply_to:false,id:uuid::Uuid::new_v4().to_string(),profile_id:uuid::Uuid::new_v4().to_string(),name:"OBS".into(),enabled:true,trigger:Trigger{kind:"command".into(),pattern:"!x".into(),permission:"everyone".into(),cooldown:0,user_cooldown:0},actions:vec![a.clone()],layout:Value::Null};
   assert!(validate_flow(&f).is_ok());
   f.actions[0].obs_op="explodir".into();assert!(validate_flow(&f).is_err());
