@@ -50,6 +50,7 @@ export const variableCatalog:VariableChoice[]=[
  {key:'local.twitchGameId',label:'ID do jogo resolvido',group:'Twitch'},
  {key:'local.twitchTitle',label:'Título aplicado pela ação Twitch',group:'Twitch'},
  {key:'local.twitchTarget',label:'Alvo da ação Twitch',group:'Twitch',example:'maria'},
+ {key:'local.clipUrl',label:'Link do clipe criado',group:'Twitch',example:'https://clips.twitch.tv/... — vale nas ações seguintes'},
  {key:'local.punished',label:'Sorteado da punição',group:'Moderação',example:'ana — vale nas ações seguintes'},
 ];
 export const scopeNames:Record<string,string>={local:'Só nesta execução',global:'Salva no perfil',user:'Salva por pessoa',session:'Perfil, até fechar o app',sessionUser:'Pessoa, até fechar o app',data:'Dados do evento'};
@@ -86,6 +87,7 @@ export function missingLocals(text:string,actions:{kind:string;target:string;twO
    if(a.twOp==='game'){defined.add('local.twitchGame');defined.add('local.twitchGameId')}
    else if(a.twOp==='title'){defined.add('local.twitchTitle')}
    else if(['timeout','ban','unban','warn','vip','unvip','shoutout','mention'].includes(a.twOp||'')){defined.add('local.twitchTarget')}
+   else if(a.twOp==='clip'){defined.add('local.clipUrl')}
    else{defined.add('local.twitchGame');defined.add('local.twitchGameId');defined.add('local.twitchTitle');defined.add('local.twitchTarget')}
   }
   if(a.kind==='ai.generate'&&a.target.startsWith('local.'))defined.add(a.target);

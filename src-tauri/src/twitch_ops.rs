@@ -7,7 +7,7 @@ use crate::{engine::Runtime, model::*};
 use serde_json::{json, Value};
 use std::{sync::Arc, time::{Duration, Instant}};
 /// Operações aceitas pela ação "twitch" (campo tw_op).
-pub const OPS:&[&str]=&["game","title","timeout","ban","unban","warn","vip","unvip","slow","slowoff","followers","followersoff","subsonly","subsonlyoff","emoteonly","emoteonlyoff","shoutout","mention"];
+pub const OPS:&[&str]=&["game","title","timeout","ban","unban","warn","vip","unvip","slow","slowoff","followers","followersoff","subsonly","subsonlyoff","emoteonly","emoteonlyoff","shoutout","mention","clip"];
 /// Quem passou pelo chat fica aqui por 24 h para a fala livre achar nomes sem @.
 const SEEN_TTL:Duration=Duration::from_secs(86400);
 const SEEN_CAP:usize=2000;
@@ -58,6 +58,8 @@ pub async fn channel_counts(rt:&Arc<Runtime>,p:&Profile)->(Option<i64>,Option<i6
  }
  (total(followers).await,total(subs).await)
 }
+/// Link público de um clipe a partir do id devolvido pela Twitch.
+pub fn clip_url(id:&str)->String{format!("https://clips.twitch.tv/{id}")}
 /// Primeiro número da fala: "timeout 300" ou "slow 5".
 fn first_number(message:&str)->Option<i64>{message.split_whitespace().filter_map(|w|w.parse::<i64>().ok()).find(|n|*n>=0)}
 async fn user_id(rt:&Runtime,p:&Profile,login:&str)->Result<String,String>{crate::moderation::twitch_user_id(rt,p,login).await}
@@ -109,6 +111,7 @@ fn required_scopes(op:&str)->&'static [&'static str]{
   "warn"=>&["moderator:manage:warnings"],
   "vip"|"unvip"=>&["channel:manage:vips"],
   "slow"|"slowoff"|"followers"|"followersoff"|"subsonly"|"subsonlyoff"|"emoteonly"|"emoteonlyoff"=>&["moderator:manage:chat_settings"],
+  "clip"=>&["clips:edit"],
   _=>&[],
  }
 }
@@ -337,6 +340,19 @@ pub async fn run(rt:&Arc<Runtime>,p:&Profile,e:&Event,a:&Action,text:&str,trigge
    remember(&mut variables,rt,p,e,"local.twitchTarget",json!(login));
    Ok(format!("Resposta enviada para @{login}"))
   }
+  "clip"=>{
+   let res=rt.http.post("https://api.twitch.tv/helix/clips").query(&[("broadcaster_id",p.channel_id.as_str())]).header("Client-Id",&p.client_id).bearer_auth(&token).send().await.map_err(|_|"Não foi possível pedir o clipe à Twitch".to_string())?;
+   if !res.status().is_success(){
+    return Err(if res.status().as_u16()==404{"Só dá para clipar com a live ligada".into()}else{format!("Clipe recusado pela Twitch: HTTP {}. Confira a live e a autorização do bot.",res.status().as_u16())});
+   }
+   let v:Value=res.json().await.map_err(|_|"Resposta de clipe inválida".to_string())?;
+   let id=v["data"][0]["id"].as_str().unwrap_or("").to_owned();
+   if id.is_empty(){return Err("A Twitch não devolveu o clipe. Tente de novo em instantes.".into())}
+   let url=clip_url(&id);
+   remember(&mut variables,rt,p,e,"local.clipUrl",json!(url));
+   let done=format!("Clipe criado: {url}");
+   rt.log(&p.id,"twitch",&done,"success");Ok(done)
+  }
   _=>Err("Ação na Twitch: escolha uma operação válida".into())
  }
 }
@@ -352,7 +368,7 @@ pub async fn run(rt:&Arc<Runtime>,p:&Profile,e:&Event,a:&Action,text:&str,trigge
  }
  #[test] fn categoria_titulo_e_vip_usam_a_conta_do_canal(){
   for op in ["game","title","vip","unvip"]{assert!(uses_channel_account(op),"{op} mexe no canal")}
-  for op in ["timeout","ban","unban","warn","slow","slowoff","followers","shoutout","mention"]{assert!(!uses_channel_account(op),"{op} usa o bot")}
+  for op in ["timeout","ban","unban","warn","slow","slowoff","followers","shoutout","mention","clip"]{assert!(!uses_channel_account(op),"{op} usa o bot")}
  }
  #[test] fn cada_operacao_cobra_seu_escopo(){
   assert_eq!(required_scopes("game"),&["channel:manage:broadcast"]);
@@ -361,6 +377,7 @@ pub async fn run(rt:&Arc<Runtime>,p:&Profile,e:&Event,a:&Action,text:&str,trigge
   assert_eq!(required_scopes("warn"),&["moderator:manage:warnings"]);
   assert_eq!(required_scopes("vip"),&["channel:manage:vips"]);
   assert_eq!(required_scopes("slow"),&["moderator:manage:chat_settings"]);
+  assert_eq!(required_scopes("clip"),&["clips:edit"]);
   assert!(required_scopes("mention").is_empty());
   assert!(required_scopes("shoutout").is_empty());
  }
@@ -370,7 +387,9 @@ pub async fn run(rt:&Arc<Runtime>,p:&Profile,e:&Event,a:&Action,text:&str,trigge
   assert_eq!(builtin_command("!setgame"),Some(("game","")));
   assert_eq!(builtin_command("!oi"),None);
  }
- #[test] fn o_primeiro_numero_vira_duracao(){
+ #[test] fn o_link_do_clipe_usa_o_id_da_twitch(){
+  assert_eq!(clip_url("AbC123xYz"),"https://clips.twitch.tv/AbC123xYz");
+ }
   assert_eq!(first_number("timeout 300 por favor"),Some(300));
   assert_eq!(first_number("sem numero"),None);
  }

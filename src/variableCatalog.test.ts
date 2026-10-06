@@ -71,4 +71,9 @@ describe('aviso de variável local sem origem no fluxo',()=>{
   expect(missingLocals('{{local.punished}}',[chat,roleta])).toEqual([]);
   expect(missingLocals('{{local.punished}}',[chat])).toEqual(['local.punished']);
  });
+ it('ação Clipe define o link',()=>{
+  const clipe={kind:'twitch',target:'',twOp:'clip'};
+  expect(missingLocals('{{local.clipUrl}}',[chat,clipe])).toEqual([]);
+  expect(missingLocals('{{local.clipUrl}}',[chat])).toEqual(['local.clipUrl']);
+ });
 });

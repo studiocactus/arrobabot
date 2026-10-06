@@ -375,7 +375,8 @@ pub fn validate_flow(f:&Flow)->Result<(),String> {
   f.actions[0].punish="timeout".into();f.actions[0].value=0;assert_eq!(validate_flow(&f).unwrap_err(),"Punição: duração de 1 segundo a 14 dias");
   f.actions[0].value=1209601;assert!(validate_flow(&f).is_err());
   f.actions[0].value=1209600;assert!(validate_flow(&f).is_ok(),"14 dias cabe");
-  f.actions[0].target="qualquer".into();assert_eq!(validate_flow(&f).unwrap_err(),"Punição: escolha quem leva a ação, quem enviou ou o primeiro argumento");
+  f.actions[0].target="qualquer".into();assert_eq!(validate_flow(&f).unwrap_err(),"Punição: escolha quem leva a ação, quem enviou, o primeiro argumento ou um sorteado");
+  f.actions[0].target="random".into();assert!(validate_flow(&f).is_ok(),"sorteado no chat vale");
   f.actions[0].target="first".into();f.actions[0].punish="ban".into();f.actions[0].value=0;
   assert!(validate_flow(&f).is_ok(),"ban e aviso não usam duração");
   assert_eq!(PUNISH_MODES,["timeout","ban","warn"]);

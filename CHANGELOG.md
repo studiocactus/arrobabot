@@ -1,5 +1,31 @@
 # Histórico de atualizações
 
+# BotLive 0.1.62
+
+## O que mudou
+
+- `!clipe` / `!clip`: nova operação **Criar clipe da live** na ação Twitch. Cria o clipe pela conta do bot e guarda o link em `{{local.clipUrl}}` para mensagem customizada na ação seguinte, ex.: `{{user}} clipou esse momento! {{local.clipUrl}}`. Use o gatilho `!clipe, !clip` e um intervalo (ex.: 1 min) para não estourar o limite da Twitch.
+- Escopo novo no bot (`clips:edit`): reautorize a conta do bot; só funciona com a live ligada (fora da live o Histórico explica).
+- Corrige o teste de validação da 0.1.61 (mensagem de alvo inválido com o sorteado).
+
+## Como usar
+
+- Comando `!clipe, !clip` → ação 1 Twitch Criar clipe (conteúdo vazio) → ação 2 mensagem livre com `{{local.clipUrl}}`. `{{local.clipUrl}}` está no catálogo e no aviso de variável local.
+
+## Validação
+
+- `npm run check` (tsc), `npm test` (vitest 33/33), `npm run docs` e `npm run test:updates` (8/8) executados antes do push.
+- `cargo test` não executado localmente (toolchain Rust indisponível); inclui testes de conta/escopo/link do clipe e do alvo sorteado; a CI compila e testa de verdade.
+- A 0.1.61 não gerou build (CI reprovou só no teste acima); esta 0.1.62 a substitui sem reescrever release, pois nenhuma release 0.1.61 chegou a existir.
+- Teste ao vivo do clipe ainda pendente.
+
+## Limitações
+
+- Fora da live, sem clipe: a Twitch recusa e o erro orienta.
+- Prévia/simulação não cria clipe: mostra o plano; `{{local.clipUrl}}` sai vazio (use `|default:`).
+
+---
+
 # BotLive 0.1.61
 
 ## O que mudou
