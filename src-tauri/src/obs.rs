@@ -190,8 +190,8 @@ async fn apply(conn: &mut Conn, op: &str, target: &str, num: f64) -> Result<Stri
    let scene = program_scene(conn).await?;
    let id = find_item(conn, &scene, target).await?;
    if op == "toggle_item" {
-    call(conn, "SetSceneItemEnabled", json!({"sceneName": scene, "sceneItemId": id, "sceneItemEnabled": !current_enabled(conn, &scene, id).await?)})
-     .await?;
+    let cur = current_enabled(conn, &scene, id).await?;
+    call(conn, "SetSceneItemEnabled", json!({"sceneName": scene, "sceneItemId": id, "sceneItemEnabled": !cur})).await?;
     Ok(format!("fonte {} alternada", target))
    } else {
     call(

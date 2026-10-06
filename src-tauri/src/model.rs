@@ -273,7 +273,7 @@ pub fn validate_flow(f:&Flow)->Result<(),String> {
   if a.obs_target.trim().is_empty()||a.obs_target.chars().count()>200{return Err("Ação do OBS: escolha o alvo".into())}
   if a.obs_duration>3600{return Err("Ação do OBS: duração de até 1 hora".into())}
   if a.obs_duration>0&&!crate::obs::temp_ok(&a.obs_op){return Err("Ação do OBS: duração só vale para mutar, volume, mostrar e esconder".into())}
-  if a.obs_op=="volume"&&a.text.trim().parse::<f64>().map_or(true,|n|!n.is_finite()||n<-100.0||n>30.0){return Err("Ação do OBS: volume em dB entre -100 e 30".into())}
+  if a.obs_op=="volume"&&a.text.trim().parse::<f64>().map_or(true,|n|!n.is_finite()||n < -100.0||n > 30.0){return Err("Ação do OBS: volume em dB entre -100 e 30".into())}
  }
  if a.kind=="ai.generate" {let (scope,name)=crate::variables::target(crate::ai::response_target(a))?;if scope!="local"||name=="aiSuccess"{return Err("Guarde a resposta da IA numa variável local de texto".into())}}
  if a.kind.starts_with("variable."){crate::variables::target(&a.target)?;}
