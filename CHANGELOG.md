@@ -1,5 +1,27 @@
 # Histórico de atualizações
 
+# BotLive 0.1.78
+
+## O que mudou
+
+- Corrige a compilação e os testes da 0.1.77 (COND_OPS no nível do módulo, argumentos das regras sem operador e closure tipada). Nenhuma mudança de comportamento além da 0.1.73.
+
+## Como usar
+
+- Vale o manual da 0.1.73: condições e variáveis de execução.
+
+## Validação
+
+- `npm run test:updates` (8/8) executado antes do push.
+- `cargo test` não executado localmente (toolchain Rust indisponível); erros apontados pelo compilador e pelos testes da CI; a CI testa de verdade.
+- A 0.1.77 não gerou build (CI reprovou); esta 0.1.78 a substitui sem reescrever release, pois nenhuma release 0.1.77 chegou a existir.
+
+## Limitações
+
+- As mesmas da 0.1.73.
+
+---
+
 # BotLive 0.1.77
 
 ## O que mudou

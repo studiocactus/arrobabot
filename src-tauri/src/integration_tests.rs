@@ -444,7 +444,7 @@ async fn random_viewer_draws_fresh_on_every_occurrence(){
 async fn condition_false_stops_and_skip_jumps_one(){
  let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();let p=profile("Condição");rt.db.save_profile(&p).unwrap();
  let cond=|var:&str,op:&str,value:&str,on_false:&str|Action{kind:"condition".into(),text:String::new(),target:String::new(),value:0,condition:String::new(),cond_var:var.into(),cond_op:op.into(),cond_value:value.into(),cond_false:on_false.into(),..Default::default()};
- let say=t=>Action{kind:"overlay".into(),text:t.into(),target:String::new(),value:0,condition:String::new(),..Default::default()};
+ let say=|t:&str|Action{kind:"overlay".into(),text:t.into(),target:String::new(),value:0,condition:String::new(),..Default::default()};
  let mut f=flow(&p);f.name="Para".into();f.trigger.pattern="!para".into();f.actions=vec![cond("reward.cost","greater_or_equal","5000","stop"),say("alto")];rt.db.save_flow(&f).unwrap();
  let mut g=flow(&p);g.name="Pula".into();g.trigger.pattern="!pula".into();g.actions=vec![cond("reward.cost","greater_or_equal","5000","skip"),say("pulado"),say("fim")];rt.db.save_flow(&g).unwrap();
  let mut rx=rt.broadcast.subscribe();

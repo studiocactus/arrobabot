@@ -196,6 +196,9 @@ pub fn is_known(raw:&str)->bool{
  if name.strip_prefix("arg").is_some_and(|n|!n.is_empty()&&n.bytes().all(|b|b.is_ascii_digit())){return true}
  LEGACY.contains(&name)||EXTRA.contains(&name)
 }
+/// Operadores da etapa de condição. Comparação com segurança de tipo:
+/// ordenação só vale quando os dois lados são números; texto compara exato.
+pub const COND_OPS:[&str;10]=["equals","not_equals","greater_than","greater_or_equal","less_than","less_or_equal","contains","not_contains","is_empty","is_not_empty"];
 fn legacy(name:&str) -> bool { LEGACY.contains(&name) || name.strip_prefix("arg").is_some_and(|n|!n.is_empty()&&n.bytes().all(|b|b.is_ascii_digit())) }
 /// Reescreve o marcador legado `$nome` como `{{nome}}`. Só nomes conhecidos viram modelo:
 /// `$5`, `R$100`, `$desconhecido` e o escape `\$user` ficam exatamente como estavam.
@@ -314,9 +317,6 @@ impl Context {
         }
         value.map(|v|display(&v)).ok_or_else(||format!("Variável ausente: {key}. Defina-a antes ou use |default:texto"))
     }
-    /// Operadores da etapa de condição. Comparação com segurança de tipo:
-    /// ordenação só vale quando os dois lados são números; texto compara exato.
-    pub const COND_OPS:[&str;10]=["equals","not_equals","greater_than","greater_or_equal","less_than","less_or_equal","contains","not_contains","is_empty","is_not_empty"];
     /// Avalia uma regra sobre o contexto e devolve (verdadeiro, valor resolvido).
     /// Variável ausente conta como vazia e não quebra a execução; operador
     /// inválido é erro de configuração.
@@ -425,8 +425,8 @@ impl Context {
         assert_eq!(c.eval_rule("redeemer","equals","Ana").unwrap().0,true);
         assert_eq!(c.eval_rule("redeemer","not_equals","Ana").unwrap().0,false);
         assert_eq!(c.eval_rule("rewardTitle","contains","mute").unwrap().0,false,"ausente não contém");
-        assert_eq!(c.eval_rule("rewardTitle","is_empty").unwrap(),(true,"".into()));
-        assert_eq!(c.eval_rule("rewardTitle","is_not_empty").unwrap().0,false);
+        assert_eq!(c.eval_rule("rewardTitle","is_empty","").unwrap(),(true,"".into()));
+        assert_eq!(c.eval_rule("rewardTitle","is_not_empty","").unwrap().0,false);
         assert_eq!(c.eval_rule("userInput","not_contains","x").unwrap().0,true);
         assert!(c.eval_rule("rewardCost","maior_que","5").is_err());
         assert!(is_known("viewer.name")&&is_known("time.timestamp")&&!is_known("viewer.nome"));
