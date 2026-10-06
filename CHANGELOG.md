@@ -1,5 +1,42 @@
 # Histórico de atualizações
 
+# BotLive 0.1.85
+
+## O que mudou
+
+- **Flow Editor UX 2.0**: interface simplificada mantendo React Flow. Nodes compactos e autoexplicativos (240-300px) com linguagem humana: tipo + ação + alvo/resumo visíveis sem selecionar cada node.
+- **Inspector contextual**: mostra apenas configuração da etapa selecionada com linguagem natural (ex.: "Custo da recompensa ≥ 5000" em vez de "reward.cost"). Sem etapa selecionada: "Selecione uma etapa para configurá-la."
+- **Header simplificado**: "Adicionar etapa" (antes "Adicionar ação") agora é secundário; Testar e Salvar permanecem como CTAs principais.
+- **Nodes por tipo**: CONDIÇÃO (condVar + op + valor + se falso), AGUARDAR (duração), OBS (operação · alvo), Twitch (tipo), Resgate, Punição — todos legíveis no canvas.
+- **Posicionamento vertical**: fluxo empilha verticalmente (y: 140 + i*90) em vez de horizontal, facilitando leitura de sequências lineares.
+- **Preservação total**: todos os Twitch Triggers v0.1.84 (Channel Points, Bits, Subscription, Gift Sub, Raid, Follow), Conditions, Runtime Variables, WAIT, OBS, actions[], execution_id, cancelamento e fulfillment intactos.
+
+## Como usar
+
+- Abra qualquer automação existente: nodes agora mostram resumo humano (ex.: "◆ CONDIÇÃO reward.cost ≥ 5000 → PARAR FLUXO").
+- Selecione um node para ver configuração simplificada no inspector direito.
+- "Adicionar etapa" adiciona ao final da cadeia; use "↑ Subir" / "↓ Descer" para reordenar.
+- Fluxos antigos abrem sem migration; salvar preserva estrutura compatível com runtime.
+
+## Validação
+
+- `npm run check` (tsc) — compilação limpa.
+- `npm test` (vitest 36/36) — todos os testes existentes passam.
+- `npm run test:updates` — 8/8.
+- `npm run docs` — manual gerado.
+- Playwright: specs de timers e Discord verdes.
+- Teste manual: fluxo Channel Points → Condição → OBS → Wait abre, edita e salva corretamente.
+- `cargo test` não executado localmente (toolchain Rust indisponível); motor não foi alterado, apenas UI.
+
+## Limitações
+
+- Inserção entre nodes (hover "+" entre dois nodes) fica para próxima melhoria.
+- Minimap reduzido mas ainda visível; recolhimento automático fica para futuro.
+- Variável picker pesquisável (popover) não implementado; catálogo completo ainda disponível na seção "Como sai" do trigger.
+- Advanced/avançado não separado; configurações técnicas ainda no mesmo nível.
+
+---
+
 # BotLive 0.1.84
 
 ## O que mudou
