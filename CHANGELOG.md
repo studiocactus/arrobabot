@@ -1,5 +1,27 @@
 # Histórico de atualizações
 
+# BotLive 0.1.76
+
+## O que mudou
+
+- Corrige a compilação da 0.1.75 (chave excedente no JSON do teste de regras). Nenhuma mudança de comportamento além da 0.1.73.
+
+## Como usar
+
+- Vale o manual da 0.1.73: condições e variáveis de execução.
+
+## Validação
+
+- `npm run test:updates` (8/8) executado antes do push; varredura de balanceamento das linhas geradas.
+- `cargo test` não executado localmente (toolchain Rust indisponível); erro apontado pelo compilador da CI; a CI testa de verdade.
+- A 0.1.75 não gerou build (CI reprovou na compilação); esta 0.1.76 a substitui sem reescrever release, pois nenhuma release 0.1.75 chegou a existir.
+
+## Limitações
+
+- As mesmas da 0.1.73.
+
+---
+
 # BotLive 0.1.75
 
 ## O que mudou

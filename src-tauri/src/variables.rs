@@ -417,7 +417,7 @@ impl Context {
         let dir=tempfile::tempdir().unwrap();let db=Db::open(&dir.path().join("t.sqlite")).unwrap();
         let p:Profile=serde_json::from_value(serde_json::json!({"id":"00000000-0000-4000-8000-000000000032","name":"P","platform":"twitch","channel":"canal"})).unwrap();
         db.save_profile(&p).unwrap();
-        let e:Event=serde_json::from_value(serde_json::json!({"id":"e9","profileId":p.id,"kind":"redemption","user":"Ana","user_id":"77","role":"everyone","message":"","data":{"reward":{"cost":5000}}}})).unwrap();
+        let e:Event=serde_json::from_value(serde_json::json!({"id":"e9","profileId":p.id,"kind":"redemption","user":"Ana","user_id":"77","role":"everyone","message":"","data":{"reward":{"cost":5000}}})).unwrap();
         let c=Context::new(&db,&p,&e,None).unwrap();
         assert_eq!(c.eval_rule("rewardCost","greater_or_equal","5000").unwrap(),(true,"5000".into()));
         assert_eq!(c.eval_rule("reward.cost","greater_than","5000").unwrap().0,false);
