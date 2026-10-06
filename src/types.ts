@@ -3,7 +3,7 @@ export type Profile={id:string;name:string;platform:'twitch'|'youtube'|'kick';ch
 export type Trigger={kind:string;pattern:string;permission:string;cooldown:number;userCooldown:number};
 export type Action={kind:string;text:string;target:string;value:number;condition:string;punish?:string;twOp?:string;aiAnchor:string;aiKnowledge:string;aiLength:string;aiStyle:string;aiNoRepeat:boolean|null};
 export type KnowledgeEntry={path:string;category:string;file:string;title:string;kind:string;size:number};
-export type Flow={counter?:boolean;timerSeconds?:number;audio?:string;audioVolume?:number;sendType?:string;sendColor?:string;replyTo?:boolean;id:string;profileId:string;name:string;enabled:boolean;trigger:Trigger;actions:Action[];layout?:unknown};
+export type Flow={counter?:boolean;timerSeconds?:number;timerCategory?:string;timerPriority?:string;timerVariants?:string[];timerMinMessages?:number;timerWindowSecs?:number;timerMaxSession?:number;timerStartDelaySecs?:number;audio?:string;audioVolume?:number;sendType?:string;sendColor?:string;replyTo?:boolean;id:string;profileId:string;name:string;enabled:boolean;trigger:Trigger;actions:Action[];layout?:unknown};
 export type Activity={id:number;profileId:string;timestamp:string;kind:string;message:string;status:string};
 export type Note={path:string;content:string};
 export type Preset={id:string;format:string;version:number;name:string;kind:string;tags:string[];data:Record<string,unknown>};
@@ -24,7 +24,9 @@ export const aiAnchors:Record<string,string>={all:'Mensagem atual e chat',messag
 export const aiLengths:Record<string,string>={short:'Uma frase',medium:'Até 300 caracteres',free:'Até 450 caracteres'};
 export const knowledgeDepths:Record<string,string>={light:'Leve · 5 mil',standard:'Padrão · 13 mil',full:'Completa · 20 mil'};
 
-export const newTimer=(profileId:string):Flow=>({...newFlow(profileId),name:'Lembrete',timerSeconds:600,counter:false,trigger:{kind:'timer',pattern:'',permission:'everyone',cooldown:0,userCooldown:0},actions:[{...newAction(),text:'Participe da nossa comunidade!'}]});
+export const newTimer=(profileId:string):Flow=>({...newFlow(profileId),name:'Lembrete',timerSeconds:600,timerCategory:'personalizado',timerPriority:'normal',timerVariants:[],timerMinMessages:0,timerWindowSecs:900,timerMaxSession:0,timerStartDelaySecs:0,counter:false,trigger:{kind:'timer',pattern:'',permission:'everyone',cooldown:0,userCooldown:0},actions:[{...newAction(),text:'Participe da nossa comunidade!'}]});
+export const timerCategories:Record<string,string>={interacao:'Interação',comunidade:'Comunidade',divulgacao:'Divulgação',monetizacao:'Monetização',informacao:'Informação',bemestar:'Bem-estar',personalizado:'Personalizado'};
+export const timerPriorities:Record<string,string>={baixa:'Baixa',normal:'Normal',alta:'Alta'};
 /** Intervalos aparecem em minutos na tela e continuam em segundos no armazenamento e nas APIs. */
 export const secondsToMinutes=(s:number)=>{const m=(Number(s)||0)/60;return String(Math.round(m*100)/100)};
 export const minutesToSeconds=(m:number)=>Math.max(0,Math.round((Number(m)||0)*60));

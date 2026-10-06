@@ -1,5 +1,29 @@
 # Histórico de atualizações
 
+# BotLive 0.1.64
+
+## O que mudou
+
+- Fase 1 dos timers inteligentes (sem mudar o disparo): categoria (7 valores) e prioridade (baixa/normal/alta) com etiquetas na lista, editor de até 10 respostas alternadas por timer e regras inteligentes salvas (atividade mínima, janela, máximo por sessão, atraso inicial). Timers antigos herdam Personalizado/Normal e continuam iguais.
+- Aviso de **mesmo intervalo** na lista + recomendação de distribuir minutos (53, 79, 101…) para reduzir disparos simultâneos.
+- O motor inteligente (cooldown global, fila, atividade, limite, prioridade, sorteio sem repetição e dashboard) vem na próxima versão; os campos já ficam salvos e validados.
+
+## Como usar
+
+- Timers → Novo/Editar: escolha categoria e prioridade, cadastre variações em Respostas alternadas e ajuste Regras inteligentes. O envio de hoje continua pelo intervalo.
+
+## Validação
+
+- `npm run check` (tsc), `npm test` (vitest 33/33), `npm run docs` (manual 22 capítulos) e `npm run test:updates` (8/8) executados antes do push.
+- `cargo test` não executado localmente (toolchain Rust indisponível); inclui testes de padrões e validação dos campos novos; a CI compila e testa de verdade.
+- Teste visual do editor e da lista ainda pendente.
+
+## Limitações
+
+- Respostas alternadas e regras inteligentes ainda não disparam: o envio segue a Resposta principal no intervalo até a próxima versão.
+
+---
+
 # BotLive 0.1.63
 
 ## O que mudou

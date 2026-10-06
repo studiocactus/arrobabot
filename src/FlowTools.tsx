@@ -2,7 +2,7 @@ import {useEffect,useState} from 'react';
 import {Save,Play,Trash2,Pencil,Package,Workflow} from 'lucide-react';
 import {api,desktop} from './api';
 import {friendlyMessage} from './errors';
-import {type Flow,type Profile,type Preset,minutesToSeconds,secondsToMinutes} from './types';
+import {type Flow,type Profile,type Preset,minutesToSeconds,secondsToMinutes,timerCategories,timerPriorities} from './types';
 import {Modal,Field,Toggle} from './components';
 import FlowEditor from './FlowEditor';
 import MessageEditor from './MessageEditor';
@@ -24,6 +24,14 @@ export async function saveFlow(flow:Flow){
  await api('flow.save',{flow});
 }
 
+export function TimerVariants({variants,onChange}:{variants:string[];onChange:(v:string[])=>void}){
+ const set=(i:number,text:string)=>onChange(variants.map((v,k)=>k===i?text:v));
+ return <div><div className="eyebrow">RESPOSTAS ALTERNADAS ({variants.length||'NENHUMA'})</div>
+ <p className="help">No disparo, o motor sorteia uma sem repetir a anterior. Vazio mantém a Resposta acima.</p>
+ {variants.map((v,i)=><div className="row end" key={i}><Field label={'Resposta '+(i+1)}><input value={v} maxLength={450} placeholder="Mensagem do timer…" onChange={e=>set(i,e.target.value)}/></Field><button type="button" className="icon-button danger" aria-label={'Remover resposta '+(i+1)} onClick={()=>onChange(variants.filter((_,k)=>k!==i))}>X</button></div>)}
+ {variants.length<10&&<button type="button" onClick={()=>onChange([...variants,''])}>+ Adicionar resposta</button>}
+ </div>;
+}
 export function FlowDialog({flow,mode,profile,notify,onSaved,onClose}:{flow:Flow;mode:FlowMode;profile:Profile;notify:Notify;onSaved:()=>Promise<void>|void;onClose:()=>void}){
  const [editing,setEditing]=useState<Flow>(flow);
  const [forceVisual,setForceVisual]=useState(false);
@@ -47,6 +55,17 @@ export function FlowDialog({flow,mode,profile,notify,onSaved,onClose}:{flow:Flow
   <SendPicker platform={profile.platform} value={editing.sendType||'chat'} color={editing.sendColor||'primary'} reply={!!editing.replyTo} onChange={sendType=>setEditing({...editing,sendType})} onColor={sendColor=>setEditing({...editing,sendColor})} onReply={replyTo=>setEditing({...editing,replyTo})}/>
   <AudioPicker profileId={profile.id} value={editing.audio||''} volume={editing.audioVolume??1} onChange={audio=>setEditing({...editing,audio})} onVolume={audioVolume=>setEditing({...editing,audioVolume})}/>
   <CommandOptions timer={mode==='timer'} seconds={editing.timerSeconds??300} counter={!!editing.counter} onSeconds={timerSeconds=>setEditing({...editing,timerSeconds})} onCounter={counter=>setEditing({...editing,counter})}/>
+  {mode==='timer'&&<div className="form-grid">
+   <Field label="Categoria"><select value={editing.timerCategory||'personalizado'} onChange={e=>setEditing({...editing,timerCategory:e.target.value})}>{Object.entries(timerCategories).map(([k,n])=><option key={k} value={k}>{n}</option>)}</select></Field>
+   <Field label="Prioridade" hint="Só decide entre timers elegíveis juntos."><select value={editing.timerPriority||'normal'} onChange={e=>setEditing({...editing,timerPriority:e.target.value})}>{Object.entries(timerPriorities).map(([k,n])=><option key={k} value={k}>{n}</option>)}</select></Field>
+  </div>}
+  {mode==='timer'&&<TimerVariants variants={editing.timerVariants||[]} onChange={timerVariants=>setEditing({...editing,timerVariants})}/>}
+  {mode==='timer'&&<details><summary>Regras inteligentes</summary><p className="help">Ficam salvas agora e passam a valer com o motor inteligente: cooldown global, atividade mínima, limite por sessão e atraso inicial.</p><div className="form-grid">
+   <Field label="Atividade mínima no chat" hint="0 desliga. Ex.: 10 mensagens."><input type="number" min="0" max="1000" step="1" value={editing.timerMinMessages??0} onChange={e=>setEditing({...editing,timerMinMessages:Math.max(0,Math.round(Number(e.target.value)||0))})}/></Field>
+   <Field label="Janela de atividade (minutos)" hint="Últimos minutos contados."><input type="number" min="1" max="60" step="any" value={secondsToMinutes(editing.timerWindowSecs??900)} onChange={e=>setEditing({...editing,timerWindowSecs:Math.round(minutesToSeconds(Number(e.target.value)||0))||900})}/></Field>
+   <Field label="Máximo por sessão" hint="0 sem limite. Zera na próxima live."><input type="number" min="0" max="500" step="1" value={editing.timerMaxSession??0} onChange={e=>setEditing({...editing,timerMaxSession:Math.max(0,Math.round(Number(e.target.value)||0))})}/></Field>
+   <Field label="Só após (minutos de live)" hint="0 libera desde o início."><input type="number" min="0" max="1440" step="any" value={secondsToMinutes(editing.timerStartDelaySecs??0)} onChange={e=>setEditing({...editing,timerStartDelaySecs:minutesToSeconds(Number(e.target.value)||0)})}/></Field>
+  </div></details>}
   {editing.counter&&<button type="button" onClick={()=>setEditing({...editing,actions:[{...editing.actions[0],text:editing.actions[0].text+'{{commandCount}}'}]})}>+ Contagem do comando</button>}
   {mode!=='timer'&&<div className="form-grid">
    <Field label="Quem pode usar"><select value={editing.trigger.permission} onChange={e=>setEditing({...editing,trigger:{...editing.trigger,permission:e.target.value}})}><option value="everyone">Todo mundo</option><option value="subscriber">Assinantes</option><option value="moderator">Moderadores</option><option value="broadcaster">Só o streamer</option></select></Field>

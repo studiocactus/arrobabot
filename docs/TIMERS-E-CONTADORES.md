@@ -27,6 +27,14 @@ Use **Timers** para publicar lembretes periódicos. Use **Contar usos deste coma
 
 Cada timer tem nome, mensagem, intervalo e chave de ativação próprios. São aceitos de 0,5 minuto (30 segundos) a 1440 minutos (24 horas). Você pode ter um lembrete da comunidade a cada dez minutos e outro sobre as regras a cada quinze.
 
+## Categoria, prioridade e respostas alternadas
+
+Todo timer tem **categoria** (Interação, Comunidade, Divulgação, Monetização, Informação, Bem-estar ou Personalizado) e **prioridade** (Baixa, Normal ou Alta), visíveis como etiquetas na lista. Em **Respostas alternadas** cadastre até 10 variações: no disparo, o motor sorteia uma sem repetir a anterior; vazio mantém a Resposta principal.
+
+Evite usar o mesmo intervalo em vários timers para reduzir disparos simultâneos: a lista marca com **mesmo intervalo** quem divide o tempo. Uma boa distribuição usa minutos quebrados e distantes, como 53, 79, 101, 137, 163, 191, 223 e 307.
+
+Em **Regras inteligentes** ficam atividade mínima no chat, janela de atividade, máximo por sessão e atraso inicial da live. Esses valores já ficam salvos e passam a valer com o motor inteligente (cooldown global, fila e dashboard vêm na próxima atualização); hoje o disparo continua pelo intervalo.
+
 ## Pausar, editar e reconectar
 
 - Desligue **Ativar Nome do timer** para pausar sem apagar.

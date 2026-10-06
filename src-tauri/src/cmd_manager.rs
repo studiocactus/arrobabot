@@ -82,7 +82,7 @@ fn same_command(pattern: &str, name: &str) -> bool {
 fn chat_flow(profile_id: &str, id: String, name: &str, response: String) -> Flow {
  Flow {
   counter: false,
-  timer_seconds: 300,
+  timer_seconds: 300,timer_category:"personalizado".into(),timer_priority:"normal".into(),timer_variants:vec![],timer_min_messages:0,timer_window_secs:900,timer_max_session:0,timer_start_delay_secs:0,
   audio: String::new(),
   audio_volume: 1.0,
   send_type: "chat".into(),
