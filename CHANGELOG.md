@@ -1,5 +1,27 @@
 # Histórico de atualizações
 
+# BotLive 0.1.70
+
+## O que mudou
+
+- Corrige a compilação da 0.1.69 (`execute_flow` aninhada movida para o nível do módulo). Nenhuma mudança de comportamento.
+
+## Como usar
+
+- Vale o manual da 0.1.69: sequences com espera, execução e teste.
+
+## Validação
+
+- `npm run test:updates` (8/8) executado antes do push.
+- `cargo test` não executado localmente (toolchain Rust indisponível); erro apontado pelo compilador da CI; a CI testa de verdade.
+- A 0.1.69 não gerou build (CI reprovou na compilação); esta 0.1.70 a substitui sem reescrever release, pois nenhuma release 0.1.69 chegou a existir.
+
+## Limitações
+
+- As mesmas da 0.1.69.
+
+---
+
 # BotLive 0.1.69
 
 ## O que mudou

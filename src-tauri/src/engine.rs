@@ -229,6 +229,15 @@ pub async fn process(rt:Arc<Runtime>,e:Event){
   let answers=publisher.as_ref().is_none_or(|id|id==&f.id);
   if execute_flow(rt,&p,&e,&f,answers,&history,counts.as_ref(),false).await{any_ok=true;}
  }
+
+ // Resgate cumprido só quando ao menos uma automação terminou tudo: sem
+ // permissão nova, o erro pede a reautorização em vez de falhar calado.
+ if any_ok&&e.kind=="redemption"&&!e.simulated{
+  let (rt2,p2)=(rt.clone(),p.clone());
+  let (reward,rid)=(e.data["reward"]["id"].as_str().unwrap_or("").to_owned(),e.id.clone());
+  tokio::spawn(async move{if let Err(err)=crate::twitch_ops::fulfill_redemption(&rt2,&p2,&reward,&rid).await{rt2.log(&p2.id,"redemption",&err,"error");}else{rt2.log(&p2.id,"redemption","Resgate marcado como cumprido","success");}});
+ }
+}
  /// Executa um fluxo com identidade própria: mesmo caminho para eventos reais e testes.
  /// Devolve true quando todas as ações terminaram (base do resgate cumprido).
  pub async fn execute_flow(rt:&Arc<Runtime>,p:&Profile,e:&Event,f:&Flow,answers:bool,history:&[Value],counts:Option<&(Option<i64>,Option<i64>)>,test:bool)->bool{
@@ -267,14 +276,6 @@ pub async fn process(rt:Arc<Runtime>,e:Event){
   rt.log(&p.id,"run",&format!("Execução {short} {status}"),if completed{"info"}else{"error"});
   completed
  }
- // Resgate cumprido só quando ao menos uma automação terminou tudo: sem
- // permissão nova, o erro pede a reautorização em vez de falhar calado.
- if any_ok&&e.kind=="redemption"&&!e.simulated{
-  let (rt2,p2)=(rt.clone(),p.clone());
-  let (reward,rid)=(e.data["reward"]["id"].as_str().unwrap_or("").to_owned(),e.id.clone());
-  tokio::spawn(async move{if let Err(err)=crate::twitch_ops::fulfill_redemption(&rt2,&p2,&reward,&rid).await{rt2.log(&p2.id,"redemption",&err,"error");}else{rt2.log(&p2.id,"redemption","Resgate marcado como cumprido","success");}});
- }
-}
 /// Ações que publicam a resposta no chat ou produzem o texto que a ação de chat envia.
 const REPLY:&[&str]=&["chat","ai","ai.generate"];
 /// True quando a automação tem alguma ação de resposta no chat.
