@@ -1,4 +1,4 @@
-import {test,expect} from '@playwright/test';
+import {test,expect,type Locator} from '@playwright/test';
 test('editor de automações agrupa campos em seções, avisa a troca para o visual e explica a ordem por conexão',async({page})=>{
  const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
  await page.goto('/');
@@ -65,5 +65,65 @@ test('editor de automações agrupa campos em seções, avisa a troca para o vis
  await page.getByRole('button',{name:'Editar Alô',exact:true}).click();
  await expect(page.getByRole('button',{name:'Salvar comando',exact:true})).toBeVisible();
  await expect(page.getByRole('button',{name:'Abrir no editor visual',exact:true})).toBeVisible();
+ expect(errors).toEqual([]);
+});
+
+test('fluxo salvo reabre com o resumo de cada etapa visível no próprio node, sem abrir nada',async({page})=>{
+ const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.goto('/');
+ await page.getByRole('button',{name:'Criar primeiro bot',exact:true}).click();
+ await page.getByLabel('Nome do perfil',{exact:true}).fill('Flashbang legível');
+ await page.getByRole('button',{name:'Salvar perfil',exact:true}).click();
+ await page.getByRole('dialog').getByRole('button',{name:'Fechar',exact:true}).click();
+ await page.getByRole('button',{name:'Automações',exact:true}).click();
+ await page.getByRole('button',{name:'Novo fluxo',exact:true}).click();
+ await page.getByLabel('Nome do fluxo',{exact:true}).fill('Flashbang');
+ await page.getByLabel('Texto que dispara',{exact:true}).fill('!flashbang');
+
+ // etapa 1: condição em linguagem humana já aparece no node
+ await page.getByRole('button',{name:'Adicionar etapa',exact:true}).click();
+ await page.getByRole('combobox',{name:'Tipo de etapa',exact:true}).selectOption('condition');
+ await page.getByRole('combobox',{name:'Variável',exact:true}).selectOption('reward.cost');
+ await page.getByRole('combobox',{name:'Operador',exact:true}).selectOption('greater_or_equal');
+ await page.getByLabel('Valor esperado',{exact:true}).fill('5000');
+ await expect(page.locator('.react-flow__node').filter({hasText:'Custo da recompensa'})).toHaveCount(1);
+ await expect(page.locator('.react-flow__node').filter({hasText:'≥ 5000'})).toHaveCount(1);
+
+ // etapa 2: aguardar, com duração legível
+ await page.getByRole('button',{name:'Adicionar etapa',exact:true}).click();
+ await page.getByRole('combobox',{name:'Tipo de etapa',exact:true}).selectOption('wait');
+ await expect(page.locator('.react-flow__node').filter({hasText:'3.0 s'})).toHaveCount(1);
+
+ // liga gatilho → condição → espera pelos pontos de conexão
+ const link=async(from:Locator,to:Locator)=>{
+  const fromBox=await from.locator('.react-flow__handle.source').boundingBox();
+  const toBox=await to.locator('.react-flow__handle.target').boundingBox();
+  if(!fromBox||!toBox)throw new Error('ponto de conexão fora da tela');
+  await page.mouse.move(fromBox.x+fromBox.width/2,fromBox.y+fromBox.height/2);
+  await page.mouse.down();
+  await page.mouse.move(fromBox.x+fromBox.width/2,fromBox.y+fromBox.height/2+6,{steps:4});
+  await page.mouse.move(toBox.x+toBox.width/2,toBox.y+toBox.height/2,{steps:12});
+  await page.waitForTimeout(150);
+  await page.mouse.up();
+  await page.waitForTimeout(100);
+ };
+ const seededNode=page.locator('.react-flow__node[data-id="action-0"]');
+ const condNode=page.locator('.react-flow__node').filter({hasText:'Custo da recompensa'});
+ const waitNode=page.locator('.react-flow__node').filter({hasText:'3.0 s'});
+ await page.locator('.react-flow__controls-fitview').click();
+ await page.waitForTimeout(300);
+ await link(seededNode,condNode);
+ await link(condNode,waitNode);
+ await expect(page.locator('.react-flow__edge')).toHaveCount(3);
+
+ await page.getByRole('button',{name:'Salvar fluxo',exact:true}).click();
+ await expect(page.getByText('Automação salva.',{exact:true})).toBeVisible();
+
+ // reabre: os rótulos legíveis vêm do próprio node, sem abrir etapa nenhuma
+ await page.getByRole('button',{name:'Editar Flashbang',exact:true}).click();
+ const nodes=page.locator('.react-flow__node');
+ await expect(nodes.filter({hasText:'Custo da recompensa'})).toHaveCount(1);
+ await expect(nodes.filter({hasText:'≥ 5000'})).toHaveCount(1);
+ await expect(nodes.filter({hasText:'3.0 s'})).toHaveCount(1);
  expect(errors).toEqual([]);
 });

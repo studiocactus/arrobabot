@@ -92,14 +92,14 @@ O intervalo global vale para o fluxo, independentemente de quem o usou. O interv
 1. Abra **Automações → Novo fluxo**.
 2. Preencha **Nome do fluxo**.
 3. Clique no bloco inicial: o painel lateral se abre em seções. **Quando** reúne Evento, texto que dispara, quem pode usar e intervalos; **Como sai** traz a forma de envio na Twitch e o áudio do disparo; **Comportamento**, recolhido, guarda a contagem de usos e o intervalo do timer.
-4. Clique no bloco de ação e selecione **Tipo de ação** na seção **Configurar etapa** do painel lateral.
+4. Clique no bloco de ação e selecione **Tipo de etapa** na seção **Configurar etapa** do painel lateral.
 5. Preencha conteúdo e os campos específicos. Em ações de IA, abra **Como esta ação responde** para escolher ancoragem, tamanho, base de conhecimento, repetição e tom daquele bloco; o que ficar em **Padrão do perfil** herda a tela de IA. **Como a IA monta a resposta** explica o que entra nessa geração, e a seção **Comportamento** fica com a condição opcional.
 6. Clique em **Adicionar etapa** para cada etapa adicional.
 7. Arraste dos pontos de conexão para ligar as etapas em ordem.
 8. Confira uma única sequência: gatilho → ação 1 → ação 2 → ação 3.
 9. Clique em **Salvar fluxo** e confira a chave de ativação.
 
-Cada bloco já mostra na tela um resumo legível da etapa — por exemplo ◆ CONDIÇÃO com variável, operador e valor, ◉ OBS · Mostrar fonte · alvo ou ◷ 3,0 s de espera — e a cadeia se empilha de cima para baixo, dá para ler o fluxo só pelo desenho sem abrir bloco nenhum. A posição do bloco no desenho não define a execução; as conexões definem. O fim do painel lateral repete essa regra sempre que um bloco está selecionado. Blocos novos precisam ser conectados. O editor rejeita ciclos, ramificações e blocos soltos. É possível arrastar os blocos, usar zoom e selecionar uma conexão para removê-la.
+Cada bloco já mostra na tela um resumo legível da etapa — por exemplo ◆ CONDIÇÃO com variável, operador e valor, ◉ OBS · Mostrar fonte · alvo ou ◷ 3,0 s de espera — e a cadeia se empilha de cima para baixo, dá para ler o fluxo só pelo desenho sem abrir bloco nenhum; fluxos salvos antes disso ganham os mesmos rótulos quando você os abre. **Adicionar etapa** põe o bloco novo logo embaixo da cadeia, só ligar pelos pontos de conexão. A posição do bloco no desenho não define a execução; as conexões definem. O fim do painel lateral repete essa regra sempre que um bloco está selecionado. Blocos novos precisam ser conectados. O editor rejeita ciclos, ramificações e blocos soltos. É possível arrastar os blocos, usar zoom e selecionar uma conexão para removê-la.
 
 Quando o salvamento é recusado, o motivo aparece em português no topo do editor. Se o texto original for técnico, ele continua disponível em **Detalhes técnicos**, dentro do próprio aviso de erro.
 

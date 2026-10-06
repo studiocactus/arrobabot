@@ -1,5 +1,42 @@
 # Histórico de atualizações
 
+# BotLive 0.1.88
+
+## O que mudou
+
+- **Fluxos salvos ganham os rótulos legíveis ao abrir**: antes, quem já tinha um fluxo desenhado continuava vendo os nomes antigos guardados no layout; agora cada node recalcula o resumo da etapa na abertura (◆ CONDIÇÃO com variável/operador/valor, ◉ OBS · Mostrar fonte · alvo, ◷ 3,0 s…). Posições, ordem e conexões salvas ficam exatamente como estavam.
+- **＋ Adicionar etapa empilha embaixo da cadeia**: o bloco novo passa a surgir logo abaixo do último da pilha, no mesmo alinhamento. Antes caía à direita, sobrepondo os vizinhos e escondendo o ponto de conexão.
+- **Condição sem chave técnica no canvas**: `not_equals`, `contains` e `not_contains` viram ≠, "contém" e "não contém" no resumo (faltavam no mapa e apareciam como código); condição sem variável escolhida mostra "◆ variável = …" em vez de um espaço vazio.
+- **"Tipo de ação" vira "Tipo de etapa"**: fecha a menção das notas 0.1.87 e completa a linguagem de etapas do editor (Adicionar etapa / Configurar etapa / Tipo de etapa). O teste de punição acompanha a renomeação.
+- **Teste de aceitação novo**: cria uma automação com condição (Custo da recompensa ≥ 5000) e espera, liga os pontos de conexão, salva, reabre e confere que os três resumos aparecem no próprio canvas, sem abrir etapa nenhuma — o critério de aceitação do Fluxo Editor UX 2.0 virou teste.
+- **Capítulo 03 do manual**: "Montar uma cadeia visual" explica que fluxos salvos antigos ganham os rótulos na abertura e que **Adicionar etapa** posiciona o bloco embaixo da cadeia.
+- **Preservação total**: motor, serialização, `actions[]`, reorder, enabled, cancelamento, fulfillment, cooldown, `execution_id` e execuções não mudaram; Twitch Triggers v0.1.84, Condições, Variáveis em execução, WAIT e OBS intactos. Mudança só de UI (`FlowEditor.tsx`) e de teste.
+
+## Como usar
+
+- Abra um fluxo salvo: os nodes já vêm com o resumo em linguagem humana — dá para conferir condição, valor e duração só olhando o desenho.
+- Para crescer a cadeia: **＋ Adicionar etapa**, configure em **Configurar etapa** no painel direito e lige os pontos de conexão (o bloco novo já nasce embaixo do último).
+- Para reordenar: **↑ Subir** / **↓ Descer**; a ordem efetiva é sempre a das setas.
+
+## Validação
+
+- `npm run check` (tsc) — compilação limpa.
+- `npm test` (vitest) — 36/36.
+- `npm run test:updates` — 8/8.
+- `npx playwright test` — suíte completa: 25/25 (24 specs existentes + o novo teste de aceitação do canvas legível).
+- `npm run docs` — manual regenerado (22 capítulos).
+- `npm run update:check` — manifesto e notas coerentes antes do push.
+- `cargo test` não executado localmente (sem toolchain Rust); o motor Rust não foi tocado — mudanças só em `FlowEditor.tsx`, teste e manual.
+
+## Limitações
+
+- Itens grandes do Fluxo Editor UX 2.0 seguem pendentes e não são afirmados aqui: variável picker pesquisável, `▸ Avançado` para campos técnicos, menu `•••` com Subir/Descer, Testar fluxo em modal dedicado, Minimap menor/recolhível, banner superior virando tooltip e validação inline (⚠ Escolha uma fonte).
+- Blocos novos ainda precisam ser ligados à mão: não há auto-conexão nem inserição no meio da cadeia.
+- Em fluxos salvos em formato horizontal (desenhados antes do empilhamento vertical), os rótulos são atualizados mas as posições antigas são mantidas — é intencional, o desenho é do usuário.
+- O registro das notas de 0.1.85 a 0.1.87 não pode ser reescrito (release publicada não se refaz); esta versão implementa o que lá foi adiantado e continua descrevendo apenas validação executada.
+
+---
+
 # BotLive 0.1.87
 
 ## O que mudou

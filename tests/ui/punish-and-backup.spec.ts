@@ -14,7 +14,7 @@ test('ação de punição escolhe modo, duração e alvo e avisa quem executa',a
  await page.getByLabel('Texto que dispara',{exact:true}).fill('!silenciar');
  // bloco de ação existente
  await page.locator('.react-flow__node').nth(1).click();
- await page.getByRole('combobox',{name:'Tipo de ação',exact:true}).selectOption('punish');
+ await page.getByRole('combobox',{name:'Tipo de etapa',exact:true}).selectOption('punish');
  await expect(page.getByRole('combobox',{name:'O que aplicar',exact:true})).toHaveValue('timeout');
  await expect(page.getByLabel('Duração do silêncio (segundos)',{exact:true})).toHaveValue('60');
  await expect(page.getByRole('combobox',{name:'Quem leva a punição',exact:true})).toHaveValue('sender');
