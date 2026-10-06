@@ -433,5 +433,4 @@ impl Context {
         assert_eq!(suggest_variable("viewer.nam"),Some("viewer.name".into()));
     }
     }
-    }
 }
