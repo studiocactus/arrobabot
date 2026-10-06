@@ -58,6 +58,23 @@ pub async fn channel_counts(rt:&Arc<Runtime>,p:&Profile)->(Option<i64>,Option<i6
  }
  (total(followers).await,total(subs).await)
 }
+/// Recompensas de pontos do canal (id, título, custo, estado). Leitura com a
+/// conta do canal; erro vira mensagem para o Histórico de quem chamou.
+pub async fn custom_rewards(rt:&Arc<Runtime>,p:&Profile)->Result<Value,String>{
+ let token=channel_creds(rt,p).await?;
+ let res=rt.http.get("https://api.twitch.tv/helix/channel_points/custom_rewards").query(&[("broadcaster_id",p.channel_id.as_str())]).header("Client-Id",&p.client_id).bearer_auth(&token).send().await.map_err(|_|"Não foi possível listar as recompensas".to_string())?;
+ if !res.status().is_success(){return Err(format!("Recompensas recusadas pela Twitch: HTTP {}. Reautorize a conta do canal.",res.status().as_u16()))}
+ let v:Value=res.json().await.map_err(|_|"Resposta de recompensas inválida".to_string())?;
+ Ok(v["data"].as_array().cloned().unwrap_or_default().into_iter().map(|r|json!({"id":r["id"],"title":r["title"],"cost":r["cost"],"enabled":r["is_enabled"],"paused":r["is_paused"],"input":r["is_user_input_required"],"image":r["image"]["url_2x"].as_str().or(r["default_image"]["url_2x"].as_str()).unwrap_or("")})).collect())
+}
+/// Marca o resgate como cumprido depois da automação. Falha nunca é silenciosa:
+/// quem chamou registra no Histórico; sem permissão, pede a reautorização.
+pub async fn fulfill_redemption(rt:&Arc<Runtime>,p:&Profile,reward_id:&str,redemption_id:&str)->Result<(),String>{
+ let token=channel_creds(rt,p).await?;
+ let res=rt.http.patch("https://api.twitch.tv/helix/channel_points/custom_rewards/redemptions").query(&[("broadcaster_id",p.channel_id.as_str()),("reward_id",reward_id),("id",redemption_id)]).header("Client-Id",&p.client_id).bearer_auth(&token).json(&json!({"status":"FULFILLED"})).send().await.map_err(|_|"Não foi possível marcar o resgate".to_string())?;
+ if !res.status().is_success(){return Err(format!("Resgate não confirmado pela Twitch: HTTP {}. Sem a permissão de gerenciar resgates, reautorize a conta do canal.",res.status().as_u16()))}
+ Ok(())
+}
 /// Link público de um clipe a partir do id devolvido pela Twitch.
 pub fn clip_url(id:&str)->String{format!("https://clips.twitch.tv/{id}")}
 /// Primeiro número da fala: "timeout 300" ou "slow 5".

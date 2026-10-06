@@ -87,7 +87,7 @@ fn draw(key: &str) -> R<String> {
 const LEGACY:[&str;28]=["user","userName","userId","role","message","channel","channelId","platform","profileId","profileName","eventId","eventType","isModerator","isBroadcaster","isSubscriber","simulated","date","time","unixtime","lf","randomViewer","command","rawInput","args","argCount","commandCount","actionId","actionName"];
 /// Variáveis de contexto que nunca tiveram forma com cifrão. Mantida em sincronia
 /// com o catálogo da interface (`src/variableCatalog.ts`).
-const EXTRA:[&str;14]=["followerCount","subCount","subTier","subMonths","subStreak","subMessage","isGift","gifterName","giftTotal","giftTier","raidViewers","raiderLogin","lastSpeech","liveSpeech"];
+const EXTRA:[&str;20]=["followerCount","subCount","subTier","subMonths","subStreak","subMessage","isGift","gifterName","giftTotal","giftTier","raidViewers","raiderLogin","lastSpeech","liveSpeech","rewardId","rewardTitle","rewardCost","redeemer","redeemerId","userInput"];
 const SCOPES:[&str;5]=["local","global","user","session","sessionUser"];
 fn levenshtein(a:&str,b:&str)->usize{
  let (a,b)=(a.as_bytes(),b.as_bytes());let mut prev:Vec<usize>=(0..=b.len()).collect();
@@ -217,6 +217,13 @@ impl Context {
      values.insert("giftTier".into(),json!(tier_short));
      values.insert("raidViewers".into(),json!(e.data["viewers"].as_u64().unwrap_or(0)));
      values.insert("raiderLogin".into(),json!(e.data["from_broadcaster_user_login"].as_str().unwrap_or("")));
+     // Resgate de pontos: identidade por reward_id, nunca só pelo título.
+     values.insert("rewardId".into(),json!(e.data["reward"]["id"].as_str().unwrap_or("")));
+     values.insert("rewardTitle".into(),json!(e.data["reward"]["title"].as_str().unwrap_or("")));
+     values.insert("rewardCost".into(),json!(e.data["reward"]["cost"].as_u64().unwrap_or(0)));
+     values.insert("redeemer".into(),json!(e.user));
+     values.insert("redeemerId".into(),json!(e.user_id));
+     values.insert("userInput".into(),json!(e.data["user_input"].as_str().unwrap_or("")));
         if let Some(f)=flow { values.insert("commandCount".into(),json!(crate::command_counter::get(db,&p.id,&f.id)?)); values.insert("actionId".into(),json!(f.id)); values.insert("actionName".into(),json!(f.name)); }
         // O que o microfone acabou de ouvir. Sem fala ainda as duas existem vazias:
         // uma automação que usa {{lastSpeech}} não pode quebrar por o streamer estar calado.
@@ -344,5 +351,14 @@ impl Context {
         // Acento antes do marcador não quebra o analisador (fatiamento UTF-8 seguro).
         let acc=analyze_variables("Olá {{user}}, café {{randomViewr}}!");
         assert_eq!(acc.len(),1);assert_eq!(acc[0]["suggestion"],"randomViewer");
+    #[test] fn resgate_expoe_recompensa_e_quem_resgatou(){
+        use crate::model::{Event, Profile};
+        let dir=tempfile::tempdir().unwrap();let db=Db::open(&dir.path().join("t.sqlite")).unwrap();
+        let p:Profile=serde_json::from_value(serde_json::json!({"id":"00000000-0000-4000-8000-000000000031","name":"P","platform":"twitch","channel":"canal"})).unwrap();
+        db.save_profile(&p).unwrap();
+        let e:Event=serde_json::from_value(serde_json::json!({"id":"e9","profileId":p.id,"kind":"redemption","user":"Ana","user_id":"77","role":"everyone","message":"","data":{"id":"red1","user_input":"com carinho","reward":{"id":"abc","title":"Mute o Thenees","cost":5000}}})).unwrap();
+        let c=Context::new(&db,&p,&e,None).unwrap();
+        assert_eq!(c.render("{{redeemer}} resgatou {{rewardTitle}} por {{rewardCost}}: {{userInput}} ({{rewardId}})").unwrap(),"Ana resgatou Mute o Thenees por 5000: com carinho (abc)");
+    }
     }
 }

@@ -1,5 +1,5 @@
 import CommandOptions from './CommandOptions';
-import {useState,useCallback,type ReactNode} from 'react';
+import {useState,useCallback,useEffect,type ReactNode} from 'react';
 import {ReactFlow,Background,Controls,MiniMap,addEdge,useNodesState,useEdgesState,type Connection,type Node,type Edge} from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import {Plus,Save,Trash2,Zap} from 'lucide-react';
@@ -12,8 +12,17 @@ import {SendPicker,AudioPicker} from './FlowOptions';
 import {AIResponseTest} from './AIConversation';
 import AIActionOptions from './AIActionOptions';
 import {friendlyError,type FriendlyError} from './errors';
+import {api,desktop} from './api';
 type Data={label:string;action?:Action;[key:string]:unknown};
 /** Seção recolhível do painel lateral: agrupa campos parecidos e sai do caminho quando fechada. */
+type Reward={id:string;title:string;cost:number;enabled:boolean;paused:boolean};
+function RewardPicker({profileId,value,onChange}:{profileId:string;value:string;onChange:(id:string)=>void}){
+ const [rewards,setRewards]=useState<Reward[]>([]);const [error,setError]=useState('');
+ useEffect(()=>{if(!desktop)return;api<Reward[]>('twitch.rewards',{profileId}).then(setRewards).catch(()=>setError('Não foi possível listar as recompensas. Confira a conexão e a autorização do canal.'))},[profileId]);
+ if(!desktop)return <p className="help">A lista de recompensas aparece no aplicativo desktop.</p>;
+ const found=rewards.find(r=>r.id===value);
+ return <><Field label="Recompensa" hint="Identidade por ID: renomear na Twitch não quebra. Vazio vale qualquer resgate."><select value={value} onChange={e=>onChange(e.target.value)}><option value="">Qualquer resgate</option>{rewards.map(r=><option key={r.id} value={r.id}>{r.title} · {r.cost} pts{r.enabled===false?' (desativada)':''}</option>)}{value&&!found&&<option value={value}>{value}</option>}</select></Field>{error&&<p className="help">{error}</p>}</>;
+}
 function Section({title,open=false,children}:{title:string;open?:boolean;children:ReactNode}){return <details open={open}><summary>{title}</summary>{children}</details>}
 export default function FlowEditor({flow,platform='twitch',ai,onSave,intro}:{flow:Flow;platform?:string;ai?:AIConfig;onSave:(f:Flow)=>Promise<void>;intro?:string}){
  const [counter,setCounter]=useState(!!flow.counter);const [timerSeconds,setTimerSeconds]=useState(flow.timerSeconds||300);
@@ -28,7 +37,7 @@ export default function FlowEditor({flow,platform='twitch',ai,onSave,intro}:{flo
  const node=nodes.find(n=>n.id===selected);const action=node?.data.action;
  const connect=useCallback((c:Connection)=>setEdges(e=>addEdge({...c,animated:true},e)),[setEdges]);
  function update(a:Action){setNodes(ns=>ns.map(n=>n.id===selected?{...n,data:{label:actions[a.kind],action:a}}:n))}
- const keepText=(kind:string)=>["command","contains","voice","mention"].includes(kind);
+ const keepText=(kind:string)=>["command","contains","voice","mention","redemption"].includes(kind);
 function switchKind(current:Action,next:string){const base:Action={...current,kind:next};
   if(next==='ai.generate'&&!base.target.startsWith('local.'))base.target='local.aiResponse';
   if(next==='punish'){if(!['sender','first','random'].includes(base.target))base.target='sender';if(!base.punish)base.punish='timeout';if(base.value<1)base.value=60}
@@ -55,7 +64,7 @@ function switchKind(current:Action,next:string){const base:Action={...current,ki
  <option key={k} value={k}>{n}</option>)}</select>
  </Field>{['command','contains','voice','mention'].includes(trigger.kind)&&<Field label="Texto que dispara" hint={trigger.kind==='mention'?'Separe os nomes do bot com vírgula: o gatilho passa quando um deles aparece na mensagem, como palavra inteira. Ex.: Arroba, ArrobaSrv, arromba.':trigger.kind==='contains'?'Separe várias palavras ou frases com vírgula: o gatilho passa quando uma delas aparece na mensagem.':trigger.kind==='command'?'Separe variações com vírgula quando o povo erra o comando: !whislist, !whishlist, !wishlist. Qualquer uma delas dispara.':trigger.kind==='voice'?'Separe variações com vírgula: o gatilho passa quando uma delas aparece na fala. Ex.: troca o jogo, muda o jogo, minecraft.':undefined}>
  <input value={trigger.pattern} onChange={e=>setTrigger({...trigger,pattern:e.target.value})}/>
- </Field>}{trigger.kind!=='timer'&&<>
+ </Field>}{trigger.kind==='redemption'&&<RewardPicker profileId={flow.profileId} value={trigger.pattern} onChange={pattern=>setTrigger({...trigger,pattern})}/>}{trigger.kind!=='timer'&&<>
  <Field label="Quem pode usar">
  <select value={trigger.permission} onChange={e=>setTrigger({...trigger,permission:e.target.value})}>
  <option value="everyone">Todo mundo</option>

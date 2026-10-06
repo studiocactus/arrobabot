@@ -79,6 +79,12 @@ Para escrever marcadores literalmente, acrescente uma barra invertida: `\{{user}
 | {{giftTier}} | Nível do presente |
 | {{raidViewers}} | Pessoas trazidas pela raid |
 | {{raiderLogin}} | Login do canal que fez a raid, pronto para destaque |
+| {{rewardId}} | ID da recompensa resgatada (identidade estável) |
+| {{rewardTitle}} | Título da recompensa no momento do resgate |
+| {{rewardCost}} | Custo em pontos do resgate |
+| {{redeemer}} | Quem resgatou |
+| {{redeemerId}} | ID de quem resgatou |
+| {{userInput}} | Texto enviado junto do resgate (vazio se não pediu) |
 | {{lastSpeech}} | Última fala reconhecida na escuta contínua (vazia se nenhuma) |
 | {{liveSpeech}} | Todas as falas da sessão de escuta, separadas por ` \| ` |
 

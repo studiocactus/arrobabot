@@ -222,7 +222,9 @@ pub async fn process(rt:Arc<Runtime>,e:Event){
  let publisher=responder(&ready);
  // Totais do canal uma vez por alerta, para {{followerCount}} e {{subCount}}.
  let counts=if !ready.is_empty()&&matches!(e.kind.as_str(),"follow"|"subscription"|"resub"|"gift")&&!e.simulated{Some(crate::twitch_ops::channel_counts(&rt,&p).await)}else{None};
+ let mut any_ok=false;
  for f in ready {
+  let mut completed=true;
   let answers=publisher.as_ref().is_none_or(|id|id==&f.id);
   rt.log(&p.id,"flow",&format!("Iniciando {}",f.name),"info");
   if !answers&&replies(&f){rt.log(&p.id,"action",&format!("{} · Outra automação já respondeu esta mensagem; os demais efeitos continuam",f.name),"info")}
@@ -239,9 +241,17 @@ pub async fn process(rt:Arc<Runtime>,e:Event){
  let result=tokio::time::timeout(Duration::from_secs(65),action(&rt,&p,&e,a,&mut variables,&history,&f)).await;
  match result{
  Ok(Ok(()))=>rt.log(&p.id,"action",&format!("{} · {}",f.name,a.kind),"success"),
- Ok(Err(err))=>{rt.log(&p.id,"action",&format!("{} · {err}",f.name),"error");break},
- Err(_)=>{rt.log(&p.id,"action","A ação excedeu o tempo permitido","error");break}
+ Ok(Err(err))=>{rt.log(&p.id,"action",&format!("{} · {err}",f.name),"error");completed=false;break},
+ Err(_)=>{rt.log(&p.id,"action","A ação excedeu o tempo permitido","error");completed=false;break}
  }
+ if completed{any_ok=true;}
+ }
+ // Resgate cumprido só quando ao menos uma automação terminou tudo: sem
+ // permissão nova, o erro pede a reautorização em vez de falhar calado.
+ if any_ok&&e.kind=="redemption"&&!e.simulated{
+  let (rt2,p2)=(rt.clone(),p.clone());
+  let (reward,rid)=(e.data["reward"]["id"].as_str().unwrap_or("").to_owned(),e.id.clone());
+  tokio::spawn(async move{if let Err(err)=crate::twitch_ops::fulfill_redemption(&rt2,&p2,&reward,&rid).await{rt2.log(&p2.id,"redemption",&err,"error");}else{rt2.log(&p2.id,"redemption","Resgate marcado como cumprido","success");}});
  }
  }
 }

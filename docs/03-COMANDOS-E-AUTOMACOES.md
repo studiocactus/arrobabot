@@ -120,7 +120,7 @@ Para reorganizar, remova as conexões antigas e conecte a sequência desejada. N
 | Sub de presente | Evento gift, com quem presenteou e quantidade |
 | Bits / Super Chat | Evento cheer |
 | Raid | Evento raid |
-| Resgate de pontos | Evento redemption |
+| Resgate de pontos | Evento redemption, com filtro por recompensa e confirmação automática |
 | Evento externo | Evento custom enviado por integração |
 | Comando de voz | Trecho da fala transcrita; separe variações com vírgula e basta uma delas aparecer |
 
@@ -129,6 +129,8 @@ A presença da opção no editor não garante que todas as plataformas emitam aq
 **Chamada pelo nome do bot** existe para o caso em que o espectador escreve o nome do bot sem marcar com `@`, como "Arroba, vem aqui". A lista é de nomes separados por vírgula, e a comparação é por palavra inteira: com `Arroba, ArrobaSrv`, a mensagem "ArrobaSrv mandou" não dispara o gatilho pelo nome curto, porque `ArrobaSrv` é uma palavra só, não `Arroba`. O gatilho considera só mensagens de chat e respeita os mesmos intervalos por fluxo e por pessoa dos demais gatilhos.
 
 **Comando de chat** também aceita variações separadas por vírgula, como `!whislist, !whishlist, !wishlist`. Cada variação começa com `!`, não contém espaço e é comparada como palavra inteira. Use esse recurso para o erro de digitação mais comum do seu público: quem escreveu errado dispara o mesmo comando e recebe a mesma resposta. A prévia usa a primeira variação da lista.
+
+**Resgate de pontos** dispara no resgate de recompensa da Twitch. No editor visual, escolha a recompensa pela lista (a identidade é o ID: renomear na Twitch não quebra); vazio vale qualquer resgate. Variáveis do resgate: `{{redeemer}}`, `{{rewardTitle}}`, `{{rewardCost}}`, `{{rewardId}}` e `{{userInput}}`. Quando ao menos uma automação termina tudo, o BotLive marca o resgate como cumprido; sem a permissão nova, o Histórico pede para reautorizar a conta do canal (gerenciar resgates). A simulação nunca confirma resgate de verdade.
 
 **Comandos nativos da Twitch no chat**: `!setgame Nome do Jogo` e `!settitle Novo título` funcionam digitados no chat por moderadores e streamer, sem precisar de automação (categoria, título e VIP com a conta do canal; o resto com a conta do bot). O bot confirma no chat marcando quem pediu, com o nome oficial do jogo. Para falar em vez de digitar, use o gatilho Comando de voz com a ação Ação na Twitch: os dois caminhos fazem o mesmo. Se você criar uma automação própria com o mesmo comando, a sua vale em vez da nativa, inclusive a mensagem de confirmação. Para mensagem própria que varia com o jogo em uma automação só: comando `!setgame` com permissão de moderadores, ação 1 de categoria com conteúdo vazio e ação 2 de mensagem como `@{{user}} agora é {{local.twitchGame}}!`. A ação da Twitch guarda `local.twitchGame`, `local.twitchGameId`, `local.twitchTitle` e `local.twitchTarget` para as ações seguintes do mesmo fluxo.
 

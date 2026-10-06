@@ -165,6 +165,7 @@ pub fn matches(t:&Trigger,e:&Event)->bool {
  "contains"=>e.kind=="chat" && contains_any(&t.pattern,&e.message),
  "mention"=>e.kind=="chat" && mention_any(&t.pattern,&e.message),
  "voice"=>e.kind=="voice" && (t.pattern.is_empty()||contains_any(&t.pattern,&e.message)),
+ "redemption"=>e.kind=="redemption"&&(t.pattern.trim().is_empty()||e.data["reward"]["id"].as_str().is_some_and(|id|id==t.pattern.trim())),
  other=>other==e.kind,
  }
 }
@@ -316,7 +317,7 @@ pub fn validate_flow(f:&Flow)->Result<(),String> {
  }
  #[test] fn smart_timer_fields_default_and_validate() {
   // Timer antigo, sem os campos novos, herda os padrões e continua válido.
-  let old:Flow=serde_json::from_value(serde_json::json!({"id":"f","profileId":"p","name":"Agua","enabled":true,"timerSeconds":3180,"trigger":{"kind":"timer"},"actions":[{"kind":"chat","text":"Beba água"}]})).unwrap();
+  let old:Flow=serde_json::from_value(serde_json::json!({"id":"00000000-0000-4000-8000-000000000021","profileId":"00000000-0000-4000-8000-000000000022","name":"Agua","enabled":true,"timerSeconds":3180,"trigger":{"kind":"timer"},"actions":[{"kind":"chat","text":"Beba água"}]})).unwrap();
   assert_eq!((old.timer_category.as_str(),old.timer_priority.as_str()),("personalizado","normal"));
   assert!(old.timer_variants.is_empty()&&old.timer_min_messages==0&&old.timer_max_session==0&&old.timer_start_delay_secs==0);
   assert!(validate_flow(&old).is_ok());
@@ -428,5 +429,16 @@ pub fn validate_flow(f:&Flow)->Result<(),String> {
   // Ações salvas antes da punição existir continuam recebendo o campo vazio.
   let mut saved=serde_json::to_value(&f.actions[0]).unwrap();saved.as_object_mut().unwrap().remove("punish");
   let back:Action=serde_json::from_value(saved).unwrap();assert_eq!(back.punish,"");
+ }
+ #[test] fn redemption_matches_by_reward_id() {
+  let t=Trigger{kind:"redemption".into(),pattern:"".into(),permission:"everyone".into(),cooldown:0,user_cooldown:0};
+  let e=Event{id:"1".into(),profile_id:"p".into(),kind:"redemption".into(),user:"Ana".into(),user_id:"77".into(),role:"everyone".into(),message:String::new(),data:serde_json::json!({"reward":{"id":"abc","title":"Mute","cost":5000}}),simulated:false};
+  assert!(matches(&t,&e),"padrão vazio vale qualquer resgate");
+  let one=Trigger{pattern:"abc".into(),..t.clone()};
+  assert!(matches(&one,&e));
+  let other=Trigger{pattern:"xyz".into(),..t.clone()};
+  assert!(!matches(&other,&e),"outra recompensa não dispara");
+  let chat=Event{kind:"chat".into(),..e.clone()};
+  assert!(!matches(&one,&chat));
  }
 }

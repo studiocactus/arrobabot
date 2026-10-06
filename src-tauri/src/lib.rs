@@ -136,6 +136,7 @@ pub async fn dispatch(rt:Arc<Runtime>,op:&str,args:Value)->R<Value>{
  "knowledge.import"=>{let mut profile=rt.db.profile(&p)?;let source=args["path"].as_str().ok_or("Escolha uma pasta")?.to_owned();let made=knowledge::import(&rt.base,&p,&source)?;profile.ai.knowledge_source=source;rt.db.save_profile(&profile)?;Ok(made)},
  "knowledge.remove"=>{rt.db.profile(&p)?;knowledge::remove(&rt.base,&p,args["path"].as_str().ok_or("Arquivo ausente")?)?;Ok(Value::Null)},
  "community"=>{rt.db.profile(&p)?;Ok(json!(modules::load(&rt,&p)))},
+ "twitch.rewards"=>{let profile=rt.db.profile(&p)?;crate::twitch_ops::custom_rewards(&rt,&profile).await},
  "community.action"=>modules::admin(&rt,&p,args["action"].as_str().ok_or("Ação ausente")?,args["data"].clone()),
  "preset.create"=>presets::export(&rt,&p,args["kind"].as_str().unwrap_or("profile"),args["name"].as_str().unwrap_or("Meu preset"),serde_json::from_value(args["ids"].clone()).unwrap_or_default()),
  "preset.preview"=>presets::preview(&rt,&p,&args["preset"]),
