@@ -28,6 +28,15 @@ export function moveAction(nodes:FlowNode[],edges:FlowEdge[],id:string,dir:-1|1)
  for(const nid of next){rebuilt.push({source:prev,target:nid});prev=nid;}
  return {nodes:nodes2,edges:others.concat(rebuilt)};
 }
+export function testVarKeys(flow:{actions:{kind:string;text:string;condVar?:string}[]}):string[]{
+ const out:string[]=[];
+ const push=(k:string)=>{const key=k.split('|')[0].trim();if(key&&!out.includes(key))out.push(key)};
+ for(const a of flow.actions){
+  if(a.condVar)push(a.condVar);
+  for(const m of (a.text||'').matchAll(/\{\{([^{}]+)\}\}/g))push(m[1]);
+ }
+ return out.slice(0,10);
+}
 export function orderedActions(nodes:FlowNode[],edges:FlowEdge[]):Action[]{
  const ids=new Set(nodes.map(n=>n.id));if(!ids.has('trigger'))throw Error('O fluxo precisa de um gatilho.');
  for(const e of edges)if(!ids.has(e.source)||!ids.has(e.target))throw Error('Conexão aponta para um bloco ausente.');

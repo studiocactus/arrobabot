@@ -227,7 +227,7 @@ pub async fn process(rt:Arc<Runtime>,e:Event){
  let mut any_ok=false;
  for f in ready {
   let answers=publisher.as_ref().is_none_or(|id|id==&f.id);
-  if execute_flow(&rt,&p,&e,&f,answers,&history,counts.as_ref(),false).await{any_ok=true;}
+  if execute_flow(&rt,&p,&e,&f,answers,&history,counts.as_ref(),false,None).await{any_ok=true;}
  }
 
  // Resgate cumprido só quando ao menos uma automação terminou tudo: sem
@@ -240,7 +240,7 @@ pub async fn process(rt:Arc<Runtime>,e:Event){
 }
  /// Executa um fluxo com identidade própria: mesmo caminho para eventos reais e testes.
  /// Devolve true quando todas as ações terminaram (base do resgate cumprido).
- pub async fn execute_flow(rt:&Arc<Runtime>,p:&Profile,e:&Event,f:&Flow,answers:bool,history:&[Value],counts:Option<&(Option<i64>,Option<i64>)>,test:bool)->bool{
+ pub async fn execute_flow(rt:&Arc<Runtime>,p:&Profile,e:&Event,f:&Flow,answers:bool,history:&[Value],counts:Option<&(Option<i64>,Option<i64>)>,test:bool,test_vars:Option<Value>)->bool{
   let kinds=f.actions.iter().map(|a|a.kind.clone()).collect::<Vec<_>>();
   let exec=rt.runs.start(&p.id,&f.id,&f.name,&kinds,test);
   let short=rt.runs.short_of(&exec);
@@ -257,24 +257,29 @@ pub async fn process(rt:Arc<Runtime>,e:Event){
   if let Some(n)=count{variables.set_command_count(n);}
   if let Some((followers,subs))=counts{variables.set("followerCount",followers.map_or(serde_json::Value::String(String::new()),|n|serde_json::json!(n)));variables.set("subCount",subs.map_or(serde_json::Value::String(String::new()),|n|serde_json::json!(n)));}
   if !testing{crate::chat_extras::play_flow(&rt,&p,&f,&e);}
+  variables.set("execution.id",json!(exec.clone()));
+  if testing{if let Some(vars)=test_vars.and_then(|v|v.as_object().cloned()){for (k,v) in vars{variables.set(&k,v.clone());}}}
+  let mut ctl=Ctl{skip_next:false,stop:false};
   for (i,a) in f.actions.iter().enumerate(){
    if rt.runs.cancelled(&exec){rt.log(&p.id,"run",&format!("Execução {short} cancelada"),"info");rt.runs.finish(&exec,"CANCELLED");return false;}
+   if ctl.skip_next{ctl.skip_next=false;rt.log(&p.id,"action",&format!("{} · etapa {} pulada pela condição",f.name,i+1),"info");rt.runs.step(&exec,i,"SKIPPED");continue}
    if !a.enabled{rt.log(&p.id,"action",&format!("{} · etapa {} pulada",f.name,i+1),"info");rt.runs.step(&exec,i,"SKIPPED");continue}
    if !answers&&matches!(a.kind.as_str(),"chat"|"ai"|"ai.generate"){continue}
    if e.kind=="timer"&&!e.simulated&&!crate::timers::event_active(&rt,&e){break}
    if !a.condition.is_empty()&&!e.message.to_lowercase().contains(&a.condition.to_lowercase()){continue}
    rt.runs.step(&exec,i,"RUNNING");
-   let result=if a.kind=="wait"{Ok(action(&rt,&p,&e,a,&mut variables,&history,&f,&exec,i).await)}else{tokio::time::timeout(Duration::from_secs(65),action(&rt,&p,&e,a,&mut variables,&history,&f,&exec,i)).await};
+   let result=if a.kind=="wait"{Ok(action(&rt,&p,&e,a,&mut variables,&history,&f,&exec,i,&mut ctl).await)}else{tokio::time::timeout(Duration::from_secs(65),action(&rt,&p,&e,a,&mut variables,&history,&f,&exec,i,&mut ctl)).await};
    match result{
    Ok(Ok(()))=>{rt.log(&p.id,"action",&format!("{} · {}",f.name,a.kind),"success");rt.runs.step(&exec,i,"SUCCESS");}
    Ok(Err(err))=>{rt.log(&p.id,"action",&format!("{} · {err}",f.name),"error");completed=false;if err=="Execução cancelada"{rt.runs.finish(&exec,"CANCELLED");rt.log(&p.id,"run",&format!("Execução {short} cancelada"),"info");return false;}break},
    Err(_)=>{rt.log(&p.id,"action","A ação excedeu o tempo permitido","error");completed=false;break}
    }
+   if ctl.stop{break}
   }
-  let status=if completed{"COMPLETED"}else{"FAILED"};
+  let status=if ctl.stop{"STOPPED_BY_CONDITION"}else if completed{"COMPLETED"}else{"FAILED"};
   rt.runs.finish(&exec,status);
   rt.log(&p.id,"run",&format!("Execução {short} {status}"),"info");
-  completed
+  completed&&!ctl.stop
  }
 /// Ações que publicam a resposta no chat ou produzem o texto que a ação de chat envia.
 const REPLY:&[&str]=&["chat","ai","ai.generate"];
@@ -295,7 +300,9 @@ fn responder(flows:&[Flow])->Option<String>{
  }
  best.map(|(_,i)|flows[i].id.clone())
 }
-async fn action(rt:&Arc<Runtime>,p:&Profile,e:&Event,a:&Action,variables:&mut crate::variables::Context,history:&[Value],f:&Flow,exec:&str,step:usize)->Result<(),String>{
+/// Controle da sequência dentro de uma execução: pular a próxima ou parar.
+pub struct Ctl{pub skip_next:bool,pub stop:bool}
+async fn action(rt:&Arc<Runtime>,p:&Profile,e:&Event,a:&Action,variables:&mut crate::variables::Context,history:&[Value],f:&Flow,exec:&str,step:usize,ctl:&mut Ctl)->Result<(),String>{
  let testing=e.data["botliveTest"]==true;
  if testing&&matches!(a.kind.as_str(),"chat"|"ai"|"ai.generate"|"discord"|"webhook"|"memory"|"points"|"punish"|"twitch"|"tts"){rt.log(&p.id,"action",&format!("{} · teste pulou {}",f.name,a.kind),"info");return Ok(())}
  let text=if a.kind=="variable.delete"{String::new()}else if a.kind=="script"{a.text.clone()}else{variables.render(&a.text)?};
@@ -328,6 +335,7 @@ async fn action(rt:&Arc<Runtime>,p:&Profile,e:&Event,a:&Action,variables:&mut cr
  },
  "memory"=>{let _lock=rt.vault_lock.lock().unwrap();rt.db.profile(&p.id)?;vault::write(&rt.base,&p.id,&variables.render(&a.target)?,&text,true)},
  "delay"=>{tokio::time::sleep(Duration::from_millis(a.value.clamp(0,30000) as u64)).await;Ok(())},
+ "condition"=>{let (ok,resolved)=variables.eval_rule(&a.cond_var,&a.cond_op,&a.cond_value)?;let short=rt.runs.short_of(exec);let op_pt=match a.cond_op.as_str(){"equals"=>"igual a","not_equals"=>"diferente de","greater_than"=>"maior que","greater_or_equal"=>"maior ou igual a","less_than"=>"menor que","less_or_equal"=>"menor ou igual a","contains"=>"contém","not_contains"=>"não contém","is_empty"=>"vazio","is_not_empty"=>"não vazio",_=>a.cond_op.as_str()};if ok{rt.log(&p.id,"condition",&format!("[{short}] {} {} {} → verdadeiro ({})",a.cond_var,op_pt,a.cond_value,resolved),"info");rt.runs.step(exec,step,"TRUE");}else if a.cond_false=="skip"{ctl.skip_next=true;rt.log(&p.id,"condition",&format!("[{short}] {} {} {} → falso ({}); pula a próxima",a.cond_var,op_pt,a.cond_value,resolved),"info");rt.runs.step(exec,step,"FALSE");}else{ctl.stop=true;rt.log(&p.id,"condition",&format!("[{short}] {} {} {} → falso ({}); para o fluxo",a.cond_var,op_pt,a.cond_value,resolved),"info");rt.runs.step(exec,step,"FALSE");}Ok(())},
  "wait"=>{let total=a.value.clamp(1,3600000) as u64;rt.runs.step(exec,step,"WAITING");let mut left=total;while left>0{if rt.runs.cancelled(exec){rt.runs.step(exec,step,"CANCELLED");return Err("Execução cancelada".into())}let nap=left.min(250);tokio::time::sleep(Duration::from_millis(nap)).await;left-=nap;}rt.runs.step(exec,step,"SUCCESS");Ok(())},
  "overlay"=>{rt.emit("overlay",json!({"profileId":p.id,"text":text}));Ok(())},
  "tts"=>{if p.modules["tts"]!=true{return Err("Ative o módulo Texto para voz".into())}let config=rt.db.module(&p.id,"tts");rt.emit("tts",json!({"profileId":p.id,"text":text.chars().take(config["limit"].as_u64().unwrap_or(300).clamp(1,500) as usize).collect::<String>(),"voice":config["voice"],"rate":config["rate"]}));Ok(())},

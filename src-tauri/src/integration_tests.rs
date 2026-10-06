@@ -441,6 +441,22 @@ async fn random_viewer_draws_fresh_on_every_occurrence(){
  assert_eq!(seen.len(),2,"um único Context sorteou 120 vezes sem variar o nome");
 }
 #[tokio::test]
+async fn condition_false_stops_and_skip_jumps_one(){
+ let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();let p=profile("Condição");rt.db.save_profile(&p).unwrap();
+ let cond=|var:&str,op:&str,value:&str,on_false:&str|Action{kind:"condition".into(),text:String::new(),target:String::new(),value:0,condition:String::new(),cond_var:var.into(),cond_op:op.into(),cond_value:value.into(),cond_false:on_false.into(),..Default::default()};
+ let say=t=>Action{kind:"overlay".into(),text:t.into(),target:String::new(),value:0,condition:String::new(),..Default::default()};
+ let mut f=flow(&p);f.name="Para".into();f.trigger.pattern="!para".into();f.actions=vec![cond("reward.cost","greater_or_equal","5000","stop"),say("alto")];rt.db.save_flow(&f).unwrap();
+ let mut g=flow(&p);g.name="Pula".into();g.trigger.pattern="!pula".into();g.actions=vec![cond("reward.cost","greater_or_equal","5000","skip"),say("pulado"),say("fim")];rt.db.save_flow(&g).unwrap();
+ let mut rx=rt.broadcast.subscribe();
+ engine::process(rt.clone(),event(&p,"!para",false)).await;
+ engine::process(rt.clone(),event(&p,"!pula",false)).await;
+ let texts:Vec<String>=std::iter::from_fn(||rx.try_recv().ok()).filter(|v|v["type"]=="overlay").map(|v|v["payload"]["text"].as_str().unwrap_or("").into()).collect();
+ assert_eq!(texts,vec!["fim"],"stop barrou o alto; skip pulou só o pulado");
+ let logs=rt.db.logs(&p.id).unwrap();
+ assert!(logs.iter().any(|l|l.message.contains("STOPPED_BY_CONDITION")),"parada aparece com identidade");
+ assert!(logs.iter().any(|l|l.message.contains("→ falso")),"falso mostra resolvido e esperado");
+ assert!(rt.runs.list(&p.id).iter().any(|r|r.status=="STOPPED_BY_CONDITION"));
+}
 async fn disabled_steps_skip_and_wait_runs_without_blocking(){
  let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();let p=profile("Sequência");rt.db.save_profile(&p).unwrap();
  let mut f=flow(&p);f.name="Flash".into();f.trigger.pattern="!flash".into();

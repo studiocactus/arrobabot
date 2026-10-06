@@ -1,5 +1,5 @@
 import {describe,it,expect} from 'vitest';
-import {orderedActions,moveAction,chainIds} from './flow';
+import {orderedActions,moveAction,chainIds,testVarKeys} from './flow';
 import {newAction} from './types';
 const nodes=['trigger','a','b','c'].map(id=>({id,position:{x:0,y:0},data:id==='trigger'?{}:{action:{...newAction(),text:id}}}));
 describe('editor de automação',()=>{
@@ -17,5 +17,10 @@ describe('editor de automação',()=>{
   expect(()=>moveAction(nodes,edges,'a',-1)).toThrow('Nada para mover');
   expect(()=>moveAction(nodes,edges,'c',1)).toThrow('Nada para mover');
   expect(chainIds(nodes,edges)).toEqual(['trigger','a','b','c']);
+ });
+ it('coleta variáveis do teste sem duplicar',()=>{
+  const flow={actions:[{kind:'condition',text:'',condVar:'reward.cost'},{kind:'chat',text:'{{redeemer}} pagou {{reward.cost|number:0}} e {{redeemer}}!'}]};
+  expect(testVarKeys(flow)).toEqual(['reward.cost','redeemer']);
+  expect(testVarKeys({actions:[{kind:'chat',text:'sem marcador'}]})).toEqual([]);
  });
 });

@@ -89,6 +89,9 @@ const LEGACY:[&str;28]=["user","userName","userId","role","message","channel","c
 /// com o catálogo da interface (`src/variableCatalog.ts`).
 const EXTRA:[&str;20]=["followerCount","subCount","subTier","subMonths","subStreak","subMessage","isGift","gifterName","giftTotal","giftTier","raidViewers","raiderLogin","lastSpeech","liveSpeech","rewardId","rewardTitle","rewardCost","redeemer","redeemerId","userInput"];
 const SCOPES:[&str;5]=["local","global","user","session","sessionUser"];
+/// Nomes pontuados de leitura (apelidos do contexto da execução). Vão para o
+/// catálogo, nunca para `$` legado, e nunca aceitam escrita por variável.
+const DOTTED:[&str;10]=["execution.id","viewer.id","viewer.login","viewer.name","reward.id","reward.title","reward.cost","redemption.id","redemption.input","time.timestamp"];
 fn levenshtein(a:&str,b:&str)->usize{
  let (a,b)=(a.as_bytes(),b.as_bytes());let mut prev:Vec<usize>=(0..=b.len()).collect();
  for i in 1..=a.len(){let mut cur=vec![i];for j in 1..=b.len(){cur.push((prev[j]+1).min(cur[j-1]+1).min(prev[j-1]+usize::from(a[i-1]!=b[j-1])));}prev=cur;}
@@ -112,11 +115,13 @@ pub fn suggest_variable(raw:&str)->Option<String>{
  if name.is_empty()||name.starts_with("random:")||name.starts_with("data."){return None}
  if let Some((scope,rest))=name.split_once('.'){
   if SCOPES.contains(&scope){return None}
+  if DOTTED.contains(&name){return None}
+  if let Some(sug)=closest(name,DOTTED.iter().copied()){return Some(sug)}
   return closest(scope,SCOPES.iter().copied()).map(|s|format!("{s}.{rest}"));
  }
  if name.strip_prefix("arg").is_some_and(|n|!n.is_empty()&&n.bytes().all(|b|b.is_ascii_digit())){return None}
- if LEGACY.contains(&name)||EXTRA.contains(&name){return None}
- closest(name,LEGACY.iter().copied().chain(EXTRA.iter().copied()))
+ if LEGACY.contains(&name)||EXTRA.contains(&name)||DOTTED.contains(&name){return None}
+ closest(name,LEGACY.iter().copied().chain(EXTRA.iter().copied()).chain(DOTTED.iter().copied()))
 }
 /// Confere os marcadores de um texto (`{{x}}`, `%x%`, `$x`) e devolve um problema
 /// por marcador desconhecido, com a linha (1-based), o marcador e a sugestão.
@@ -153,11 +158,43 @@ pub fn analyze_variables(text:&str)->Vec<Value>{
   for m in marks{
    let key=m.split('|').next().unwrap_or("").trim();
    if key.is_empty(){continue}
-   let known=key.starts_with("random:")||key.starts_with("data.")||key.split_once('.').is_some_and(|(s,_)|SCOPES.contains(&s))||key.strip_prefix("arg").is_some_and(|n|!n.is_empty()&&n.bytes().all(|b|b.is_ascii_digit()))||LEGACY.contains(&key)||EXTRA.contains(&key);
+   let known=key.starts_with("random:")||key.starts_with("data.")||key.split_once('.').is_some_and(|(s,_)|SCOPES.contains(&s))||key.strip_prefix("arg").is_some_and(|n|!n.is_empty()&&n.bytes().all(|b|b.is_ascii_digit()))||LEGACY.contains(&key)||EXTRA.contains(&key)||DOTTED.contains(&key);
    if !known{out.push(json!({"line":i+1,"marker":m,"suggestion":suggest_variable(&m)}));}
   }
  }
  out
+}
+/// Compara com segurança de tipo: ordenação e igualdade numérica só valem
+/// quando os dois lados são números; o resto compara texto exato, com
+/// contém sem diferenciar maiúsculas. Ausente (vazio) só passa em vazio/negação.
+fn compare_rule(op:&str,got:&str,want:&str)->bool{
+ let (a,b)=(got.trim(),want.trim());
+ match op{
+  "is_empty"=>a.is_empty(),
+  "is_not_empty"=>!a.is_empty(),
+  "contains"=>!a.is_empty()&&!b.is_empty()&&a.to_lowercase().contains(&b.to_lowercase()),
+  "not_contains"=>b.is_empty()||!a.to_lowercase().contains(&b.to_lowercase()),
+  _=>{
+   let pair=a.parse::<f64>().ok().zip(b.parse::<f64>().ok()).filter(|(x,y)|x.is_finite()&&y.is_finite());
+   if let Some((x,y))=pair{
+    match op{"equals"=>x==y,"not_equals"=>x!=y,"greater_than"=>x>y,"greater_or_equal"=>x>=y,"less_than"=>x<y,"less_or_equal"=>x<=y,_=>false}
+   }else{
+    match op{"equals"=>a==b,"not_equals"=>a!=b,_=>false}
+   }
+  }
+ }
+}
+/// Diz se o nome base existe no catálogo (vale filtros com `|` depois).
+pub fn is_known(raw:&str)->bool{
+ let name=raw.split('|').next().unwrap_or("").trim();
+ if name.is_empty(){return false}
+ if name.starts_with("random:")||name.starts_with("data."){return true}
+ if let Some((scope,_))=name.split_once('.'){
+  if SCOPES.contains(&scope)||DOTTED.contains(&name){return true}
+  return false;
+ }
+ if name.strip_prefix("arg").is_some_and(|n|!n.is_empty()&&n.bytes().all(|b|b.is_ascii_digit())){return true}
+ LEGACY.contains(&name)||EXTRA.contains(&name)
 }
 fn legacy(name:&str) -> bool { LEGACY.contains(&name) || name.strip_prefix("arg").is_some_and(|n|!n.is_empty()&&n.bytes().all(|b|b.is_ascii_digit())) }
 /// Reescreve o marcador legado `$nome` como `{{nome}}`. Só nomes conhecidos viram modelo:
@@ -224,6 +261,9 @@ impl Context {
      values.insert("redeemer".into(),json!(e.user));
      values.insert("redeemerId".into(),json!(e.user_id));
      values.insert("userInput".into(),json!(e.data["user_input"].as_str().unwrap_or("")));
+     // Apelidos pontuados do contexto da execução (leitura; sem escrita por variável).
+     let login=e.data["chatter_user_login"].as_str().filter(|s|!s.is_empty()).map(str::to_owned).unwrap_or_else(||e.user.to_lowercase());
+     for (key,value) in [("viewer.id",json!(e.user_id)),("viewer.login",json!(login)),("viewer.name",json!(e.user)),("time.timestamp",json!(now.timestamp())),("reward.id",json!(e.data["reward"]["id"].as_str().unwrap_or(""))),("reward.title",json!(e.data["reward"]["title"].as_str().unwrap_or(""))),("reward.cost",json!(e.data["reward"]["cost"].as_u64().unwrap_or(0))),("redemption.id",json!(e.id)),("redemption.input",json!(e.data["user_input"].as_str().unwrap_or("")))] { values.insert(key.into(),value); }
         if let Some(f)=flow { values.insert("commandCount".into(),json!(crate::command_counter::get(db,&p.id,&f.id)?)); values.insert("actionId".into(),json!(f.id)); values.insert("actionName".into(),json!(f.name)); }
         // O que o microfone acabou de ouvir. Sem fala ainda as duas existem vazias:
         // uma automação que usa {{lastSpeech}} não pode quebrar por o streamer estar calado.
@@ -273,6 +313,17 @@ impl Context {
             });
         }
         value.map(|v|display(&v)).ok_or_else(||format!("Variável ausente: {key}. Defina-a antes ou use |default:texto"))
+    }
+    /// Operadores da etapa de condição. Comparação com segurança de tipo:
+    /// ordenação só vale quando os dois lados são números; texto compara exato.
+    pub const COND_OPS:[&str;10]=["equals","not_equals","greater_than","greater_or_equal","less_than","less_or_equal","contains","not_contains","is_empty","is_not_empty"];
+    /// Avalia uma regra sobre o contexto e devolve (verdadeiro, valor resolvido).
+    /// Variável ausente conta como vazia e não quebra a execução; operador
+    /// inválido é erro de configuração.
+    pub fn eval_rule(&self,var:&str,op:&str,expected:&str)->Result<(bool,String),String>{
+        if !COND_OPS.contains(&op){return Err(format!("Operador desconhecido: {op}"))}
+        let resolved=self.render(&format!("{{{{{var}}}}}")).unwrap_or_default();
+        Ok((compare_rule(op,&resolved,expected),resolved))
     }
     pub fn render(&self, text: &str) -> R<String> {
         if text.len()>LIMIT {return Err("Modelo muito longo".into());}
@@ -359,6 +410,28 @@ impl Context {
         let e:Event=serde_json::from_value(serde_json::json!({"id":"e9","profileId":p.id,"kind":"redemption","user":"Ana","user_id":"77","role":"everyone","message":"","data":{"id":"red1","user_input":"com carinho","reward":{"id":"abc","title":"Mute o Thenees","cost":5000}}})).unwrap();
         let c=Context::new(&db,&p,&e,None).unwrap();
         assert_eq!(c.render("{{redeemer}} resgatou {{rewardTitle}} por {{rewardCost}}: {{userInput}} ({{rewardId}})").unwrap(),"Ana resgatou Mute o Thenees por 5000: com carinho (abc)");
+        assert_eq!(c.render("{{viewer.name}} ({{viewer.login}}) pagou {{reward.cost}}: {{redemption.input}}").unwrap(),"Ana (ana) pagou 5000: com carinho");
+    }
+    #[test] fn regras_comparam_com_tipo_e_sem_quebrar_no_vazio(){
+        use crate::model::{Event, Profile};
+        let dir=tempfile::tempdir().unwrap();let db=Db::open(&dir.path().join("t.sqlite")).unwrap();
+        let p:Profile=serde_json::from_value(serde_json::json!({"id":"00000000-0000-4000-8000-000000000032","name":"P","platform":"twitch","channel":"canal"})).unwrap();
+        db.save_profile(&p).unwrap();
+        let e:Event=serde_json::from_value(serde_json::json!({"id":"e9","profileId":p.id,"kind":"redemption","user":"Ana","user_id":"77","role":"everyone","message":"","data":{"reward":{"cost":5000}}}})).unwrap();
+        let c=Context::new(&db,&p,&e,None).unwrap();
+        assert_eq!(c.eval_rule("rewardCost","greater_or_equal","5000").unwrap(),(true,"5000".into()));
+        assert_eq!(c.eval_rule("reward.cost","greater_than","5000").unwrap().0,false);
+        assert_eq!(c.eval_rule("rewardCost","less_than","100").unwrap().0,false,"número compara número, sem cair na armadilha de texto");
+        assert_eq!(c.eval_rule("redeemer","equals","Ana").unwrap().0,true);
+        assert_eq!(c.eval_rule("redeemer","not_equals","Ana").unwrap().0,false);
+        assert_eq!(c.eval_rule("rewardTitle","contains","mute").unwrap().0,false,"ausente não contém");
+        assert_eq!(c.eval_rule("rewardTitle","is_empty").unwrap(),(true,"".into()));
+        assert_eq!(c.eval_rule("rewardTitle","is_not_empty").unwrap().0,false);
+        assert_eq!(c.eval_rule("userInput","not_contains","x").unwrap().0,true);
+        assert!(c.eval_rule("rewardCost","maior_que","5").is_err());
+        assert!(is_known("viewer.name")&&is_known("time.timestamp")&&!is_known("viewer.nome"));
+        assert_eq!(suggest_variable("viewer.nam"),Some("viewer.name".into()));
+    }
     }
     }
 }

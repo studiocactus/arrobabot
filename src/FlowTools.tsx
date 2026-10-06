@@ -1,4 +1,5 @@
 import {useEffect,useState} from 'react';
+import {testVarKeys} from './flow';
 import {Save,Play,Trash2,Pencil,Package,Workflow} from 'lucide-react';
 import {api,desktop} from './api';
 import {friendlyMessage} from './errors';
@@ -34,9 +35,17 @@ export function TimerVariants({variants,onChange}:{variants:string[];onChange:(v
 }
 type TestStep={index:number;kind:string;status:string};
 type TestRun={id:string;flow:string;status:string;test:boolean;steps:TestStep[]};
-const STEP_ICON:Record<string,string>={SUCCESS:'✓',FAILED:'✕',CANCELLED:'■',SKIPPED:'–',RUNNING:'▶',WAITING:'⏳',PENDING:'○'};
+const STEP_ICON:Record<string,string>={SUCCESS:'✓',FAILED:'✕',CANCELLED:'■',SKIPPED:'–',RUNNING:'▶',WAITING:'⏳',PENDING:'○',TRUE:'✓',FALSE:'○'};
+const TEST_SAMPLES:Record<string,string>={'viewer.name':'TesteViewer',user:'Teste',message:'!teste','reward.title':'Flashbang',rewardTitle:'Flashbang','reward.cost':'5000',rewardCost:'5000','redemption.input':'hello',userInput:'hello',redeemer:'TesteViewer'};
 export function TestFlowDialog({flow,profileId,notify,onClose}:{flow:Flow;profileId:string;notify:Notify;onClose:()=>void}){
  const [exec,setExec]=useState<string|null>(null);const [run,setRun]=useState<TestRun|null>(null);const [error,setError]=useState('');
+ const keys=testVarKeys(flow);
+ const [vals,setVals]=useState<Record<string,string>>(()=>Object.fromEntries(keys.map(k=>[k,TEST_SAMPLES[k]||''])));
+ const [began,setBegan]=useState(keys.length===0);
+ const start=async()=>{setError('');try{const testVars:Record<string,string>={};keys.forEach(k=>{testVars[k]=vals[k]||''});const r=await api<{executionId:string}>('flow.test',{flow,testVars});setExec(r.executionId)}catch(e){setError(friendlyMessage(e))}};
+ useEffect(()=>{if(!began)return;void start();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+ },[began]);
  const terminal=!!run&&(run.status==='COMPLETED'||run.status==='FAILED'||run.status==='CANCELLED');
  useEffect(()=>{let stop=false;api<{executionId:string}>('flow.test',{flow}).then(r=>{if(!stop)setExec(r.executionId)}).catch(e=>{if(!stop)setError(friendlyMessage(e))});return ()=>{stop=true};
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -44,7 +53,8 @@ export function TestFlowDialog({flow,profileId,notify,onClose}:{flow:Flow;profil
  useEffect(()=>{if(!exec||terminal)return;const timer=setInterval(async()=>{try{const list=await api<TestRun[]>('flow.runs',{profileId});const found=list.find(r=>r.id===exec);if(found)setRun(found)}catch{}},500);return ()=>clearInterval(timer)},[exec,terminal,profileId]);
  return <Modal title={'Testar '+flow.name} onClose={onClose}><div className="form-pad">
   {error&&<p role="alert" className="inline-error">{error}</p>}
-  {!run&&!error&&<p className="help">Executando…</p>}
+  {!began&&!error&&<><p className="help">Valores usados pelas condições e mensagens do teste:</p>{keys.map(k=><Field key={k} label={k}><input value={vals[k]||''} onChange={e=>setVals({...vals,[k]:e.target.value})}/></Field>)}<button className="primary" onClick={()=>setBegan(true)}>Iniciar teste</button></>}
+  {began&&!run&&!error&&<p className="help">Executando…</p>}
   {run&&<><p className="help">Execução {run.id.slice(0,8)} · {run.status==='COMPLETED'?'CONCLUÍDA':run.status==='FAILED'?'FALHOU':run.status==='CANCELLED'?'CANCELADA':run.status==='WAITING'?'AGUARDANDO':'RODANDO'}</p>
   {run.steps.map(st=><div className="list-row" key={st.index}><div><span>{st.index+1}. {st.kind}</span></div><strong>{STEP_ICON[st.status]||'?'} {st.status}</strong></div>)}
   {!terminal&&<button disabled={!exec} onClick={async()=>{try{if(exec)await api('flow.cancel',{profileId,executionId:exec})}catch(e){notify(friendlyMessage(e))}}}>Cancelar execução</button>}

@@ -1,5 +1,5 @@
 import {describe,it,expect} from 'vitest';
-import {insertVariable,makeVariableToken,messageParts,missingLocals,variableLabel} from './variableCatalog';
+import {insertVariable,makeVariableToken,messageParts,missingLocals,variableLabel,variableCatalog} from './variableCatalog';
 describe('edição de mensagens com variáveis',()=>{
  it('substitui só a seleção e preserva o restante da mensagem',()=>{
   expect(insertVariable('Olá, convidado!','{{user}}',5,14)).toEqual({text:'Olá, {{user}}!',caret:13});
@@ -75,5 +75,10 @@ describe('aviso de variável local sem origem no fluxo',()=>{
   const clipe={kind:'twitch',target:'',twOp:'clip'};
   expect(missingLocals('{{local.clipUrl}}',[chat,clipe])).toEqual([]);
   expect(missingLocals('{{local.clipUrl}}',[chat])).toEqual(['local.clipUrl']);
+ });
+ it('catálogo expõe contexto de execução sem segredos',()=>{
+  const keys=variableCatalog.map(v=>v.key);
+  for(const k of ['execution.id','viewer.id','viewer.login','viewer.name','reward.id','reward.title','reward.cost','redemption.id','redemption.input','time.timestamp'])expect(keys).toContain(k);
+  expect(keys.some(k=>/password|secret|token|credential/i.test(k))).toBe(false);
  });
 });

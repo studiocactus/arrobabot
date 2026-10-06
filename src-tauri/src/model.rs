@@ -111,6 +111,12 @@ pub struct Action {
  /// Duração temporária em segundos (0 = permanente). Só mutar, volume,
  /// mostrar e esconder restauram o estado anterior.
  #[serde(default)] pub obs_duration:u64,
+ /// Etapa de condição: variável, operador, valor esperado e saída no falso
+ /// ("stop" encerra o fluxo; "skip" pula a próxima etapa). Só vale em "condition".
+ #[serde(default)] pub cond_var:String,
+ #[serde(default)] pub cond_op:String,
+ #[serde(default)] pub cond_value:String,
+ #[serde(default)] pub cond_false:String,
  /// Etapa ligada ou pulada. Ausente em fluxos antigos vale ligada.
  #[serde(default="enabled_true")] pub enabled:bool,
  /// Controles da resposta com IA. Vazio ou ausente herda o padrão do perfil.
@@ -121,7 +127,7 @@ pub struct Action {
  #[serde(default)] pub ai_no_repeat:Option<bool>,
 }
 impl Default for Action {
- fn default()->Self { Self{kind:"chat".into(),text:String::new(),target:String::new(),value:0,condition:String::new(),punish:String::new(),tw_op:String::new(),obs_op:String::new(),obs_target:String::new(),obs_duration:0,ai_anchor:String::new(),ai_knowledge:String::new(),ai_length:String::new(),ai_style:String::new(),ai_no_repeat:None,enabled:true} }
+ fn default()->Self { Self{kind:"chat".into(),text:String::new(),target:String::new(),value:0,condition:String::new(),punish:String::new(),tw_op:String::new(),obs_op:String::new(),obs_target:String::new(),obs_duration:0,cond_var:String::new(),cond_op:String::new(),cond_value:String::new(),cond_false:String::new(),ai_anchor:String::new(),ai_knowledge:String::new(),ai_length:String::new(),ai_style:String::new(),ai_no_repeat:None,enabled:true} }
 }
 impl Action {
  pub fn anchor<'a>(&'a self,ai:&'a AiConfig)->&'a str { self.pick(&self.ai_anchor,&ai.anchor,"all") }
@@ -278,6 +284,14 @@ pub fn validate_flow(f:&Flow)->Result<(),String> {
   if a.obs_duration>3600{return Err("Ação do OBS: duração de até 1 hora".into())}
   if a.obs_duration>0&&!crate::obs::temp_ok(&a.obs_op){return Err("Ação do OBS: duração só vale para mutar, volume, mostrar e esconder".into())}
   if a.obs_op=="volume"&&a.text.trim().parse::<f64>().map_or(true,|n|!n.is_finite()||n < -100.0||n > 30.0){return Err("Ação do OBS: volume em dB entre -100 e 30".into())}
+  if a.kind=="condition"{
+   if a.cond_var.trim().is_empty()||a.cond_var.chars().count()>120{return Err("Condição: escolha a variável".into())}
+   if !crate::variables::COND_OPS.contains(&a.cond_op.as_str()){return Err("Condição: escolha um operador válido".into())}
+   if a.cond_value.chars().count()>500{return Err("Condição: valor esperado com até 500 caracteres".into())}
+   if !["stop","skip"].contains(&a.cond_false.as_str()){return Err("Condição: no falso, parar o fluxo ou pular a próxima".into())}
+   let base=a.cond_var.split("|").next().unwrap_or("").trim();
+   if !crate::variables::is_known(base){let hint=crate::variables::suggest_variable(base).map(|v|format!(" Quis dizer {}?",v)).unwrap_or_default();return Err(format!("Condição: variável desconhecida.{hint}"))}
+  }
  }
  if a.kind=="ai.generate" {let (scope,name)=crate::variables::target(crate::ai::response_target(a))?;if scope!="local"||name=="aiSuccess"{return Err("Guarde a resposta da IA numa variável local de texto".into())}}
  if a.kind.starts_with("variable."){crate::variables::target(&a.target)?;}
@@ -433,6 +447,17 @@ pub fn validate_flow(f:&Flow)->Result<(),String> {
   f.actions[0].obs_duration=0;assert!(validate_flow(&f).is_ok());
   f.actions[0].obs_op="volume".into();f.actions[0].text="alto".into();assert!(validate_flow(&f).is_err());
   f.actions[0].text="-6.5".into();assert!(validate_flow(&f).is_ok());
+ }
+ #[test] fn condition_steps_validate_variable_operator_and_exit() {
+  let good=Action{kind:"condition".into(),cond_var:"reward.cost".into(),cond_op:"greater_or_equal".into(),cond_value:"5000".into(),cond_false:"stop".into(),..Default::default()};
+  assert!(validate_flow(&Flow{counter:false,timer_seconds:300,timer_category:"personalizado".into(),timer_priority:"normal".into(),timer_variants:vec![],timer_min_messages:0,timer_window_secs:900,timer_max_session:0,timer_start_delay_secs:0,audio:String::new(),audio_volume:1.0,send_type:"chat".into(),send_color:"primary".into(),reply_to:false,id:uuid::Uuid::new_v4().to_string(),profile_id:uuid::Uuid::new_v4().to_string(),name:"C".into(),enabled:true,trigger:Trigger{kind:"command".into(),pattern:"!c".into(),permission:"everyone".into(),cooldown:0,user_cooldown:0},actions:vec![good.clone()],layout:Value::Null}).is_ok());
+  let mut bad=good.clone();bad.cond_op="quase".into();
+  let mut f=Flow{counter:false,timer_seconds:300,timer_category:"personalizado".into(),timer_priority:"normal".into(),timer_variants:vec![],timer_min_messages:0,timer_window_secs:900,timer_max_session:0,timer_start_delay_secs:0,audio:String::new(),audio_volume:1.0,send_type:"chat".into(),send_color:"primary".into(),reply_to:false,id:uuid::Uuid::new_v4().to_string(),profile_id:uuid::Uuid::new_v4().to_string(),name:"C".into(),enabled:true,trigger:Trigger{kind:"command".into(),pattern:"!c".into(),permission:"everyone".into(),cooldown:0,user_cooldown:0},actions:vec![bad],layout:Value::Null};
+  assert!(validate_flow(&f).is_err());
+  f.actions[0].cond_op="equals".into();f.actions[0].cond_var="rewar.cost".into();
+  let err=validate_flow(&f).unwrap_err();assert!(err.contains("reward.cost"),"sugere o nome certo: {err}");
+  f.actions[0].cond_var="reward.cost".into();f.actions[0].cond_false="voltar".into();
+  assert!(validate_flow(&f).is_err());
  }
  #[test] fn wait_steps_validate_range_and_default_on() {
   let a=Action{kind:"wait".into(),value:3000,..Default::default()};
