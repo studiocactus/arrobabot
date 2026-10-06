@@ -284,14 +284,14 @@ pub fn validate_flow(f:&Flow)->Result<(),String> {
   if a.obs_duration>3600{return Err("Ação do OBS: duração de até 1 hora".into())}
   if a.obs_duration>0&&!crate::obs::temp_ok(&a.obs_op){return Err("Ação do OBS: duração só vale para mutar, volume, mostrar e esconder".into())}
   if a.obs_op=="volume"&&a.text.trim().parse::<f64>().map_or(true,|n|!n.is_finite()||n < -100.0||n > 30.0){return Err("Ação do OBS: volume em dB entre -100 e 30".into())}
-  if a.kind=="condition"{
-   if a.cond_var.trim().is_empty()||a.cond_var.chars().count()>120{return Err("Condição: escolha a variável".into())}
-   if !crate::variables::COND_OPS.contains(&a.cond_op.as_str()){return Err("Condição: escolha um operador válido".into())}
-   if a.cond_value.chars().count()>500{return Err("Condição: valor esperado com até 500 caracteres".into())}
-   if !["stop","skip"].contains(&a.cond_false.as_str()){return Err("Condição: no falso, parar o fluxo ou pular a próxima".into())}
-   let base=a.cond_var.split("|").next().unwrap_or("").trim();
-   if !crate::variables::is_known(base){let hint=crate::variables::suggest_variable(base).map(|v|format!(" Quis dizer {}?",v)).unwrap_or_default();return Err(format!("Condição: variável desconhecida.{hint}"))}
-  }
+ }
+ if a.kind=="condition"{
+  if a.cond_var.trim().is_empty()||a.cond_var.chars().count()>120{return Err("Condição: escolha a variável".into())}
+  if !crate::variables::COND_OPS.contains(&a.cond_op.as_str()){return Err("Condição: escolha um operador válido".into())}
+  if a.cond_value.chars().count()>500{return Err("Condição: valor esperado com até 500 caracteres".into())}
+  if !["stop","skip"].contains(&a.cond_false.as_str()){return Err("Condição: no falso, parar o fluxo ou pular a próxima".into())}
+  let base=a.cond_var.split("|").next().unwrap_or("").trim();
+  if !crate::variables::is_known(base){let hint=crate::variables::suggest_variable(base).map(|v|format!(" Quis dizer {}?",v)).unwrap_or_default();return Err(format!("Condição: variável desconhecida.{hint}"))}
  }
  if a.kind=="ai.generate" {let (scope,name)=crate::variables::target(crate::ai::response_target(a))?;if scope!="local"||name=="aiSuccess"{return Err("Guarde a resposta da IA numa variável local de texto".into())}}
  if a.kind.starts_with("variable."){crate::variables::target(&a.target)?;}
