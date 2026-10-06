@@ -445,7 +445,7 @@ impl Context {
         let c=Context::new(&db,&p,&raid,None).unwrap();
         assert_eq!(c.render("{{raider.name}} com {{raid.viewers}}").unwrap(),"RaidMan com 42");
         assert_eq!(c.eval_rule("raid.viewers","greater_or_equal","20").unwrap().0,true);
-        let sub:Event=serde_json::from_value(serde_json::json!({"id":"s1","profileId":p.id,"kind":"subscription","user":"Subzado","user_id":"80","role":"subscriber","message":"","data":{"tier":"2000","is_gift":false}}})).unwrap();
+        let sub:Event=serde_json::from_value(serde_json::json!({"id":"s1","profileId":p.id,"kind":"subscription","user":"Subzado","user_id":"80","role":"subscriber","message":"","data":{"tier":"2000","is_gift":false}})).unwrap();
         let c=Context::new(&db,&p,&sub,None).unwrap();
         assert_eq!(c.render("{{subscription.tier}} presente? {{subscription.is_gift}}").unwrap(),"2000 presente? false");
         assert!(is_known("bits.amount")&&is_known("raid.viewers")&&is_known("gifter.name"));

@@ -1,5 +1,27 @@
 # Histórico de atualizações
 
+# BotLive 0.1.83
+
+## O que mudou
+
+- Corrige a compilação da 0.1.82 (parêntese excedente no teste de triggers). Nenhuma mudança de comportamento.
+
+## Como usar
+
+- Vale o manual da 0.1.82: triggers Twitch normalizados.
+
+## Validação
+
+- `npm run test:updates` (8/8) e varredura de balanceamento executados antes do push.
+- `cargo test` não executado localmente (toolchain Rust indisponível); erro apontado pelo compilador da CI; a CI testa de verdade.
+- A 0.1.82 não gerou build (CI reprovou na compilação); esta 0.1.83 a substitui sem reescrever release, pois nenhuma release 0.1.82 chegou a existir.
+
+## Limitações
+
+- As mesmas da 0.1.82.
+
+---
+
 # BotLive 0.1.82
 
 ## O que mudou
