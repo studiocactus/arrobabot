@@ -465,14 +465,14 @@ async fn duplicate_events_submit_once_and_run_once(){
  let e=event(&p,"!eco",false);
  assert!(rt.submit(e.clone()).await.is_ok());
  assert!(rt.submit(e.clone()).await.is_ok(),"duplicata entra como ok, mas a fila ignora");
- let deadline=tokio::time::Instant::now()+Duration::from_secs(5);
+ let deadline=tokio::time::Instant::now()+std::time::Duration::from_secs(5);
  loop{
   let got:Vec<String>=std::iter::from_fn(||rx.try_recv().ok()).filter(|v|v["type"]=="overlay").map(|v|v["payload"]["text"].as_str().unwrap_or("").into()).collect();
   if !got.is_empty(){assert_eq!(got,vec!["eco"],"um evento, uma execução");break}
   assert!(tokio::time::Instant::now()<deadline,"o worker não entregou");
-  tokio::time::sleep(Duration::from_millis(50)).await;
+  tokio::time::sleep(std::time::Duration::from_millis(50)).await;
  }
- tokio::time::sleep(Duration::from_millis(500)).await;
+ tokio::time::sleep(std::time::Duration::from_millis(500)).await;
  assert!(std::iter::from_fn(||rx.try_recv().ok()).all(|v|v["type"]!="overlay"),"nada duplicado depois");
 }
 async fn disabled_steps_skip_and_wait_runs_without_blocking(){
