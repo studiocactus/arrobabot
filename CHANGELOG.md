@@ -1,5 +1,27 @@
 # Histórico de atualizações
 
+# BotLive 0.1.80
+
+## O que mudou
+
+- Diagnóstico da validação de condição (asserts isolam lista vs campo). Nenhuma mudança de comportamento além da 0.1.73.
+
+## Como usar
+
+- Vale o manual da 0.1.73: condições e variáveis de execução.
+
+## Validação
+
+- `npm run test:updates` (8/8) executado antes do push.
+- `cargo test` não executado localmente (toolchain Rust indisponível); a CI testa de verdade.
+- A 0.1.79 não gerou build (CI reprovou em 1 teste); esta 0.1.80 a substitui sem reescrever release, pois nenhuma release 0.1.79 chegou a existir.
+
+## Limitações
+
+- As mesmas da 0.1.73.
+
+---
+
 # BotLive 0.1.79
 
 ## O que mudou

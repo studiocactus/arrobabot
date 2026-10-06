@@ -454,7 +454,10 @@ pub fn validate_flow(f:&Flow)->Result<(),String> {
   let mut bad=good.clone();bad.cond_op="quase".into();
   let mut f=Flow{counter:false,timer_seconds:300,timer_category:"personalizado".into(),timer_priority:"normal".into(),timer_variants:vec![],timer_min_messages:0,timer_window_secs:900,timer_max_session:0,timer_start_delay_secs:0,audio:String::new(),audio_volume:1.0,send_type:"chat".into(),send_color:"primary".into(),reply_to:false,id:uuid::Uuid::new_v4().to_string(),profile_id:uuid::Uuid::new_v4().to_string(),name:"C".into(),enabled:true,trigger:Trigger{kind:"command".into(),pattern:"!c".into(),permission:"everyone".into(),cooldown:0,user_cooldown:0},actions:vec![bad],layout:Value::Null};
   assert!(validate_flow(&f).is_err());
-  f.actions[0].cond_op="equals".into();f.actions[0].cond_var="rewar.cost".into();
+  assert!(!crate::variables::COND_OPS.contains(&"quase"),"a lista rejeita quase");
+  assert!(crate::variables::COND_OPS.contains(&"equals"));
+  assert_eq!(f.actions[0].cond_op.as_str(),"quase","o campo chega na validação");
+   f.actions[0].cond_op="equals".into();f.actions[0].cond_var="rewar.cost".into();
   let err=validate_flow(&f).unwrap_err();assert!(err.contains("reward.cost"),"sugere o nome certo: {err}");
   f.actions[0].cond_var="reward.cost".into();f.actions[0].cond_false="voltar".into();
   assert!(validate_flow(&f).is_err());
