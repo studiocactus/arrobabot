@@ -432,4 +432,5 @@ impl Context {
         assert!(is_known("viewer.name")&&is_known("time.timestamp")&&!is_known("viewer.nome"));
         assert_eq!(suggest_variable("viewer.nam"),Some("viewer.name".into()));
     }
+    }
 }
