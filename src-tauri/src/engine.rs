@@ -244,6 +244,12 @@ pub async fn process(rt:Arc<Runtime>,e:Event){
  pub async fn execute_flow(rt:&Arc<Runtime>,p:&Profile,e:&Event,f:&Flow,answers:bool,history:&[Value],counts:Option<&(Option<i64>,Option<i64>)>,test:bool,test_vars:Option<Value>)->bool{
   let kinds=f.actions.iter().map(|a|a.kind.clone()).collect::<Vec<_>>();
   let exec=rt.runs.start(&p.id,&f.id,&f.name,&kinds,test);
+  execute_flow_with_run(rt,p,e,f,answers,history,counts,test,test_vars,exec).await
+ }
+ /// Executa um fluxo sobre uma execução já registrada. `flow.test` cria a execução
+ /// antes de responder justamente para devolver o mesmo id que o motor vai usar;
+ /// sem isto a tela acompanharia um registro parado e o cancelamento miraria outro.
+ pub async fn execute_flow_with_run(rt:&Arc<Runtime>,p:&Profile,e:&Event,f:&Flow,answers:bool,history:&[Value],counts:Option<&(Option<i64>,Option<i64>)>,test:bool,test_vars:Option<Value>,exec:String)->bool{
   let short=rt.runs.short_of(&exec);
   rt.log(&p.id,"run",&format!("Execução {short} iniciada ({} · {})",f.name,e.kind),"info");
   let testing=test||e.data["botliveTest"]==true;
@@ -252,9 +258,9 @@ pub async fn process(rt:Arc<Runtime>,e:Event){
   let mut completed=true;
   rt.log(&p.id,"flow",&format!("Iniciando {}",f.name),"info");
   if !answers&&replies(&f){rt.log(&p.id,"action",&format!("{} · Outra automação já respondeu esta mensagem; os demais efeitos continuam",f.name),"info")}
-  let count=if f.counter{match if e.simulated||testing{crate::command_counter::get(&rt.db,&p.id,&f.id).and_then(|n|n.checked_add(1).ok_or("Contador excedeu o limite".into()))}else{crate::command_counter::change(&rt.db,&p.id,&f.id,None)}{Ok(n)=>Some(n),Err(err)=>{rt.log(&p.id,"counter",&err,"error");rt.runs.finish(&exec,"FAILED");return false}}}else{None};
+  let count=if f.counter{match if e.simulated||testing{crate::command_counter::get(&rt.db,&p.id,&f.id).and_then(|n|n.checked_add(1).ok_or("Contador excedeu o limite".into()))}else{crate::command_counter::change(&rt.db,&p.id,&f.id,None)}{Ok(n)=>Some(n),Err(err)=>{rt.log(&p.id,"counter",&err,"error");rt.runs.fail(&exec,None,&err);rt.runs.finish(&exec,"FAILED");return false}}}else{None};
   if let Some(n)=count{if !e.simulated&&!testing{rt.emit("command-counter",json!({"profileId":p.id,"id":f.id,"value":n}));}}
-  let mut variables=match crate::variables::Context::new(&rt.db,&p,&e,Some(&f)){Ok(v)=>v,Err(err)=>{rt.log(&p.id,"variables",&err,"error");rt.runs.finish(&exec,"FAILED");return false}};
+  let mut variables=match crate::variables::Context::new(&rt.db,&p,&e,Some(&f)){Ok(v)=>v,Err(err)=>{rt.log(&p.id,"variables",&err,"error");rt.runs.fail(&exec,None,&err);rt.runs.finish(&exec,"FAILED");return false}};
   if let Some(n)=count{variables.set_command_count(n);}
   if let Some((followers,subs))=counts{variables.set("followerCount",followers.map_or(serde_json::Value::String(String::new()),|n|serde_json::json!(n)));variables.set("subCount",subs.map_or(serde_json::Value::String(String::new()),|n|serde_json::json!(n)));}
   if !testing{crate::chat_extras::play_flow(&rt,&p,&f,&e);}
@@ -265,15 +271,16 @@ pub async fn process(rt:Arc<Runtime>,e:Event){
    if rt.runs.cancelled(&exec){rt.log(&p.id,"run",&format!("Execução {short} cancelada"),"info");rt.runs.finish(&exec,"CANCELLED");return false;}
    if ctl.skip_next{ctl.skip_next=false;rt.log(&p.id,"action",&format!("{} · etapa {} pulada pela condição",f.name,i+1),"info");rt.runs.step(&exec,i,"SKIPPED");continue}
    if !a.enabled{rt.log(&p.id,"action",&format!("{} · etapa {} pulada",f.name,i+1),"info");rt.runs.step(&exec,i,"SKIPPED");continue}
+   if testing&&test_skipped(a.kind.as_str(),a.target.as_str()){rt.log(&p.id,"action",&format!("{} · teste pulou {}",f.name,a.kind),"info");rt.runs.step(&exec,i,"SKIPPED");continue}
    if !answers&&matches!(a.kind.as_str(),"chat"|"ai"|"ai.generate"){continue}
    if e.kind=="timer"&&!e.simulated&&!crate::timers::event_active(&rt,&e){break}
    if !a.condition.is_empty()&&!e.message.to_lowercase().contains(&a.condition.to_lowercase()){continue}
    rt.runs.step(&exec,i,"RUNNING");
    let result=if a.kind=="wait"{Ok(action(&rt,&p,&e,a,&mut variables,&history,&f,&exec,i,&mut ctl).await)}else{tokio::time::timeout(Duration::from_secs(65),action(&rt,&p,&e,a,&mut variables,&history,&f,&exec,i,&mut ctl)).await};
    match result{
-   Ok(Ok(()))=>{rt.log(&p.id,"action",&format!("{} · {}",f.name,a.kind),"success");rt.runs.step(&exec,i,"SUCCESS");}
-   Ok(Err(err))=>{rt.log(&p.id,"action",&format!("{} · {err}",f.name),"error");completed=false;if err=="Execução cancelada"{rt.runs.finish(&exec,"CANCELLED");rt.log(&p.id,"run",&format!("Execução {short} cancelada"),"info");return false;}break},
-   Err(_)=>{rt.log(&p.id,"action","A ação excedeu o tempo permitido","error");completed=false;break}
+   Ok(Ok(()))=>{rt.log(&p.id,"action",&format!("{} · {}",f.name,a.kind),"success");rt.runs.succeed(&exec,i);}
+   Ok(Err(err))=>{if err=="Execução cancelada"{rt.runs.step(&exec,i,"CANCELLED");rt.runs.finish(&exec,"CANCELLED");rt.log(&p.id,"run",&format!("Execução {short} cancelada"),"info");return false;}rt.log(&p.id,"action",&format!("{} · {err}",f.name),"error");rt.runs.fail(&exec,Some(i),&err);completed=false;break},
+   Err(_)=>{rt.log(&p.id,"action","A ação excedeu o tempo permitido","error");rt.runs.fail(&exec,Some(i),"A ação excedeu o tempo permitido");completed=false;break}
    }
    if ctl.stop{break}
   }
@@ -286,6 +293,15 @@ pub async fn process(rt:Arc<Runtime>,e:Event){
 const REPLY:&[&str]=&["chat","ai","ai.generate"];
 /// True quando a automação tem alguma ação de resposta no chat.
 fn replies(f:&Flow)->bool{f.actions.iter().any(|a|REPLY.contains(&a.kind.as_str()))}
+/// Etapas que o teste nunca executa: publicam no chat, alteram a live ou chamam
+/// serviços de fora. O teste só prova a lógica — sequência, espera e condição.
+const TEST_SKIP:&[&str]=&["chat","ai","ai.generate","discord","webhook","memory","points","punish","twitch","tts","obs","overlay","script"];
+/// True quando a etapa fica de fora do teste: ou é externa, ou escreve variável
+/// fora do escopo local (que é o único que o teste pode gravar sem efeito real).
+fn test_skipped(kind:&str,target:&str)->bool{
+ if TEST_SKIP.contains(&kind){return true}
+ kind.starts_with("variable.")&&matches!(crate::variables::target(target),Ok((scope,_)) if scope!="local")
+}
 /// Escolhe qual automação publica a resposta quando várias casam na mesma mensagem.
 /// A ordem é a do tipo do gatilho (comando, chamada pelo nome, contém, mensagem e os
 /// demais), depois o gatilho mais específico (menos opções e texto mais longo) e, no
@@ -304,10 +320,8 @@ fn responder(flows:&[Flow])->Option<String>{
 /// Controle da sequência dentro de uma execução: pular a próxima ou parar.
 pub struct Ctl{pub skip_next:bool,pub stop:bool}
 async fn action(rt:&Arc<Runtime>,p:&Profile,e:&Event,a:&Action,variables:&mut crate::variables::Context,history:&[Value],f:&Flow,exec:&str,step:usize,ctl:&mut Ctl)->Result<(),String>{
- let testing=e.data["botliveTest"]==true;
- if testing&&matches!(a.kind.as_str(),"chat"|"ai"|"ai.generate"|"discord"|"webhook"|"memory"|"points"|"punish"|"twitch"|"tts"){rt.log(&p.id,"action",&format!("{} · teste pulou {}",f.name,a.kind),"info");return Ok(())}
  let text=if a.kind=="variable.delete"{String::new()}else if a.kind=="script"{a.text.clone()}else{variables.render(&a.text)?};
- if a.kind.starts_with("variable."){if testing{let (scope,_)=crate::variables::target(&a.target).map_err(|e|e.to_string())?;if scope!="local"{rt.log(&p.id,"action",&format!("{} · teste pulou {}",f.name,a.kind),"info");return Ok(())}}variables.change(&rt.db,p,e,&a.target,a.kind.trim_start_matches("variable."),crate::variables::typed(&text))?;return Ok(())}
+ if a.kind.starts_with("variable."){variables.change(&rt.db,p,e,&a.target,a.kind.trim_start_matches("variable."),crate::variables::typed(&text))?;return Ok(())}
  if blocked(&text,p)&&matches!(a.kind.as_str(),"chat"|"tts"|"overlay"|"discord"){return Err("Conteúdo bloqueado".into())}
  // Simulations never perform external effects or change persistent module/vault state.
  if e.simulated && a.kind!="chat" {if matches!(a.kind.as_str(),"ai"|"ai.generate"){crate::ai::save_response(variables,rt,p,e,a,"[Prévia: resposta contextual da IA]",false)?;}rt.log(&p.id,"simulation",&format!("Executaria {}: {}",a.kind,text.chars().take(200).collect::<String>()),"success");return Ok(())}

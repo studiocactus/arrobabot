@@ -109,3 +109,16 @@
 .flow-help{position:fixed;z-index:120;padding:13px 15px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);box-shadow:var(--shadow);font-size:11.5px;line-height:1.7;color:var(--text);overflow:auto}
 .flow-help p+p{margin-top:9px}
 .flow-toolbar .icon-button{border-color:var(--border)}
+
+/* Testar fluxo 0.1.92: preparacao, acompanhamento etapa a etapa e escolha ao fechar. */
+.test-flow{display:flex;flex-direction:column;gap:12px}
+.test-summary{display:flex;flex-direction:column;gap:5px;padding-bottom:12px;border-bottom:1px solid var(--border)}
+.test-summary strong{font-size:15px}
+.test-flow .eyebrow{margin-top:4px}
+.test-run-line{font-size:13px}
+.test-steps{display:flex;flex-direction:column;gap:8px}
+.test-step-block{display:flex;flex-direction:column;gap:6px}
+.test-step strong{font-size:11px;letter-spacing:.4px;text-transform:uppercase;white-space:nowrap;color:var(--muted)}
+.test-step span{font-size:13px}
+.test-choice{display:flex;flex-direction:column;gap:10px;padding:15px;border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:var(--r-md);background:var(--surface2)}
+.test-choice .form-footer{margin:0}

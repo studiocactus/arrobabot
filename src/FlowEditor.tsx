@@ -9,7 +9,7 @@ import {StepMenu,FlowHelp} from './FlowChrome';
 import {readPrefs,writePrefs} from './editorPrefs';
 import {Field,Toggle} from './components';
 import {VariableTarget} from './Variables';
-import {variableCatalog} from './variableCatalog';
+import {stepLabel} from './stepLabel';
 import VariablePicker from './VariablePicker';
 import MessageEditor from './MessageEditor';
 import {SendPicker,AudioPicker} from './FlowOptions';
@@ -100,7 +100,7 @@ export default function FlowEditor({flow,platform='twitch',ai,onSave,onTest,intr
  const [sendType,setSendType]=useState(flow.sendType||'chat');const [sendColor,setSendColor]=useState(flow.sendColor||'primary');const [replyTo,setReplyTo]=useState(!!flow.replyTo);
  const [audio,setAudio]=useState(flow.audio||'');const [audioVolume,setAudioVolume]=useState(flow.audioVolume??1);const [obsTest,setObsTest]=useState('');
  const layout=flow.layout as {nodes?:Node<Data>[];edges?:Edge[]}|undefined;
- const startNodes:Node<Data>[]=layout?.nodes?layout.nodes.map(n=>n.data.action?{...n,data:{...n.data,label:nodeLabel(n.data.action)}}:n):[{id:'trigger',position:{x:60,y:140},data:{label:'⚡ '+(triggers[flow.trigger.kind]||flow.trigger.kind)},type:'input'},...flow.actions.map((action,i)=>({id:'action-'+i,position:{x:60,y:140+(i+1)*90},data:{label:nodeLabel(action),action}}))];
+ const startNodes:Node<Data>[]=layout?.nodes?layout.nodes.map(n=>n.data.action?{...n,data:{...n.data,label:stepLabel(n.data.action)}}:n):[{id:'trigger',position:{x:60,y:140},data:{label:'⚡ '+(triggers[flow.trigger.kind]||flow.trigger.kind)},type:'input'},...flow.actions.map((action,i)=>({id:'action-'+i,position:{x:60,y:140+(i+1)*90},data:{label:stepLabel(action),action}}))];
  const startEdges:Edge[]=layout?.edges||flow.actions.map((_,i)=>({id:'e'+i,source:i===0?'trigger':'action-'+(i-1),target:'action-'+i,animated:true}));
  const [nodes,setNodes,onNodesChange]=useNodesState(startNodes);
  const [edges,setEdges,onEdgesChange]=useEdgesState(startEdges);
@@ -127,7 +127,7 @@ export default function FlowEditor({flow,platform='twitch',ai,onSave,onTest,intr
   }
   return null;
  }
- function update(a:Action){setNodes(ns=>ns.map(n=>n.id===selected?{...n,data:{label:nodeLabel(a),action:a},className:actionProblem(a)?n.className:undefined}:n))}
+ function update(a:Action){setNodes(ns=>ns.map(n=>n.id===selected?{...n,data:{label:stepLabel(a),action:a},className:actionProblem(a)?n.className:undefined}:n))}
 function move(dir:-1|1){try{const ns=nodes.map(n=>({id:n.id,position:{x:n.position.x,y:n.position.y},data:{action:n.data.action,label:String(n.data.label||'')}}));const es=edges.map(e=>({source:e.source,target:e.target}));const r=moveAction(ns,es,selected,dir);setNodes(cur=>{const pos:Record<string,{x:number;y:number}>={};r.nodes.forEach(n=>{pos[n.id]=n.position});return cur.map(n=>pos[n.id]?{...n,position:pos[n.id]}:n)});setEdges(r.edges.map((e,i)=>({id:'e'+i,source:e.source,target:e.target,animated:true})))}catch(e){setError(friendlyError(e))}}
  /** Aplica um plano de cadeia: posiciona os blocos, refaz as conexões, seleciona a etapa nova e pede para deixá-la visível. */
  function applyStep(plan:StepPlan,id:string){
@@ -139,21 +139,6 @@ function move(dir:-1|1){try{const ns=nodes.map(n=>({id:n.id,position:{x:n.positi
  function addStep(){const id=crypto.randomUUID();try{applyStep(appendStepPlan(nodes,edges,id,flowSizes()),id)}catch(e){setError(friendlyError(e))}}
  function insertStep(){const id=crypto.randomUUID();try{applyStep(insertStepPlan(nodes,edges,selected,id,flowSizes()),id)}catch(e){setError(friendlyError(e))}}
  const keepText=(kind:string)=>["command","contains","voice","mention","redemption"].includes(kind);
-  function nodeLabel(a:Action):string{const kind=a.kind;
-  if(kind==='condition')return '◆ '+(condVarLabel(a.condVar||'')||'variável')+' '+condOpLabel(a.condOp||'equals')+(a.condValue?' '+a.condValue:'');
-  if(kind==='wait')return '◷ '+durationLabel(a.value||0);
-  if(kind==='obs')return '◉ '+obsOpLabel(a.obsOp||'mute')+(a.obsTarget?' · '+a.obsTarget:'');
-  if(kind==='twitch')return '⚡ '+twitchKindLabel(a.twOp||'game');
-  if(kind==='punish')return '🔨 '+(punishModes[a.punish||'timeout']||a.punish||'Punir');
-  if(kind==='redemption')return '⚡ Resgate';
-  if(kind==='script')return '📜 Script';
-  return actions[kind]||kind}
-  function condVarLabel(k:string){const v=variableCatalog.find(v=>v.key===k);return v?v.label:k}
-  function condOpLabel(op:string){const m:Record<string,string>={equals:'=',not_equals:'≠',greater_or_equal:'≥',greater_than:'>',less_than:'≤',less_or_equal:'≤',contains:'contém',not_contains:'não contém',is_empty:'vazio',is_not_empty:'não vazio'};return m[op]||op}
-  function condFalseLabel(f:string){const m:Record<string,string>={stop:'PARAR FLUXO',skip:'PULAR PRÓXIMO'};return m[f]||f}
-  function durationLabel(ms:number){const v=ms/1000;if(v>=60)return `${Math.round(v/60)} min`;return `${v.toFixed(1)} s`}
-  function twitchKindLabel(k:string){const m:Record<string,string>={game:'Jogo',title:'Titulo',timeout:'Timeout',ban:'Ban',unban:'Desban',warn:'Warn',vip:'Vip',unvip:'Unvip',shoutout:'Shoutout',mention:'Mencao',followers:'Followers'};return m[k]||k}
-  function obsOpLabel(op:string){const m:Record<string,string>={mute:'Mutar',unmute:'Desmutar',toggle_mute:'Alternar mudo',volume:'Volume',show:'Mostrar fonte',hide:'Esconder fonte',toggle_item:'Alternar fonte',scene:'Trocar cena'};return m[op]||op}
 function switchKind(current:Action,next:string){const base:Action={...current,kind:next};
   if(next==='ai.generate'&&!base.target.startsWith('local.'))base.target='local.aiResponse';
   if(next==='punish'){if(!['sender','first','random'].includes(base.target))base.target='sender';if(!base.punish)base.punish='timeout';if(base.value<1)base.value=60}
@@ -168,7 +153,7 @@ function switchKind(current:Action,next:string){const base:Action={...current,ki
   setNodes(ns=>ns.map(n=>n.className==='step-invalid'?{...n,className:undefined}:n));
   try{setBusy(true);setError(null);const ordered=orderedActions(nodes,edges);await onSave({...flow,name,trigger:trigger.kind==='timer'?{...trigger,permission:'everyone',cooldown:0,userCooldown:0,pattern:''}:keepText(trigger.kind)?trigger:{...trigger,pattern:''},counter:trigger.kind==='command'&&counter,timerSeconds,sendType,sendColor,replyTo,audio,audioVolume,actions:ordered,layout:{nodes,edges}})}catch(e){setError(friendlyError(e))}finally{setBusy(false)}}
  return <div className="flow-editor">
- <div className="flow-toolbar"><input aria-label="Nome do fluxo" value={name} onChange={e=>setName(e.target.value)}/><FlowHelp note={intro}/>{onTest&&<button type="button" disabled={busy} onClick={()=>{try{onTest({...flow,name,trigger,counter:trigger.kind==='command'&&counter,timerSeconds,sendType,sendColor,replyTo,audio,audioVolume,actions:orderedActions(nodes,edges),layout:{nodes,edges}})}catch(e){setError(friendlyError(e))}}}><Play size={16}/>Testar fluxo</button>}<button type="button" aria-expanded={showMini} onClick={toggleMini}><MapIcon size={16}/>Minimapa</button><button onClick={addStep}><Plus size={16}/>Adicionar etapa</button><button className="primary" disabled={busy} onClick={save}><Save size={16}/>Salvar fluxo</button></div>
+ <div className="flow-toolbar"><input aria-label="Nome do fluxo" value={name} onChange={e=>setName(e.target.value)}/><FlowHelp note={intro}/>{onTest&&<button type="button" data-test-flow disabled={busy} onClick={()=>{try{onTest({...flow,name,trigger,counter:trigger.kind==='command'&&counter,timerSeconds,sendType,sendColor,replyTo,audio,audioVolume,actions:orderedActions(nodes,edges),layout:{nodes,edges}})}catch(e){setError(friendlyError(e))}}}><Play size={16}/>Testar fluxo</button>}<button type="button" aria-expanded={showMini} onClick={toggleMini}><MapIcon size={16}/>Minimapa</button><button onClick={addStep}><Plus size={16}/>Adicionar etapa</button><button className="primary" disabled={busy} onClick={save}><Save size={16}/>Salvar fluxo</button></div>
  {error&&<div role="alert" className="inline-error">{error.message}{error.detail&&<details><summary>Detalhes técnicos</summary><code>{error.detail}</code></details>}</div>}
  <div className="flow-workspace">
  <div className="canvas">

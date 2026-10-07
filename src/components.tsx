@@ -1,6 +1,27 @@
 import {useEffect,useRef,type ReactNode} from 'react';
 import {X,ArrowUpRight,Inbox,LoaderCircle,ChevronDown} from 'lucide-react';
-export function Modal({title,children,onClose,wide=false}:{title:string;children:ReactNode;onClose:()=>void;wide?:boolean}){const ref=useRef<HTMLElement>(null);useEffect(()=>{const previous=document.activeElement as HTMLElement|null;const element=ref.current;const first=element?.querySelector<HTMLElement>('input,textarea,select,button');first?.focus();const trap=(event:KeyboardEvent)=>{if(event.key!=='Tab')return;const elements=Array.from(element?.querySelectorAll<HTMLElement>('button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex="0"]')||[]).filter(e=>e.getClientRects().length);const first=elements[0],last=elements.at(-1);if(event.shiftKey&&document.activeElement===first){event.preventDefault();last?.focus()}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first?.focus()}};element?.addEventListener('keydown',trap);return()=>{element?.removeEventListener('keydown',trap);previous?.focus()}},[]);return <div className="modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)onClose()}}><section ref={ref} role="dialog" aria-modal="true" aria-label={title} className={'modal '+(wide?'wide':'')} onKeyDown={e=>{if(e.key==='Escape')onClose()}}><header><h2>{title}</h2><button className="icon-button" onClick={onClose} aria-label="Fechar"><X size={20}/></button></header>{children}</section></div>}
+/** Modal abertos, na ordem de abertura: só o último responde ao Escape. */
+const openModals:HTMLElement[]=[];
+export function Modal({title,children,onClose,wide=false}:{title:string;children:ReactNode;onClose:()=>void;wide?:boolean}){
+ const ref=useRef<HTMLElement>(null);
+ /** Escape precisa do onClose da última renderização, não do que existia ao montar. */
+ const close=useRef(onClose);
+ useEffect(()=>{close.current=onClose});
+ useEffect(()=>{
+  const previous=document.activeElement as HTMLElement|null;
+  const element=ref.current;
+  const first=element?.querySelector<HTMLElement>('input,textarea,select,button');
+  first?.focus();
+  const trap=(event:KeyboardEvent)=>{if(event.key!=='Tab')return;const elements=Array.from(element?.querySelectorAll<HTMLElement>('button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex="0"]')||[]).filter(e=>e.getClientRects().length);const first=elements[0],last=elements.at(-1);if(event.shiftKey&&document.activeElement===first){event.preventDefault();last?.focus()}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first?.focus()}};
+  element?.addEventListener('keydown',trap);
+  if(element)openModals.push(element);
+  /** O modal responde ao Escape mesmo quando o foco saiu dele (botão que some ao trocar de visão). */
+  const escape=(event:KeyboardEvent)=>{if(event.key!=='Escape')return;if(!element||openModals.at(-1)!==element)return;close.current()};
+  document.addEventListener('keydown',escape);
+  return()=>{element?.removeEventListener('keydown',trap);document.removeEventListener('keydown',escape);const i=element?openModals.indexOf(element):-1;if(i>=0)openModals.splice(i,1);previous?.focus()};
+ },[]);
+ return <div className="modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)onClose()}}><section ref={ref} role="dialog" aria-modal="true" aria-label={title} className={'modal '+(wide?'wide':'')}><header><h2>{title}</h2><button className="icon-button" onClick={onClose} aria-label="Fechar"><X size={20}/></button></header>{children}</section></div>;
+}
 export function Field({label,children,hint}:{label:string;children:ReactNode;hint?:string}){return <div className="field"><label><span>{label}</span>{children}</label>{hint&&<small>{hint}</small>}</div>}
 export function Empty({title,children,action}:{title:string;children:ReactNode;action?:ReactNode}){return <div className="empty"><span className="empty-icon"><Inbox size={28}/></span><h3>{title}</h3><p>{children}</p>{action}</div>}
 export function Card({title,children,action,className=''}:{title?:string;children:ReactNode;action?:ReactNode;className?:string}){return <section className={'card '+className}>{title&&<div className="card-heading"><h3>{title}</h3>{action}</div>}{children}</section>}

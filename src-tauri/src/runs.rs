@@ -23,6 +23,8 @@ pub struct Run {
  pub steps: Vec<Step>,
  pub cancelled: bool,
  pub test: bool,
+ /// Motivo da falha, para a tela mostrar junto da etapa ou da execução.
+ pub error: Option<String>,
 }
 #[derive(Default)]
 pub struct Runs(pub Mutex<HashMap<String, Run>>);
@@ -43,6 +45,7 @@ impl Runs {
    steps: kinds.iter().enumerate().map(|(i, k)| Step { index: i, kind: k.clone(), status: "PENDING".into() }).collect(),
    cancelled: false,
    test,
+   error: None,
   };
   let mut all = self.0.lock().unwrap();
   all.insert(id.clone(), run);
@@ -68,6 +71,29 @@ impl Runs {
    }
    if status == "WAITING" {
     run.status = "WAITING".into();
+   }
+  }
+ }
+ /// Marca a etapa como concluída, mas preserva um resultado que a própria ação já
+ /// definiu (a condição grava TRUE ou FALSE antes de voltar ao motor).
+ pub fn succeed(&self, id: &str, index: usize) {
+  if let Some(run) = self.0.lock().unwrap().get_mut(id) {
+   if let Some(step) = run.steps.get_mut(index) {
+    if step.status == "RUNNING" || step.status == "WAITING" || step.status == "PENDING" {
+     step.status = "SUCCESS".into();
+    }
+   }
+  }
+ }
+ pub fn fail(&self, id: &str, index: Option<usize>, error: &str) {
+  if let Some(run) = self.0.lock().unwrap().get_mut(id) {
+   if let Some(i) = index {
+    if let Some(step) = run.steps.get_mut(i) {
+     step.status = "FAILED".into();
+    }
+   }
+   if run.error.is_none() {
+    run.error = Some(error.into());
    }
   }
  }
@@ -123,6 +149,35 @@ mod tests {
   runs.finish(&id, "CANCELLED");
   assert_eq!(runs.get(&id).unwrap().status, "CANCELLED");
   assert!(!runs.cancel(&id), "finalizada não cancela");
+ }
+ #[test]
+ fn failure_records_step_and_reason() {
+  let (runs, id) = run_with(&["chat", "wait"]);
+  runs.fail(&id, Some(0), "Sem permissão para publicar");
+  let run = runs.get(&id).unwrap();
+  assert_eq!(run.steps[0].status, "FAILED");
+  assert_eq!(run.steps[1].status, "PENDING");
+  assert_eq!(run.error.as_deref(), Some("Sem permissão para publicar"));
+  runs.fail(&id, None, "Outro motivo");
+  assert_eq!(
+   runs.get(&id).unwrap().error.as_deref(),
+   Some("Sem permissão para publicar"),
+   "o primeiro motivo é o que fica"
+  );
+  runs.finish(&id, "FAILED");
+  assert_eq!(runs.get(&id).unwrap().status, "FAILED");
+ }
+ #[test]
+ fn succeed_keeps_the_condition_result() {
+  let (runs, id) = run_with(&["condition", "wait"]);
+  runs.step(&id, 0, "TRUE");
+  runs.succeed(&id, 0);
+  assert_eq!(
+   runs.get(&id).unwrap().steps[0].status, "TRUE",
+   "a condição grava o resultado dela e o motor não sobrescreve"
+  );
+  runs.succeed(&id, 1);
+  assert_eq!(runs.get(&id).unwrap().steps[1].status, "SUCCESS");
  }
  #[test]
  fn prune_keeps_the_newest_runs() {

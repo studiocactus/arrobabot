@@ -402,6 +402,7 @@ impl Context {
         // Acento antes do marcador não quebra o analisador (fatiamento UTF-8 seguro).
         let acc=analyze_variables("Olá {{user}}, café {{randomViewr}}!");
         assert_eq!(acc.len(),1);assert_eq!(acc[0]["suggestion"],"randomViewer");
+    }
     #[test] fn resgate_expoe_recompensa_e_quem_resgatou(){
         use crate::model::{Event, Profile};
         let dir=tempfile::tempdir().unwrap();let db=Db::open(&dir.path().join("t.sqlite")).unwrap();
@@ -431,6 +432,7 @@ impl Context {
         assert!(c.eval_rule("rewardCost","maior_que","5").is_err());
         assert!(is_known("viewer.name")&&is_known("time.timestamp")&&!is_known("viewer.nome"));
         assert_eq!(suggest_variable("viewer.nam"),Some("viewer.name".into()));
+    }
     #[test] fn triggers_twitch_expoem_bits_sub_raid_e_follow(){
         use crate::model::{Event, Profile};
         let dir=tempfile::tempdir().unwrap();let db=Db::open(&dir.path().join("t.sqlite")).unwrap();
@@ -450,7 +452,5 @@ impl Context {
         assert_eq!(c.render("{{subscription.tier}} presente? {{subscription.is_gift}}").unwrap(),"2000 presente? false");
         assert!(is_known("bits.amount")&&is_known("raid.viewers")&&is_known("gifter.name"));
         assert_eq!(suggest_variable("bits.amout"),Some("bits.amount".into()));
-    }
-    }
     }
 }

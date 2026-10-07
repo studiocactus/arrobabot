@@ -251,6 +251,7 @@ async fn generate_with_instruction(client:&reqwest::Client,p:&Profile,prompt:&st
   let (_,without)=request_text(&e,&history,"x",&Options::default());
   assert!(!without.contains("Emotes liberados"),"sem lista buscada, a regra não aparece");
  }
+ #[test]
  fn repetition_context_uses_latest_six_bot_replies(){
   let e:Event=serde_json::from_value(json!({"id":"1","profileId":"a","kind":"chat","user":"Ana","message":"oi"})).unwrap();
   let history:Vec<Value>=(0..9).map(|i|json!({"person":"Bot","message":format!("resposta-{i}")})).collect();

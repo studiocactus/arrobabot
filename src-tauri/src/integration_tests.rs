@@ -457,6 +457,7 @@ async fn condition_false_stops_and_skip_jumps_one(){
  assert!(logs.iter().any(|l|l.message.contains("→ falso")),"falso mostra resolvido e esperado");
  assert!(rt.runs.list(&p.id).iter().any(|r|r.status=="STOPPED_BY_CONDITION"));
 }
+#[tokio::test]
 async fn duplicate_events_submit_once_and_run_once(){
  let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();let p=profile("Duplicado");rt.db.save_profile(&p).unwrap();
  let mut f=flow(&p);f.name="Eco".into();f.trigger.pattern="!eco".into();
@@ -475,6 +476,7 @@ async fn duplicate_events_submit_once_and_run_once(){
  tokio::time::sleep(std::time::Duration::from_millis(500)).await;
  assert!(std::iter::from_fn(||rx.try_recv().ok()).all(|v|v["type"]!="overlay"),"nada duplicado depois");
 }
+#[tokio::test]
 async fn disabled_steps_skip_and_wait_runs_without_blocking(){
  let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();let p=profile("Sequência");rt.db.save_profile(&p).unwrap();
  let mut f=flow(&p);f.name="Flash".into();f.trigger.pattern="!flash".into();
@@ -677,6 +679,118 @@ async fn the_ear_stays_local_and_respects_module_and_switch(){
  assert!(status["error"].as_str().unwrap_or("").is_empty());
  *rt.actor.lock().unwrap()="intruso".into();
  assert!(dispatch(rt,"voice.status",json!({"profileId":p.id})).await.is_err(),"quem não edita o perfil não enxerga a escuta");
+}
+/// Espera a execução chegar a um estado final devolvendo o registro do motor.
+async fn finished_run(rt:&Arc<Runtime>,id:&str)->crate::runs::Run{
+ let deadline=tokio::time::Instant::now()+std::time::Duration::from_secs(20);
+ loop{
+  if let Some(r)=rt.runs.get(id){
+   if ["COMPLETED","FAILED","CANCELLED","STOPPED_BY_CONDITION"].contains(&r.status.as_str()){return r}
+  }
+  assert!(tokio::time::Instant::now()<deadline,"a execução {id} não chegou a um estado final");
+  tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+ }
+}
+/// O id que a tela recebe é o que o motor executa: um registro só, sem gêmeo parado.
+#[tokio::test]
+async fn flow_test_returns_the_execution_it_actually_runs(){
+ let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();let p=profile("Teste de fluxo");rt.db.save_profile(&p).unwrap();
+ let mut f=flow(&p);f.name="Cumprimento".into();f.trigger.pattern="!oi".into();
+ f.actions=vec![Action{kind:"overlay".into(),text:"oi".into(),target:String::new(),value:0,condition:String::new(),..Default::default()}];
+ rt.db.save_flow(&f).unwrap();
+ let out=dispatch(rt.clone(),"flow.test",json!({"profileId":p.id,"flow":f.clone(),"testVars":{}})).await.unwrap();
+ let id=out["executionId"].as_str().expect("flow.test devolve a execução").to_owned();
+ let run=finished_run(&rt,&id).await;
+ assert_eq!(run.id,id,"o id devolvido é o que o motor usou");
+ assert_eq!(run.flow_id,f.id);
+ assert!(run.test,"registro marcado como teste");
+ assert_eq!(run.status,"COMPLETED");
+ assert_eq!(run.steps[0].status,"SKIPPED","etapa de efeito externo fica pulada, não concluída");
+ assert!(run.error.is_none());
+ assert_eq!(rt.runs.list(&p.id).iter().filter(|r|r.flow_id==f.id).count(),1,"um flow.test, uma execução: nada de gêmeo parado em PENDING");
+ let api=dispatch(rt.clone(),"flow.runs",json!({"profileId":p.id})).await.unwrap();
+ let entry=api.as_array().unwrap().iter().find(|r|r["id"]==id).cloned().expect("a tela encontra a execução pelo id");
+ assert_eq!(entry["error"],Value::Null);
+ assert_eq!(entry["steps"][0]["status"].as_str(),Some("SKIPPED"));
+}
+/// A prévia só prova lógica: espera, condição e variável local rodam; nada de fora acontece.
+#[tokio::test]
+async fn flow_test_keeps_local_logic_and_never_touches_the_outside(){
+ let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();let p=profile("Teste sem efeitos");rt.db.save_profile(&p).unwrap();
+ let act=|kind:&str,target:&str,text:&str|Action{kind:kind.into(),text:text.into(),target:target.into(),value:0,condition:String::new(),..Default::default()};
+ let mut obs=act("obs","","mute");obs.obs_op="mute".into();obs.obs_target="Mic".into();
+ let mut punish=act("punish","sender","motivo");punish.punish="timeout".into();punish.value=60;
+ let mut wait=act("wait","","");wait.value=5;
+ let mut delay=act("delay","","");delay.value=1;
+ let mut cond=act("condition","","");cond.cond_var="reward.cost".into();cond.cond_op="greater_or_equal".into();cond.cond_value="0".into();cond.cond_false="stop".into();
+ let mut f=flow(&p);f.name="Misto".into();f.trigger.pattern="!misto".into();
+ f.actions=vec![
+  act("chat","","Oi {{viewer.name}}"),act("overlay","","aparece na tela"),act("script","","1+1"),
+  obs,punish,act("webhook","https://example.com/hook","{}"),act("memory","local.memoria","escreve"),
+  act("points","","10"),act("variable.set","global.fora","nao pode"),act("variable.set","local.dentro","pode"),
+  wait,delay,cond];
+ rt.db.save_flow(&f).unwrap();
+ let mut rx=rt.broadcast.subscribe();
+ let out=dispatch(rt.clone(),"flow.test",json!({"profileId":p.id,"flow":f.clone(),"testVars":{}})).await.unwrap();
+ let id=out["executionId"].as_str().unwrap().to_owned();
+ let run=finished_run(&rt,&id).await;
+ assert_eq!(run.status,"COMPLETED");
+ let status=|i:usize|run.steps[i].status.clone();
+ for i in 0..9{assert_eq!(status(i),"SKIPPED","etapa {i} não pode agir fora: {}",f.actions[i].kind)}
+ assert_eq!(status(9),"SUCCESS","variável local roda de verdade");
+ assert_eq!(status(10),"SUCCESS","espera roda de verdade");
+ assert_eq!(status(11),"SUCCESS","atraso local roda de verdade");
+ assert_eq!(status(12),"TRUE","condição avaliada de verdade");
+ assert!(std::iter::from_fn(||rx.try_recv().ok()).all(|v|v["type"]!="overlay"),"nada foi publicado na tela");
+ let after=variables::Context::new(&rt.db,&p,&event(&p,"!x",true),None).unwrap();
+ assert_ne!(after.render("{{global.fora}}").ok().as_deref(),Some("nao pode"),"o teste não grava variável global");
+}
+/// A falha fica na etapa, com o motivo, e interrompe o resto da sequência.
+#[tokio::test]
+async fn flow_test_marks_the_failed_step_and_keeps_the_reason(){
+ let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();let p=profile("Teste com falha");rt.db.save_profile(&p).unwrap();
+ let mut f=flow(&p);f.name="Quebra".into();f.trigger.pattern="!quebra".into();
+ f.actions=vec![
+  Action{kind:"variable.set".into(),text:"{{".into(),target:"local.quebra".into(),value:0,condition:String::new(),..Default::default()},
+  Action{kind:"overlay".into(),text:"não roda".into(),target:String::new(),value:0,condition:String::new(),..Default::default()}];
+ rt.db.save_flow(&f).unwrap();
+ let out=dispatch(rt.clone(),"flow.test",json!({"profileId":p.id,"flow":f.clone(),"testVars":{}})).await.unwrap();
+ let id=out["executionId"].as_str().unwrap().to_owned();
+ let run=finished_run(&rt,&id).await;
+ assert_eq!(run.status,"FAILED");
+ assert_eq!(run.steps[0].status,"FAILED");
+ assert_eq!(run.error.as_deref(),Some("Variável sem fechamento }}"));
+ assert_eq!(run.steps[1].status,"PENDING","a falha interrompe; o que vem depois não roda");
+ let api=dispatch(rt.clone(),"flow.runs",json!({"profileId":p.id})).await.unwrap();
+ let entry=api.as_array().unwrap().iter().find(|r|r["id"]==id).cloned().unwrap();
+ assert_eq!(entry["error"].as_str(),Some("Variável sem fechamento }}"),"o motivo chega na API que a tela consulta");
+ assert_eq!(entry["steps"][0]["status"].as_str(),Some("FAILED"));
+}
+/// Cancelar mira a execução devolvida e só termina quando o motor confirma.
+#[tokio::test]
+async fn flow_test_cancel_stops_the_execution_it_returned(){
+ let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();let p=profile("Teste cancelado");rt.db.save_profile(&p).unwrap();
+ let wait=Action{kind:"wait".into(),text:String::new(),target:String::new(),value:60000,condition:String::new(),..Default::default()};
+ let mut f=flow(&p);f.name="Lento".into();f.trigger.pattern="!lento".into();
+ f.actions=vec![wait,Action{kind:"overlay".into(),text:"fim".into(),target:String::new(),value:0,condition:String::new(),..Default::default()}];
+ rt.db.save_flow(&f).unwrap();
+ let out=dispatch(rt.clone(),"flow.test",json!({"profileId":p.id,"flow":f.clone(),"testVars":{}})).await.unwrap();
+ let id=out["executionId"].as_str().unwrap().to_owned();
+ let deadline=tokio::time::Instant::now()+std::time::Duration::from_secs(20);
+ loop{
+  if rt.runs.get(&id).is_some_and(|r|r.steps.iter().any(|s|s.status=="RUNNING"||s.status=="WAITING")){break}
+  assert!(tokio::time::Instant::now()<deadline,"a execução nem começou a rodar");
+  tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+ }
+ let mut rx=rt.broadcast.subscribe();
+ dispatch(rt.clone(),"flow.cancel",json!({"profileId":p.id,"executionId":id})).await.expect("cancelar a execução em andamento");
+ let run=finished_run(&rt,&id).await;
+ assert_eq!(run.status,"CANCELLED","o estado final vem do motor, não do clique");
+ assert!(run.steps.iter().any(|s|s.status=="CANCELLED"));
+ let again=dispatch(rt.clone(),"flow.cancel",json!({"profileId":p.id,"executionId":id})).await;
+ assert_eq!(again.unwrap_err(),"Execução não encontrada ou já terminada","já terminada não cancela de novo");
+ tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+ assert!(std::iter::from_fn(||rx.try_recv().ok()).all(|v|v["type"]!="overlay"),"a etapa seguinte não roda depois do cancelamento");
 }
 #[tokio::test]
 async fn the_ai_sees_what_the_streamer_just_said_on_the_mic(){

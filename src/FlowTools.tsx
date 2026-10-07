@@ -1,10 +1,10 @@
 import {useEffect,useState} from 'react';
-import {testVarKeys} from './flow';
 import {Save,Play,Trash2,Pencil,Package,Workflow} from 'lucide-react';
 import {api,desktop} from './api';
 import {friendlyMessage} from './errors';
 import {type Flow,type Profile,type Preset,minutesToSeconds,secondsToMinutes,timerCategories,timerPriorities} from './types';
 import {Modal,Field,Toggle} from './components';
+import TestFlowDialog,{focusTestButton} from './TestFlow';
 import FlowEditor from './FlowEditor';
 import MessageEditor from './MessageEditor';
 import {SendPicker,AudioPicker} from './FlowOptions';
@@ -33,34 +33,6 @@ export function TimerVariants({variants,onChange}:{variants:string[];onChange:(v
  {variants.length<10&&<button type="button" onClick={()=>onChange([...variants,''])}>+ Adicionar resposta</button>}
  </div>;
 }
-type TestStep={index:number;kind:string;status:string};
-type TestRun={id:string;flow:string;status:string;test:boolean;steps:TestStep[]};
-const STEP_ICON:Record<string,string>={SUCCESS:'✓',FAILED:'✕',CANCELLED:'■',SKIPPED:'–',RUNNING:'▶',WAITING:'⏳',PENDING:'○',TRUE:'✓',FALSE:'○'};
-const TEST_SAMPLES:Record<string,string>={'viewer.name':'TesteViewer',user:'Teste',message:'!teste','reward.title':'Flashbang',rewardTitle:'Flashbang','reward.cost':'5000',rewardCost:'5000','redemption.input':'hello',userInput:'hello',redeemer:'TesteViewer','bits.amount':'500','raid.viewers':'42','raider.name':'TesteRaider','subscription.tier':'1000','gifter.name':'TesteGifter'};
-export function TestFlowDialog({flow,profileId,notify,onClose}:{flow:Flow;profileId:string;notify:Notify;onClose:()=>void}){
- const [exec,setExec]=useState<string|null>(null);const [run,setRun]=useState<TestRun|null>(null);const [error,setError]=useState('');
- const keys=testVarKeys(flow);
- const [vals,setVals]=useState<Record<string,string>>(()=>Object.fromEntries(keys.map(k=>[k,TEST_SAMPLES[k]||''])));
- const [began,setBegan]=useState(keys.length===0);
- const start=async()=>{setError('');try{const testVars:Record<string,string>={};keys.forEach(k=>{testVars[k]=vals[k]||''});const r=await api<{executionId:string}>('flow.test',{flow,testVars});setExec(r.executionId)}catch(e){setError(friendlyMessage(e))}};
- useEffect(()=>{if(!began)return;void start();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
- },[began]);
- const terminal=!!run&&(run.status==='COMPLETED'||run.status==='FAILED'||run.status==='CANCELLED');
- useEffect(()=>{let stop=false;api<{executionId:string}>('flow.test',{flow}).then(r=>{if(!stop)setExec(r.executionId)}).catch(e=>{if(!stop)setError(friendlyMessage(e))});return ()=>{stop=true};
-  // eslint-disable-next-line react-hooks/exhaustive-deps
- },[]);
- useEffect(()=>{if(!exec||terminal)return;const timer=setInterval(async()=>{try{const list=await api<TestRun[]>('flow.runs',{profileId});const found=list.find(r=>r.id===exec);if(found)setRun(found)}catch{}},500);return ()=>clearInterval(timer)},[exec,terminal,profileId]);
- return <Modal title={'Testar '+flow.name} onClose={onClose}><div className="form-pad">
-  {error&&<p role="alert" className="inline-error">{error}</p>}
-  {!began&&!error&&<><p className="help">Valores usados pelas condições e mensagens do teste:</p>{keys.map(k=><Field key={k} label={k}><input value={vals[k]||''} onChange={e=>setVals({...vals,[k]:e.target.value})}/></Field>)}<button className="primary" onClick={()=>setBegan(true)}>Iniciar teste</button></>}
-  {began&&!run&&!error&&<p className="help">Executando…</p>}
-  {run&&<><p className="help">Execução {run.id.slice(0,8)} · {run.status==='COMPLETED'?'CONCLUÍDA':run.status==='FAILED'?'FALHOU':run.status==='CANCELLED'?'CANCELADA':run.status==='WAITING'?'AGUARDANDO':'RODANDO'}</p>
-  {run.steps.map(st=><div className="list-row" key={st.index}><div><span>{st.index+1}. {st.kind}</span></div><strong>{STEP_ICON[st.status]||'?'} {st.status}</strong></div>)}
-  {!terminal&&<button disabled={!exec} onClick={async()=>{try{if(exec)await api('flow.cancel',{profileId,executionId:exec})}catch(e){notify(friendlyMessage(e))}}}>Cancelar execução</button>}
-  {terminal&&<button onClick={onClose}>Fechar</button>}</>}
- </div></Modal>;
-}
 export function FlowDialog({flow,mode,profile,notify,onSaved,onClose}:{flow:Flow;mode:FlowMode;profile:Profile;notify:Notify;onSaved:()=>Promise<void>|void;onClose:()=>void}){
  const [editing,setEditing]=useState<Flow>(flow);
  const [forceVisual,setForceVisual]=useState(false);
@@ -75,7 +47,8 @@ export function FlowDialog({flow,mode,profile,notify,onSaved,onClose}:{flow:Flow
   notify('Automação salva.');
   onClose();
  }
- return <Modal wide={editor} title={title} onClose={onClose}>
+ return <>
+ <Modal wide={editor} title={title} onClose={onClose}>
  {editor?<FlowEditor flow={editing} platform={profile.platform} ai={profile.ai} onSave={save} onTest={f=>setTesting(f)} intro={intro}/>:<form className="form-pad" onSubmit={e=>{e.preventDefault();save(editing).catch(err=>notify(friendlyMessage(err)))}}>
   <div className="form-grid">
    <Field label="Nome"><input required value={editing.name} onChange={e=>setEditing({...editing,name:e.target.value})}/></Field>
@@ -102,10 +75,11 @@ export function FlowDialog({flow,mode,profile,notify,onSaved,onClose}:{flow:Flow
    <Field label="Intervalo entre usos (minutos)"><input type="number" min="0" max="1440" step="any" value={secondsToMinutes(editing.trigger.cooldown)} onChange={e=>setEditing({...editing,trigger:{...editing.trigger,cooldown:minutesToSeconds(Number(e.target.value)||0)}})}/></Field>
    <Field label="Intervalo por pessoa (minutos)"><input type="number" min="0" max="1440" step="any" value={secondsToMinutes(editing.trigger.userCooldown)} onChange={e=>setEditing({...editing,trigger:{...editing.trigger,userCooldown:minutesToSeconds(Number(e.target.value)||0)}})}/></Field>
   </div>}
-  <footer className="form-footer"><span className="help">{mode==='timer'?'Ao pausar, desconectar ou editar, o intervalo começa novamente.':'Vá para o editor visual quando quiser conectar várias ações em sequência.'}</span><button type="button" onClick={()=>setForceVisual(true)}><Workflow size={15}/>Abrir no editor visual</button><button type="button" onClick={()=>setTesting(editing)}><Play size={15}/>Testar fluxo</button><button className="primary"><Save size={16}/>{mode==='timer'?'Salvar timer':'Salvar comando'}</button></footer>
-  {testing&&<TestFlowDialog flow={testing} profileId={profile.id} notify={notify} onClose={()=>setTesting(null)}/>}
- </form>}
+  <footer className="form-footer"><span className="help">{mode==='timer'?'Ao pausar, desconectar ou editar, o intervalo começa novamente.':'Vá para o editor visual quando quiser conectar várias ações em sequência.'}</span><button type="button" onClick={()=>setForceVisual(true)}><Workflow size={15}/>Abrir no editor visual</button><button type="button" data-test-flow onClick={()=>setTesting(editing)}><Play size={15}/>Testar fluxo</button><button className="primary"><Save size={16}/>{mode==='timer'?'Salvar timer':'Salvar comando'}</button></footer>
+  </form>}
  </Modal>
+ {testing&&<TestFlowDialog flow={testing} profileId={profile.id} onClose={()=>{setTesting(null);focusTestButton()}}/>}
+ </>;
 }
 
 export function RemoveFlowDialog({flow,mode,onClose,onRemoved,notify}:{flow:Flow;mode:FlowMode;onClose:()=>void;onRemoved:()=>Promise<void>|void;notify:Notify}){
