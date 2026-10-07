@@ -1,10 +1,10 @@
 import CommandOptions from './CommandOptions';
-import {useState,useCallback,useEffect,type ReactNode} from 'react';
-import {ReactFlow,Background,Controls,MiniMap,addEdge,useNodesState,useEdgesState,type Connection,type Node,type Edge} from '@xyflow/react';
+import {useState,useCallback,useEffect,useRef,type ReactNode} from 'react';
+import {ReactFlow,Background,Controls,MiniMap,addEdge,useNodesState,useEdgesState,useReactFlow,useStore,type Connection,type Node,type Edge} from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import {Plus,Save,Trash2,Zap,Play,Map as MapIcon} from 'lucide-react';
 import {actions,triggers,newAction,punishModes,punishTargets,twOps,condOps,condFalse,minutesToSeconds,secondsToMinutes,type Flow,type Action,type AIConfig} from './types';
-import {orderedActions,moveAction,chainIds,stepBounds} from './flow';
+import {orderedActions,moveAction,chainIds,stepBounds,fullChain,appendStepPlan,insertStepPlan,type StepPlan} from './flow';
 import {StepMenu,FlowHelp} from './FlowChrome';
 import {readPrefs,writePrefs} from './editorPrefs';
 import {Field,Toggle} from './components';
@@ -28,6 +28,46 @@ function ObsTarget({profileId,op,value,onChange,issue}:{profileId:string;op:stri
  return <><Field label={label}><select value={value} onChange={e=>onChange(e.target.value)}><option value="">Escolha…</option>{options.map(o=><option key={o} value={o}>{o}</option>)}{value&&!options.includes(value)&&<option value={value}>{value}</option>}</select></Field>{issue&&<p className="field-warn" role="status">{issue}</p>}{error&&<p className="help">{error}</p>}</>;
 }
 type Data={label:string;action?:Action;[key:string]:unknown};
+/** Zoom atual do canvas (o transform do viewport do React Flow), para medir blocos em unidades do fluxo. */
+function flowZoom():number{
+ const el=document.querySelector('.react-flow__viewport');
+ const m=el?(el as HTMLElement).style.transform.match(/scale\(([\d.]+)\)/):null;
+ return m?Number(m[1])||1:1;
+}
+/** Mede os blocos no canvas em unidades do fluxo; usado para abrir espaço sem sobrepor ao adicionar ou inserir. */
+function flowSizes():Record<string,{w:number;h:number}>{
+ const z=flowZoom();const out:Record<string,{w:number;h:number}>={};
+ document.querySelectorAll<HTMLElement>('.react-flow__node').forEach(el=>{
+  const id=el.dataset.id;if(!id)return;
+  const r=el.getBoundingClientRect();
+  out[id]={w:Math.round(r.width/z)||185,h:Math.round(r.height/z)||70};
+ });
+ return out;
+}
+/** Deixa a etapa nova visível sem redefinir o zoom: só faz pan quando ela caiu fora do canvas. */
+function StepReveal({target,restZoom}:{target:{id:string;x:number;y:number}|null;restZoom:{current:number|null}}){
+ const rf=useReactFlow();
+ const width=useStore(s=>s.width);
+ const height=useStore(s=>s.height);
+ const timer=useRef(0);
+ useEffect(()=>{
+  if(!target||!width||!height)return;
+  window.clearTimeout(timer.current);
+  timer.current=window.setTimeout(()=>{
+   const vp=rf.getViewport();
+   // zoom estável da última pausa: uma animação de pan arremessa o zoom para o meio do caminho
+   const zoom=restZoom.current??vp.zoom;
+   const w=220,h=90;
+   const cx=vp.x+(target.x+w/2)*zoom;
+   const cy=vp.y+(target.y+h/2)*zoom;
+   if(cx>8&&cx<width-8&&cy>8&&cy<height-8)return;
+   restZoom.current=zoom;
+   rf.setCenter(target.x+w/2,target.y+h/2,{zoom,duration:180});
+  },60);
+  return ()=>window.clearTimeout(timer.current);
+ },[target,width,height,rf,restZoom]);
+ return null;
+}
 /** Seção recolhível do painel lateral: agrupa campos parecidos e sai do caminho quando fechada. */
 type Reward={id:string;title:string;cost:number;enabled:boolean;paused:boolean};
 function RewardPicker({profileId,value,onChange}:{profileId:string;value:string;onChange:(id:string)=>void}){
@@ -72,6 +112,11 @@ export default function FlowEditor({flow,platform='twitch',ai,onSave,onTest,intr
  function toggleMini(){setShowMini(v=>{const next=!v;writePrefs({minimap:next});return next})}
  const stepChain=(()=>{try{return chainIds(nodes,edges).filter(x=>x!=='trigger')}catch{return [] as string[]}})();
  const bounds=stepBounds(stepChain,selected);
+ // inserir no meio exige uma única cadeia válida; com bloco solto, ciclo ou ramificação a opção some do menu
+ const insertable=(()=>{try{fullChain(nodes,edges);return true}catch{return false}})();
+ const [reveal,setReveal]=useState<{id:string;x:number;y:number}|null>(null);
+ /** Zoom da última pausa do canvas: animações de pan oscilam o zoom no meio e não servem de alvo. */
+ const restZoom=useRef<number|null>(null);
  const connect=useCallback((c:Connection)=>setEdges(e=>addEdge({...c,animated:true},e)),[setEdges]);
  /** Espelha as regras do backend (model.rs) para apontar etapa e campo antes de enviar. */
  function actionProblem(a:Action):{message:string}|null{
@@ -84,6 +129,15 @@ export default function FlowEditor({flow,platform='twitch',ai,onSave,onTest,intr
  }
  function update(a:Action){setNodes(ns=>ns.map(n=>n.id===selected?{...n,data:{label:nodeLabel(a),action:a},className:actionProblem(a)?n.className:undefined}:n))}
 function move(dir:-1|1){try{const ns=nodes.map(n=>({id:n.id,position:{x:n.position.x,y:n.position.y},data:{action:n.data.action,label:String(n.data.label||'')}}));const es=edges.map(e=>({source:e.source,target:e.target}));const r=moveAction(ns,es,selected,dir);setNodes(cur=>{const pos:Record<string,{x:number;y:number}>={};r.nodes.forEach(n=>{pos[n.id]=n.position});return cur.map(n=>pos[n.id]?{...n,position:pos[n.id]}:n)});setEdges(r.edges.map((e,i)=>({id:'e'+i,source:e.source,target:e.target,animated:true})))}catch(e){setError(friendlyError(e))}}
+ /** Aplica um plano de cadeia: posiciona os blocos, refaz as conexões, seleciona a etapa nova e pede para deixá-la visível. */
+ function applyStep(plan:StepPlan,id:string){
+  setNodes(ns=>[...ns.map(n=>plan.positions[n.id]?{...n,position:plan.positions[n.id],selected:false}:{...n,selected:false}),{id,position:plan.positions[id],data:{label:actions.chat,action:newAction()},selected:true}]);
+  setEdges(plan.edges.map((e,i)=>({id:'e'+i,source:e.source,target:e.target,animated:true})));
+  setSelected(id);
+  setReveal({id,x:plan.positions[id].x,y:plan.positions[id].y});
+ }
+ function addStep(){const id=crypto.randomUUID();try{applyStep(appendStepPlan(nodes,edges,id,flowSizes()),id)}catch(e){setError(friendlyError(e))}}
+ function insertStep(){const id=crypto.randomUUID();try{applyStep(insertStepPlan(nodes,edges,selected,id,flowSizes()),id)}catch(e){setError(friendlyError(e))}}
  const keepText=(kind:string)=>["command","contains","voice","mention","redemption"].includes(kind);
   function nodeLabel(a:Action):string{const kind=a.kind;
   if(kind==='condition')return '◆ '+(condVarLabel(a.condVar||'')||'variável')+' '+condOpLabel(a.condOp||'equals')+(a.condValue?' '+a.condValue:'');
@@ -114,14 +168,15 @@ function switchKind(current:Action,next:string){const base:Action={...current,ki
   setNodes(ns=>ns.map(n=>n.className==='step-invalid'?{...n,className:undefined}:n));
   try{setBusy(true);setError(null);const ordered=orderedActions(nodes,edges);await onSave({...flow,name,trigger:trigger.kind==='timer'?{...trigger,permission:'everyone',cooldown:0,userCooldown:0,pattern:''}:keepText(trigger.kind)?trigger:{...trigger,pattern:''},counter:trigger.kind==='command'&&counter,timerSeconds,sendType,sendColor,replyTo,audio,audioVolume,actions:ordered,layout:{nodes,edges}})}catch(e){setError(friendlyError(e))}finally{setBusy(false)}}
  return <div className="flow-editor">
- <div className="flow-toolbar"><input aria-label="Nome do fluxo" value={name} onChange={e=>setName(e.target.value)}/><FlowHelp note={intro}/>{onTest&&<button type="button" disabled={busy} onClick={()=>{try{onTest({...flow,name,trigger,counter:trigger.kind==='command'&&counter,timerSeconds,sendType,sendColor,replyTo,audio,audioVolume,actions:orderedActions(nodes,edges),layout:{nodes,edges}})}catch(e){setError(friendlyError(e))}}}><Play size={16}/>Testar fluxo</button>}<button type="button" aria-expanded={showMini} onClick={toggleMini}><MapIcon size={16}/>Minimapa</button><button onClick={()=>{const id=crypto.randomUUID();setNodes(ns=>{const low=ns.reduce((a,n)=>n.position.y>a.position.y?n:a,ns[0]);return ns.concat({id,position:{x:low.position.x,y:low.position.y+120},data:{label:actions.chat,action:newAction()}})});setSelected(id)}}><Plus size={16}/>Adicionar etapa</button><button className="primary" disabled={busy} onClick={save}><Save size={16}/>Salvar fluxo</button></div>
+ <div className="flow-toolbar"><input aria-label="Nome do fluxo" value={name} onChange={e=>setName(e.target.value)}/><FlowHelp note={intro}/>{onTest&&<button type="button" disabled={busy} onClick={()=>{try{onTest({...flow,name,trigger,counter:trigger.kind==='command'&&counter,timerSeconds,sendType,sendColor,replyTo,audio,audioVolume,actions:orderedActions(nodes,edges),layout:{nodes,edges}})}catch(e){setError(friendlyError(e))}}}><Play size={16}/>Testar fluxo</button>}<button type="button" aria-expanded={showMini} onClick={toggleMini}><MapIcon size={16}/>Minimapa</button><button onClick={addStep}><Plus size={16}/>Adicionar etapa</button><button className="primary" disabled={busy} onClick={save}><Save size={16}/>Salvar fluxo</button></div>
  {error&&<div role="alert" className="inline-error">{error.message}{error.detail&&<details><summary>Detalhes técnicos</summary><code>{error.detail}</code></details>}</div>}
  <div className="flow-workspace">
  <div className="canvas">
- <ReactFlow nodes={nodes} edges={edges} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} onConnect={connect} onNodeClick={(_,n)=>setSelected(n.id)} fitView minZoom={0.25} maxZoom={1.5} deleteKeyCode={['Backspace','Delete']}>
+ <ReactFlow nodes={nodes} edges={edges} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} onConnect={connect} onNodeClick={(_,n)=>setSelected(n.id)} onMoveEnd={(_,vp)=>{restZoom.current=vp.zoom}} fitView minZoom={0.25} maxZoom={1.5} deleteKeyCode={['Backspace','Delete']}>
  <Background gap={22}/>
  <Controls/>
  {showMini&&<MiniMap pannable zoomable style={{width:150,height:100}}/>}
+ <StepReveal target={reveal} restZoom={restZoom}/>
  </ReactFlow>
  </div>
  <aside className="node-inspector">
@@ -161,7 +216,7 @@ function switchKind(current:Action,next:string){const base:Action={...current,ki
  </Field>
  <div className="list-row"><div><strong>Etapa ativa</strong><small>Desligada pula sem erro.</small></div><Toggle label="Etapa ativa" checked={action.enabled!==false} onChange={v=>update({...action,enabled:v})}/></div>
  {action.kind==='wait'&&<WaitEditor value={action.value||0} onChange={value=>update({...action,value})}/>}
- <div className="row"><StepMenu canUp={bounds.up} canDown={bounds.down} onMove={move}/></div>
+ <div className="row"><StepMenu canUp={bounds.up} canDown={bounds.down} canInsert={insertable} onMove={move} onInsert={insertStep}/></div>
  {action.kind==='condition'&&<CondEditor action={action} update={update} issue={issue}/>}
  {action.kind==='script'?<Field label="Script Rhai (retorna texto)">
  <textarea rows={5} value={action.text} onChange={e=>update({...action,text:e.target.value})}/>

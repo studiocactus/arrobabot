@@ -1,4 +1,4 @@
-import {useEffect,useRef,useState,type KeyboardEvent as ReactKeyboardEvent} from 'react';
+import {useEffect,useLayoutEffect,useRef,useState,type KeyboardEvent as ReactKeyboardEvent} from 'react';
 import {createPortal} from 'react-dom';
 import {Ellipsis,CircleHelp} from 'lucide-react';
 
@@ -36,14 +36,19 @@ function usePopover(width:number){
  return {open,place,trigger,pop,openIt,close,escapeClose};
 }
 
-/** Substitui os botões Subir/Descer por um menu "•••" com os limites da cadeia já refletidos nos itens. */
-export function StepMenu({canUp,canDown,onMove}:{canUp:boolean;canDown:boolean;onMove:(dir:-1|1)=>void}){
- const {open,place,trigger,pop,openIt,close,escapeClose}=usePopover(200);
- const items=[{dir:-1 as const,label:'Subir',off:!canUp},{dir:1 as const,label:'Descer',off:!canDown}];
+/** Substitui os botões Subir/Descer por um menu "•••" com os limites da cadeia e a inserção no meio. */
+export function StepMenu({canUp,canDown,canInsert,onMove,onInsert}:{canUp:boolean;canDown:boolean;canInsert?:boolean;onMove:(dir:-1|1)=>void;onInsert?:()=>void}){
+ const {open,place,trigger,pop,openIt,close,escapeClose}=usePopover(220);
+ const items:{key:string;label:string;off:boolean;run?:()=>void}[]=[
+  {key:'up',label:'Subir',off:!canUp,run:()=>onMove(-1)},
+  {key:'down',label:'Descer',off:!canDown,run:()=>onMove(1)}
+ ];
+ if(canInsert&&onInsert)items.push({key:'insert',label:'Inserir etapa depois',off:false,run:onInsert});
  const first=Math.max(0,items.findIndex(i=>!i.off));
  const [active,setActive]=useState(first);
  useEffect(()=>{if(open)setActive(first)},[open,first]);
- useEffect(()=>{
+ // foco síncrono com o commit: um useEffect atrasado poderia roubar o foco depois de o menu fechar
+ useLayoutEffect(()=>{
   if(!open)return;
   pop.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')[active]?.focus();
  },[open,active]);
@@ -59,7 +64,7 @@ export function StepMenu({canUp,canDown,onMove}:{canUp:boolean;canDown:boolean;o
   <button type="button" ref={trigger} aria-label="Opções da etapa" aria-haspopup="menu" aria-expanded={open} onClick={()=>open?close(false):openIt()} onKeyDown={e=>{if(open&&(e.key==='Escape'||e.key==='Tab'))escapeClose(e)}}><Ellipsis size={16}/></button>
   {open&&place&&createPortal(
    <div className="step-menu" role="menu" aria-label="Opções da etapa" ref={pop} onKeyDown={onKey} style={{left:place.left,top:place.top,bottom:place.bottom,width:place.width,maxHeight:place.maxHeight}}>
-    {items.map(it=><button key={it.label} type="button" role="menuitem" disabled={it.off} onClick={()=>{close();onMove(it.dir)}}>{it.label}</button>)}
+    {items.map(it=><button key={it.key} type="button" role="menuitem" disabled={it.off} onClick={()=>{close();it.run?.()}}>{it.label}</button>)}
    </div>,document.body)}
  </>;
 }

@@ -31,6 +31,7 @@ Abra [MANUAL.html](MANUAL.html) para ler todos os capítulos em uma página, com
 - [Desenvolvimento e distribuição](DISTRIBUICAO.md): dependências, testes e builds.
 - [Validação realizada](VALIDACAO.md): evidências e limites dos testes.
 - [Matriz de aceite](MATRIZ-DE-ACEITE.md): implementações e pendências.
+- [Roadmap](ROADMAP.md): o que já está entregue e o que está planejado.
 
 ## Vocabulário
 

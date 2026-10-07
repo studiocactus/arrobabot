@@ -13,18 +13,6 @@ async function newFlow(page:Page,name:string){
  await page.getByLabel('Nome do fluxo',{exact:true}).fill(name);
  await page.getByLabel('Texto que dispara',{exact:true}).fill('!'+name.toLowerCase().replace(/[^a-z0-9]/g,''));
 }
-async function link(page:Page,from:Locator,to:Locator){
- const fromBox=await from.locator('.react-flow__handle.source').boundingBox();
- const toBox=await to.locator('.react-flow__handle.target').boundingBox();
- if(!fromBox||!toBox)throw new Error('ponto de conexão fora da tela');
- await page.mouse.move(fromBox.x+fromBox.width/2,fromBox.y+fromBox.height/2);
- await page.mouse.down();
- await page.mouse.move(fromBox.x+fromBox.width/2,fromBox.y+fromBox.height/2+6,{steps:4});
- await page.mouse.move(toBox.x+toBox.width/2,toBox.y+toBox.height/2,{steps:12});
- await page.waitForTimeout(150);
- await page.mouse.up();
- await page.waitForTimeout(100);
-}
 function trackErrors(page:Page){const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));return errors}
 const isFocused=(l:Locator)=>l.evaluate(el=>document.activeElement===el);
 
@@ -36,27 +24,25 @@ test('menu Opções da etapa reordena na cadeia com limites, devolve o foco e n�
  const subir=page.getByRole('menuitem',{name:'Subir',exact:true});
  const descer=page.getByRole('menuitem',{name:'Descer',exact:true});
 
- // critério 1: o gatilho não oferece menu, a etapa sim
+ // critério 1: o gatilho não oferece menu, a etapa sim — sozinha não sobe nem desce
  await page.locator('.react-flow__node[data-id="trigger"]').click();
  await expect(menuBtn).toHaveCount(0);
  await page.locator('.react-flow__node[data-id="action-0"]').click();
  await expect(menuBtn).toBeVisible();
-
- // etapa desconectada não reorganiza
- await page.getByRole('button',{name:'Adicionar etapa',exact:true}).click();
- await page.getByRole('combobox',{name:'Tipo de etapa',exact:true}).selectOption('wait');
- await expect(page.locator('.react-flow__node').filter({hasText:'3.0 s'})).toHaveCount(1);
+ const inserir=page.getByRole('menuitem',{name:'Inserir etapa depois',exact:true});
  await menuBtn.click();
  await expect(subir).toBeDisabled();
  await expect(descer).toBeDisabled();
+ await expect(inserir).toBeVisible();
  await page.keyboard.press('Escape');
  await expect(page.getByRole('menu',{name:'Opções da etapa',exact:true})).toHaveCount(0);
  expect(await isFocused(menuBtn)).toBe(true);
 
- // liga gatilho → chat → espera
- await page.locator('.react-flow__controls-fitview').click();
- await page.waitForTimeout(300);
- await link(page,page.locator('.react-flow__node[data-id="action-0"]'),page.locator('.react-flow__node').filter({hasText:'3.0 s'}));
+ // adicionar etapa: nasce já ligada à cadeia (conexão automática), sem arraste manual
+ await page.getByRole('button',{name:'Adicionar etapa',exact:true}).click();
+ await page.getByRole('combobox',{name:'Tipo de etapa',exact:true}).selectOption('wait');
+ await expect(page.locator('.react-flow__node').filter({hasText:'3.0 s'})).toHaveCount(1);
+ await page.waitForTimeout(400);
  await expect(page.locator('.react-flow__edge')).toHaveCount(2);
 
  // critério 2: limites da cadeia (primeira não sobe, última não desce)
@@ -66,6 +52,7 @@ test('menu Opções da etapa reordena na cadeia com limites, devolve o foco e n�
  await expect(subir).toBeEnabled();
  await expect(descer).toBeDisabled();
  await page.keyboard.press('Escape');
+ await expect(page.getByRole('menu',{name:'Opções da etapa',exact:true})).toHaveCount(0);
  expect(await isFocused(menuBtn)).toBe(true);
  await page.locator('.react-flow__node[data-id="action-0"]').click();
  await menuBtn.click();
@@ -119,10 +106,10 @@ test('reordenar com o menu, salvar e reabrir preserva a ordem das ações e as c
  await page.getByRole('combobox',{name:'Tipo de etapa',exact:true}).selectOption('punish');
  const punishNode=page.locator('.react-flow__node').filter({hasText:'Silenciar por um tempo'});
 
+ // as duas etapas já nasceram ligadas: gatilho → chat → espera → punição
+ await page.waitForTimeout(400);
  await page.locator('.react-flow__controls-fitview').click();
  await page.waitForTimeout(300);
- await link(page,page.locator('.react-flow__node[data-id="action-0"]'),waitNode);
- await link(page,waitNode,punishNode);
  await expect(page.locator('.react-flow__edge')).toHaveCount(3);
 
  // a etapa do meio desce: a punição passa para cima da espera

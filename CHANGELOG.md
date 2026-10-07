@@ -1,5 +1,46 @@
 # Histórico de atualizações
 
+# BotLive 0.1.91
+
+## O que mudou
+
+- **Adicionar etapa já conectada**: o botão **Adicionar etapa** da barra do editor agora cria a etapa **no fim da cadeia já ligada à última** (ou ao gatilho, quando ainda não há etapa nenhuma), em vez de deixar um bloco solto para religar à mão. A etapa nova vem **selecionada, com a configuração aberta no painel lateral e destacada no canvas**, nasce em espaço livre sem cobrir os vizinhos e **o zoom não é redefinido**: quando ela cai fora da área visível, o canvas faz um pan curto que a traz para a tela mantendo o mesmo zoom (o alvo do pan é sempre o zoom da última pausa do canvas, então animações seguidas não escorregam o zoom). Se o fluxo está desconectado, em ciclo ou com mais de uma saída na mesma etapa, **nada é criado nem reorganizado**: o editor mostra a explicação em português no topo e os blocos permanecem como estavam — nenhum bloco é religado ou descartado em silêncio.
+- **Inserir etapa depois**: novo item no menu **••• (Opções da etapa)** da etapa selecionada. Ele troca apenas a conexão daquele trecho: de A → B você passa para **A → nova → B**, preservando todos os dados de A e de B e mantendo as demais conexões intactas. Funciona inclusive na **última etapa** (a nova fecha a cadeia). A etapa inserida vem selecionada, destacada e com a configuração aberta; o espaço é aberto apenas o necessário, **no mesmo eixo do desenho** — uma fila antiga na horizontal continua na horizontal, sem reorganizar o resto do canvas. O item **some do menu** quando o fluxo não é uma única cadeia válida (bloco solto, ciclo ou ramificação), e nesse caso nada muda no desenho. **Subir/Descer**, os limites por posição na cadeia, a remoção de blocos (sem religação automática) e as conexões feitas à mão continuam exatamente como antes: a ordem de execução é definida só pelas conexões, nunca pela posição X/Y.
+- **Seleção visual sincronizada**: ao adicionar ou inserir, o realce no canvas passa a acompanhar a etapa nova (antes só o painel lateral mudava, e o contorno continuava na etapa anterior).
+- **Foco do menu ••• determinístico**: o foco dos itens do menu passou a ser aplicado junto com a renderização (layout effect); antes, um efeito atrasado podia roubar o foco depois do Escape e a devolução do foco ao botão ficava intermitente.
+- **Capítulo 03 do manual**: "Montar uma cadeia visual" agora ensina a adicionar no fim (já ligado), a inserir no meio pelo menu **•••**, o comportamento em fluxo inválido, a preservação de layouts antigos e a relação entre **Inserir etapa depois** e **Se falso → Pular a próxima etapa** (a condição pula a etapa que vem logo depois dela na ordem das conexões — inserir no meio muda o que é pulado; **Parar o fluxo** não muda).
+- **Roadmap do projeto (novo)**: `docs/ROADMAP.md` — ligado no índice do manual (23º capítulo, grupo "Referência técnica") — reúne o que a UX 2.0 já entregou e o que está **planejado**, sem declarar o programa concluído. O primeiro item planejado é a **Integração com o Voicemod (PLANEJADO)** com 9 fases numeradas (validação da Control API, conexão/estado, lista de vozes por id, recompensa ligada por id, duração e resgates simultâneos, restauração de estado, ausência do Voicemod sem erros no chat, conclusão/cancelamento pelas permissões da Twitch, microfone virtual no OBS com teste no aplicativo real), referenciando <https://control-api.voicemod.net/> e registrando os cuidados: provar compatibilidade antes de prometer, não confundir com troca de TTS e não assumir o conteúdo da licença do Voicemod.
+- **Testes**: 9 testes novos de cadeia em `src/flow.test.ts` (`fullChain`, `appendStepPlan`, `insertStepPlan`: fim da cadeia, sem conexão duplicada, inserção no meio e na última, preservação dos dados das vizinhas, layout horizontal, fluxo inválido, consequência em "Pular a próxima etapa" e não sobreposição); novo `tests/ui/flow-connect.spec.ts` com 5 cenários de navegação cobrindo os critérios de aceite (adicionar com autoconexão e zoom estável, inserir A→nova→B, inserção na última etapa, fluxo inválido, conexão manual ainda possível, layout horizontal intacto); `flow-organize.spec.ts` passou a esperar autoconexão e o item de inserção; `flow-inspector.spec.ts` não faz mais conexões manuais. Um cenário dedicado continua exercitando a conexão manual de verdade (religar gatilho → espera arrastando os pontos).
+
+## Como usar
+
+- Para acrescentar etapas, clique em **Adicionar etapa** na barra do editor: cada nova nasce ligada à anterior, já selecionada e com a configuração aberta.
+- Para enfiar uma etapa no meio, selecione a etapa que vem **antes** do lugar desejado e use **••• → Inserir etapa depois**.
+- Se o editor recusar (bloco solto, ciclo ou ramificação), leia a explicação no topo e religue os blocos à mão; a opção de inserir some até o fluxo voltar a ser uma única cadeia.
+- Lembrete: com **Se falso → Pular a próxima etapa**, inserir logo depois da condição faz a condição pular a etapa nova.
+
+## Validação
+
+- `npm run check` (tsc) — compilação limpa.
+- `npm test` (vitest) — 56/56 (47 anteriores + 9 novos).
+- `npm run test:updates` — 8/8.
+- `npm run docs` — manual regenerado (23 capítulos, 478 KiB).
+- `npx playwright test` — suíte completa: 37/38 na primeira execução sobre esta entrega (uma falha própria do teste novo: a verificação de zoom capturou o alvo de um pan durante a oscilação intermediária da animação), corrigida no produto apontando o pan para o zoom da última pausa; depois **38/38 em duas execuções consecutivas**, mais uma execução repetida do teste de adicionar (`--repeat-each=8`): 8/8. As falhas foram todas de teste/corrigíveis no comportamento da revelação — nenhuma perda de funcionalidade.
+- `npm run update:check` — manifesto, versões e notas coerentes antes do push.
+- `cargo test` não executado localmente (sem toolchain Rust); o motor Rust não foi tocado — mudanças só em `src/flow.ts`, `src/FlowEditor.tsx`, `src/FlowChrome.tsx`, testes, `scripts/build-docs.cjs` e manual. O Rust segue sendo validado pela CI.
+
+## Limitações
+
+- Esta entrega é a **Etapa 3** do roadmap de UX 2.0; **o programa não está concluído**. Seguem fora desta versão: reformulação do modal **Testar fluxo**, redenho completo do inspector, novos gatilhos/ações e qualquer alteração do motor.
+- **Voicemod não foi implementado**: o `docs/ROADMAP.md` registra apenas o planejamento (PLANEJADO) com as 9 fases e os cuidados; a Control API ainda não foi validada e nada foi prometido como funcional.
+- A inserção exige uma única cadeia válida; com bloco solto, ciclo ou ramificação o item não aparece e o fluxo não é alterado.
+- Inserir no meio muda o que **Pular a próxima etapa** pula (é a definição do comportamento, documentada no capítulo 03); **Parar o fluxo** não muda.
+- O pan de revelação mantém o zoom final idêntico ao anterior; durante os 180 ms da animação o zoom oscila visualmente (arco da câmera) sem alterar o valor final.
+- O menu continua reordenando apenas etapas adjacentes (**Subir/Descer**), como na 0.1.90.
+- O registro das notas de 0.1.85 a 0.1.90 não é reescrito (release publicada não se refaz).
+
+---
+
 # BotLive 0.1.90
 
 ## O que mudou
