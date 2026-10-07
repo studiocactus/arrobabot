@@ -1,5 +1,42 @@
 # Histórico de atualizações
 
+# BotLive 0.1.89
+
+## O que mudou
+
+- **Seletor de variáveis pesquisável na etapa Condição**: o `select` extenso virou um seletor com busca. Ele abre num popover portalizado fora do painel (não é cortado pelo `overflow` do inspector) e busca pelo nome compreensível (`custo` acha "Custo da recompensa"), pela categoria (`Eventos`) e pelo identificador técnico (`reward.cost`), sem diferenciar maiúscula nem acento. Os resultados continuam agrupados pelas categorias do catálogo existente e trazem o exemplo quando o catálogo já tem um. Selecionar é clique único: o seletor fecha e o foco volta ao botão. Teclado completo: botão abre com Enter/Espaço, setas escolhem, Enter seleciona e Escape fecha **só o seletor** — o editor de fluxos continua aberto. Sem resultados aparece "Nenhuma variável encontrada para …".
+- **Identificador preservado**: escolher "Custo da recompensa (ponto)" continua gravando `reward.cost`; nada muda na serialização e os rótulos do canvas continuam derivados da chave. Um valor antigo ou personalizado que não está mais no catálogo aparece no topo do seletor com o aviso "fora do catálogo" e nunca é apagado.
+- **Seção Avançado (recolhida)**: nas etapas de IA e OBS, o que é secundário sai do caminho — **Como a IA monta a resposta**, a prévia **Testar resposta contextual** e o botão **Testar no OBS** agora moram em **Avançado**, que nasce fechado. Os campos essenciais continuam visíveis em **Configurar etapa** (Nome da resposta, Como esta ação responde, Operação/alvo/duração do OBS, todos os campos de condição, espera, punição, Twitch e variáveis). A seção é um `<details>`: recolher não desmonta o conteúdo, então nada do que foi digitado ali se perde.
+- **Validação junto do campo**: ao tentar salvar, condição sem variável mostra **"Escolha uma variável"** ao lado do campo, e o OBS mostra **"Escolha uma cena"**, **"Escolha uma entrada de áudio"** ou **"Escolha uma fonte"** conforme a operação — as mesmas regras que o backend já exige, apontadas antes do envio. A etapa inválida fica destacada em vermelho no canvas e o painel lateral já seleciona-a; corrigir o campo tira o aviso e o destaque na hora. A validação do backend permanece intacta para todas as demais regras.
+- **Testes novos**: 8 unitários de busca, agrupamento e preservação (`src/variableSearch.test.ts`) e 4 de navegação (`tests/ui/variable-picker.spec.ts`) cobrindo os critérios: busca por nome/código/categoria, identificador persistido ao salvar e reabrir, posições e conexões estáveis ao reabrir, Escape sem fechar o editor, popover fora do corte do painel, Avançado preservando valores e demais editores acessíveis, orientação da condição e do OBS ao salvar. O teste do canvas legível passou a escolher a variável pelo seletor (mesma expectativa, caminho novo).
+- **Capítulo 03 do manual**: "Montar uma cadeia visual" ganhou o passo do seletor com busca, a explicação da seção **Avançado** e o parágrafo de orientação junto do campo.
+
+## Como usar
+
+- Na etapa **Condição**, clique em **Variável** e digite `custo`, `Eventos` ou `reward.cost`; navegue com ↑/↓ e Enter ou clique no resultado. Escape fecha o seletor sem fechar o editor.
+- Para a prévia da IA ou o teste no OBS, abra **Avançado**; fechar a seção mantém tudo o que você digitou.
+- Ao salvar sem a variável da condição ou sem o alvo do OBS, o editor aponta o campo em falta e destaca a etapa em vermelho — corrija e salve normalmente.
+
+## Validação
+
+- `npm run check` (tsc) — compilação limpa.
+- `npm test` (vitest) — 44/44 (36 existentes + 8 novos).
+- `npm run test:updates` — 8/8.
+- `npm run docs` — manual regenerado (22 capítulos).
+- `npx playwright test` — quatro execuções da suíte completa: 28/29 na primeira (falha intermitente em `app.spec` "resenha com IA cria geração antes do envio e variável por nome", que passou isolado logo depois), 29/29 nas três seguintes — duas sobre a base 0.1.88 e uma em 0.1.89 já preparado (25 specs existentes + 4 novos). A falha intermitente é observada, não corrigida.
+- `npm run update:check` — manifesto, versões e notas coerentes antes do push.
+- `cargo test` não executado localmente (sem toolchain Rust); o motor Rust não foi tocado — mudanças só em `src/VariablePicker.tsx`, `src/variableSearch.ts`, `src/FlowEditor.tsx`, `src/styles.css`, testes e manual.
+
+## Limitações
+
+- Esta entrega cobre somente a primeira etapa do roadmap de UX 2.0. Seguem pendentes: menu `•••` com Subir/Descer, Testar fluxo em modal dedicado, Minimap menor/recolhível, banner superior virando tooltip, conexão automática e inserção de etapas no meio da cadeia.
+- O seletor pesquisável vale para a variável da **Condição**; os demais seletores da plataforma (catálogo de inserção de mensagens, destino de variável, recompensa, etc.) seguem exatamente como estavam — trocá-los fica para a próxima etapa.
+- A validação local espelha apenas os campos obrigatórios (condição e alvo OBS); faixas, formatos e as demais regras continuam sendo do backend, com o aviso em português no topo do editor.
+- O popover se reposiciona em rolagem e redimensionamento, mas não oferece PageUp/PageDown entre as opções; a navegação é por setas.
+- O registro das notas de 0.1.85 a 0.1.88 não é reescrito (release publicada não se refaz); esta versão implementa a primeira etapa anunciada como pendente nas notas anteriores.
+
+---
+
 # BotLive 0.1.88
 
 ## O que mudou

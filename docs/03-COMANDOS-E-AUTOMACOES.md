@@ -93,15 +93,16 @@ O intervalo global vale para o fluxo, independentemente de quem o usou. O interv
 2. Preencha **Nome do fluxo**.
 3. Clique no bloco inicial: o painel lateral se abre em seções. **Quando** reúne Evento, texto que dispara, quem pode usar e intervalos; **Como sai** traz a forma de envio na Twitch e o áudio do disparo; **Comportamento**, recolhido, guarda a contagem de usos e o intervalo do timer.
 4. Clique no bloco de ação e selecione **Tipo de etapa** na seção **Configurar etapa** do painel lateral.
-5. Preencha conteúdo e os campos específicos. Em ações de IA, abra **Como esta ação responde** para escolher ancoragem, tamanho, base de conhecimento, repetição e tom daquele bloco; o que ficar em **Padrão do perfil** herda a tela de IA. **Como a IA monta a resposta** explica o que entra nessa geração, e a seção **Comportamento** fica com a condição opcional.
-6. Clique em **Adicionar etapa** para cada etapa adicional.
-7. Arraste dos pontos de conexão para ligar as etapas em ordem.
-8. Confira uma única sequência: gatilho → ação 1 → ação 2 → ação 3.
-9. Clique em **Salvar fluxo** e confira a chave de ativação.
+5. Preencha conteúdo e os campos específicos. Em ações de IA, abra **Como esta ação responde** para escolher ancoragem, tamanho, base de conhecimento, repetição e tom daquele bloco; o que ficar em **Padrão do perfil** herda a tela de IA. O que é secundário fica na seção **Avançado**, recolhida no início: **Como a IA monta a resposta**, a prévia **Testar resposta contextual** e, no OBS, o botão **Testar no OBS**. Recolher **Avançado** não apaga nada do que você digitou nele, e a seção **Comportamento** continua com a condição opcional.
+6. Em uma etapa **Condição**, escolha a variável no seletor com busca: digite o nome (`custo` encontra "Custo da recompensa"), a categoria (`Eventos`) ou o identificador técnico (`reward.cost`) e clique no resultado. O seletor abre abaixo do painel sem ser cortado, aceita teclado (setas e Enter) e fecha com Escape sem fechar o editor. Um valor salvo por versões antigas que não está mais no catálogo aparece no topo do seletor, preservado.
+7. Clique em **Adicionar etapa** para cada etapa adicional.
+8. Arraste dos pontos de conexão para ligar as etapas em ordem.
+9. Confira uma única sequência: gatilho → ação 1 → ação 2 → ação 3.
+10. Clique em **Salvar fluxo** e confira a chave de ativação.
 
 Cada bloco já mostra na tela um resumo legível da etapa — por exemplo ◆ CONDIÇÃO com variável, operador e valor, ◉ OBS · Mostrar fonte · alvo ou ◷ 3,0 s de espera — e a cadeia se empilha de cima para baixo, dá para ler o fluxo só pelo desenho sem abrir bloco nenhum; fluxos salvos antes disso ganham os mesmos rótulos quando você os abre. **Adicionar etapa** põe o bloco novo logo embaixo da cadeia, só ligar pelos pontos de conexão. A posição do bloco no desenho não define a execução; as conexões definem. O fim do painel lateral repete essa regra sempre que um bloco está selecionado. Blocos novos precisam ser conectados. O editor rejeita ciclos, ramificações e blocos soltos. É possível arrastar os blocos, usar zoom e selecionar uma conexão para removê-la.
 
-Quando o salvamento é recusado, o motivo aparece em português no topo do editor. Se o texto original for técnico, ele continua disponível em **Detalhes técnicos**, dentro do próprio aviso de erro.
+Quando o salvamento é recusado, o motivo aparece em português no topo do editor. Se o texto original for técnico, ele continua disponível em **Detalhes técnicos**, dentro do próprio aviso de erro. Além disso, campos obrigatórios vazios são apontados antes do envio: ao tentar salvar, a orientação aparece ao lado do campo — **Escolha uma variável** na Condição; **Escolha uma cena**, **Escolha uma entrada de áudio** ou **Escolha uma fonte** no OBS, conforme a operação — e a etapa que precisa de correção fica destacada em vermelho no canvas, com o painel lateral já selecionando-a. O restante continua validado pelo backend.
 
 Para reorganizar, remova as conexões antigas e conecte a sequência desejada. Não apague o gatilho. São permitidas de 1 a 64 ações.
 

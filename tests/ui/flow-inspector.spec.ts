@@ -83,7 +83,9 @@ test('fluxo salvo reabre com o resumo de cada etapa visível no próprio node, s
  // etapa 1: condição em linguagem humana já aparece no node
  await page.getByRole('button',{name:'Adicionar etapa',exact:true}).click();
  await page.getByRole('combobox',{name:'Tipo de etapa',exact:true}).selectOption('condition');
- await page.getByRole('combobox',{name:'Variável',exact:true}).selectOption('reward.cost');
+ await page.getByLabel(/^Variável: /).click();
+ await page.getByLabel('Buscar variável').fill('reward.cost');
+ await page.getByRole('option',{name:/Custo da recompensa \(ponto\)/}).click();
  await page.getByRole('combobox',{name:'Operador',exact:true}).selectOption('greater_or_equal');
  await page.getByLabel('Valor esperado',{exact:true}).fill('5000');
  await expect(page.locator('.react-flow__node').filter({hasText:'Custo da recompensa'})).toHaveCount(1);

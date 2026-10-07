@@ -8,6 +8,7 @@ import {orderedActions,moveAction} from './flow';
 import {Field,Toggle} from './components';
 import {VariableTarget} from './Variables';
 import {variableCatalog} from './variableCatalog';
+import VariablePicker from './VariablePicker';
 import MessageEditor from './MessageEditor';
 import {SendPicker,AudioPicker} from './FlowOptions';
 import {AIResponseTest} from './AIConversation';
@@ -17,12 +18,12 @@ import {api,desktop} from './api';
 const OBS_OPS:Record<string,string>={mute:'Mutar entrada',unmute:'Desmutar entrada',toggle_mute:'Alternar mudo',volume:'Volume da entrada',show:'Mostrar fonte',hide:'Esconder fonte',toggle_item:'Alternar fonte',scene:'Trocar de cena'};
 const OBS_TEMP=['mute','unmute','volume','show','hide'];
 type ObsDisco={scenes:string[];current:string;inputs:string[];sources:string[]};
-function ObsTarget({profileId,op,value,onChange}:{profileId:string;op:string;value:string;onChange:(v:string)=>void}){
+function ObsTarget({profileId,op,value,onChange,issue}:{profileId:string;op:string;value:string;onChange:(v:string)=>void;issue?:string}){
  const [disco,setDisco]=useState<ObsDisco|null>(null);const [error,setError]=useState('');
  useEffect(()=>{if(!desktop){return}api<ObsDisco>('obs.discover',{profileId}).then(setDisco).catch(()=>setError('Abra o OBS e confira a integração na tela OBS Studio.'))},[profileId]);
  const options=op==='scene'?(disco?.scenes||[]):['mute','unmute','toggle_mute','volume'].includes(op)?(disco?.inputs||[]):(disco?.sources||[]);
  const label=op==='scene'?'Cena':['mute','unmute','toggle_mute','volume'].includes(op)?'Entrada de áudio':'Fonte (cena atual)';
- return <><Field label={label}><select value={value} onChange={e=>onChange(e.target.value)}><option value="">Escolha…</option>{options.map(o=><option key={o} value={o}>{o}</option>)}{value&&!options.includes(value)&&<option value={value}>{value}</option>}</select></Field>{error&&<p className="help">{error}</p>}</>;
+ return <><Field label={label}><select value={value} onChange={e=>onChange(e.target.value)}><option value="">Escolha…</option>{options.map(o=><option key={o} value={o}>{o}</option>)}{value&&!options.includes(value)&&<option value={value}>{value}</option>}</select></Field>{issue&&<p className="field-warn" role="status">{issue}</p>}{error&&<p className="help">{error}</p>}</>;
 }
 type Data={label:string;action?:Action;[key:string]:unknown};
 /** Seção recolhível do painel lateral: agrupa campos parecidos e sai do caminho quando fechada. */
@@ -43,14 +44,10 @@ function WaitEditor({value,onChange}:{value:number;onChange:(ms:number)=>void}){
  const shown=Math.round((value/factor)*100)/100;
  return <div className="row end"><Field label="Duração"><input type="number" min={0} step="any" value={shown} onChange={e=>onChange(Math.max(0,Math.round((Number(e.target.value)||0)*factor)))}/></Field><Field label="Unidade"><select value={unit} onChange={e=>{const f=units.find(([u])=>u===e.target.value)?.[1]||1;setUnit(e.target.value);onChange(Math.max(0,Math.round((value/f)*f)))}}>{units.map(([u,,n])=><option key={u} value={u}>{n}</option>)}</select></Field></div>;
 }
-function CondEditor({action,update}:{action:Action;update:(a:Action)=>void}){
- const groups:Record<string,{key:string;label:string}[]>={};
- for(const v of variableCatalog){(groups[v.group]=groups[v.group]||[]).push({key:v.key,label:v.label})}
+function CondEditor({action,update,issue}:{action:Action;update:(a:Action)=>void;issue?:string}){
  return <>
-  <Field label="Variável"><select value={action.condVar||''} onChange={e=>update({...action,condVar:e.target.value})}>
-   <option value="">Escolha…</option>
-   {Object.entries(groups).map(([g,vs])=><optgroup key={g} label={g}>{vs.map(v=><option key={v.key} value={v.key}>{v.label}</option>)}</optgroup>)}
-  </select></Field>
+  <Field label="Variável"><VariablePicker value={action.condVar||''} onChange={condVar=>update({...action,condVar})}/></Field>
+  {issue&&<p className="field-warn" role="status">{issue}</p>}
   <Field label="Operador"><select value={action.condOp||'equals'} onChange={e=>update({...action,condOp:e.target.value})}>{Object.entries(condOps).map(([k,n])=><option key={k} value={k}>{n}</option>)}</select></Field>
   {!['is_empty','is_not_empty'].includes(action.condOp||'equals')&&<Field label="Valor esperado"><input value={action.condValue||''} maxLength={500} onChange={e=>update({...action,condValue:e.target.value})}/></Field>}
   <Field label="Se falso"><select value={action.condFalse||'stop'} onChange={e=>update({...action,condFalse:e.target.value})}>{Object.entries(condFalse).map(([k,n])=><option key={k} value={k}>{n}</option>)}</select></Field>
@@ -67,8 +64,19 @@ export default function FlowEditor({flow,platform='twitch',ai,onSave,onTest,intr
  const [edges,setEdges,onEdgesChange]=useEdgesState(startEdges);
  const [selected,setSelected]=useState('trigger');const [name,setName]=useState(flow.name);const [trigger,setTrigger]=useState(flow.trigger);const [error,setError]=useState<FriendlyError|null>(null);const [busy,setBusy]=useState(false);
  const node=nodes.find(n=>n.id===selected);const action=node?.data.action;
+ const problem=action?actionProblem(action):null;
+ const issue=problem&&node?.className==='step-invalid'?problem.message:undefined;
  const connect=useCallback((c:Connection)=>setEdges(e=>addEdge({...c,animated:true},e)),[setEdges]);
- function update(a:Action){setNodes(ns=>ns.map(n=>n.id===selected?{...n,data:{label:nodeLabel(a),action:a}}:n))}
+ /** Espelha as regras do backend (model.rs) para apontar etapa e campo antes de enviar. */
+ function actionProblem(a:Action):{message:string}|null{
+  if(a.kind==='condition'&&!(a.condVar||'').trim())return {message:'Escolha uma variável'};
+  if(a.kind==='obs'&&!(a.obsTarget||'').trim()){
+   const op=a.obsOp||'mute';
+   return {message:op==='scene'?'Escolha uma cena':['mute','unmute','toggle_mute','volume'].includes(op)?'Escolha uma entrada de áudio':'Escolha uma fonte'};
+  }
+  return null;
+ }
+ function update(a:Action){setNodes(ns=>ns.map(n=>n.id===selected?{...n,data:{label:nodeLabel(a),action:a},className:actionProblem(a)?n.className:undefined}:n))}
 function move(dir:-1|1){try{const ns=nodes.map(n=>({id:n.id,position:{x:n.position.x,y:n.position.y},data:{action:n.data.action,label:String(n.data.label||'')}}));const es=edges.map(e=>({source:e.source,target:e.target}));const r=moveAction(ns,es,selected,dir);setNodes(cur=>{const pos:Record<string,{x:number;y:number}>={};r.nodes.forEach(n=>{pos[n.id]=n.position});return cur.map(n=>pos[n.id]?{...n,position:pos[n.id]}:n)});setEdges(r.edges.map((e,i)=>({id:'e'+i,source:e.source,target:e.target,animated:true})))}catch(e){setError(friendlyError(e))}}
  const keepText=(kind:string)=>["command","contains","voice","mention","redemption"].includes(kind);
   function nodeLabel(a:Action):string{const kind=a.kind;
@@ -94,7 +102,11 @@ function switchKind(current:Action,next:string){const base:Action={...current,ki
   if(next==='wait'&&!(base.value>=1))base.value=3000
   if(next==='obs'){if(!base.obsOp)base.obsOp='mute';if(!base.obsTarget)base.obsTarget=''}
   update(base)}
- async function save(){try{setBusy(true);setError(null);const ordered=orderedActions(nodes,edges);await onSave({...flow,name,trigger:trigger.kind==='timer'?{...trigger,permission:'everyone',cooldown:0,userCooldown:0,pattern:''}:keepText(trigger.kind)?trigger:{...trigger,pattern:''},counter:trigger.kind==='command'&&counter,timerSeconds,sendType,sendColor,replyTo,audio,audioVolume,actions:ordered,layout:{nodes,edges}})}catch(e){setError(friendlyError(e))}finally{setBusy(false)}}
+ async function save(){
+  const invalid=nodes.find(n=>n.data.action&&actionProblem(n.data.action));
+  if(invalid){setNodes(ns=>ns.map(n=>n.id===invalid.id?{...n,className:'step-invalid'}:n));setSelected(invalid.id);return}
+  setNodes(ns=>ns.map(n=>n.className==='step-invalid'?{...n,className:undefined}:n));
+  try{setBusy(true);setError(null);const ordered=orderedActions(nodes,edges);await onSave({...flow,name,trigger:trigger.kind==='timer'?{...trigger,permission:'everyone',cooldown:0,userCooldown:0,pattern:''}:keepText(trigger.kind)?trigger:{...trigger,pattern:''},counter:trigger.kind==='command'&&counter,timerSeconds,sendType,sendColor,replyTo,audio,audioVolume,actions:ordered,layout:{nodes,edges}})}catch(e){setError(friendlyError(e))}finally{setBusy(false)}}
  return <div className="flow-editor">
  {intro&&<p className="notice flow-intro">{intro}</p>}
  <div className="flow-toolbar"><input aria-label="Nome do fluxo" value={name} onChange={e=>setName(e.target.value)}/>{onTest&&<button type="button" disabled={busy} onClick={()=>{try{onTest({...flow,name,trigger,counter:trigger.kind==='command'&&counter,timerSeconds,sendType,sendColor,replyTo,audio,audioVolume,actions:orderedActions(nodes,edges),layout:{nodes,edges}})}catch(e){setError(friendlyError(e))}}}><Play size={16}/>Testar fluxo</button>}<button onClick={()=>{const id=crypto.randomUUID();setNodes(ns=>{const low=ns.reduce((a,n)=>n.position.y>a.position.y?n:a,ns[0]);return ns.concat({id,position:{x:low.position.x,y:low.position.y+120},data:{label:actions.chat,action:newAction()}})});setSelected(id)}}><Plus size={16}/>Adicionar etapa</button><button className="primary" disabled={busy} onClick={save}><Save size={16}/>Salvar fluxo</button></div>
@@ -145,12 +157,12 @@ function switchKind(current:Action,next:string){const base:Action={...current,ki
  <div className="list-row"><div><strong>Etapa ativa</strong><small>Desligada pula sem erro.</small></div><Toggle label="Etapa ativa" checked={action.enabled!==false} onChange={v=>update({...action,enabled:v})}/></div>
  {action.kind==='wait'&&<WaitEditor value={action.value||0} onChange={value=>update({...action,value})}/>}
  <div className="row"><button type="button" onClick={()=>move(-1)}>Subir</button><button type="button" onClick={()=>move(1)}>Descer</button></div>
- {action.kind==='condition'&&<CondEditor action={action} update={update}/>}
+ {action.kind==='condition'&&<CondEditor action={action} update={update} issue={issue}/>}
  {action.kind==='script'?<Field label="Script Rhai (retorna texto)">
  <textarea rows={5} value={action.text} onChange={e=>update({...action,text:e.target.value})}/>
- </Field>:action.kind==='variable.delete'?<p className="help">Escolha o valor que será apagado.</p>:action.kind==='twitch'&&!['game','title','timeout','ban','warn','mention'].includes(action.twOp||'game')?<p className="help">Esta operação não usa texto: o alvo e a duração vêm da fala ou dos campos abaixo.</p>:<MessageEditor key={selected} profileId={flow.profileId} label={action.kind.startsWith('ai')?'Como a IA deve responder':action.kind==='variable.increment'?'Quanto somar':action.kind==='punish'?'Motivo (vai para a Twitch e para o Histórico)':action.kind==='twitch'?((action.twOp||'game')==='game'?'Nome do jogo fixo (vazio usa o que você falou)':(action.twOp||'game')==='title'?'Novo título fixo (vazio usa o que você falou, até 140 caracteres)':(action.twOp||'game')==='mention'?'Mensagem (o bot marca @alvo na frente)':'Motivo (vai para a Twitch e para o Histórico)'):'Mensagem / conteúdo'} value={action.text} onChange={text=>update({...action,text})} flow={{...flow,name,trigger,actions:(()=>{try{return orderedActions(nodes,edges)}catch{return []}})()}}/>}{action.kind.startsWith('ai')&&<details className="ai-help"><summary>Como a IA monta a resposta</summary><p className="help">A mensagem atual, até 12 falas recentes dos últimos 5 minutos e as memórias entram automaticamente. Defina o tom aqui. {action.kind==='ai.generate'?'Esta ação só guarda a resposta. Conecte Enviar mensagem e clique em + Resposta da IA.':'Esta ação já envia ao chat e guarda a resposta para os próximos blocos.'}</p></details>}{ai&&<AIActionOptions action={action} ai={ai} onChange={update}/>}{action.kind==='ai.generate'&&<Field label="Nome da resposta" hint="Disponível somente nesta execução; evita misturar respostas entre pessoas.">
+ </Field>:action.kind==='variable.delete'?<p className="help">Escolha o valor que será apagado.</p>:action.kind==='twitch'&&!['game','title','timeout','ban','warn','mention'].includes(action.twOp||'game')?<p className="help">Esta operação não usa texto: o alvo e a duração vêm da fala ou dos campos abaixo.</p>:<MessageEditor key={selected} profileId={flow.profileId} label={action.kind.startsWith('ai')?'Como a IA deve responder':action.kind==='variable.increment'?'Quanto somar':action.kind==='punish'?'Motivo (vai para a Twitch e para o Histórico)':action.kind==='twitch'?((action.twOp||'game')==='game'?'Nome do jogo fixo (vazio usa o que você falou)':(action.twOp||'game')==='title'?'Novo título fixo (vazio usa o que você falou, até 140 caracteres)':(action.twOp||'game')==='mention'?'Mensagem (o bot marca @alvo na frente)':'Motivo (vai para a Twitch e para o Histórico)'):'Mensagem / conteúdo'} value={action.text} onChange={text=>update({...action,text})} flow={{...flow,name,trigger,actions:(()=>{try{return orderedActions(nodes,edges)}catch{return []}})()}}/>}{ai&&<AIActionOptions action={action} ai={ai} onChange={update}/>}{action.kind==='ai.generate'&&<Field label="Nome da resposta" hint="Disponível somente nesta execução; evita misturar respostas entre pessoas.">
  <input value={(action.target||'local.aiResponse').replace(/^local\./,'')} onChange={e=>update({...action,target:'local.'+e.target.value})}/>
- </Field>}{action.kind.startsWith('ai')&&<AIResponseTest key={selected} profileId={flow.profileId} instruction={action.text}/>}{action.kind.startsWith('variable.')&&<VariableTarget value={action.target} onChange={target=>update({...action,target})}/>}{['memory','webhook'].includes(action.kind)&&<Field label={action.kind==='memory'?'Arquivo no vault':'Endereço HTTPS'}>
+ </Field>}{action.kind.startsWith('variable.')&&<VariableTarget value={action.target} onChange={target=>update({...action,target})}/>}{['memory','webhook'].includes(action.kind)&&<Field label={action.kind==='memory'?'Arquivo no vault':'Endereço HTTPS'}>
  <input value={action.target} onChange={e=>update({...action,target:e.target.value})}/>
  </Field>}{['delay','points'].includes(action.kind)&&<Field label={action.kind==='delay'?'Espera em milissegundos (máx. 30000)':'Quantidade de pontos'}>
  <input type="number" value={action.value} onChange={e=>update({...action,value:+e.target.value})}/>
@@ -186,13 +198,16 @@ function switchKind(current:Action,next:string){const base:Action={...current,ki
  <p className="help">Categoria, título e VIP executam com a conta do canal (reautorize o canal após atualizar); o resto executa com a conta do bot, que precisa ser moderadora. A prévia não executa.</p>
  </>}{action.kind==='obs'&&<>
   <Field label="Operação no OBS"><select value={action.obsOp||'mute'} onChange={e=>update({...action,obsOp:e.target.value,obsTarget:''})}>{Object.entries(OBS_OPS).map(([k,n])=><option key={k} value={k}>{n}</option>)}</select></Field>
-  <ObsTarget profileId={flow.profileId} op={action.obsOp||'mute'} value={action.obsTarget||''} onChange={obsTarget=>update({...action,obsTarget})}/>
+  <ObsTarget profileId={flow.profileId} op={action.obsOp||'mute'} value={action.obsTarget||''} onChange={obsTarget=>update({...action,obsTarget})} issue={issue}/>
   {(action.obsOp||'mute')==='volume'&&<Field label="Volume (dB)" hint="Ex.: -6. Entre -100 e 30."><input type="number" min={-100} max={30} step="any" value={action.text} onChange={e=>update({...action,text:e.target.value})}/></Field>}
   {OBS_TEMP.includes(action.obsOp||'mute')&&<Field label="Duração (segundos)" hint="0 = permanente. Temporário restaura o estado anterior no fim."><input type="number" min={0} max={3600} step={1} value={action.obsDuration??0} onChange={e=>update({...action,obsDuration:Math.max(0,Math.round(Number(e.target.value)||0))})}/></Field>}
-  <div className="row"><button type="button" disabled={busy||!desktop} onClick={async()=>{setBusy(true);setObsTest('');try{const done=await api<string>('obs.execute',{profileId:flow.profileId,op:action.obsOp||'mute',target:action.obsTarget||'',num:action.obsOp==='volume'?Number(action.text)||0:0,secs:action.obsDuration??0});setObsTest(String(done))}catch(e){setObsTest('Falhou: '+friendlyMessage(e))}finally{setBusy(false)}}}><Play size={15}/>Testar no OBS</button></div>
-  {obsTest&&<p className="help">{obsTest}</p>}
   <p className="help">Executa no OBS desta máquina, sem nuvem. Temporário com o mesmo alvo soma o tempo; alvo ocupado por outro efeito é recusado no Histórico.</p>
   </>}</Section>
+  {(action.kind.startsWith('ai')||action.kind==='obs')&&<Section title="Avançado">
+  {action.kind.startsWith('ai')&&<details className="ai-help"><summary>Como a IA monta a resposta</summary><p className="help">A mensagem atual, até 12 falas recentes dos últimos 5 minutos e as memórias entram automaticamente. Defina o tom aqui. {action.kind==='ai.generate'?'Esta ação só guarda a resposta. Conecte Enviar mensagem e clique em + Resposta da IA.':'Esta ação já envia ao chat e guarda a resposta para os próximos blocos.'}</p></details>}
+  {action.kind.startsWith('ai')&&<AIResponseTest key={selected} profileId={flow.profileId} instruction={action.text}/>}
+  {action.kind==='obs'&&<><div className="row"><button type="button" disabled={busy||!desktop} onClick={async()=>{setBusy(true);setObsTest('');try{const done=await api<string>('obs.execute',{profileId:flow.profileId,op:action.obsOp||'mute',target:action.obsTarget||'',num:action.obsOp==='volume'?Number(action.text)||0:0,secs:action.obsDuration??0});setObsTest(String(done))}catch(e){setObsTest('Falhou: '+friendlyMessage(e))}finally{setBusy(false)}}}><Play size={15}/>Testar no OBS</button></div>{obsTest&&<p className="help">{obsTest}</p>}</>}
+  </Section>}
  <Section title="Comportamento">
  <Field label="Executar só se a mensagem contiver">
  <input value={action.condition} onChange={e=>update({...action,condition:e.target.value})}/>
