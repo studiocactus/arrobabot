@@ -15,26 +15,27 @@ O que já está no BotLive e o que está planejado. Este documento é a referên
 
 > A etapa de UX 2.0 segue em andamento: este documento não declara o programa concluído. Próximas entregas serão listadas aqui conforme forem aprovadas.
 
+- **Voicemod — etapa 1: conexão local e teste manual (0.1.93)** — a tela **Voicemod** usa a [Control API oficial](https://control-api.voicemod.net/) por WebSocket local, sem nuvem e sem varrer a rede. A chave fica no cofre do sistema; **Conectado** só aparece após o `registerClient` respondido com 200. A tela lista as vozes com o **id** real de cada uma, mostra a voz atual, o modificador de voz, ouvir minha voz e a licença, busca por nome e permite **Testar voz** por um tempo configurável (padrão 10 s) com contagem no núcleo, encerramento antecipado e devolução do estado anterior. Queda da conexão durante o teste deixa a restauração **não confirmada** com **Restaurar agora** explícito; reconexão automática nunca reenvia a voz; troca manual nunca é desfeita em silêncio. Erros vão para a tela e para o **Histórico**, nunca para o chat. A conexão real **não foi homologada** nesta entrega (sem Voicemod instalado/autorizado na máquina de validação): os testes automatizados rodam contra um servidor WebSocket controlado.
+
 ## Planejado
 
-### Integração com o Voicemod (PLANEJADO)
+### Integração com o Voicemod (etapa 1 ENTREGUE · etapas seguintes PENDENTES)
 
-Trocar a voz do bot pelo microfone virtual do Voicemod durante falas em TTS, usando a [Voicemod Control API](https://control-api.voicemod.net/). A intenção é provar compatibilidade antes de prometer a funcionalidade: a implementação só começa depois que a API for validada de verdade, com o aplicativo Voicemod aberto.
+O objetivo final continua sendo trocar a voz do bot pelo microfone virtual do Voicemod durante falas em TTS, usando a [Voicemod Control API](https://control-api.voicemod.net/). A etapa 1 (conexão, estado, lista de vozes e teste manual com restauração) já está na versão atual e está descrita em **Entregue** acima e no capítulo [Perfis e conexões](INTEGRACOES.md).
 
-Fases previstas:
+**Validado nesta etapa:** a referência oficial, o endereço `ws://127.0.0.1:<porta>/v1`, o formato de `registerClient` + `clientKey`, a correlação de respostas por `id`/`action` e os eventos espontâneos usados (`voiceChangedEvent`, `toggleVoiceChanger`). **Não validado:** a conexão com um Voicemod real instalado e autorizado.
 
-1. **Validação da Control API** — abrir a documentação oficial, descobrir porta e endereços, e confirmar por experimento que dá para consultar e trocar o microfone virtual com o Voicemod rodando.
-2. **Conexão e estado** — conectar, manter a conexão viva, reconectar e mostrar ao usuário se o Voicemod está conectado ou não.
-3. **Lista de vozes** — listar as vozes disponíveis com o **id** de cada uma, sem depender de nomes digitados pelo usuário.
-4. **Recompensa ligada por id** — o painel de recompensa escolhe a voz pelo id obtido na fase anterior; nada de escrever id à mão.
-5. **Duração e recompensas simultâneas** — definir quanto tempo a voz vale e o que acontece quando duas recompensas são resgatadas ao mesmo tempo (uma espera, a última vence, etc.).
-6. **Restauração de estado** — voltar ao microfone anterior ao fim da duração ou do fluxo, mesmo sem recompensa envolvida.
-7. **Ausência do Voicemod** — quando não houver conexão, o fluxo continua normalmente sem erros no chat; a falha só aparece onde faz sentido (histórico ou aviso).
-8. **Conclusão e cancelamento** — encerrar a troca de voz quando o tempo acabar ou o usuário cancelar a recompensa na Twitch, respeitando as permissões de reembolso (redeem/cancel) da conta do canal.
-9. **Microfone virtual no OBS** — rotear o microfone virtual para uma fonte do OBS e registrar passo a passo na documentação, testado no aplicativo real.
+O que continua pendente:
+
+1. **Recompensa ligada por id** — o painel de recompensa escolhe a voz pelo id obtido na lista; nada de escrever id à mão.
+2. **Duração por recompensa** — definir quanto tempo a voz vale, recompensa por recompensa.
+3. **Fila de resgates simultâneos** — decidir o que acontece quando duas recompensas são resgatadas ao mesmo tempo (uma espera, a última vence, etc.).
+4. **Conclusão e cancelamento do resgate** — encerrar a troca de voz quando o tempo acabar ou o usuário cancelar o resgate na Twitch, respeitando as permissões de reembolso da conta do canal.
+5. **A integração como etapa de automação** — usar a troca de voz dentro do editor de fluxos, com o mesmo aviso de efeito real no microfone.
+6. **Microfone virtual no OBS sem passo manual** — hoje o roteamento é feito à mão no OBS (descrito na documentação); automatizar segue pendente.
 
 Cuidados importantes desta integração:
 
-- **Provar antes de prometer** — nada de prometer a funcionalidade antes de validar a API com o Voicemod aberto; as fases acima são ordem de execução, não garantia.
+- **Provar antes de prometer** — a etapa 1 está entregue como código e testes contra servidor controlado; não declare Voicemod concluído nem homologado enquanto a conexão real não for verificada com o aplicativo aberto e autorizado.
 - **Não confundir com troca de TTS** — isto é sobre o microfone virtual usado como fonte de áudio, não sobre trocar o motor de voz do bot.
-- **Licença do Voicemod** — o que está disponível pode depender da licença do usuário; não assumir conteúdo de licença sem verificar.
+- **Licença do Voicemod** — o que está disponível pode depender da licença do usuário; vozes bloqueadas pela licença aparecem como indisponíveis em vez de falhar em silêncio.

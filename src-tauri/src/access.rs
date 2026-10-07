@@ -10,6 +10,7 @@ pub fn guard(rt:&Runtime,op:&str,args:&Value)->Result<(),String>{
  if ["snapshot","presets"].contains(&op){return Ok(())}
  if matches!(op,"knowledge.import"){return Err("Somente o proprietário importa a base de conhecimento".into())}
  if ["backup.get","backup.save","backup.now","backup.list","backup.restore"].contains(&op){return Err("Somente o proprietário faz ou importa backup".into())}
+ if op=="voicemod.key"{return Err("Somente o proprietário salva a chave da Control API do Voicemod".into())}
  if matches!(op,"chatExtras.import"|"chatExtras.save"|"chatExtras.reset"){return Err("Somente o proprietário configura arquivos e sons".into())}
  if matches!(op,"labels.save"|"labels.folder"){return Err("Somente o proprietário configura os rótulos".into())}
  if ["settings","settings.get","update.check","update.install","profile.delete","secret.save","oauth.start","oauth.finish","obs.save","obs.password"].contains(&op){return Err("Somente o proprietário pode realizar esta operação".into())}

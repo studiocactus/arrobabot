@@ -1,6 +1,6 @@
 import {describe,expect,it} from 'vitest';
 import {newAction,newProfile} from './types';
-import {knowledgeGroups,resolveAnchor,resolveKnowledge,resolveLength,resolveNoRepeat,toggleKnowledgeFile} from './aiOptions';
+import {knowledgeGroups,normalizeAI,resolveAnchor,resolveKnowledge,resolveLength,resolveNoRepeat,toggleKnowledgeFile} from './aiOptions';
 
 const ai={...newProfile().ai,anchor:'fixed',answerLength:'short',knowledge:true,noRepeat:true};
 
@@ -50,5 +50,38 @@ describe('base de conhecimento',()=>{
   expect(off.knowledgeOff).toEqual(['nichos/fps.md']);
   expect(base.knowledgeOff).toEqual([]);
   expect(toggleKnowledgeFile(off,'nichos/fps.md').knowledgeOff).toEqual([]);
+ });
+});
+
+describe('perfil de IA salvo incompleto',()=>{
+ // Um campo faltando não pode derrubar a tela inteira: completa antes de renderizar.
+ it('preenche o que a versão antiga não tinha',()=>{
+  const antigo={provider:'openai',endpoint:'https://api.openai.com/v1',model:'gpt-4o-mini',personality:'Oi',temperature:0.3,fallback:'',remember:false} as unknown as ReturnType<typeof newProfile>['ai'];
+  const n=normalizeAI(antigo);
+  expect(n.temperature).toBe(0.3);
+  expect(n.knowledge).toBe(true);
+  expect(n.knowledgeDepth).toBe('standard');
+  expect(n.knowledgeOff).toEqual([]);
+  expect(n.anchor).toBe('');
+  expect(n.noRepeat).toBe(false);
+ });
+ it('assume valores padrão quando o campo não existe',()=>{
+  const vazio={} as unknown as ReturnType<typeof newProfile>['ai'];
+  const n=normalizeAI(vazio);
+  expect(n.temperature).toBe(0.7);
+  expect(n.provider).toBe('ollama');
+  expect(n.endpoint).toBe('http://localhost:11434');
+  expect(n.model).toBe('');
+  expect(Array.isArray(n.knowledgeOff)).toBe(true);
+ });
+ it('não aceita tipo errado no lugar do número de criatividade',()=>{
+  const errado={...newProfile().ai,temperature:'quente'} as unknown as ReturnType<typeof newProfile>['ai'];
+  expect(normalizeAI(errado).temperature).toBe(0.7);
+ });
+ it('sobrevive a um perfil sem o objeto de IA',()=>{
+  const semAi=undefined as unknown as ReturnType<typeof newProfile>['ai'];
+  const n=normalizeAI(semAi);
+  expect(n.temperature).toBe(0.7);
+  expect(n.knowledge).toBe(true);
  });
 });

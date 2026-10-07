@@ -2,15 +2,25 @@ import type {Action,AIConfig,KnowledgeEntry} from './types';
 
 /** Perfis salvos antes desta versão não têm os campos novos; completa sem quebrar a tela. */
 export function normalizeAI(ai:AIConfig):AIConfig {
-  return {...ai,
-    knowledge:ai.knowledge!==false,
-    knowledgeNicho:ai.knowledgeNicho||'',
-    knowledgeDepth:ai.knowledgeDepth||'standard',
-    knowledgeOff:Array.isArray(ai.knowledgeOff)?ai.knowledgeOff:[],
-    knowledgeSource:ai.knowledgeSource||'',
-    anchor:ai.anchor||'',
-    answerLength:ai.answerLength||'',
-    noRepeat:!!ai.noRepeat,
+  const src=(ai||{}) as AIConfig;
+  const num=(v:unknown,d:number)=>typeof v==='number'&&isFinite(v)?v:d;
+  const str=(v:unknown,d:string)=>typeof v==='string'?v:d;
+  return {...src,
+    provider:str(src.provider,'ollama') as AIConfig['provider'],
+    endpoint:str(src.endpoint,'http://localhost:11434'),
+    model:str(src.model,''),
+    personality:str(src.personality,''),
+    temperature:num(src.temperature,0.7),
+    fallback:str(src.fallback,''),
+    remember:!!src.remember,
+    knowledge:src.knowledge!==false,
+    knowledgeNicho:src.knowledgeNicho||'',
+    knowledgeDepth:src.knowledgeDepth||'standard',
+    knowledgeOff:Array.isArray(src.knowledgeOff)?src.knowledgeOff:[],
+    knowledgeSource:src.knowledgeSource||'',
+    anchor:src.anchor||'',
+    answerLength:src.answerLength||'',
+    noRepeat:!!src.noRepeat,
   };
 }
 

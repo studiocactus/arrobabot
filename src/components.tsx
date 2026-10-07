@@ -1,4 +1,4 @@
-import {useEffect,useRef,type ReactNode} from 'react';
+import {useEffect,useRef,Component,type ReactNode} from 'react';
 import {X,ArrowUpRight,Inbox,LoaderCircle,ChevronDown} from 'lucide-react';
 /** Modal abertos, na ordem de abertura: só o último responde ao Escape. */
 const openModals:HTMLElement[]=[];
@@ -56,4 +56,25 @@ export function ListTools({count,total,shown,search,onSearch,searchLabel,onExpan
   <button type="button" onClick={onCollapseAll}>Recolher todos</button>
   {!!search&&shown===0&&<span className="list-count">nenhum resultado</span>}
  </div>;
+}
+
+/** Uma tela com problema não derruba o aplicativo: só o conteúdo é substituído,
+ *  a barra lateral e o topo continuam de pé para o usuário sair do erro. */
+export class ScreenBoundary extends Component<{children:ReactNode;onHome:()=>void},{error:string}>{
+ state={error:''};
+ static getDerivedStateFromError(error:unknown){return {error:error instanceof Error?error.message:String(error)}}
+ componentDidCatch(error:unknown){console.error('[BotLive] falha ao renderizar a tela',error)}
+ render(){
+  if(!this.state.error)return this.props.children;
+  return <div className="empty screen-failure" role="alert">
+   <span className="empty-icon"><Inbox size={28}/></span>
+   <h3>Esta tela encontrou um problema</h3>
+   <p>As outras telas continuam funcionando e nada do que você já salvou foi perdido.</p>
+   <pre>{this.state.error}</pre>
+   <div className="screen-failure-actions">
+    <button className="primary" type="button" onClick={()=>this.setState({error:''})}>Tentar de novo</button>
+    <button type="button" onClick={this.props.onHome}>Ir para a Visão geral</button>
+   </div>
+  </div>;
+ }
 }
