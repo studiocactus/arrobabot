@@ -2,9 +2,11 @@ import CommandOptions from './CommandOptions';
 import {useState,useCallback,useEffect,type ReactNode} from 'react';
 import {ReactFlow,Background,Controls,MiniMap,addEdge,useNodesState,useEdgesState,type Connection,type Node,type Edge} from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import {Plus,Save,Trash2,Zap,Play} from 'lucide-react';
+import {Plus,Save,Trash2,Zap,Play,Map as MapIcon} from 'lucide-react';
 import {actions,triggers,newAction,punishModes,punishTargets,twOps,condOps,condFalse,minutesToSeconds,secondsToMinutes,type Flow,type Action,type AIConfig} from './types';
-import {orderedActions,moveAction} from './flow';
+import {orderedActions,moveAction,chainIds,stepBounds} from './flow';
+import {StepMenu,FlowHelp} from './FlowChrome';
+import {readPrefs,writePrefs} from './editorPrefs';
 import {Field,Toggle} from './components';
 import {VariableTarget} from './Variables';
 import {variableCatalog} from './variableCatalog';
@@ -66,6 +68,10 @@ export default function FlowEditor({flow,platform='twitch',ai,onSave,onTest,intr
  const node=nodes.find(n=>n.id===selected);const action=node?.data.action;
  const problem=action?actionProblem(action):null;
  const issue=problem&&node?.className==='step-invalid'?problem.message:undefined;
+ const [showMini,setShowMini]=useState(()=>!!readPrefs().minimap);
+ function toggleMini(){setShowMini(v=>{const next=!v;writePrefs({minimap:next});return next})}
+ const stepChain=(()=>{try{return chainIds(nodes,edges).filter(x=>x!=='trigger')}catch{return [] as string[]}})();
+ const bounds=stepBounds(stepChain,selected);
  const connect=useCallback((c:Connection)=>setEdges(e=>addEdge({...c,animated:true},e)),[setEdges]);
  /** Espelha as regras do backend (model.rs) para apontar etapa e campo antes de enviar. */
  function actionProblem(a:Action):{message:string}|null{
@@ -108,15 +114,14 @@ function switchKind(current:Action,next:string){const base:Action={...current,ki
   setNodes(ns=>ns.map(n=>n.className==='step-invalid'?{...n,className:undefined}:n));
   try{setBusy(true);setError(null);const ordered=orderedActions(nodes,edges);await onSave({...flow,name,trigger:trigger.kind==='timer'?{...trigger,permission:'everyone',cooldown:0,userCooldown:0,pattern:''}:keepText(trigger.kind)?trigger:{...trigger,pattern:''},counter:trigger.kind==='command'&&counter,timerSeconds,sendType,sendColor,replyTo,audio,audioVolume,actions:ordered,layout:{nodes,edges}})}catch(e){setError(friendlyError(e))}finally{setBusy(false)}}
  return <div className="flow-editor">
- {intro&&<p className="notice flow-intro">{intro}</p>}
- <div className="flow-toolbar"><input aria-label="Nome do fluxo" value={name} onChange={e=>setName(e.target.value)}/>{onTest&&<button type="button" disabled={busy} onClick={()=>{try{onTest({...flow,name,trigger,counter:trigger.kind==='command'&&counter,timerSeconds,sendType,sendColor,replyTo,audio,audioVolume,actions:orderedActions(nodes,edges),layout:{nodes,edges}})}catch(e){setError(friendlyError(e))}}}><Play size={16}/>Testar fluxo</button>}<button onClick={()=>{const id=crypto.randomUUID();setNodes(ns=>{const low=ns.reduce((a,n)=>n.position.y>a.position.y?n:a,ns[0]);return ns.concat({id,position:{x:low.position.x,y:low.position.y+120},data:{label:actions.chat,action:newAction()}})});setSelected(id)}}><Plus size={16}/>Adicionar etapa</button><button className="primary" disabled={busy} onClick={save}><Save size={16}/>Salvar fluxo</button></div>
+ <div className="flow-toolbar"><input aria-label="Nome do fluxo" value={name} onChange={e=>setName(e.target.value)}/><FlowHelp note={intro}/>{onTest&&<button type="button" disabled={busy} onClick={()=>{try{onTest({...flow,name,trigger,counter:trigger.kind==='command'&&counter,timerSeconds,sendType,sendColor,replyTo,audio,audioVolume,actions:orderedActions(nodes,edges),layout:{nodes,edges}})}catch(e){setError(friendlyError(e))}}}><Play size={16}/>Testar fluxo</button>}<button type="button" aria-expanded={showMini} onClick={toggleMini}><MapIcon size={16}/>Minimapa</button><button onClick={()=>{const id=crypto.randomUUID();setNodes(ns=>{const low=ns.reduce((a,n)=>n.position.y>a.position.y?n:a,ns[0]);return ns.concat({id,position:{x:low.position.x,y:low.position.y+120},data:{label:actions.chat,action:newAction()}})});setSelected(id)}}><Plus size={16}/>Adicionar etapa</button><button className="primary" disabled={busy} onClick={save}><Save size={16}/>Salvar fluxo</button></div>
  {error&&<div role="alert" className="inline-error">{error.message}{error.detail&&<details><summary>Detalhes técnicos</summary><code>{error.detail}</code></details>}</div>}
  <div className="flow-workspace">
  <div className="canvas">
  <ReactFlow nodes={nodes} edges={edges} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} onConnect={connect} onNodeClick={(_,n)=>setSelected(n.id)} fitView minZoom={0.25} maxZoom={1.5} deleteKeyCode={['Backspace','Delete']}>
  <Background gap={22}/>
  <Controls/>
- <MiniMap pannable zoomable/>
+ {showMini&&<MiniMap pannable zoomable style={{width:150,height:100}}/>}
  </ReactFlow>
  </div>
  <aside className="node-inspector">
@@ -156,7 +161,7 @@ function switchKind(current:Action,next:string){const base:Action={...current,ki
  </Field>
  <div className="list-row"><div><strong>Etapa ativa</strong><small>Desligada pula sem erro.</small></div><Toggle label="Etapa ativa" checked={action.enabled!==false} onChange={v=>update({...action,enabled:v})}/></div>
  {action.kind==='wait'&&<WaitEditor value={action.value||0} onChange={value=>update({...action,value})}/>}
- <div className="row"><button type="button" onClick={()=>move(-1)}>Subir</button><button type="button" onClick={()=>move(1)}>Descer</button></div>
+ <div className="row"><StepMenu canUp={bounds.up} canDown={bounds.down} onMove={move}/></div>
  {action.kind==='condition'&&<CondEditor action={action} update={update} issue={issue}/>}
  {action.kind==='script'?<Field label="Script Rhai (retorna texto)">
  <textarea rows={5} value={action.text} onChange={e=>update({...action,text:e.target.value})}/>

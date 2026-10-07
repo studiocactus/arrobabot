@@ -1,5 +1,5 @@
 import {describe,it,expect} from 'vitest';
-import {orderedActions,moveAction,chainIds,testVarKeys} from './flow';
+import {orderedActions,moveAction,chainIds,stepBounds,testVarKeys} from './flow';
 import {newAction} from './types';
 const nodes=['trigger','a','b','c'].map(id=>({id,position:{x:0,y:0},data:id==='trigger'?{}:{action:{...newAction(),text:id}}}));
 describe('editor de automação',()=>{
@@ -22,5 +22,13 @@ describe('editor de automação',()=>{
   const flow={actions:[{kind:'condition',text:'',condVar:'reward.cost'},{kind:'chat',text:'{{redeemer}} pagou {{reward.cost|number:0}} e {{redeemer}}!'}]};
   expect(testVarKeys(flow)).toEqual(['reward.cost','redeemer']);
   expect(testVarKeys({actions:[{kind:'chat',text:'sem marcador'}]})).toEqual([]);
+ });
+ it('limita o menu da etapa: sem Subir na primeira nem Descer na última',()=>{
+  expect(stepBounds(['a'],'a')).toEqual({up:false,down:false});
+  expect(stepBounds(['a','b'],'a')).toEqual({up:false,down:true});
+  expect(stepBounds(['a','b'],'b')).toEqual({up:true,down:false});
+  expect(stepBounds(['a','b','c'],'b')).toEqual({up:true,down:true});
+  expect(stepBounds(['a','b'],'fora-da-cadeia')).toEqual({up:false,down:false});
+  expect(stepBounds([],'action-0')).toEqual({up:false,down:false});
  });
 });

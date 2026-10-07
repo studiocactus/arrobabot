@@ -14,7 +14,7 @@ Para mais opções, abra **Inserir variável e testar mensagem**. Clique na fich
 
 **Comandos** é o caminho rápido para uma resposta textual. **Automações** abre o editor visual e permite combinar ações. São duas visualizações dos mesmos fluxos: um comando criado no modo simples também aparece em Automações.
 
-No modo simples, **Abrir no editor visual** troca a tela na hora e mostra um aviso: a ordem das ações passa a valer pelas conexões entre os blocos, não pela posição deles. Ao salvar, o comando continua o mesmo, com o mesmo nome, gatilho e ativação, e volta a abrir pelo modo simples enquanto tiver uma só ação. Com mais de uma ação, ele já abre no editor visual.
+No modo simples, **Abrir no editor visual** troca a tela na hora e o botão **?** (**Ajuda do editor de fluxos**) no cabeçalho do editor explica a regra: a ordem das ações vale pelas conexões entre os blocos, não pela posição deles. A mesma ajuda traz, quando o editor veio de um comando ou timer, a nota de que ao salvar ele mantém o mesmo nome, gatilho e ativação. Ao salvar, o comando continua o mesmo, com o mesmo nome, gatilho e ativação, e volta a abrir pelo modo simples enquanto tiver uma só ação. Com mais de uma ação, ele já abre no editor visual.
 
 ![Editor visual de automação na prévia da interface](images/flow-editor.png)
 
@@ -104,7 +104,9 @@ Cada bloco já mostra na tela um resumo legível da etapa — por exemplo ◆ CO
 
 Quando o salvamento é recusado, o motivo aparece em português no topo do editor. Se o texto original for técnico, ele continua disponível em **Detalhes técnicos**, dentro do próprio aviso de erro. Além disso, campos obrigatórios vazios são apontados antes do envio: ao tentar salvar, a orientação aparece ao lado do campo — **Escolha uma variável** na Condição; **Escolha uma cena**, **Escolha uma entrada de áudio** ou **Escolha uma fonte** no OBS, conforme a operação — e a etapa que precisa de correção fica destacada em vermelho no canvas, com o painel lateral já selecionando-a. O restante continua validado pelo backend.
 
-Para reorganizar, remova as conexões antigas e conecte a sequência desejada. Não apague o gatilho. São permitidas de 1 a 64 ações.
+Para reorganizar, selecione a etapa e use o menu **••• (Opções da etapa)** no painel lateral: **Subir** e **Descer** trocam a etapa com a vizinha refazendo as conexões — a primeira não sobe, a última não desce e o gatilho não tem esse menu. O menu fecha ao escolher uma opção, clicar fora ou apertar Escape, que devolve o foco ao botão; abrir e fechar o menu não altera o fluxo. A ordem de execução continua sendo a das conexões. Ainda dá para remover as conexões antigas e religar a sequência à mão. Não apague o gatilho. São permitidas de 1 a 64 ações.
+
+Na barra do editor, o botão **Minimapa** mostra ou esconde o minimapa do canvas. Ele começa recolhido para deixar mais espaço para o fluxo; quando abre, aparece compacto no canto inferior direito, sem cobrir os controles de zoom, e a preferência fica guardada localmente neste navegador, fora do layout do fluxo (reabrir o editor mantém a escolha). Mostrar ou esconder não mexe em zoom, arraste, seleção, conexões nem no ajuste da tela. O botão **?** ao lado do nome do fluxo abre a **Ajuda do editor de fluxos**, com a explicação de que a ordem das etapas segue as conexões entre os blocos — a mesma que antes aparecia em destaque — e, quando o editor veio de um comando ou timer, a nota de que nome, gatilho e ativação são conservados. A ajuda abre por clique ou pelo teclado (foco no botão e Enter), cabe em tela pequena e fecha com Escape sem fechar o editor; avisos de erro continuam aparecendo no topo do editor, fora da ajuda.
 
 ## Gatilhos disponíveis
 
@@ -169,7 +171,7 @@ Na ação **Punir na Twitch**, **Quem leva a punição** escolhe entre quem envi
 
 ## Sequências: etapas, espera e teste
 
-Todo fluxo já é uma sequência: as ações executam em ordem e cada etapa tem interruptor próprio (**Etapa ativa**; desligada pula com `pulada` no Histórico, sem erro), botões **Subir/Descer** e a ação **Aguardar** (duração + unidade, até 1 hora). Uma falha para as etapas seguintes, como sempre.
+Todo fluxo já é uma sequência: as ações executam em ordem e cada etapa tem interruptor próprio (**Etapa ativa**; desligada pula com `pulada` no Histórico, sem erro), o menu **••• (Opções da etapa)** com **Subir/Descer** e a ação **Aguardar** (duração + unidade, até 1 hora). Uma falha para as etapas seguintes, como sempre.
 
 Cada execução ganha identidade (`Execução abc12345`) nas linhas de início e fim do Histórico. **Testar fluxo** executa de verdade OBS, espera, overlay e variáveis locais, pulando envios e efeitos externos (chat, IA, Discord, som da conta, punição, Twitch) com aviso; o progresso mostra ✓/⏳ por etapa e o **Cancelar** para só aquela execução. Dicas: waits longos pedem cancelamento à mão; temporário do OBS e WAIT são independentes (um restaura estado, o outro só pausa); fluxos antigos continuam ligados e válidos.
 

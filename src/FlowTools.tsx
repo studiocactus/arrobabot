@@ -67,7 +67,7 @@ export function FlowDialog({flow,mode,profile,notify,onSaved,onClose}:{flow:Flow
  const [testing,setTesting]=useState<Flow|null>(null);
  const kind=mode==='timer'?'timer':'comando';
  const editor=mode==='flow'||editing.actions.length>1||forceVisual||editing.actions.some(a=>!['chat','ai'].includes(a.kind));
- const intro=mode!=='flow'&&(forceVisual||editing.actions.length>1)?'Trocou para o editor visual: a ordem das ações é a das conexões entre os blocos, não pela posição deles na tela. Ao salvar, este '+kind+' mantém o mesmo nome, gatilho e ativação.':'';
+ const intro=mode!=='flow'&&(forceVisual||editing.actions.length>1)?'Ao salvar, este '+kind+' mantém o mesmo nome, gatilho e ativação.':'';
  const title=mode==='flow'?'Editor de automação':mode==='timer'?'Configurar timer':'Configurar comando';
  async function save(next:Flow){
   await saveFlow(next);

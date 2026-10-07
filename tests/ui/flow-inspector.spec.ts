@@ -1,5 +1,5 @@
 import {test,expect,type Locator} from '@playwright/test';
-test('editor de automações agrupa campos em seções, avisa a troca para o visual e explica a ordem por conexão',async({page})=>{
+test('editor de automações agrupa campos em seções, oferece a ajuda compacta e explica a ordem por conexão',async({page})=>{
  const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
  await page.goto('/');
  await page.getByRole('button',{name:'Criar primeiro bot',exact:true}).click();
@@ -49,14 +49,19 @@ test('editor de automações agrupa campos em seções, avisa a troca para o vis
  await expect(page.getByLabel('Executar só se a mensagem contiver',{exact:true})).toBeVisible();
  await page.getByRole('dialog').getByRole('button',{name:'Fechar',exact:true}).click();
 
- // comando simples pode ser aberto no editor visual, com aviso
+ // comando simples pode ser aberto no editor visual, com a nota de preservação na ajuda
  await page.getByRole('button',{name:'Comandos',exact:true}).click();
  await page.getByRole('button',{name:'Novo comando',exact:true}).click();
  await page.getByLabel('Nome',{exact:true}).fill('Alô');
  await page.getByLabel('Comando',{exact:true}).fill('!alo');
  await page.getByRole('textbox',{name:'Resposta',exact:true}).fill('Oi, {{user}}!');
  await page.getByRole('button',{name:'Abrir no editor visual',exact:true}).click();
- await expect(page.locator('.flow-intro')).toContainText('Trocou para o editor visual');
+ await expect(page.locator('.flow-intro')).toHaveCount(0);
+ await page.getByRole('button',{name:'Ajuda do editor de fluxos',exact:true}).click();
+ await expect(page.locator('.flow-help')).toContainText('A ordem das etapas segue as conexões entre os blocos');
+ await expect(page.locator('.flow-help')).toContainText('mantém o mesmo nome, gatilho e ativação');
+ await page.keyboard.press('Escape');
+ await expect(page.locator('.flow-help')).toHaveCount(0);
  await expect(page.locator('.react-flow__node')).toHaveCount(2);
  await page.getByRole('button',{name:'Salvar fluxo',exact:true}).click();
  await expect(page.getByText('Automação salva.',{exact:true})).toBeVisible();

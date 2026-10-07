@@ -60,10 +60,10 @@ export default function VariablePicker({value,onChange}:{value:string;onChange:(
    close(false);
   };
   const moved=()=>reposition();
-  document.addEventListener('mousedown',outside);
+  document.addEventListener('mousedown',outside,true);
   window.addEventListener('scroll',moved,true);
   window.addEventListener('resize',moved);
-  return ()=>{document.removeEventListener('mousedown',outside);window.removeEventListener('scroll',moved,true);window.removeEventListener('resize',moved)};
+  return ()=>{document.removeEventListener('mousedown',outside,true);window.removeEventListener('scroll',moved,true);window.removeEventListener('resize',moved)};
  },[open]);
 
  useEffect(()=>{

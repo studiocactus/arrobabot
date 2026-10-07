@@ -11,6 +11,8 @@ export function chainIds(nodes:FlowNode[],edges:FlowEdge[]):string[]{
  }
  return order;
 }
+/** Limites do menu da etapa: sem Subir na primeira posição nem Descer na última (o gatilho fica fora da cadeia). */
+export function stepBounds(chain:string[],id:string):{up:boolean;down:boolean}{const at=chain.indexOf(id);return {up:at>0,down:at>=0&&at<chain.length-1}}
 export function moveAction(nodes:FlowNode[],edges:FlowEdge[],id:string,dir:-1|1):{nodes:FlowNode[];edges:FlowEdge[]}{
  const order=chainIds(nodes,edges).filter(x=>x!=='trigger');
  const at=order.indexOf(id);const to=at+dir;
