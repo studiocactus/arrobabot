@@ -25,7 +25,7 @@ function voicemod(page:Page,cfg:Partial<Cfg>={}){
   const snap=()=>({status:{phase:st.phase,message:st.message,port:39273,voices:shown,currentVoice:st.current,currentName:name(st.current),
    voiceChanger:st.testActive,hearMyself:false,license:'free',attempts:0},
    test:{active:st.testActive,phase:st.testActive?'running':'',voiceId:st.selected,voiceName:name(st.selected),seconds:10,remainingMs:st.testActive?8000:0,interrupted:false,manual:false},
-   outcome:st.outcome,hasKey:st.hasKey,defaultSecs:10,minSecs:1,maxSecs:60});
+   outcome:st.outcome,hasKey:st.hasKey,keyLen:21,defaultSecs:10,minSecs:1,maxSecs:60});
   const core=window as unknown as {__TAURI_INTERNALS__:{invoke:(c:string,p:{op?:string;args?:Record<string,unknown>})=>unknown}};
   const inner=core.__TAURI_INTERNALS__||{invoke:async()=>null};
   const orig=inner.invoke.bind(inner);

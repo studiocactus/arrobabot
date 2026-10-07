@@ -170,7 +170,7 @@ pub struct Voice {
  busy: AtomicBool,
  reconnect: Mutex<Option<tokio::task::JoinHandle<()>>>,
  #[cfg(test)]
- test_key: Mutex<Option<String>>,
+ test_keys: Mutex<HashMap<String, String>>,
  #[cfg(test)]
  reply_timeout: Mutex<Duration>,
 }
@@ -197,7 +197,11 @@ impl Voice {
  }
  #[cfg(test)]
  pub fn set_key(&self, key: Option<String>) {
-  *self.test_key.lock().unwrap() = key;
+  let mut keys = self.test_keys.lock().unwrap();
+  keys.clear();
+  if let Some(k) = key {
+   keys.insert(String::new(), k);
+  }
  }
  #[cfg(test)]
  pub fn set_reply_timeout(&self, ms: u64) {
@@ -224,7 +228,7 @@ impl Default for Voice {
    busy: AtomicBool::new(false),
    reconnect: Mutex::new(None),
    #[cfg(test)]
-   test_key: Mutex::new(None),
+   test_keys: Mutex::new(HashMap::new()),
    #[cfg(test)]
    reply_timeout: Mutex::new(REPLY_TIMEOUT),
   }
@@ -326,39 +330,56 @@ fn snapshot_json(rt: &Runtime) -> Value {
   "status": s,
   "test": t,
   "outcome": o,
-  "hasKey": has_key(rt),
   "defaultSecs": DEFAULT_TEST_SECS,
   "minSecs": MIN_TEST_SECS,
   "maxSecs": MAX_TEST_SECS
  })
 }
 
-fn has_key(rt: &Runtime) -> bool {
+/// Ponto único de leitura da credencial. Em teste usa o cofre falso da sessão,
+/// para nenhum teste tocar no cofre do sistema.
+fn read_key(_rt: &Runtime, profile: &str) -> Result<String, String> {
  #[cfg(test)]
  {
-  return rt.voicemod.test_key.lock().unwrap().is_some();
- }
- #[allow(unreachable_code)]
- {
-  let profile = rt.voicemod.profile();
-  !profile.is_empty() && crate::secrets::get(&profile, "vm_key").is_ok()
- }
-}
-
-fn key_for(_rt: &Runtime, _profile: &str) -> Result<String, String> {
- #[cfg(test)]
- {
-  return _rt
-   .voicemod
-   .test_key
-   .lock()
-   .unwrap()
-   .clone()
+  let keys = _rt.voicemod.test_keys.lock().unwrap();
+  return keys
+   .get(profile)
+   .or_else(|| keys.get(""))
+   .cloned()
    .ok_or_else(|| NO_KEY.to_string());
  }
  #[allow(unreachable_code)]
  {
-  crate::secrets::get(_profile, "vm_key").map_err(|_| NO_KEY.to_string())
+  if profile.is_empty() {
+   return Err(NO_KEY.to_string());
+  }
+  crate::secrets::get(profile, "vm_key").map_err(|_| NO_KEY.to_string())
+ }
+}
+
+/// Ponto único de gravação: em teste grava no cofre falso da sessão.
+fn write_key(_rt: &Runtime, profile: &str, value: &str) -> Result<(), String> {
+ #[cfg(test)]
+ {
+  let mut keys = _rt.voicemod.test_keys.lock().unwrap();
+  if value.is_empty() {
+   keys.remove(profile);
+  } else {
+   keys.insert(profile.to_string(), value.to_string());
+  }
+  return Ok(());
+ }
+ #[allow(unreachable_code)]
+ { crate::secrets::set(profile, "vm_key", value) }
+}
+
+/// A chave pertence ao perfil que fez a chamada, não à sessão aberta. O estado
+/// do cofre é montado por `operation`, o único lugar que sabe qual perfil é.
+fn stored_key(rt: &Runtime, profile: &str) -> Option<String> {
+ if profile.is_empty() {
+  None
+ } else {
+  read_key(rt, profile).ok()
  }
 }
 
@@ -597,7 +618,7 @@ async fn discover(rt: &Runtime) -> Result<(u16, Ws), String> {
 }
 
 async fn open_and_install(rt: &Arc<Runtime>, p: &Profile, from_reconnect: bool) -> Result<(), String> {
- let key = key_for(rt, &p.id).map_err(|e| {
+ let key = read_key(rt, &p.id).map_err(|e| {
   set_phase(rt, FAILED, &e);
   e
  })?;
@@ -609,6 +630,7 @@ async fn open_and_install(rt: &Arc<Runtime>, p: &Profile, from_reconnect: bool) 
  set_phase(rt, AUTHORIZING, "Autorizando no Voicemod…");
  let gen = rt.voicemod.gen.fetch_add(1, Ordering::SeqCst);
  let (link, task) = spawn_link(rt.clone(), gen, ws);
+ let key_len = key.chars().count();
  let body = json!({"id": uuid::Uuid::new_v4().to_string(), "action": "registerClient", "payload": {"clientKey": key}});
  let reply = request(rt, &link, "registerClient", &["registerClient"], body).await;
  let register = match reply {
@@ -623,8 +645,13 @@ async fn open_and_install(rt: &Arc<Runtime>, p: &Profile, from_reconnect: bool) 
   Some(200) => {},
   Some(401) => {
    link.tx.send(Out::Close).ok();
-   set_phase(rt, FAILED, KEY_REFUSED);
-   return Err(KEY_REFUSED.into());
+   // O protocolo está certo (o Voicemod respondeu): só o valor da chave foi
+   // recusado. Dizer isso sem mexer no cofre evita outra tentativa às cegas.
+   let refused = format!(
+    "{KEY_REFUSED} A chave guardada tem {key_len} caracteres: confira se é exatamente a recebida por e-mail, sem rótulo e sem aspas, e se o aplicativo Voicemod está aberto na mesma conta que pediu a chave. Ainda em dúvida, peça outra em control-api.voicemod.net/getting-started ou escreva para devservices@voicemod.net."
+   );
+   set_phase(rt, FAILED, &refused);
+   return Err(refused);
   },
   _ => {
    link.tx.send(Out::Close).ok();
@@ -1110,20 +1137,40 @@ pub async fn disconnect(rt: &Arc<Runtime>, p: &Profile) -> Result<Value, String>
  Ok(json!({"stoppedTest": stopped, "restored": restored, "detail": detail}))
 }
 
-pub fn save_key(profile: &str, value: &str) -> Result<Value, String> {
- let v = value.trim();
+/// Caracteres que um copiar-e-colar do e-mail traz junto sem serem parte da chave.
+const INVISIBLE: [char; 6] = ['\u{feff}', '\u{200b}', '\u{200c}', '\u{200d}', '\u{2060}', '\u{00ad}'];
+
+/// Tira só o que veio junto da cópia; a chave em si não é alterada.
+fn clean_key(value: &str) -> String {
+ value
+  .chars()
+  .filter(|c| !INVISIBLE.contains(c))
+  .collect::<String>()
+  .trim()
+  .to_string()
+}
+
+pub fn save_key(rt: &Runtime, profile: &str, value: &str) -> Result<Value, String> {
+ let v = clean_key(value);
  if v.chars().count() > 400 {
   return Err("Chave da Control API longa demais.".into());
  }
- crate::secrets::set(profile, "vm_key", v)?;
- Ok(json!({"hasKey": !v.is_empty()}))
+ // Uma chave não tem espaço interno, aspas ou quebra de linha: isso é o rótulo
+ // do e-mail copiado junto, e chegaria ao Voicemod como um 401 sem explicação.
+ if v.split_whitespace().count() > 1 || v.contains('"') || v.contains('\'') || v.contains('`') {
+  return Err(
+   "A chave veio com espaço, aspas ou quebra de linha: cole só a chave do e-mail, sem o rótulo e sem aspas.".into(),
+  );
+ }
+ write_key(rt, profile, &v)?;
+ Ok(json!({"hasKey": !v.is_empty(), "keyLen": v.chars().count()}))
 }
 
 pub async fn operation(rt: &Arc<Runtime>, p: &str, op: &str, args: &Value) -> Result<Value, String> {
  let profile = rt.db.profile(p)?;
  let out = match op {
   "voicemod.get" => Ok(snapshot_json(rt)),
-  "voicemod.key" => save_key(p, args["value"].as_str().unwrap_or("")),
+  "voicemod.key" => save_key(rt, p, args["value"].as_str().unwrap_or("")),
   "voicemod.connect" => connect(rt, &profile).await,
   "voicemod.disconnect" => disconnect(rt, &profile).await,
   "voicemod.refresh" => match refresh_now(rt).await {
@@ -1135,6 +1182,17 @@ pub async fn operation(rt: &Arc<Runtime>, p: &str, op: &str, args: &Value) -> Re
   "voicemod.recover" => recover(rt, &profile).await,
   _ => Err("Operação do Voicemod desconhecida".into()),
  };
+ // O cofre é do perfil que fez a chamada, nunca da sessão aberta. A sessão só
+ // ganha perfil depois da primeira conexão aceita, então calcular isso lá dentro
+ // fazia a tela voltar a dizer "nenhuma chave guardada" logo após salvar.
+ let out = out.map(|mut v| {
+  if v.is_object() {
+   let stored = stored_key(rt, p);
+   v["hasKey"] = json!(stored.is_some());
+   v["keyLen"] = json!(stored.as_ref().map(|k| k.chars().count()).unwrap_or(0));
+  }
+  v
+ });
  // Erro de integração entra no Histórico, nunca vira mensagem de chat.
  if let Err(e) = &out {
   if op != "voicemod.get" {
@@ -1674,5 +1732,51 @@ mod tests {
   assert!(access::guard(&rt, "voicemod.get", &args).is_ok(), "editor pode usar a tela");
   let err = access::guard(&rt, "voicemod.key", &args).unwrap_err();
   assert!(err.contains("Somente o proprietário"), "{err}");
+ }
+
+ // A tela tem que confirmar a chave logo depois de salvar, sem conexão nenhuma:
+ // a sessão só ganha perfil depois da primeira conexão aceita pelo Voicemod.
+ #[tokio::test]
+ async fn saving_the_key_is_reported_even_before_the_first_connection() {
+  let (_dir, rt, p) = setup().await;
+  assert!(rt.voicemod.profile().is_empty(), "nenhuma conexão aconteceu");
+  let saved = save_key(&rt, &p.id, KEY).unwrap();
+  assert_eq!(saved["hasKey"], json!(true));
+  assert_eq!(saved["keyLen"], json!(KEY.chars().count()));
+  let view = operation(&rt, &p.id, "voicemod.get", &json!({})).await.unwrap();
+  assert_eq!(view["hasKey"], json!(true), "a tela precisa ver a chave logo após salvar");
+  assert_eq!(view["keyLen"], json!(KEY.chars().count()));
+ }
+
+ #[tokio::test]
+ async fn the_key_belongs_to_the_profile_that_saved_it() {
+  let (_dir, rt, p) = setup().await;
+  let outro = profile("Outro");
+  rt.db.save_profile(&outro).unwrap();
+  save_key(&rt, &p.id, KEY).unwrap();
+  let view = operation(&rt, &outro.id, "voicemod.get", &json!({})).await.unwrap();
+  assert_eq!(view["hasKey"], json!(false), "um perfil não herda a chave do outro");
+ }
+
+ // Rótulo do e-mail colado junto viraria um 401 do Voicemod sem explicar nada.
+ #[tokio::test]
+ async fn a_paste_with_label_spaces_or_quotes_is_refused_before_it_reaches_the_voicemod() {
+  let (_dir, rt, p) = setup().await;
+  for bad in ["API Key: controlapi-1234", "\"controlapi-1234\"", "controlapi-1234\noutra"] {
+   let err = save_key(&rt, &p.id, bad).unwrap_err();
+   assert!(err.contains("cole só a chave"), "{bad} => {err}");
+  }
+  assert!(stored_key(&rt, &p.id).is_none(), "nada foi guardado");
+  let view = operation(&rt, &p.id, "voicemod.get", &json!({})).await.unwrap();
+  assert_eq!(view["hasKey"], json!(false));
+ }
+
+ #[tokio::test]
+ async fn invisible_characters_copied_from_an_email_do_not_change_the_key() {
+  let (_dir, rt, p) = setup().await;
+  let raw = format!("\u{feff}{KEY}\u{200b}");
+  let saved = save_key(&rt, &p.id, &raw).unwrap();
+  assert_eq!(saved["keyLen"], json!(KEY.chars().count()));
+  assert_eq!(read_key(&rt, &p.id).unwrap(), KEY, "a chave enviada ao Voicemod é a do e-mail");
  }
 }

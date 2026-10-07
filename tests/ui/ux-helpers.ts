@@ -63,7 +63,7 @@ export const voicemod={
   currentVoice:'nofx',currentName:'Efeito desligado',voiceChanger:false,hearMyself:false,license:'free',attempts:0},
  test:{active:false,phase:'',voiceId:'',voiceName:'',seconds:0,remainingMs:0,interrupted:false,manual:false},
  outcome:{kind:'',detail:''},
- hasKey:true,defaultSecs:10,minSecs:1,maxSecs:60
+ hasKey:true,keyLen:21,defaultSecs:10,minSecs:1,maxSecs:60
 };
 
 export async function mock(page:Page){

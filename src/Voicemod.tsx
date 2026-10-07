@@ -8,7 +8,7 @@ type Voice={id:string;friendlyName:string;enabled?:boolean};
 type Status={phase:string;message:string;port:number;voices:Voice[];currentVoice:string;currentName:string;voiceChanger:boolean|null;hearMyself:boolean|null;license:string;attempts:number};
 type Test={active:boolean;phase:string;voiceId:string;voiceName:string;seconds:number;remainingMs:number;interrupted:boolean;manual:boolean};
 type Outcome={kind:string;detail:string};
-type Snap={status:Status;test:Test;outcome:Outcome;hasKey:boolean;defaultSecs:number;minSecs:number;maxSecs:number};
+type Snap={status:Status;test:Test;outcome:Outcome;hasKey:boolean;keyLen:number;defaultSecs:number;minSecs:number;maxSecs:number};
 
 const PHASE:{[k:string]:{cls:string;text:string}}={
  disconnected:{cls:'status-pill off',text:'Desconectado'},
@@ -21,7 +21,7 @@ const PHASE:{[k:string]:{cls:string;text:string}}={
 const BLANK:Snap={
  status:{phase:'disconnected',message:'Prévia no navegador: a conexão local só existe no aplicativo desktop.',port:0,voices:[],currentVoice:'',currentName:'',voiceChanger:null,hearMyself:null,license:'',attempts:0},
  test:{active:false,phase:'',voiceId:'',voiceName:'',seconds:0,remainingMs:0,interrupted:false,manual:false},
- outcome:{kind:'',detail:''},hasKey:false,defaultSecs:10,minSecs:1,maxSecs:60
+ outcome:{kind:'',detail:''},hasKey:false,keyLen:0,defaultSecs:10,minSecs:1,maxSecs:60
 };
 
 function tone(kind:string){
@@ -107,9 +107,10 @@ export default function Voicemod({profileId,notify}:{profileId:string;notify:(s:
 
  <Card title="Chave da Control API">
   <p className="help">A Voicemod entrega a chave pelo formulário oficial em <a className="link" href="https://control-api.voicemod.net/getting-started/" target="_blank" rel="noreferrer">control-api.voicemod.net/getting-started</a>. A chave fica só no cofre do sistema: nunca entra em log, preset, exportação ou código.</p>
-  <Field label="Chave" hint={s.hasKey?'Chave guardada no cofre. Preencha para trocar.':'Nenhuma chave guardada neste perfil.'}>
+  <Field label="Chave" hint={s.hasKey?`Chave guardada no cofre · ${s.keyLen} caracteres. Preencha para trocar.`:'Nenhuma chave guardada neste perfil.'}>
    <input type="password" autoComplete="new-password" value={keyInput} placeholder={s.hasKey?'••••••••':'Cole a chave recebida'} onChange={e=>setKeyInput(e.target.value)}/>
   </Field>
+  {keyInput&&/[\s"'`]/.test(keyInput.trim())&&<p role="alert" className="inline-error">O texto colado tem espaço, aspas ou quebra de linha: cole só a chave, sem o rótulo do e-mail.</p>}
   <div className="row"><button className="primary" disabled={!desktop||busy||!keyInput.trim()} onClick={()=>void saveKey()}><Save size={15}/>Salvar chave</button></div>
  </Card>
 
