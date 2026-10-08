@@ -101,9 +101,9 @@ O Voicemod troca a voz do microfone dentro do aplicativo dele. O BotLive convers
 
 ### Conectar
 
-1. Abra **Voicemod** no menu e use **Salvar chave**. A chave fica no cofre do sistema e nunca aparece em log, preset, exportação ou código.
+1. Abra **Voicemod** no menu e use **Salvar chave**. Cole **apenas a sequência da chave**, sem o rótulo do e-mail, aspas ou quebra de linha: o BotLive remove os caracteres invisíveis que costumam vir na colagem (BOM, espaço de largura zero etc.) e recusa chave com espaço interno, aspas ou crase, com a explicação no cartão. A chave fica no cofre do sistema e nunca aparece em log, preset, exportação ou código; quando já existe uma chave salva, o campo mostra **Chave guardada no cofre · N caracteres** (sem revelar o valor).
 2. Clique em **Conectar**. Os estados são **Desconectado**, **Procurando Voicemod**, **Autorizando**, **Conectado** e **Falha**.
-3. **Conectado** só aparece depois que o Voicemod responde autorizando a chave (código 200). Um socket aberto não prova autorização: recusa (401), resposta fora do formato, porta que não é do Voicemod ou chave ausente viram **Falha**, com a explicação no cartão e no **Histórico**.
+3. **Conectado** só aparece depois que o Voicemod responde autorizando a chave (código 200). Um socket aberto não prova autorização: recusa (401), resposta fora do formato, porta que não é do Voicemod ou chave ausente viram **Falha**, com a explicação no cartão e no **Histórico**. Em um 401, a tela informa quantos caracteres a chave guardada tem e os passos seguintes: comparar com o e-mail recebido, confirmar se o Voicemod aberto é da mesma conta e, se persistir, contatar `devservices@voicemod.net`.
 4. **Atualizar vozes** recarrega a lista, a voz atual, o modificador de voz, ouvir minha voz e a licença.
 5. **Desconectar** encerra a sessão. Com um teste em andamento, ele restaura primeiro e mostra o resultado.
 
@@ -124,6 +124,8 @@ O Voicemod troca a voz do microfone dentro do aplicativo dele. O BotLive convers
 | Você troca a voz no Voicemod durante o teste | A tela avisa e o BotLive **não desfaz** a escolha em silêncio |
 | Fechar o Voicemod e reabrir | Clique em **Conectar** de novo; o estado anterior fica registrado no **Histórico** |
 | Erro em qualquer operação | Aparece na tela da integração e no **Histórico**, nunca como mensagem no chat |
+| Colou a chave junto com o rótulo do e-mail | O **Salvar chave** recusa com a explicação; recopie só a sequência. O comprimento da chave guardada aparece no cartão, não o valor |
+| **Falha** com 401 ao conectar | A tela diz quantos caracteres a chave guardada tem e manda comparar com o e-mail recebido, confirmar a conta do Voicemod aberto e contatar `devservices@voicemod.net` se persistir |
 
 ### Usar no OBS
 

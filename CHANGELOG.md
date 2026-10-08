@@ -1,5 +1,56 @@
 # Histórico de atualizações
 
+# BotLive 0.1.94
+
+## O que mudou
+
+- **`has_key` agora usa o perfil da chamada, não a sessão aberta** (Rust `voicemod.rs`).
+  A dica do campo de chave deixava de dizer "Nenhuma chave guardada neste perfil." após salvar, mesmo com a chave armazenada. Agora o cálculo do cofre é feito pela `operation`, que conhece o perfil chamador.
+- **Validação e saneamento da chave ao salvar** (Rust `voicemod.rs` + TS `Voicemod.tsx`).
+  O `save_key` agora remove caracteres invisíveis (BOM U+FEFF, ZWSP U+200B, ZWNJ U+200C, ZWJ U+200D, WJ U+2060, SHY U+00AD) que costumam colar junto ao copiar e-mails. Chaves com espaço interno, aspas (`"`, `'`) ou crase (``` ` ```) são recusadas com mensagem clara, evitando que o usuário salve um rótulo do e-mail e depois receba um 401 sem explicação. A chave salva tem seu comprimento em caracteres (`keyLen`) exposto na resposta da API.
+- **Mensagem de 401 mais ação** (Rust `voicemod.rs`).
+  Antes: "O Voicemod recusou a chave (401 unauthorized). Confira a chave salva." Agora inclui a quantidade de caracteres da chave guardada e passos concretos: comparar com o e-mail recebido, confirmar se o Voicemod está na mesma conta, e contactar devservices@voicemod.net.
+- **Tipo Snap agora inclui `keyLen`** (TS `Voicemod.tsx` + `ux-helpers.ts` + `voicemod.spec.ts`).
+  O campo `keyLen:number` foi adicionado ao tipo Snap e ao estado vazio BLANK. O hint do campo agora mostra "Chave guardada no cofre · N caracteres. Preencha para trocar." ou "Nenhuma chave guardada neste perfil."
+- **Correção de perfil isolado** (Rust `voicemod.rs` + testes).
+  Uma chave salva para o perfil A não aparece para o perfil B. Isso evita que chaves de um perfil "vaze" para outro.
+- **A atualização volta a ser entregue pelo aplicativo** (`.github/workflows/build.yml` + versionamento).
+  A validação da CI exige que cada commit suba a versão e inclua `updates/<versão>.md` e `updates/latest.json`; sem isso o job para em `check --range` antes de compilar os instaladores e gerar o manifesto, e nenhuma release é publicada — daí o aplicativo na 0.1.93 não oferecer novidade. A versão 0.1.94 foi preparada agora com `npm run update:prepare`, o job `validate` usa Node 22 (a mesma configuração da última release publicada) e a checagem de execução manual valida o estado atual em vez de percorrer o histórico completo.
+- **Capítulo de uso atualizado** (`docs/INTEGRACOES.md`).
+  A seção Conectar documenta a colagem saneada (rótulo, aspas e caracteres invisíveis), a dica "Chave guardada no cofre · N caracteres" e os passos de um 401; a tabela de problemas ganhou as linhas de chave colada junto com o rótulo e de 401 ao conectar.
+
+## Como usar
+
+1. Instale e **abra o Voicemod** nesta máquina. O BotLive procura só nos endereços documentados pela Voicemod; ele não varre a sua rede.
+2. Peça a chave da Control API em <https://control-api.voicemod.net/getting-started/> (formulário oficial; o contato vem de `devservices@voicemod.net`).
+3. No BotLive, abra **Voicemod**, cole **somente a sequência da chave** (sem o rótulo do e-mail, aspas ou quebra de linha) no cartão **Chave da Control API** e clique em **Salvar chave**. A chave fica no cofre do sistema e não aparece em log, preset, exportação nem no código; quando já existe uma chave salva, o cartão mostra **Chave guardada no cofre · N caracteres**.
+4. Clique em **Conectar**. A pílula passa por **Procurando Voicemod** e **Autorizando** e só mostra **Conectado** quando o Voicemod autoriza a chave. Se falhar, a tela diz o motivo e o próximo passo, e a entrada aparece no **Histórico**.
+5. Use **Atualizar vozes** para recarregar a lista. Cada linha mostra o nome da voz e o id real; a atual tem a etiqueta **atual**; as bloqueadas pela licença ficam desabilitadas.
+6. Procure a voz pelo nome, escolha a duração (padrão 10 s) e clique em **Testar voz**. A tela avisa que o microfone real passa a ser ouvido — se estiver ao vivo, avise a chat antes.
+7. A contagem aparece na tela. **Encerrar teste e restaurar** encerra antes da hora e devolve a voz e o modificador. Quando terminar, o resultado (restaurado, manual ou não confirmado) fica visível na tela e no **Histórico**.
+8. Para usar na live, escolha o microfone virtual do Voicemod **no OBS, à mão**: **Configurações → Áudio → Dispositivos de áudio de entrada**. O BotLive não mexe no OBS nem no microfone padrão do Windows e não liga **Ouvir minha voz**.
+
+## Validação
+
+- `npm run check` — 0 erros (TypeScript).
+- `npm test` — 66/66 testes Vitest passaram.
+- `npm run test:updates` — 8/8 testes dos scripts de atualização e do manifesto passaram.
+- `cargo test --lib` — 187 aprovados, 0 falhas, 1 ignorado (exige servidor RealtimeSTT real; o mesmo já era ignorado na 0.1.93). Também executado como a CI o faz: `cargo test --manifest-path src-tauri/Cargo.toml --locked --lib -j 1`.
+- `npx playwright test` — 53/53 testes de interface passaram; a expectativa do hint do campo de chave foi atualizada no spec do Voicemod para o novo texto com o comprimento.
+- `npm run build` (tsc + Vite) — 1794 módulos compilados; `npm run docs` — manual regenerado com 23 capítulos.
+- `npm run update:check` — versões e registros válidos após a preparação da 0.1.94.
+- Causa da parada da CI reproduzida em local: `node scripts/update.cjs check --range 8929d43..HEAD` falha com a mensagem de que cada commit precisa aumentar a versão e detalhar o update — o mesmo erro do log do workflow; a anotação de depreciação do Node 20 naquele log é apenas um aviso e não encerra o job.
+- O capítulo de uso Integrações foi atualizado e o manual regenerado.
+
+## Limitações
+
+- A chave ainda deve ser solicitada no formulário oficial (https://voicemod.typeform.com/to/Zh5ZHRED) e o aplicativo Voicemod deve estar aberto e logado com a **mesma conta** que solicitou a chave. Se o Voicemod não tiver a chave ativada para a conta logada, o 401 persiste — aí o usuário deve gerar uma nova chave em control-api.voicemod.net/getting-started ou contactar devservices@voicemod.net.
+- Caso o usuário tenha colado o rótulo do e-mail junto da chave (ex: `API Key: controlapi-...`), o salvamento é recusado; ele deve copiar apenas a sequência alfanumérica.
+- Caso o usuário tenha caracteres invisíveis colados (BOM, ZWSP etc.), eles são removidos automaticamente; nada muda na funcionalidade.
+- **A conexão real com o Voicemod não foi homologada nesta entrega**: os testes automatizados rodam contra um servidor WebSocket controlado, o que prova o protocolo e o ciclo de teste/restauração, mas não prova conexão com um Voicemod de verdade.
+
+---
+
 # BotLive 0.1.93
 
 ## O que mudou

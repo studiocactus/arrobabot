@@ -121,7 +121,7 @@ test('estados, seleção de voz, teste e restauração na tela do Voicemod',asyn
 
  // a chave não é obrigatória para nada além de conectar, mas o botão espera conteúdo
  await expect(page.getByRole('button',{name:'Salvar chave',exact:true})).toBeDisabled();
- await expect(page.getByText('Chave guardada no cofre. Preencha para trocar.',{exact:true})).toBeVisible();
+ await expect(page.getByText('Chave guardada no cofre · 21 caracteres. Preencha para trocar.',{exact:true})).toBeVisible();
 
  expect(errors).toEqual([]);
 });
