@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="pt-BR">
+<meta charset="utf-8">
+<title>Overlay Meta BotLive</title>
+<style>
+  body{margin:0;background:transparent;color:#edf6df;font:20px system-ui}
+  #meta{position:relative;width:100%;padding:12px 0;text-align:center}
+  #bar{width:90%;height:30px;background:#111b20ef;border-radius:8px;overflow:hidden;margin:0 auto 8px}
+  #fill{height:100%;background:#4caf50;transition:width .2s ease; width:0%}
+  #label{font-family:var(--font-family,sans-serif);font-size:18px;color:#fff;line-height:30px}
+  #title{font-size:14px;color:#aaa;margin-bottom:2px;display:block}
+  #pct{font-size:12px;color:#ddd;margin-top:2px;display:block}
+</style>
+<div id="meta">
+  <div id="bar"><div id="fill"></div></div>
+  <div id="label"></div>
+  <div id="title">Meta: —</div>
+  <div id="pct">0% / 0,00 BRL</div>
+</div>
+<script>
+/* OBS: fonte Navegador > Arquivo local. Acrescente #token=...&profile=...&port=9876 ao endereço file:/// do overlay.
+   O fragmento não é enviado a servidores. A chave muda a cada abertura do BotLive. */
+const params=new URLSearchParams(location.hash.slice(1));
+const token=params.get('token'),profile=params.get('profile'),port=Number(params.get('port')||9876);
+const meta=document.getElementById('meta'),label=document.getElementById('label'),title=document.getElementById('title'),pct=document.getElementById('pct');
+let timer;function connect(){
+ if(!token){label.textContent='Configure a chave da sessão BotLive no fragmento #token=...';return}
+ const ws=new WebSocket('ws://127.0.0.1:'+port);
+ ws.onopen=()=>ws.send(JSON.stringify({token}));
+ ws.onmessage=e=>{
+  try{const msg=JSON.parse(e.data)}catch{return}
+  if(msg.type==='goal'&&(!profile||msg.payload.profileId===profile)){
+    const p=msg.payload.current, t=msg.payload.target, f=msg.payload.font_family||'system-ui';
+    // inject font face so the overlay uses the chosen family
+    const style=document.createElement('style');
+    style.textContent=`@font-face{font-family:${f};src:local("Helvetica")}`;document.head.appendChild(style);
+    const pct=Math.round((p/t)*100);
+    const fmtBr=(n)=>n.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+    label.textContent=`${msg.payload.title}: ${(p/100).toFixed(2)} / ${(t/100).toFixed(2)} BRL`;
+    title.textContent=`Meta: ${msg.payload.title}`;
+    fill.style.width=pct+'%';
+    pct.textContent=`${pct}% / ${fmtBr(p/100)} / ${fmtBr(t/100)}`;
+  }
+ };
+ ws.onclose=()=>{label.textContent='Aguardando BotLive…';label.style.color='#ddd';timer=setTimeout(connect,3000)};
+ ws.onerror=()=>ws.close();
+}
+connect();
+</script>
+</html>
