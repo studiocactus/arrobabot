@@ -14,6 +14,7 @@ pub async fn run(rt:Arc<Runtime>){
  let config=rt.db.module(&p.id,"games");
  if config["autoTrivia"]!=true{continue}
  let now=chrono::Utc::now().timestamp();
+ let question={
  let _lock=rt.module_lock.lock().unwrap();let mut state=modules::load(&rt,&p.id);
  if state.trivia["open"]==true&&state.trivia["expires"].as_i64().is_some_and(|t|t<=now){state.trivia["open"]=json!(false);let _=rt.db.set_module(&p.id,"community",&serde_json::to_value(&state).unwrap());}
  let idle=config["idleSeconds"].as_i64().unwrap_or(300).clamp(60,3600);

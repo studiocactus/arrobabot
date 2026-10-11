@@ -89,6 +89,16 @@ Ative **Server Members Intent** e **Message Content Intent** na página do aplic
 
 A tela **Discord** cobre entrada e saída, contador de membros, espelho de chat, notificações, auto-moderação, auditoria, sorteios, XP, aniversários, vínculo de identidade e comandos slash. O passo a passo completo está no capítulo [Discord](09-DISCORD.md).
 
+## LivePix — barra de meta de doações
+
+A partir da versão 0.1.97, o BotLive lê as doações da [LivePix](https://livepix.gg) e mostra uma barra de progresso no OBS. Em **Integrações → LivePix**, informe o **Client ID** e o **Client Secret** da aplicação criada no painel da LivePix e use **Salvar no cofre**: as credenciais ficam no cofre do sistema, nunca em código, logs ou presets.
+
+Depois, crie uma meta com título e valor-alvo em centavos (500000 = 5000,00 BRL) e use **Iniciar meta**. O BotLive consulta a API da LivePix a cada 15 segundos — sem webhook e sem endereço público — e envia o estado da meta por WebSocket local (porta 9876).
+
+No OBS, adicione uma **Fonte Navegador** apontando para o arquivo `examples/goal-overlay.html` incluído no pacote, com o fragmento `#token=…&profile=…&port=9876` mostrado na própria tela de integração. A barra aceita família de fonte por meta: fontes do Windows (como `Segoe UI`) funcionam sem internet; fontes do Google Fonts exigem conexão no computador que roda o OBS, e sem a fonte instalada a barra volta à fonte padrão do navegador.
+
+O módulo soma apenas pagamentos da LivePix em BRL; bits e subs da Twitch não entram nesta barra. O atraso de até 15 segundos é esperado pelo intervalo de consulta.
+
 ## Voicemod — removido
 
 O Voicemod saiu do BotLive. A partir da versão 0.1.95, a tela e a conexão com a Control API local foram retiradas do programa: nada no BotLive conversa mais com o Voicemod. A chave que você tenha salva no cofre do sistema permanece guardada como dado seu, sem uso — apague-a no cofre do sistema quando quiser.

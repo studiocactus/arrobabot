@@ -6,6 +6,13 @@ function fixture(){const dir=fs.mkdtempSync(path.join(os.tmpdir(),'botlive-updat
 test('preparação sincroniza todas as versões e preserva notas detalhadas',()=>{const {dir,run}=fixture();let r=run('prepare','1.0.1','notes.md');assert.equal(r.status,0,r.stderr);assert.equal(run('check').status,0);assert.equal(JSON.parse(fs.readFileSync(path.join(dir,'package-lock.json'))).packages[''].version,'1.0.1');assert.match(fs.readFileSync(path.join(dir,'CHANGELOG.md'),'utf8'),/Como usar/);assert.notEqual(run('prepare','1.0.1','notes.md').status,0)});
 test('notas incompletas e downgrade são rejeitados antes de alterar versão',()=>{const {dir,put,run}=fixture();put('bad.md','Correção pequena');assert.notEqual(run('prepare','1.0.1','bad.md').status,0);assert.notEqual(run('prepare','0.9.0','notes.md').status,0);assert.equal(JSON.parse(fs.readFileSync(path.join(dir,'package.json'))).version,'1.0.0')});
 test('verificação detecta manifesto divergente e changelog ausente',()=>{const {put,run}=fixture();assert.equal(run('prepare','1.0.1','notes.md').status,0);put('src-tauri/tauri.conf.json',{version:'1.0.2'});assert.notEqual(run('check').status,0);put('src-tauri/tauri.conf.json',{version:'1.0.1'});put('CHANGELOG.md','Sem descrição');assert.notEqual(run('check').status,0)});
+test('palavras comuns com "todo" interno não são marcadores',()=>{const {dir,run}=fixture();
+ // "método"/"métodos" trazem "todo" interno (após "é", que não é fronteira \b no JS antigo).
+ fs.writeFileSync(path.join(dir,'notes.md'),['O que mudou','Como usar','Validação','Limitações'].map(h=>'## '+h+'\n\nUsa o método escolhido, com os métodos descritos e evidências reais de teste.').join('\n\n'));
+ assert.equal(run('prepare','1.0.1','notes.md').status,0);
+ // Marcadores reais continuam rejeitados mesmo com fronteiras Unicode.
+ fs.writeFileSync(path.join(dir,'bad.md'),['O que mudou','Como usar','Validação','Limitações'].map(h=>'## '+h+'\n\nAinda falta TODO o detalhamento necessário.').join('\n\n'));
+ assert.notEqual(run('prepare','1.0.2','bad.md').status,0)});
 test('verificação por intervalo aceita o merge sintético de um pull request',()=>{const {dir,put,run}=fixture();
  const git=(...args)=>{const r=cp.spawnSync('git',args,{cwd:dir,encoding:'utf8'});assert.equal(r.status,0,String(r.stderr||r.stdout));return String(r.stdout).trim()};
  git('init','-b','main');git('config','user.email','teste@example.com');git('config','user.name','teste');git('config','commit.gpgsign','false');

@@ -5,7 +5,10 @@ const git=(...args)=>cp.execFileSync('git',args,{encoding:'utf8',stdio:['ignore'
 const semver=/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 const greater=(a,b)=>{const x=a.split('.').map(Number),y=b.split('.').map(Number);for(let i=0;i<3;i++)if(x[i]!==y[i])return x[i]>y[i];return false};
 const read=(p)=>fs.readFileSync(p,'utf8');const writeJSON=(p,v)=>fs.writeFileSync(p,JSON.stringify(v,null,2)+'\n');
-function validateNotes(text){for(const heading of ['## O que mudou','## Como usar','## Validação','## Limitações']){const at=text.indexOf(heading+'\n');if(at<0)throw Error('Notas precisam da seção '+heading);const rest=text.slice(at+heading.length).split(/\n## /)[0].trim();if(rest.length<20||/\b(TODO|PREENCHER)\b/i.test(rest))throw Error('Detalhe a seção '+heading);}if(text.length<300)throw Error('Descreva a atualização com detalhes.');}
+// \b do JS é ASCII e trata "é" como não-palavra, então "méTODO" casava o marcador;
+// usa fronteiras Unicode para marcar só palavras soltas (TODO, PREENCHER).
+const marker=/(?<![\p{L}\p{N}_])(TODO|PREENCHER)(?![\p{L}\p{N}_])/iu;
+function validateNotes(text){for(const heading of ['## O que mudou','## Como usar','## Validação','## Limitações']){const at=text.indexOf(heading+'\n');if(at<0)throw Error('Notas precisam da seção '+heading);const rest=text.slice(at+heading.length).split(/\n## /)[0].trim();if(rest.length<20||marker.test(rest))throw Error('Detalhe a seção '+heading);}if(text.length<300)throw Error('Descreva a atualização com detalhes.');}
 function check(readFile,previous,changed){
  const pkg=JSON.parse(readFile('package.json')),lock=JSON.parse(readFile('package-lock.json')),config=JSON.parse(readFile('src-tauri/tauri.conf.json')),meta=JSON.parse(readFile('updates/latest.json'));
  const v=pkg.version;if(!semver.test(v))throw Error('Versão deve ser X.Y.Z');
