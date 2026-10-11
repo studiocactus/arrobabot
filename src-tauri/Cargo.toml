@@ -1,6 +1,6 @@
 [package]
 name = "botlive"
-version = "0.1.94"
+version = "0.1.95"
 description = "Automação local para comunidades ao vivo"
 edition = "2021"
 rust-version = "1.80"
@@ -31,6 +31,8 @@ sha2 = "0.10"
 base64 = "0.22"
 rhai = { version = "1", features = ["sync"] }
 open = "5"
+cpal = "0.15"
+ringbuf = "0.4"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 keyring = { version = "3", features = ["windows-native"] }

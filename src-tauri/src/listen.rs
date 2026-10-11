@@ -61,7 +61,7 @@ fn level(bytes:&[u8])->f64{
  if count==0{0.0}else{(sum/count as f64).sqrt()}
 }
 #[derive(Default)]
-struct Session{speaking:bool,started:Option<Instant>,last_voice:Option<Instant>,buffer:Vec<u8>,frames:u64,heard:u64,last:String,error:String,updated:Option<Instant>}
+struct Session{speaking:bool,started:Option<Instant>,last_voice:Option<Instant>,buffer:Vec<u8>,frames:u64,heard:u64,last:String,error:String,updated:Option<Instant>,level:f64,matched:bool}
 fn milliseconds(bytes:usize)->u64{(bytes/2) as u64*1000/RATE}
 /// Junta o lote na fala em andamento e devolve a fala quando o silêncio a encerra.
 fn cut(s:&mut Session,bytes:&[u8],voice:bool,cfg:&Config,now:Instant)->Option<Vec<u8>>{
@@ -82,7 +82,7 @@ fn close(s:&mut Session)->Option<Vec<u8>>{
  Some(pcm)
 }
 fn describe(s:&Session,cfg:&Config,now:Instant)->Value{
- json!({"enabled":cfg.listen,"listening":s.updated.is_some_and(|at|now.saturating_duration_since(at)<Duration::from_secs(5)),"frames":s.frames,"heard":s.heard,"last":s.last,"error":s.error,"endpoint":cfg.endpoint,"language":cfg.language,"activation":cfg.activation,"captions":cfg.captions})
+ json!({"enabled":cfg.listen,"listening":s.updated.is_some_and(|at|now.saturating_duration_since(at)<Duration::from_secs(5)),"frames":s.frames,"heard":s.heard,"last":s.last,"error":s.error,"endpoint":cfg.endpoint,"language":cfg.language,"activation":cfg.activation,"captions":cfg.captions,"level":s.level,"threshold":cfg.threshold,"matched":s.matched})
 }
 fn empty(cfg:&Config)->Value{describe(&Session::default(),cfg,Instant::now())}
 #[derive(Default)]
@@ -99,11 +99,11 @@ impl Sessions{
   let bytes=base64::engine::general_purpose::STANDARD.decode(payload).map_err(|_|"Áudio inválido".to_string())?;
   if bytes.len()<2||bytes.len()%2!=0{return Err("Lote de áudio inválido: use PCM16".into())}
   if bytes.len()>MAX_FRAME{return Err("Lote de áudio muito grande".into())}
-  let voice=level(&bytes)>=cfg.threshold;let now=Instant::now();let ready;let status;
+  let energy=level(&bytes);let voice=energy>=cfg.threshold;let now=Instant::now();let ready;let status;
   {
    let mut map=self.0.lock().unwrap();
    let s=map.entry(profile.to_owned()).or_default();
-   s.frames+=1;s.updated=Some(now);
+   s.frames+=1;s.updated=Some(now);s.level=energy;
    ready=cut(s,&bytes,voice,&cfg,now);
    status=describe(s,&cfg,now);
   }
@@ -124,7 +124,7 @@ async fn finish(rt:Arc<Runtime>,profile:String,cfg:Config,pcm:Vec<u8>){
  match transcribe(&rt.http,&cfg,&pcm).await{
   Ok(text)=>{
    let recovered={let mut map=rt.listen.0.lock().unwrap();let known=map.contains_key(&profile);let recovered=map.get(&profile).is_some_and(|s|!s.error.is_empty());
-    if let Some(s)=map.get_mut(&profile){if !text.is_empty(){s.last=text.clone();s.heard+=1;}s.error.clear();}
+    if let Some(s)=map.get_mut(&profile){if !text.is_empty(){s.last=text.clone();s.heard+=1;}s.matched=cfg.activation.is_empty()||crate::model::mention_any(&cfg.activation,&text);s.error.clear();}
     known&&recovered};
    if recovered{rt.log(&profile,"voice","Escuta contínua reconectada ao servidor de transcrição","success");}
    if text.is_empty(){return}
@@ -179,6 +179,17 @@ async fn transcribe(client:&reqwest::Client,cfg:&Config,pcm:&[u8])->R<String>{
   let done=done.expect("600 ms de silêncio fecham a fala");
   assert_eq!(milliseconds(done.len()),800,"a fala leva junto o silêncio que a encerrou");
   assert!(s.buffer.is_empty()&&!s.speaking,"a sessão fica limpa para a próxima fala");
+ }
+ #[test] fn o_painel_mostra_nivel_e_se_ativou(){
+  let cfg=Config{listen:true,endpoint:DEFAULT_ENDPOINT.into(),language:"pt".into(),activation:"arroba".into(),captions:true,silence:600,threshold:0.02};
+  let mut s=Session::default();
+  s.level=0.35;
+  let v=describe(&s,&cfg,Instant::now());
+  assert!((v["level"].as_f64().unwrap()-0.35).abs()<1e-9,"o nível do último lote aparece no painel");
+  assert!((v["threshold"].as_f64().unwrap()-0.02).abs()<1e-9,"o limite vem junto para o ajuste fino");
+  assert!(!v["matched"].as_bool().unwrap(),"fala sem a palavra de ativação ainda não ativou");
+  s.matched=true;
+  assert!(describe(&s,&cfg,Instant::now())["matched"].as_bool().unwrap(),"com a palavra, o painel marca que ativou");
  }
  #[test] fn fala_curta_e_fala_muito_longa_sao_tratadas(){
   let cfg=Config{listen:true,endpoint:DEFAULT_ENDPOINT.into(),language:"pt".into(),activation:String::new(),captions:true,silence:600,threshold:0.02};

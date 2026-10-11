@@ -20,7 +20,7 @@ pub struct Runtime {
  pub chat_extras:Mutex<crate::chat_extras::State>,
  pub runs:crate::runs::Runs,
  pub obs:crate::obs::Locks,
- pub voicemod:crate::voicemod::Voice,
+ pub voice_fx:crate::voice_fx::Fx,
  pub seen:Mutex<HashMap<String,Instant>>,
  pub seen_chatters:Mutex<HashMap<String,(String,Instant)>>,
  pub module_lock:Mutex<()>,pub vault_lock:Mutex<()>,pub send_locks:Mutex<HashMap<String,Arc<tokio::sync::Mutex<Instant>>>>,
@@ -33,7 +33,7 @@ impl Runtime {
  let (tx,rx)=mpsc::channel(512);let (broadcast,_)=broadcast::channel(512);
  let http=reqwest::Client::builder().timeout(Duration::from_secs(30)).redirect(reqwest::redirect::Policy::none()).build().map_err(|e|e.to_string())?;
  let actor=if db.get("accessEnabled")==true{"locked"}else{"owner"}.to_owned();
- let rt=Arc::new(Self{actor:Mutex::new(actor),db,base,http,tx,broadcast,app:Mutex::new(None),connections:Mutex::new(HashMap::new()),statuses:Mutex::new(HashMap::new()),discord_tasks:Mutex::new(HashMap::new()),discord_status:Mutex::new(HashMap::new()),discord_cache:Mutex::new(HashMap::new()),timer_pending:Mutex::new(std::collections::HashSet::new()),cooldowns:Mutex::new(HashMap::new()),conversation:Mutex::new(crate::conversation::History::default()),live:crate::live_state::LiveStates::default(),listen:crate::listen::Sessions::default(),chat_extras:Mutex::new(crate::chat_extras::State::default()),runs:crate::runs::Runs::default(),obs:crate::obs::Locks::default(),voicemod:crate::voicemod::Voice::default(),seen:Mutex::new(HashMap::new()),seen_chatters:Mutex::new(HashMap::new()),module_lock:Mutex::new(()),vault_lock:Mutex::new(()),send_locks:Mutex::new(HashMap::new()),api_token:format!("{}{}",uuid::Uuid::new_v4().simple(),uuid::Uuid::new_v4().simple()),api_port:Mutex::new(0)});
+ let rt=Arc::new(Self{actor:Mutex::new(actor),db,base,http,tx,broadcast,app:Mutex::new(None),connections:Mutex::new(HashMap::new()),statuses:Mutex::new(HashMap::new()),discord_tasks:Mutex::new(HashMap::new()),discord_status:Mutex::new(HashMap::new()),discord_cache:Mutex::new(HashMap::new()),timer_pending:Mutex::new(std::collections::HashSet::new()),cooldowns:Mutex::new(HashMap::new()),conversation:Mutex::new(crate::conversation::History::default()),live:crate::live_state::LiveStates::default(),listen:crate::listen::Sessions::default(),chat_extras:Mutex::new(crate::chat_extras::State::default()),runs:crate::runs::Runs::default(),obs:crate::obs::Locks::default(),voice_fx:crate::voice_fx::Fx::default(),seen:Mutex::new(HashMap::new()),seen_chatters:Mutex::new(HashMap::new()),module_lock:Mutex::new(()),vault_lock:Mutex::new(()),send_locks:Mutex::new(HashMap::new()),api_token:format!("{}{}",uuid::Uuid::new_v4().simple(),uuid::Uuid::new_v4().simple()),api_port:Mutex::new(0)});
  tokio::spawn(worker(rt.clone(),rx));Ok(rt)
  }
  pub fn emit(&self,kind:&str,payload:Value){
@@ -368,6 +368,21 @@ async fn action(rt:&Arc<Runtime>,p:&Profile,e:&Event,a:&Action,variables:&mut cr
  let mut scope=rhai::Scope::new();scope.push_constant("user",e.user.clone());scope.push_constant("message",e.message.clone());scope.push_constant("channel",p.channel.clone());
  let reply=engine.eval_with_scope::<String>(&mut scope,&a.text).map_err(|_|"O script falhou ou ultrapassou os limites")?;
  rt.send_with(p,e,&reply,Some(f)).await
+ },
+ "voiceFx"=>{
+ if !rt.voice_fx.is_running(){return Err("Inicie a Voz da live antes de usar este efeito".into())}
+ let effect=if a.target.trim().is_empty(){a.text.clone()}else{a.target.clone()};
+ let effect=effect.trim().to_lowercase();
+ if !crate::voice_fx::EFFECTS.contains(&effect.as_str()){return Err(format!("Voz desconhecida: {effect}"))}
+ let secs=a.value.clamp(0,3600) as u64;
+ let gen=rt.voice_fx.set_effect(rt,&p.id,&effect)?["gen"].as_u64().unwrap_or(0);
+ if secs>0{
+  let rt2=rt.clone();let pid=p.id.clone();
+  tokio::spawn(async move{tokio::time::sleep(Duration::from_secs(secs)).await;rt2.voice_fx.revert_if(&rt2,&pid,gen);});
+ }
+ let when=if secs>0{format!("{secs}s")}else{"∞".into()};
+ rt.log(&p.id,"voiceFx",&format!("{} · voz {effect} por {when}",f.name),"success");
+ Ok(())
  },
  _=>Err("Ação desconhecida".into())
  }

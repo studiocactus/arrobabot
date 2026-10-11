@@ -48,6 +48,8 @@ describe('rótulos compartilhados com o editor',()=>{
   expect(stepLabel(action({kind:'wait',value:180000}))).toBe('◷ 3 min');
   expect(stepLabel(action({kind:'punish',punish:'timeout'}))).toBe('🔨 Silenciar por um tempo');
   expect(stepLabel(action({kind:'obs',obsOp:'scene',obsTarget:'BRB'}))).toBe('◉ Trocar cena · BRB');
+ expect(stepLabel(action({kind:'voiceFx',target:'fina',value:20}))).toBe('🎙 Voz fina · 20s');
+ expect(stepLabel(action({kind:'voiceFx',target:'normal',value:0}))).toBe('🎙 Voz normal (sem efeito)');
   expect(stepLabel(action({kind:'fluxo.futuro'}))).toBe('fluxo.futuro');
  });
  it('preserva o código da variável quando não há nome no catálogo',()=>{

@@ -3,7 +3,7 @@ import {useState,useCallback,useEffect,useRef,type ReactNode} from 'react';
 import {ReactFlow,Background,Controls,MiniMap,addEdge,useNodesState,useEdgesState,useReactFlow,useStore,type Connection,type Node,type Edge} from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import {Plus,Save,Trash2,Zap,Play,Map as MapIcon} from 'lucide-react';
-import {actions,triggers,newAction,punishModes,punishTargets,twOps,condOps,condFalse,minutesToSeconds,secondsToMinutes,type Flow,type Action,type AIConfig} from './types';
+import {actions,triggers,newAction,punishModes,punishTargets,twOps,condOps,condFalse,voiceEffects,type Flow,type Action,type AIConfig} from './types';
 import {orderedActions,moveAction,chainIds,stepBounds,fullChain,appendStepPlan,insertStepPlan,type StepPlan} from './flow';
 import {StepMenu,FlowHelp} from './FlowChrome';
 import {readPrefs,writePrefs} from './editorPrefs';
@@ -16,7 +16,7 @@ import {SendPicker,AudioPicker} from './FlowOptions';
 import {AIResponseTest} from './AIConversation';
 import AIActionOptions from './AIActionOptions';
 import {friendlyError,friendlyMessage,type FriendlyError} from './errors';
-import {api,desktop} from './api';
+import {api,desktop,errorText} from './api';
 const OBS_OPS:Record<string,string>={mute:'Mutar entrada',unmute:'Desmutar entrada',toggle_mute:'Alternar mudo',volume:'Volume da entrada',show:'Mostrar fonte',hide:'Esconder fonte',toggle_item:'Alternar fonte',scene:'Trocar de cena'};
 const OBS_TEMP=['mute','unmute','volume','show','hide'];
 type ObsDisco={scenes:string[];current:string;inputs:string[];sources:string[]};
@@ -70,12 +70,23 @@ function StepReveal({target,restZoom}:{target:{id:string;x:number;y:number}|null
 }
 /** Seção recolhível do painel lateral: agrupa campos parecidos e sai do caminho quando fechada. */
 type Reward={id:string;title:string;cost:number;enabled:boolean;paused:boolean};
+type Rewards={channel:string;rewards:Reward[]};
 function RewardPicker({profileId,value,onChange}:{profileId:string;value:string;onChange:(id:string)=>void}){
- const [rewards,setRewards]=useState<Reward[]>([]);const [error,setError]=useState('');
- useEffect(()=>{if(!desktop)return;api<Reward[]>('twitch.rewards',{profileId}).then(setRewards).catch(()=>setError('Não foi possível listar as recompensas. Confira a conexão e a autorização do canal.'))},[profileId]);
+ const [rewards,setRewards]=useState<Reward[]>([]);const [channel,setChannel]=useState('');const [at,setAt]=useState('');const [error,setError]=useState('');const [loading,setLoading]=useState(false);
+ const [creating,setCreating]=useState(false);const [ntitle,setNtitle]=useState('');const [ncost,setNcost]=useState(100);const [ninput,setNinput]=useState(false);const [busy,setBusy]=useState(false);
+ const load=useCallback(()=>{setLoading(true);setError('');api<Rewards>('twitch.rewards',{profileId}).then(r=>{setRewards(r.rewards||[]);setChannel(r.channel||'');setAt(new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}))}).catch(()=>setError('Não foi possível listar as recompensas. Confira a conexão e a autorização da conta do canal.')).finally(()=>setLoading(false))},[profileId]);
+ useEffect(()=>{if(desktop)void load()},[load]);
+ const create=()=>{setBusy(true);setError('');api<Reward>('twitch.reward.create',{profileId,title:ntitle,cost:ncost,userInput:ninput}).then(r=>{setRewards(rs=>[...rs,r]);onChange(r.id);setCreating(false);setNtitle('');setNcost(100);setNinput(false)}).catch(e=>setError(errorText(e))).finally(()=>setBusy(false))};
  if(!desktop)return <p className="help">A lista de recompensas aparece no aplicativo desktop.</p>;
  const found=rewards.find(r=>r.id===value);
- return <><Field label="Recompensa" hint="Identidade por ID: renomear na Twitch não quebra. Vazio vale qualquer resgate."><select value={value} onChange={e=>onChange(e.target.value)}><option value="">Qualquer resgate</option>{rewards.map(r=><option key={r.id} value={r.id}>{r.title} · {r.cost} pts{r.enabled===false?' (desativada)':''}</option>)}{value&&!found&&<option value={value}>{value}</option>}</select></Field>{error&&<p className="help">{error}</p>}</>;
+ return <><Field label="Recompensa" hint="Identidade por ID: renomear na Twitch não quebra. Vazio vale qualquer resgate."><div className="row">
+  <select value={value} onChange={e=>onChange(e.target.value)} aria-label="Recompensa da Twitch"><option value="">Qualquer resgate</option>{rewards.map(r=><option key={r.id} value={r.id}>{r.title} · {r.cost} pts{r.enabled===false?' (desativada)':''}{r.paused?' (pausada)':''}</option>)}{value&&!found&&<option value={value}>Resgate guardado fora desta lista — escolha de novo</option>}</select>
+  <button type="button" onClick={load} disabled={loading||busy}>{loading?'Buscando…':'Atualizar lista'}</button>
+  <button type="button" onClick={()=>setCreating(v=>!v)} disabled={busy}>{creating?'Fechar':'Criar resgate'}</button>
+ </div></Field>{creating&&<div className="form-grid">
+  <Field label="Nome do resgate" hint="Como aparece na Twitch, no máximo 45 caracteres."><input value={ntitle} maxLength={45} placeholder="Ex.: Voz Fina" onChange={e=>setNtitle(e.target.value)}/></Field>
+  <Field label="Custo em pontos" hint="Mínimo 1; é o que a pessoa paga para resgatar."><input type="number" min={1} max={1000000} step={1} value={ncost} onChange={e=>setNcost(Number(e.target.value)||0)}/></Field>
+ </div>}{creating&&<div className="list-row"><div><strong>Pedir mensagem no resgate</strong><small>Quem resgata escreve um texto junto — útil para pedir a frase da live.</small></div><Toggle label="Pedir mensagem no resgate" checked={ninput} onChange={setNinput}/></div>}{creating&&<div className="row"><button className="primary" type="button" disabled={busy||!ntitle.trim()||ncost<1} onClick={create}>{busy?'Criando…':'Criar e escolher'}</button></div>}{error&&<p className="help">{error}</p>}{!error&&!loading&&rewards.length>0&&<p className="help">{rewards.length} recompensa{rewards.length>1?'s':''} do canal {channel} · lista atualizada às {at}.</p>}{!error&&!loading&&!rewards.length&&<p className="help">Nenhuma recompensa no canal {channel} ainda. Crie uma aqui embaixo ou em Pontos de canal na Twitch.</p>}{value&&!found&&<p className="help">O resgate guardado não está nesta lista: se você trocou de canal ou apagou o resgate, escolha de novo. Renomear na Twitch não quebra nada, pois a ligação é pelo id.</p>}</>;
 }
 function Section({title,open=false,children}:{title:string;open?:boolean;children:ReactNode}){return <details open={open}><summary>{title}</summary>{children}</details>}
 function WaitEditor({value,onChange}:{value:number;onChange:(ms:number)=>void}){
@@ -138,7 +149,7 @@ function move(dir:-1|1){try{const ns=nodes.map(n=>({id:n.id,position:{x:n.positi
  }
  function addStep(){const id=crypto.randomUUID();try{applyStep(appendStepPlan(nodes,edges,id,flowSizes()),id)}catch(e){setError(friendlyError(e))}}
  function insertStep(){const id=crypto.randomUUID();try{applyStep(insertStepPlan(nodes,edges,selected,id,flowSizes()),id)}catch(e){setError(friendlyError(e))}}
- const keepText=(kind:string)=>["command","contains","voice","mention","redemption"].includes(kind);
+ const keepText=(kind:string)=>["command","contains","voice","mention"].includes(kind);
 function switchKind(current:Action,next:string){const base:Action={...current,kind:next};
   if(next==='ai.generate'&&!base.target.startsWith('local.'))base.target='local.aiResponse';
   if(next==='punish'){if(!['sender','first','random'].includes(base.target))base.target='sender';if(!base.punish)base.punish='timeout';if(base.value<1)base.value=60}
@@ -146,6 +157,7 @@ function switchKind(current:Action,next:string){const base:Action={...current,ki
   if(next==='twitch'){if(!base.twOp)base.twOp='game';if(base.value<1)base.value=60}
   if(next==='wait'&&!(base.value>=1))base.value=3000
   if(next==='obs'){if(!base.obsOp)base.obsOp='mute';if(!base.obsTarget)base.obsTarget=''}
+  if(next==='voiceFx'){if(!voiceEffects[base.target])base.target='fina';if(!(base.value>=0))base.value=15}
   update(base)}
  async function save(){
   const invalid=nodes.find(n=>n.data.action&&actionProblem(n.data.action));
@@ -168,7 +180,7 @@ function switchKind(current:Action,next:string){const base:Action={...current,ki
  <div className="eyebrow"><Zap size={14}/> CONFIGURAR BLOCO</div>{selected==='trigger'?<>
  <Section title="Quando" open>
  <Field label="Evento">
- <select value={trigger.kind} onChange={e=>{const kind=e.target.value;setTrigger({...trigger,kind,pattern:keepText(kind)?trigger.pattern:''});setNodes(ns=>ns.map(n=>n.id==='trigger'?{...n,data:{...n.data,label:'⚡ '+(triggers[kind]||kind)}}:n))}}>{Object.entries(triggers).filter(([k])=>flow.trigger.kind==='timer'?k==='timer':k!=='timer').map(([k,n])=>
+ <select value={trigger.kind} onChange={e=>{const kind=e.target.value;setTrigger({...trigger,kind,pattern:keepText(kind)&&keepText(trigger.kind)?trigger.pattern:''});setNodes(ns=>ns.map(n=>n.id==='trigger'?{...n,data:{...n.data,label:'⚡ '+(triggers[kind]||kind)}}:n))}}>{Object.entries(triggers).filter(([k])=>flow.trigger.kind==='timer'?k==='timer':k!=='timer').map(([k,n])=>
  <option key={k} value={k}>{n}</option>)}</select>
  </Field>{['command','contains','voice','mention'].includes(trigger.kind)&&<Field label="Texto que dispara" hint={trigger.kind==='mention'?'Separe os nomes do bot com vírgula: o gatilho passa quando um deles aparece na mensagem, como palavra inteira. Ex.: Arroba, ArrobaSrv, arromba.':trigger.kind==='contains'?'Separe várias palavras ou frases com vírgula: o gatilho passa quando uma delas aparece na mensagem.':trigger.kind==='command'?'Separe variações com vírgula quando o povo erra o comando: !whislist, !whishlist, !wishlist. Qualquer uma delas dispara.':trigger.kind==='voice'?'Separe variações com vírgula: o gatilho passa quando uma delas aparece na fala. Ex.: troca o jogo, muda o jogo, minecraft.':undefined}>
  <input value={trigger.pattern} onChange={e=>setTrigger({...trigger,pattern:e.target.value})}/>
@@ -181,11 +193,11 @@ function switchKind(current:Action,next:string){const base:Action={...current,ki
  <option value="broadcaster">Só o streamer</option>
  </select>
  </Field>
- <Field label="Intervalo entre usos (minutos)">
- <input type="number" min="0" max="1440" step="any" value={secondsToMinutes(trigger.cooldown)} onChange={e=>setTrigger({...trigger,cooldown:minutesToSeconds(Number(e.target.value)||0)})}/>
+ <Field label="Intervalo entre usos (segundos)" hint="60 = 1 minuto. 0 libera sem espera.">
+ <input type="number" min="0" max="86400" step="5" value={trigger.cooldown} onChange={e=>setTrigger({...trigger,cooldown:Number(e.target.value)||0})}/>
  </Field>
- <Field label="Intervalo por pessoa (minutos)">
- <input type="number" min="0" max="1440" step="any" value={secondsToMinutes(trigger.userCooldown)} onChange={e=>setTrigger({...trigger,userCooldown:minutesToSeconds(Number(e.target.value)||0)})}/>
+ <Field label="Intervalo por pessoa (segundos)" hint="60 = 1 minuto. Evita repetir na sequência.">
+ <input type="number" min="0" max="86400" step="5" value={trigger.userCooldown} onChange={e=>setTrigger({...trigger,userCooldown:Number(e.target.value)||0})}/>
  </Field>
  </>}</Section>
  <Section title="Como sai" open>
@@ -205,7 +217,7 @@ function switchKind(current:Action,next:string){const base:Action={...current,ki
  {action.kind==='condition'&&<CondEditor action={action} update={update} issue={issue}/>}
  {action.kind==='script'?<Field label="Script Rhai (retorna texto)">
  <textarea rows={5} value={action.text} onChange={e=>update({...action,text:e.target.value})}/>
- </Field>:action.kind==='variable.delete'?<p className="help">Escolha o valor que será apagado.</p>:action.kind==='twitch'&&!['game','title','timeout','ban','warn','mention'].includes(action.twOp||'game')?<p className="help">Esta operação não usa texto: o alvo e a duração vêm da fala ou dos campos abaixo.</p>:<MessageEditor key={selected} profileId={flow.profileId} label={action.kind.startsWith('ai')?'Como a IA deve responder':action.kind==='variable.increment'?'Quanto somar':action.kind==='punish'?'Motivo (vai para a Twitch e para o Histórico)':action.kind==='twitch'?((action.twOp||'game')==='game'?'Nome do jogo fixo (vazio usa o que você falou)':(action.twOp||'game')==='title'?'Novo título fixo (vazio usa o que você falou, até 140 caracteres)':(action.twOp||'game')==='mention'?'Mensagem (o bot marca @alvo na frente)':'Motivo (vai para a Twitch e para o Histórico)'):'Mensagem / conteúdo'} value={action.text} onChange={text=>update({...action,text})} flow={{...flow,name,trigger,actions:(()=>{try{return orderedActions(nodes,edges)}catch{return []}})()}}/>}{ai&&<AIActionOptions action={action} ai={ai} onChange={update}/>}{action.kind==='ai.generate'&&<Field label="Nome da resposta" hint="Disponível somente nesta execução; evita misturar respostas entre pessoas.">
+ </Field>:action.kind==='variable.delete'?<p className="help">Escolha o valor que será apagado.</p>:action.kind==='twitch'&&!['game','title','timeout','ban','warn','mention'].includes(action.twOp||'game')?<p className="help">Esta operação não usa texto: o alvo e a duração vêm da fala ou dos campos abaixo.</p>:action.kind==='voiceFx'?<p className="help">Esta etapa não usa texto: escolha a voz e a duração acima.</p>:<MessageEditor key={selected} profileId={flow.profileId} label={action.kind.startsWith('ai')?'Como a IA deve responder':action.kind==='variable.increment'?'Quanto somar':action.kind==='punish'?'Motivo (vai para a Twitch e para o Histórico)':action.kind==='twitch'?((action.twOp||'game')==='game'?'Nome do jogo fixo (vazio usa o que você falou)':(action.twOp||'game')==='title'?'Novo título fixo (vazio usa o que você falou, até 140 caracteres)':(action.twOp||'game')==='mention'?'Mensagem (o bot marca @alvo na frente)':'Motivo (vai para a Twitch e para o Histórico)'):'Mensagem / conteúdo'} value={action.text} onChange={text=>update({...action,text})} flow={{...flow,name,trigger,actions:(()=>{try{return orderedActions(nodes,edges)}catch{return []}})()}}/>}{ai&&<AIActionOptions action={action} ai={ai} onChange={update}/>}{action.kind==='ai.generate'&&<Field label="Nome da resposta" hint="Disponível somente nesta execução; evita misturar respostas entre pessoas.">
  <input value={(action.target||'local.aiResponse').replace(/^local\./,'')} onChange={e=>update({...action,target:'local.'+e.target.value})}/>
  </Field>}{action.kind.startsWith('variable.')&&<VariableTarget value={action.target} onChange={target=>update({...action,target})}/>}{['memory','webhook'].includes(action.kind)&&<Field label={action.kind==='memory'?'Arquivo no vault':'Endereço HTTPS'}>
  <input value={action.target} onChange={e=>update({...action,target:e.target.value})}/>
@@ -247,6 +259,10 @@ function switchKind(current:Action,next:string){const base:Action={...current,ki
   {(action.obsOp||'mute')==='volume'&&<Field label="Volume (dB)" hint="Ex.: -6. Entre -100 e 30."><input type="number" min={-100} max={30} step="any" value={action.text} onChange={e=>update({...action,text:e.target.value})}/></Field>}
   {OBS_TEMP.includes(action.obsOp||'mute')&&<Field label="Duração (segundos)" hint="0 = permanente. Temporário restaura o estado anterior no fim."><input type="number" min={0} max={3600} step={1} value={action.obsDuration??0} onChange={e=>update({...action,obsDuration:Math.max(0,Math.round(Number(e.target.value)||0))})}/></Field>}
   <p className="help">Executa no OBS desta máquina, sem nuvem. Temporário com o mesmo alvo soma o tempo; alvo ocupado por outro efeito é recusado no Histórico.</p>
+  </>}{action.kind==='voiceFx'&&<>
+  <Field label="Voz"><select value={voiceEffects[action.target||'fina']?action.target:'fina'} onChange={e=>update({...action,target:e.target.value})}>{Object.entries(voiceEffects).map(([k,n])=><option key={k} value={k}>{n}</option>)}</select></Field>
+  <Field label="Duração (segundos)" hint="0 = manter até a próxima troca. Com tempo, volta ao normal sozinho."><input type="number" min={0} max={3600} step={1} value={action.value??0} onChange={e=>update({...action,value:Math.max(0,Math.round(Number(e.target.value)||0))})}/></Field>
+  <p className="help">Muda a sua voz no ar pelo VB-Cable. Comece a Voz da live (menu Voz da live) antes do resgate disparar. Se outro efeito entrar no meio, só o mais recente volta ao normal.</p>
   </>}</Section>
   {(action.kind.startsWith('ai')||action.kind==='obs')&&<Section title="Avançado">
   {action.kind.startsWith('ai')&&<details className="ai-help"><summary>Como a IA monta a resposta</summary><p className="help">A mensagem atual, até 12 falas recentes dos últimos 5 minutos e as memórias entram automaticamente. Defina o tom aqui. {action.kind==='ai.generate'?'Esta ação só guarda a resposta. Conecte Enviar mensagem e clique em + Resposta da IA.':'Esta ação já envia ao chat e guarda a resposta para os próximos blocos.'}</p></details>}

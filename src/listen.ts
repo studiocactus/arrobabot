@@ -12,6 +12,10 @@ let failure='';
 const listeners:Listener[]=[];
 const queue:Uint8Array[]=[];
 let sending=false;
+let lastFrame:Record<string,unknown>|null=null;
+
+/** Último estado devolvido pelo backend a cada lote de 100 ms (nível do microfone, se ativou…). */
+export function listenFrame(){return lastFrame}
 
 /** Nota quem acompanha a escuta (o painel de voz desenha o estado). */
 export function onListenChange(fn:Listener){listeners.push(fn);return()=>{const i=listeners.indexOf(fn);if(i>=0)listeners.splice(i,1)}}
@@ -36,7 +40,7 @@ function pump(profileId:string){
  const payload=encode(batch);
  sending=true;
  api('voice.frame',{profileId,pcm:payload})
-  .then(()=>{if(failure){failure=''}})
+  .then(s=>{lastFrame=(s as Record<string,unknown>)??null;if(failure){failure=''}})
   .catch(e=>{failure=errorText(e)})
   .finally(()=>{sending=false;announce();pump(profileId)});
 }

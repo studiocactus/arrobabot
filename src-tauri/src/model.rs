@@ -276,7 +276,7 @@ pub fn validate_flow(f:&Flow)->Result<(),String> {
  if !f.audio.is_empty()&&(f.audio.len()>64||f.audio.contains(char::is_whitespace)){return Err("Áudio inválido: escolha um som da biblioteca".into())}
  if !f.audio_volume.is_finite()||!(0.0..=1.0).contains(&f.audio_volume){return Err("Volume do áudio: escolha de 0% a 100%".into())}
  for a in &f.actions {
- if !["chat","ai","ai.generate","memory","webhook","discord","overlay","delay","script","points","tts","variable.set","variable.increment","variable.delete","punish","twitch","obs","wait","condition"].contains(&a.kind.as_str()) {return Err("Tipo de ação inválido".into())}
+ if !["chat","ai","ai.generate","memory","webhook","discord","overlay","delay","script","points","tts","variable.set","variable.increment","variable.delete","punish","twitch","obs","wait","condition","voiceFx"].contains(&a.kind.as_str()) {return Err("Tipo de ação inválido".into())}
  if a.kind=="wait"&&!(1..=3600000).contains(&a.value){return Err("Espera de 1 milissegundo a 1 hora".into())}
  if a.kind=="obs" {
   if !crate::obs::OPS.contains(&a.obs_op.as_str()){return Err("Ação do OBS: escolha uma operação válida".into())}
@@ -284,6 +284,11 @@ pub fn validate_flow(f:&Flow)->Result<(),String> {
   if a.obs_duration>3600{return Err("Ação do OBS: duração de até 1 hora".into())}
   if a.obs_duration>0&&!crate::obs::temp_ok(&a.obs_op){return Err("Ação do OBS: duração só vale para mutar, volume, mostrar e esconder".into())}
   if a.obs_op=="volume"&&a.text.trim().parse::<f64>().map_or(true,|n|!n.is_finite()||n < -100.0||n > 30.0){return Err("Ação do OBS: volume em dB entre -100 e 30".into())}
+ }
+ if a.kind=="voiceFx"{
+  let effect=if a.target.trim().is_empty(){a.text.trim()}else{a.target.trim()};
+  if !crate::voice_fx::EFFECTS.contains(&effect.to_lowercase().as_str()){return Err(format!("Voz: escolha uma das vozes prontas ({})",crate::voice_fx::EFFECTS.join(", ")))}
+  if a.value>3600{return Err("Voz: duração de até 1 hora (0 = manter até trocar)".into())}
  }
  if a.kind=="condition"{
   if a.cond_var.trim().is_empty()||a.cond_var.chars().count()>120{return Err("Condição: escolha a variável".into())}
@@ -461,6 +466,16 @@ pub fn validate_flow(f:&Flow)->Result<(),String> {
   let err=validate_flow(&f).unwrap_err();assert!(err.contains("reward.cost"),"sugere o nome certo: {err}");
   f.actions[0].cond_var="reward.cost".into();f.actions[0].cond_false="voltar".into();
   assert!(validate_flow(&f).is_err());
+ }
+ #[test] fn voice_action_validates_name_and_duration() {
+  let a=Action{kind:"voiceFx".into(),target:"fina".into(),value:10,..Default::default()};
+  let mut f=Flow{counter:false,timer_seconds:300,timer_category:"personalizado".into(),timer_priority:"normal".into(),timer_variants:vec![],timer_min_messages:0,timer_window_secs:900,timer_max_session:0,timer_start_delay_secs:0,audio:String::new(),audio_volume:1.0,send_type:"chat".into(),send_color:"primary".into(),reply_to:false,id:uuid::Uuid::new_v4().to_string(),profile_id:uuid::Uuid::new_v4().to_string(),name:"Voz".into(),enabled:true,trigger:Trigger{kind:"redemption".into(),pattern:"reward-id".into(),permission:"everyone".into(),cooldown:0,user_cooldown:0},actions:vec![a.clone()],layout:Value::Null};
+  assert!(validate_flow(&f).is_ok());
+  f.actions[0].target="robô".into();assert!(validate_flow(&f).is_err(),"só vozes da lista passam");
+  f.actions[0].target="normal".into();assert!(validate_flow(&f).is_ok(),"normal é aceito (volta ao Pass)");
+  f.actions[0].target="fina".into();f.actions[0].value=3601;assert!(validate_flow(&f).is_err(),"duração acima de 1 hora é recusada");
+  f.actions[0].value=0;assert!(validate_flow(&f).is_ok(),"0 = manter até a próxima troca");
+  assert!(crate::voice_fx::EFFECTS.contains(&"engracada"),"a lista embutida tem a voz engraçada");
  }
  #[test] fn wait_steps_validate_range_and_default_on() {
   let a=Action{kind:"wait".into(),value:3000,..Default::default()};

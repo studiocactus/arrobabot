@@ -1,4 +1,4 @@
-import {actions,punishModes,type Action} from './types';
+import {actions,punishModes,voiceEffects,type Action} from './types';
 import {variableCatalog} from './variableCatalog';
 
 /** Nome legível de uma variável de condição, preservando o código quando não há entrada. */
@@ -15,6 +15,7 @@ export function stepLabel(a:Action):string{const kind=a.kind;
  if(kind==='condition')return '◆ '+(condVarLabel(a.condVar||'')||'variável')+' '+condOpLabel(a.condOp||'equals')+(a.condValue?' '+a.condValue:'');
  if(kind==='wait')return '◷ '+durationLabel(a.value||0);
  if(kind==='obs')return '◉ '+obsOpLabel(a.obsOp||'mute')+(a.obsTarget?' · '+a.obsTarget:'');
+ if(kind==='voiceFx')return '🎙 '+(voiceEffects[a.target||'fina']||a.target||'Voz')+(a.value>0?' · '+a.value+'s':'');
  if(kind==='twitch')return '⚡ '+twitchKindLabel(a.twOp||'game');
  if(kind==='punish')return '🔨 '+(punishModes[a.punish||'timeout']||a.punish||'Punir');
  if(kind==='redemption')return '⚡ Resgate';

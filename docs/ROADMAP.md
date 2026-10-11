@@ -15,27 +15,10 @@ O que já está no BotLive e o que está planejado. Este documento é a referên
 
 > A etapa de UX 2.0 segue em andamento: este documento não declara o programa concluído. Próximas entregas serão listadas aqui conforme forem aprovadas.
 
-- **Voicemod — etapa 1: conexão local e teste manual (0.1.93)** — a tela **Voicemod** usa a [Control API oficial](https://control-api.voicemod.net/) por WebSocket local, sem nuvem e sem varrer a rede. A chave fica no cofre do sistema; **Conectado** só aparece após o `registerClient` respondido com 200. A tela lista as vozes com o **id** real de cada uma, mostra a voz atual, o modificador de voz, ouvir minha voz e a licença, busca por nome e permite **Testar voz** por um tempo configurável (padrão 10 s) com contagem no núcleo, encerramento antecipado e devolução do estado anterior. Queda da conexão durante o teste deixa a restauração **não confirmada** com **Restaurar agora** explícito; reconexão automática nunca reenvia a voz; troca manual nunca é desfeita em silêncio. Erros vão para a tela e para o **Histórico**, nunca para o chat. A conexão real **não foi homologada** nesta entrega (sem Voicemod instalado/autorizado na máquina de validação): os testes automatizados rodam contra um servidor WebSocket controlado.
+- **Voicemod — etapa 1: conexão local e teste manual (0.1.93)** — a tela **Voicemod** usava a [Control API oficial](https://control-api.voicemod.net/) por WebSocket local, sem nuvem e sem varrer a rede, com chave no cofre do sistema e teste manual com restauração. **REMOVIDO em 0.1.95**: a integração saiu do produto (tela, conexão e operações); a voz da live passou a ser feita pelo **Voz da live**, dentro do próprio BotLive, sem depender do Voicemod.
 
 ## Planejado
 
-### Integração com o Voicemod (etapa 1 ENTREGUE · etapas seguintes PENDENTES)
+### Integração com o Voicemod — REMOVIDA
 
-O objetivo final continua sendo trocar a voz do bot pelo microfone virtual do Voicemod durante falas em TTS, usando a [Voicemod Control API](https://control-api.voicemod.net/). A etapa 1 (conexão, estado, lista de vozes e teste manual com restauração) já está na versão atual e está descrita em **Entregue** acima e no capítulo [Perfis e conexões](INTEGRACOES.md).
-
-**Validado nesta etapa:** a referência oficial, o endereço `ws://127.0.0.1:<porta>/v1`, o formato de `registerClient` + `clientKey`, a correlação de respostas por `id`/`action` e os eventos espontâneos usados (`voiceChangedEvent`, `toggleVoiceChanger`). **Não validado:** a conexão com um Voicemod real instalado e autorizado.
-
-O que continua pendente:
-
-1. **Recompensa ligada por id** — o painel de recompensa escolhe a voz pelo id obtido na lista; nada de escrever id à mão.
-2. **Duração por recompensa** — definir quanto tempo a voz vale, recompensa por recompensa.
-3. **Fila de resgates simultâneos** — decidir o que acontece quando duas recompensas são resgatadas ao mesmo tempo (uma espera, a última vence, etc.).
-4. **Conclusão e cancelamento do resgate** — encerrar a troca de voz quando o tempo acabar ou o usuário cancelar o resgate na Twitch, respeitando as permissões de reembolso da conta do canal.
-5. **A integração como etapa de automação** — usar a troca de voz dentro do editor de fluxos, com o mesmo aviso de efeito real no microfone.
-6. **Microfone virtual no OBS sem passo manual** — hoje o roteamento é feito à mão no OBS (descrito na documentação); automatizar segue pendente.
-
-Cuidados importantes desta integração:
-
-- **Provar antes de prometer** — a etapa 1 está entregue como código e testes contra servidor controlado; não declare Voicemod concluído nem homologado enquanto a conexão real não for verificada com o aplicativo aberto e autorizado.
-- **Não confundir com troca de TTS** — isto é sobre o microfone virtual usado como fonte de áudio, não sobre trocar o motor de voz do bot.
-- **Licença do Voicemod** — o que está disponível pode depender da licença do usuário; vozes bloqueadas pela licença aparecem como indisponíveis em vez de falhar em silêncio.
+A integração com o Voicemod foi retirada do produto: a etapa 1 entregue em 0.1.93 saiu do código em 0.1.95, e nada conversa mais com a Control API. O objetivo de trocar a voz da live foi alcançado por outro caminho, sem depender de outro programa aberto: a tela **Voz da live** aplica os efeitos no microfone dentro do próprio BotLive e envia o resultado para o VB-Cable, que o OBS usa como microfone. A troca de voz por resgate da Twitch e a etapa de automação (ação **Voz da live**) passaram a existir nessa tela.

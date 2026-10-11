@@ -167,6 +167,42 @@ A moderação de links pode impedir pedidos de música antes de chegarem ao mód
 
 **Punição por comando:** para punir alguém quando o chat pedir, crie um fluxo com a ação **Punir na Twitch**: escolha silenciar, banir ou avisar, a duração quando for silêncio, quem leva a punição (quem enviou a mensagem ou o primeiro argumento do comando) e o motivo, e restrinja **Quem pode usar** para Moderadores ou Só o streamer. Exemplo: `!silenciar @alvo` com alvo **Primeiro argumento** e duração 300. A diferença para a **Moderação** do perfil: aquela age sozinha nas expressões proibidas; esta ação executa quando o fluxo é disparado. A prévia nunca pune, e a ação vale só em perfil da Twitch.
 
+## Voz da live por resgate com mensagem da IA
+
+**O que faz:** alguém resgata a recompensa, a ArrobaSrv publica uma piada da IA cumprimentando quem resgatou e a sua voz muda na live por 60 segundos, voltando ao normal sozinho.
+
+**Preparo (uma vez):** na tela **Voz da live**, escolha **Microfone de entrada** (seu microfone de verdade) e **Saída para o OBS (VB-Cable)** (a entrada "CABLE Input") e configure o provedor em **Inteligência artificial**. No OBS, a fonte de microfone da live passa a capturar **CABLE Output**. O **Corte de ruído de fundo** (padrão -45 dB) tira o fundo constante; ele não substitui a supressão de ruído do OBS.
+
+**Montagem, campo por campo:**
+
+1. Menu **Automações** → **Novo fluxo**. Escreva o nome no topo do editor, por exemplo `Voz fina por resgate`.
+2. Clique no bloco do gatilho → painel **CONFIGURAR BLOCO** → seção **Quando**:
+   - **Evento**: `Resgate de pontos`;
+   - **Recompensa da Twitch**: escolha a recompensa na lista (**Atualizar lista** traz as recém-criadas; **Criar resgate** cria na hora pela API, sem esperar a Twitch propagar);
+   - **Intervalo entre usos (segundos)** e **Intervalo por pessoa (segundos)**: `0` — quem limita é o cooldown da própria recompensa.
+3. Clique no bloco de etapa que já vem com o fluxo → seção **Configurar etapa**:
+   - **Tipo de etapa**: `Mudar minha voz`;
+   - **Voz**: `Voz fina`;
+   - **Duração (segundos)**: `60` (o valor que aparece ao trocar o tipo é 15 — mude para 60).
+4. Barra superior → **Adicionar etapa** → no bloco novo, **Tipo de etapa**: `Responder com IA` → em **Como a IA deve responder**:
+
+```text
+{{redeemer}} acabou de resgatar {{rewardTitle}} por {{rewardCost}} pontos.
+Escreva UMA frase só, original e de riso, e comece exatamente com @{{viewer.login}} (o login já vem em minúsculas) cumprimentando pelo resgate.
+Tom de resenha leve, zoação educada, sem ofensa.
+```
+
+   `{{redeemer}}` traz o nome de exibição (Thenees); `{{viewer.login}}` traz o login em minúsculas (thenees), que é o formato que a Twitch transforma em menção clicável que notifica a pessoa. Abra **Como esta ação responde**: **Tamanho** = `Uma frase` e **Tom deste bloco** = `humor do canal, piada rápida`. Em **Avançado → Testar resposta contextual**, o botão **Gerar resposta de teste** mostra a piada sem publicar (consome créditos do provedor).
+
+   **Se a IA esquecer o @ de vez em quando:** troque a etapa `Responder com IA` por `Gerar resposta da IA (variável)` e acrescente depois uma etapa `Enviar mensagem` com o texto `@{{viewer.login}} {{local.aiResponse}}`. A menção passa a ser escrita pelo BotLive, não pelo modelo — ela não pode faltar, e a mensagem continua uma só.
+5. **Salvar fluxo**. A ordem de execução é a das setas entre os blocos, não a posição na tela; para reordenar use o menu da etapa (botão de setas no inspetor) com **Subir** e **Descer**, e **Remover bloco** apaga a etapa.
+
+**Por que a voz vem primeiro:** uma etapa que falha interrompe o resto do fluxo. Com a voz antes da IA, uma falha do provedor de IA não impede o efeito pelo qual a pessoa pagou. Em contrapartida, com a **Voz da live** parada a etapa de voz falha com "Inicie a Voz da live antes de usar este efeito" e a mensagem também não sai — por isso a rotina é **Voz da live → Iniciar voz ao vivo** antes de ir ao ar.
+
+**Entrada:** Ana resgata **Voz fina**. **Resultado:** a ArrobaSrv publica a piada no chat começando com `@ana`, que notifica a pessoa pelo nome clicável, a sua voz fica fina por 60 segundos e volta ao normal sozinho; o Histórico registra `→ voz fina por 60s` e, ao terminar, `→ voz normal`. Se outro resgate entrar no meio, só a troca mais recente volta ao normal. Renomear a recompensa na Twitch não quebra o fluxo: a identidade é o ID.
+
+**Como testar:** **Testar fluxo** executa a sequência na hora e mostra os **Valores de exemplo** de {{redeemer}} e companhia; as etapas que publicam (chat, IA, OBS, punições) aparecem como **Puladas**, mas etapa local roda de verdade — com a **Voz da live** iniciada, o teste aplica o efeito na sua voz (ele volta sozinho em 60 segundos); com ela parada, o teste falha na etapa mostrando exatamente o erro que apareceria ao vivo. O teste completo é um resgate real, de outra conta ou com custo temporário de 1 ponto. A simulação pelo botão **Simular evento** não serve para este fluxo: ela dispara eventos de chat, e o gatilho é de resgate.
+
 ## Discord — bot no servidor
 
 **Conectar o bot:** abra **Discord** em **SEU ESPAÇO**, salve o token do bot, clique em **Descobrir servidor e canais**, escolha o servidor, ligue **Ativar o bot do Discord** e salve. Depois clique em **Conectar**. **Resultado esperado:** o rótulo mostra **Conectado** e os canais e cargos já estão disponíveis nos campos.

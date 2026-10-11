@@ -65,7 +65,45 @@ pub async fn custom_rewards(rt:&Arc<Runtime>,p:&Profile)->Result<Value,String>{
  let res=rt.http.get("https://api.twitch.tv/helix/channel_points/custom_rewards").query(&[("broadcaster_id",p.channel_id.as_str())]).header("Client-Id",&p.client_id).bearer_auth(&token).send().await.map_err(|_|"Não foi possível listar as recompensas".to_string())?;
  if !res.status().is_success(){return Err(format!("Recompensas recusadas pela Twitch: HTTP {}. Reautorize a conta do canal.",res.status().as_u16()))}
  let v:Value=res.json().await.map_err(|_|"Resposta de recompensas inválida".to_string())?;
- Ok(v["data"].as_array().cloned().unwrap_or_default().into_iter().map(|r|json!({"id":r["id"],"title":r["title"],"cost":r["cost"],"enabled":r["is_enabled"],"paused":r["is_paused"],"input":r["is_user_input_required"],"image":r["image"]["url_2x"].as_str().or(r["default_image"]["url_2x"].as_str()).unwrap_or("")})).collect())
+ let list:Vec<Value>=v["data"].as_array().cloned().unwrap_or_default().into_iter().map(|r|json!({"id":r["id"],"title":r["title"],"cost":r["cost"],"enabled":r["is_enabled"],"paused":r["is_paused"],"input":r["is_user_input_required"],"image":r["image"]["url_2x"].as_str().or(r["default_image"]["url_2x"].as_str()).unwrap_or("")})).collect();
+ // O canal volta junto: a tela mostra de qual canal é a lista, para não
+ // procurar resgate no canal errado.
+ Ok(json!({"channel":p.channel,"rewards":list}))
+}
+/// Erros de forma de uma recompensa nova, antes de gastar requisicao.
+pub fn reward_shape_error(title:&str,cost:i64)->Option<String>{
+ let t=title.trim();
+ if t.is_empty(){return Some("Dê um nome para a recompensa.".into())}
+ if t.chars().count()>45{return Some("O nome da recompensa pode ter no máximo 45 caracteres.".into())}
+ if cost<1{return Some("O custo mínimo é 1 ponto.".into())}
+ if cost>1_000_000{return Some("O custo pode chegar no máximo a 1.000.000 de pontos.".into())}
+ None
+}
+/// Rejeição de criação explicada pelo caso certo: 401/403 é permissão da conta
+/// do canal (a Twitch devolve 401 quando falta escopo); 400 traz o motivo no
+/// corpo (nome repetido, custo fora do intervalo) e o texto dela é o nosso.
+pub fn reward_rejection(status:u16,twitch_msg:Option<&str>)->String{
+ match status{
+  401|403=>"A Twitch recusou por permissão: reautorize a conta do canal em Perfis — é a autorização que concede a permissão de gerenciar resgates.".into(),
+  400=>match twitch_msg{Some(m)=>format!("A Twitch recusou a recompensa: {m}"),None=>"A Twitch recusou a recompensa. Confira o nome (único no canal, até 45 caracteres) e o custo (mínimo 1).".into()},
+  _=>format!("Recompensa recusada pela Twitch: HTTP {status}. {}",twitch_msg.unwrap_or("Tente novamente em instantes.")),
+ }
+}
+/// Cria uma recompensa de pontos no canal pela conta do canal. A Twitch passa
+/// a devolve-la na propria listagem (mesma API), sem esperar o painel propagar.
+pub async fn create_reward(rt:&Arc<Runtime>,p:&Profile,title:&str,cost:i64,user_input:bool)->Result<Value,String>{
+ if let Some(e)=reward_shape_error(title,cost){return Err(e)}
+ let token=channel_creds(rt,p).await?;
+ let res=rt.http.post("https://api.twitch.tv/helix/channel_points/custom_rewards").query(&[("broadcaster_id",p.channel_id.as_str())]).header("Client-Id",&p.client_id).bearer_auth(&token).json(&json!({"title":title.trim(),"cost":cost,"is_enabled":true,"is_user_input_required":user_input})).send().await.map_err(|_|"Não foi possível criar a recompensa".to_string())?;
+ let status=res.status();
+ if !status.is_success(){
+  let twitch_msg=res.json::<Value>().await.ok().and_then(|v|v["message"].as_str().map(|s|s.to_string()));
+  return Err(reward_rejection(status.as_u16(),twitch_msg.as_deref()));
+ }
+ let v:Value=res.json().await.map_err(|_|"Resposta de recompensa inválida".to_string())?;
+ let r=v["data"].as_array().and_then(|a|a.first()).cloned().unwrap_or(Value::Null);
+ if r["id"].is_null(){return Err("A Twitch não devolveu a recompensa criada. Ela pode existir já: atualize a lista.".into())}
+ Ok(json!({"id":r["id"],"title":r["title"],"cost":r["cost"],"enabled":r["is_enabled"],"paused":r["is_paused"],"input":r["is_user_input_required"],"image":r["image"]["url_2x"].as_str().or(r["default_image"]["url_2x"].as_str()).unwrap_or("")}))
 }
 /// Marca o resgate como cumprido depois da automação. Falha nunca é silenciosa:
 /// quem chamou registra no Histórico; sem permissão, pede a reautorização.
@@ -424,5 +462,23 @@ pub async fn run(rt:&Arc<Runtime>,p:&Profile,e:&Event,a:&Action,text:&str,trigge
   assert_eq!(
    derive_subject(&strip_activation("Arroba. Troca o jogo para Minecraft.","Arroba"),"troca o jogo, muda o jogo"),
    "Minecraft");
+ }
+ #[test] fn rejeicao_de_recompensa_explica_o_caso_certo(){
+  assert!(reward_rejection(401,None).contains("reautorize a conta do canal"),"401 é permissão, não forma");
+  assert!(reward_rejection(403,None).contains("reautorize a conta do canal"),"403 também é permissão");
+  assert!(reward_rejection(400,Some("nome repetido")).contains("nome repetido"),"400 repete o motivo da Twitch");
+  assert!(reward_rejection(400,None).contains("45 caracteres"),"400 sem motivo fala de nome e custo");
+  assert!(reward_rejection(500,None).contains("HTTP 500"),"fora disso, o status fica visível");
+ }
+ #[test] fn recompensa_nova_valida_a_forma_antes_de_gastar_requisicao(){
+  assert!(reward_shape_error("",100).is_some(),"nome vazio recusa");
+  assert!(reward_shape_error("   ",100).is_some(),"só espaço recusa");
+  assert!(reward_shape_error("Voz Fina",0).is_some(),"custo 0 recusa");
+  assert!(reward_shape_error("Voz Fina",-5).is_some(),"custo negativo recusa");
+  assert!(reward_shape_error(&"x".repeat(46),100).is_some(),"nome de 46 caracteres recusa");
+  assert!(reward_shape_error(&"x".repeat(45),100).is_none(),"nome de 45 caracteres passa");
+  assert!(reward_shape_error("Voz Fina",1_000_001).is_some(),"custo acima do máximo recusa");
+  assert!(reward_shape_error("Voz Fina",150).is_none(),"recompensa simples passa");
+  assert!(reward_shape_error("  Voz Fina  ",150).is_none(),"espaço nas pontas é aparado");
  }
 }

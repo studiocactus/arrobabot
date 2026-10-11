@@ -30,7 +30,7 @@ mod access;
 mod stats;
 mod labels;
 mod obs;
-mod voicemod;
+mod voice_fx;
 mod runs;
 mod scheduler;
 mod obsidian;
@@ -55,7 +55,6 @@ pub async fn dispatch(rt:Arc<Runtime>,op:&str,args:Value)->R<Value>{
  if op.starts_with("chatExtras."){return chat_extras::operation(&rt,&p,op,&args)}
  if op.starts_with("labels."){return labels::operation(&rt,&p,op,&args).await}
  if op.starts_with("obs."){return obs::operation(&rt,&p,op,&args).await}
- if op.starts_with("voicemod."){return voicemod::operation(&rt,&p,op,&args).await}
  if op.starts_with("discord."){return discord_admin::operation(&rt,&p,op,&args).await}
  match op{
  "snapshot"=>Ok(json!({"profiles":rt.db.profiles()?.into_iter().filter(|p|access::allowed(&rt,p)).collect::<Vec<_>>(),"logs":rt.db.logs("")?.into_iter().filter(|l|access::current(&rt)=="owner"||rt.db.profile(&l.profile_id).is_ok_and(|p|access::allowed(&rt,&p))).collect::<Vec<_>>(),"statuses":*rt.statuses.lock().unwrap(),"theme":rt.db.get("theme"),"accent":rt.db.get("accent"),"apiPort":*rt.api_port.lock().unwrap(),"dataDir":rt.base.to_string_lossy()})),
@@ -145,6 +144,7 @@ pub async fn dispatch(rt:Arc<Runtime>,op:&str,args:Value)->R<Value>{
  "knowledge.remove"=>{rt.db.profile(&p)?;knowledge::remove(&rt.base,&p,args["path"].as_str().ok_or("Arquivo ausente")?)?;Ok(Value::Null)},
  "community"=>{rt.db.profile(&p)?;Ok(json!(modules::load(&rt,&p)))},
  "twitch.rewards"=>{let profile=rt.db.profile(&p)?;crate::twitch_ops::custom_rewards(&rt,&profile).await},
+ "twitch.reward.create"=>{let profile=rt.db.profile(&p)?;crate::twitch_ops::create_reward(&rt,&profile,args["title"].as_str().unwrap_or(""),args["cost"].as_i64().unwrap_or(0),args["userInput"].as_bool().unwrap_or(false)).await},
  "community.action"=>modules::admin(&rt,&p,args["action"].as_str().ok_or("Ação ausente")?,args["data"].clone()),
  "preset.create"=>presets::export(&rt,&p,args["kind"].as_str().unwrap_or("profile"),args["name"].as_str().unwrap_or("Meu preset"),serde_json::from_value(args["ids"].clone()).unwrap_or_default()),
  "preset.preview"=>presets::preview(&rt,&p,&args["preset"]),
@@ -168,6 +168,15 @@ pub async fn dispatch(rt:Arc<Runtime>,op:&str,args:Value)->R<Value>{
  "backup.list"=>backup::list(&rt.db),
  "backup.now"=>{let folder=args["folder"].as_str().map(str::to_owned).unwrap_or_else(||backup::config(&rt.db)["folder"].as_str().unwrap_or("").to_owned());backup::create(&rt,&folder)},
  "backup.restore"=>{let result=backup::restore(&rt,args["path"].as_str().ok_or("Escolha um arquivo de backup")?);if result.is_ok(){rt.log("","backup","Importação concluída. Reconecte os perfis para usar os dados recebidos.","success")}result},
+ "voiceFx.devices"=>{rt.db.profile(&p)?;Ok(crate::voice_fx::devices())},
+ "voiceFx.get"=>Ok(rt.voice_fx.get()),
+ "voiceFx.level"=>Ok(rt.voice_fx.level()),
+ "voiceFx.selection"=>rt.voice_fx.load_selection(&rt,&p),
+ "voiceFx.saveSelection"=>rt.voice_fx.save_selection(&rt,&p,args["input"].as_str().unwrap_or(""),args["output"].as_str().unwrap_or("")),
+ "voiceFx.start"=>rt.voice_fx.start(&rt,&p,args["input"].as_str().unwrap_or(""),args["output"].as_str().unwrap_or("")),
+ "voiceFx.stop"=>rt.voice_fx.stop(&rt,&p),
+ "voiceFx.effect"=>rt.voice_fx.set_effect(&rt,&p,args["name"].as_str().unwrap_or("")),
+ "voiceFx.gate"=>rt.voice_fx.set_gate(&rt,&p,args["db"].as_f64().unwrap_or(-45.0) as f32),
  _=>Err("Operação desconhecida".into())
  }
 }

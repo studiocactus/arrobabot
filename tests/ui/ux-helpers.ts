@@ -18,7 +18,7 @@ export const flows=[
   actions:[act('condition','',{condVar:'reward.cost',condOp:'greater_or_equal',condValue:'100',condFalse:'stop'}),act('chat','Oi {{viewer.name}}'),act('overlay','Aparece na OBS')]}
 ];
 
-export const NAV=['Visão geral','Perfis de bot','Discord','Rótulos OBS','Comandos','Timers','Respostas e sons','Sons','OBS Studio','Voicemod','Contadores','Automações','Inteligência artificial','Memórias','Comunidade','Biblioteca de presets','Histórico','Estatísticas'];
+export const NAV=['Visão geral','Perfis de bot','Discord','Rótulos OBS','Comandos','Timers','Respostas e sons','Sons','OBS Studio','Voz da live','Contadores','Automações','Inteligência artificial','Memórias','Comunidade','Biblioteca de presets','Histórico','Estatísticas'];
 
 const LOGS=[
  {id:'l1',profileId:'p1',kind:'run',message:'Execução concluída com sucesso no fluxo de boas-vindas',status:'success',at:'2026-10-07T10:00:00Z'},
@@ -51,21 +51,6 @@ export const stats={
  commands:[{name:'!pontos',count:64},{name:'!so',count:31},{name:'!bemvindo',count:22}]
 };
 
-/** Forma padrão que o backend devolve para `voicemod.get`. */
-export const voicemod={
- status:{phase:'connected',message:'Conectado ao Voicemod na porta 39273.',port:39273,
-  voices:[
-   {id:'nofx',friendlyName:'Efeito desligado',enabled:true,favorited:false,isNew:false,isCustom:false},
-   {id:'robot',friendlyName:'Robô',enabled:true,favorited:true,isNew:false,isCustom:false},
-   {id:'alien',friendlyName:'Alien com um nome comprido para forçar o corte',enabled:true,favorited:false,isNew:true,isCustom:false},
-   {id:'blocked',friendlyName:'Voz bloqueada pela licença',enabled:false,favorited:false,isNew:false,isCustom:false}
-  ],
-  currentVoice:'nofx',currentName:'Efeito desligado',voiceChanger:false,hearMyself:false,license:'free',attempts:0},
- test:{active:false,phase:'',voiceId:'',voiceName:'',seconds:0,remainingMs:0,interrupted:false,manual:false},
- outcome:{kind:'',detail:''},
- hasKey:true,keyLen:21,defaultSecs:10,minSecs:1,maxSecs:60
-};
-
 export async function mock(page:Page){
  await page.addInitScript(arg=>{
   const w=window as unknown as Record<string,unknown>;
@@ -93,7 +78,9 @@ export async function mock(page:Page){
       case 'obs.get':return {config:{enabled:false,host:'127.0.0.1',port:4455},hasPassword:false};
       case 'obs.status':return null;
       case 'obs.discover':return null;
-      case 'voicemod.get':return arg.voicemod;
+      case 'voiceFx.get':return {phase:'off',message:'Prévia no navegador: a voz ao vivo só existe no aplicativo desktop.',input:'',output:'',gate_db:-45};
+      case 'voiceFx.devices':return {inputs:[{name:'Microfone (Realtek)',default:true}],outputs:[{name:'CABLE Input (VB-Audio Virtual Cable)',default:true}]};
+      case 'voiceFx.selection':return {input:'Microfone (Realtek)',output:'CABLE Input (VB-Audio Virtual Cable)',gateDb:-45};
       case 'voice.status':return {listening:false,error:'',port:0};
       case 'secret.status':return {ai:false,bot:false,channel:false};
       case 'discord.status':return {online:false};
@@ -104,7 +91,7 @@ export async function mock(page:Page){
       default:st.unknown.push(op);return lists.includes(op)?[]:null;
      }
     }}} as unknown as void);
- },{profile:profile,flows:flows,logs:LOGS,community:community,stats:stats,voicemod:voicemod});
+ },{profile:profile,flows:flows,logs:LOGS,community:community,stats:stats});
 }
 
 export type Issue={k:string;sel:string;txt:string;extra:string};

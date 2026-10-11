@@ -1,5 +1,66 @@
 # Histórico de atualizações
 
+# BotLive 0.1.95
+
+## O que mudou
+
+- **Voz da live: a sua voz muda ao vivo dentro do BotLive** (novo `src-tauri/src/voice_fx.rs` + tela `src/VozFx.tsx`).
+  O BotLive captura o seu microfone, aplica o efeito escolhido e envia a voz para o VB-Cable, que o OBS usa como microfone. Efeitos prontos: **Voz fina, Voz grossa, Robô, Engraçada, Eco** e **Voz normal**. Cada aparelho é aberto na taxa padrão dele; o pipeline interno roda a 48 kHz e o resampling acontece só nas bordas. Não mexe no OBS nem no microfone do Windows e não liga "Ouvir minha voz".
+- **Ação "Mudar minha voz" no editor de fluxos** (motor, validação e editor).
+  Efeito por etapa e **Duração em segundos** (0 = manter até a próxima troca; com tempo, volta ao normal sozinho). Cada troca gera um número de geração: o retorno automático só desfaz a troca mais recente, então dois resgates no meio um do outro não se apagam. Duração aceita de até 1 hora; a validação de forma acontece no salvamento.
+- **Porta-lapso (Corte de ruído de fundo)** (`voice_fx` + controle na tela).
+  Controle de -80 a -20 dB (padrão -45) aplicado na hora, para cortar o fundo constante (ventilador, teclado). Ele **não** é supressão completa — o filtro "Supressão de ruído" do OBS na fonte CABLE Output continua recomendado para isso.
+- **Correção da voz "Engraçada"**: a varredura do efeito era larga demais e o som se parecia com o Eco; agora é varredura estreita a 9 Hz, distinta dos demais efeitos (assinatura DSP coberta por teste).
+- **Resgate com voz e IA — o fluxo completo homologado na live**: gatilho **Resgate de pontos** → **Mudar minha voz** (60 s, volta sozinha) → **Responder com IA** como a conta do bot, começando com `@{{viewer.login}}` para notificar quem resgatou. O passo a passo campo por campo está em **Exemplos práticos → "Voz da live por resgate com mensagem da IA"**.
+- **Criar resgate direto no BotLive** (`twitch.reward.create`).
+  No campo **Recompensa da Twitch** do editor, **Criar resgate** cria a recompensa pela API com a conta do canal (nome até 45 caracteres, custo a partir de 1, opção de pedir mensagem) e já deixa selecionada no fluxo. Resolve o atraso de propagação do painel da Twitch: recompensa criada no site pode levar minutos para aparecer na API; pela API aparece na hora. A validação de forma acontece antes de gastar requisição.
+- **Erro de criação aponta o conserto certo** (`reward_rejection` + teste).
+  401/403 → "reautorize a conta do canal em Perfis" (a Twitch devolve 401 quando falta a permissão `channel:manage:redemptions`); 400 → repete o motivo devolvido pela Twitch (nome repetido, custo fora do intervalo). Permissão nova não entra em token antigo por refresh — só na reautorização da conta do canal.
+- **Lista de recompensas com canal e hora** (`twitch.rewards` devolve `{channel,rewards}`).
+  O editor mostra "N recompensas do canal X · lista atualizada às HH:MM", o botão **Atualizar lista** tem estado ocupado, e quando a recompensa escolhida some da lista o valor guardado é mantido e marcado como "escolha de novo", com aviso explicando.
+- **Trocar o gatilho para Resgate limpa o texto antigo**: antes, um `!oi` de comando ficava escondido no campo e fazia o fluxo disparar em qualquer resgate; agora o texto só sobrevive quando os dois tipos são de texto.
+- **Controle por voz com prévia e atalho de criação** (`ModuleSettings` + `listen.rs`).
+  O painel ganhou medidor de nível ao vivo com a marca da sensibilidade, prévia do reconhecimento com a etiqueta "ativou o bot" ou "só registro", e o botão **Criar comando por voz**: frase + o que o bot faz (responder no chat, ler em voz alta, atualizar overlay ou mudar sua voz) cria o fluxo pronto, já com voz e duração.
+- **Intervalos em segundos nos campos de comando**: "Intervalo entre usos" e "Intervalo por pessoa" passaram de minutos decimais ("0,08") para segundos com dica "60 = 1 minuto" (editor de comandos, fluxos e simulação).
+- **Qualidade de tela sistematizada** (`styles.css` + regra nova em AGENTS.md).
+  `.form-grid` só cria coluna quando há largura para ela (mínimo 240 px), dentro do inspetor de fluxos é sempre uma coluna, e rodapé de formulário com texto de apoio em largura própria (flex-wrap). Modal de comando e inspetor deixam de cortar texto e de gerar rolagem horizontal em janela estreita. As regras ficaram registradas em AGENTS.md ("Regras de tela").
+- **Voicemod removido** (1.782 linhas de Rust e a tela, sem substituto externo).
+  Nada no BotLive conversa mais com a Control API; a tela saiu do menu e do código. A chave salva no cofre do sistema permanece guardada como dado seu, sem uso (pode ser apagada lá). O trabalho dela agora é da **Voz da live**, com um único driver leve (VB-Cable) e sem outro programa aberto.
+- **Documentação**: capítulo 03 ganhou a seção de Resgate com Criar resgate, reautorização e variáveis; **Exemplos práticos** ganhou o passo a passo completo do resgate com voz e IA (com a diferença entre `{{redeemer}}` e `{{viewer.login}}` e a variante garantida da menção); **Integrações** virou a migração Voicemod → Voz da live com o link do VB-Cable; ROADMAP marcou a integração como REMOVIDA. Spec de interface do Voicemod removida e o mock de UI ganhou as ops da Voz da live.
+
+## Como usar
+
+1. Instale o **VB-Cable** uma vez (link em Integrações). No OBS, a fonte de microfone da live passa a capturar **CABLE Output**.
+2. Menu **Voz da live**: escolha **Microfone de entrada** (seu microfone de verdade, nunca o CABLE) e **Saída para o OBS (VB-Cable)** (a entrada "CABLE Input") e clique em **Iniciar voz ao vivo**. A barra **Nível do microfone** confirma que a voz está entrando. **Corte de ruído de fundo** em -45 dB corta o fundo constante; se a sua voz cortar no meio, suba o valor.
+3. Teste os efeitos no cartão **Voz ao vivo (efeitos)** sem precisar de resgate.
+4. Para a live com resgate: Automações → **Novo fluxo** → gatilho **Resgate de pontos** com a recompensa → etapa **Mudar minha voz** (Voz fina, 60 s) → etapa **Responder com IA** começando com `@{{viewer.login}}`. Passo a passo campo por campo em **Exemplos práticos**.
+5. Recompensa nova: no editor, **Recompensa da Twitch → Criar resgate**. Se a conta do canal foi autorizada antes desta permissão existir, reautorize-a uma vez em **Perfis** (Autorizar conta do canal).
+6. Controle por voz: no painel do módulo, o medidor mostra o nível contra a sensibilidade e **Criar comando por voz** monta o fluxo em segundos (exige o servidor local RealtimeSTT rodando).
+7. Rotina de live: **Iniciar voz ao vivo** antes de ir ao ar — sem isso, a etapa de voz falha com "Inicie a Voz da live antes de usar este efeito" e o restante do fluxo não roda.
+
+## Validação
+
+- `cargo test --lib` — 191 aprovados, 0 falhas, 1 ignorado (exige servidor RealtimeSTT real; o mesmo já era ignorado nas versões anteriores). Também executado como a CI o faz: `cargo test --manifest-path src-tauri/Cargo.toml --locked --lib -j 1`.
+- `npm test` — 66/66 testes Vitest passaram (inclui os 6 do porta-lapso, o mapeamento de rejeição de recompensa e os rótulos da etapa de voz).
+- `npm run test:updates` — 8/8 testes dos scripts de atualização e do manifesto.
+- `npx playwright test` — 49/49 testes de interface passaram (a spec do Voicemod foi removida junto com a tela; o mock de UI cobre as ops da Voz da live).
+- `npm run check` e `npm run build` (tsc + Vite) — compilam sem erro; `npm run docs` — manual regenerado com 23 capítulos.
+- `npm run update:check` — versões e registros válidos após a preparação da 0.1.95.
+- **Homologado com áudio e conta reais, pelo streamer nesta máquina:** caminho completo da Voz da live no ar (microfone → VB-Cable → OBS), resgate de verdade disparando a voz fina e voltando ao normal em 60 segundos, mensagem da ArrobaSrv com piada da IA para quem resgatou no chat, criação de recompensa pela API após reautorizar a conta do canal e a lista de recompensas com canal e hora.
+- **Validado no navegador:** as correções de layout (modal de comando e inspetor de fluxos) em janela estreita (~1100 px) e larga, com screenshot.
+
+## Limitações
+
+- **O porta-lapso não é supressão de ruído completa**: ele corta o fundo constante abaixo do limiar; ruído variável continua passando. O recomendado é somar o filtro "Supressão de ruído" do OBS na fonte CABLE Output. O comportamento com áudio real de live **não foi homologado nesta entrega** — os testes do algoritmo são unitários (assinatura, hold, ataque e liberação).
+- **A voz "Engraçada" foi corrigida e coberta por teste de assinatura DSP, mas não foi ouvida e aprovada em live nesta entrega.**
+- **Comandos por voz (escuta contínua, medidor e atalho de criação) exigem o servidor local RealtimeSTT em execução**; sem servidor, o painel avisa e nada dispara. O reconhecimento com o servidor real não foi homologado nesta entrega.
+- **Uma etapa que falha interrompe o resto do fluxo** — por isso a voz vem antes da IA no exemplo: uma falha do provedor de IA não impede o efeito pago pelo resgate. Em contrapartida, com a Voz da live parada a mensagem da IA também não sai.
+- **O "Testar fluxo" executa a etapa de voz de verdade** (é efeito local e volta sozinho em 60 segundos); as etapas que publicam (chat, IA, OBS, punições) aparecem como Puladas. A **Simular evento** da lista não serve para fluxo de resgate: ela dispara eventos de chat.
+- **A Twitch pode recusar a criação de recompensa por regras próprias** (nome repetido, custo fora do intervalo, limite de recompensas do canal); nesses casos o texto devolvido pela API aparece na mensagem de erro.
+- A chave antiga do Voicemod continua no cofre do sistema sem uso; apague-a no cofre quando quiser.
+
+---
+
 # BotLive 0.1.94
 
 ## O que mudou

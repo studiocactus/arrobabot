@@ -89,56 +89,11 @@ Ative **Server Members Intent** e **Message Content Intent** na página do aplic
 
 A tela **Discord** cobre entrada e saída, contador de membros, espelho de chat, notificações, auto-moderação, auditoria, sorteios, XP, aniversários, vínculo de identidade e comandos slash. O passo a passo completo está no capítulo [Discord](09-DISCORD.md).
 
-## Voicemod — outra voz para o bot
+## Voicemod — removido
 
-O Voicemod troca a voz do microfone dentro do aplicativo dele. O BotLive conversa com a Control API local (WebSocket em `127.0.0.1`, caminho `/v1`) para ver o estado, listar vozes, aplicar uma voz no teste manual e devolver o que estava antes. Trocar o microfone **não é narração por voz (TTS)**: o bot continua escrevendo no chat, e quem fala com a voz alterada é você.
+O Voicemod saiu do BotLive. A partir da versão 0.1.95, a tela e a conexão com a Control API local foram retiradas do programa: nada no BotLive conversa mais com o Voicemod. A chave que você tenha salva no cofre do sistema permanece guardada como dado seu, sem uso — apague-a no cofre do sistema quando quiser.
 
-### Pré-requisitos
-
-1. Voicemod instalado **e aberto** nesta máquina. O BotLive só tenta os endereços publicados na referência oficial; ele não varre a rede.
-2. Uma chave da Control API. Peça pelo formulário oficial em <https://control-api.voicemod.net/getting-started/> e aguarde o contato de `devservices@voicemod.net`.
-3. A licença da sua conta define quais vozes aparecem liberadas; a lista mostra as bloqueadas, mas não deixa testá-las.
-
-### Conectar
-
-1. Abra **Voicemod** no menu e use **Salvar chave**. Cole **apenas a sequência da chave**, sem o rótulo do e-mail, aspas ou quebra de linha: o BotLive remove os caracteres invisíveis que costumam vir na colagem (BOM, espaço de largura zero etc.) e recusa chave com espaço interno, aspas ou crase, com a explicação no cartão. A chave fica no cofre do sistema e nunca aparece em log, preset, exportação ou código; quando já existe uma chave salva, o campo mostra **Chave guardada no cofre · N caracteres** (sem revelar o valor).
-2. Clique em **Conectar**. Os estados são **Desconectado**, **Procurando Voicemod**, **Autorizando**, **Conectado** e **Falha**.
-3. **Conectado** só aparece depois que o Voicemod responde autorizando a chave (código 200). Um socket aberto não prova autorização: recusa (401), resposta fora do formato, porta que não é do Voicemod ou chave ausente viram **Falha**, com a explicação no cartão e no **Histórico**. Em um 401, a tela informa quantos caracteres a chave guardada tem e os passos seguintes: comparar com o e-mail recebido, confirmar se o Voicemod aberto é da mesma conta e, se persistir, contatar `devservices@voicemod.net`.
-4. **Atualizar vozes** recarrega a lista, a voz atual, o modificador de voz, ouvir minha voz e a licença.
-5. **Desconectar** encerra a sessão. Com um teste em andamento, ele restaura primeiro e mostra o resultado.
-
-### Escolher e testar uma voz
-
-1. Procure a voz pelo nome. Cada linha mostra o nome amigável e o **id real** usado pela API — o BotLive não inventa vozes nem usa o nome como identidade.
-2. Escolha a duração (padrão 10 s, entre 1 e 60 s) e clique em **Testar voz**.
-3. Antes de qualquer mudança, o BotLive lê a voz atual e o estado do modificador. Se não conseguir ler, **o teste não começa** em vez de prometer uma restauração impossível.
-4. Durante o teste a tela mostra o tempo restante e um botão **Encerrar teste e restaurar**. O relógio roda no núcleo: trocar de tela não cancela o teste nem deixa o efeito preso. Só existe um teste por vez.
-5. Ao terminar, a voz e o modificador voltam ao estado lido no início. "Sem efeito" não é "restaurado": só se declara restaurado o que foi lido de volta da API.
-
-### Se algo sair do caminho
-
-| Situação | O que o BotLive faz |
-|---|---|
-| Voicemod fechou ou a conexão caiu durante o teste | A restauração fica **não confirmada**; a tela oferece **Restaurar agora** |
-| Reconexão automática (2, 4, 8, 16 s, no máximo 4 tentativas) | Só reestabelece a sessão; **nunca reenvia a voz do teste** |
-| Você troca a voz no Voicemod durante o teste | A tela avisa e o BotLive **não desfaz** a escolha em silêncio |
-| Fechar o Voicemod e reabrir | Clique em **Conectar** de novo; o estado anterior fica registrado no **Histórico** |
-| Erro em qualquer operação | Aparece na tela da integração e no **Histórico**, nunca como mensagem no chat |
-| Colou a chave junto com o rótulo do e-mail | O **Salvar chave** recusa com a explicação; recopie só a sequência. O comprimento da chave guardada aparece no cartão, não o valor |
-| **Falha** com 401 ao conectar | A tela diz quantos caracteres a chave guardada tem e manda comparar com o e-mail recebido, confirmar a conta do Voicemod aberto e contatar `devservices@voicemod.net` se persistir |
-
-### Usar no OBS
-
-O BotLive **não** altera o OBS nem o microfone padrão do Windows, e não liga **Ouvir minha voz**. Para ouvir o resultado na live: no OBS, abra **Configurações → Áudio**, adicione o microfone virtual do Voicemod (aparece como *Voicemod Audio Output* ou *Microphone (Voicemod Virtual Audio)*) como dispositivo de entrada e escolha-o na cena. Faça isso no OBS você mesmo, quando quiser.
-
-### Limites desta etapa
-
-- Etapa 1 entregue: conexão local, estado, lista de vozes e teste manual com restauração. Recompensa da Twitch, duração por recompensa, fila de resgates simultâneos, conclusão/cancelamento de resgate e uso como etapa de automação **ainda não existem** (veja [Roadmap](ROADMAP.md)).
-- **Sessão única por máquina**: o Voicemod é um aparelho local compartilhado, então dois perfis não abrem duas conexões ao mesmo tempo; a chave usada é a do perfil que clicou em **Conectar**.
-- A chave pertence a uma licença e a uma versão do Voicemod. Versão ou protocolo incompatíveis aparecem como **Falha** com a explicação de protocolo.
-- **A conexão real não foi homologada nesta entrega**: os testes automatizados rodam contra um servidor WebSocket controlado, o que prova o protocolo e o ciclo de teste/restauração, mas **não** prova conexão com um Voicemod de verdade.
-
-Referências oficiais: [getting started](https://control-api.voicemod.net/getting-started/), [referência da API](https://control-api.voicemod.net/api-reference/), [página de desenvolvedores](https://www.voicemod.net/en/developers/). A licença da Control API é Apache 2.0.
+Para trocar a sua voz na live, use a tela **Voz da live**: o BotLive captura o seu microfone, aplica o efeito escolhido (fina, grossa, robô, engraçada ou eco) e envia a voz para o [VB-Cable](https://vb-audio.com/Cable/) (driver leve, instalado uma vez), que o OBS usa como microfone. Sem outro programa aberto, e também muda a voz por resgate na Twitch.
 
 ## Estados e reconexão
 
@@ -157,7 +112,7 @@ Em **Restrições de conteúdo**, coloque uma expressão por linha. A busca de p
 
 Apagar um perfil remove comandos, notas, economia e credenciais desse perfil. Não há lixeira. Faça backup antes. Os demais perfis têm dados separados.
 
-Nenhuma plataforma foi homologada com contas reais do usuário nesta entrega, e o Voicemod também não: os procedimentos descrevem o fluxo implementado; mensagens de recusa de autorização, quota, escopo e versão devem ser verificadas no Histórico.
+Nenhuma plataforma foi homologada com contas reais do usuário nesta entrega: os procedimentos descrevem o fluxo implementado; mensagens de recusa de autorização, quota, escopo e versão devem ser verificadas no Histórico.
 
 ## Permissão para sons na entrada silenciosa
 
