@@ -26,6 +26,7 @@ mod cmd_manager;
 mod twitch_ops;
 mod voice;
 mod listen;
+mod natural;
 mod speech;
 mod access;
 mod stats;

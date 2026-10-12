@@ -1,5 +1,41 @@
 # Histórico de atualizações
 
+# BotLive 0.3.0
+
+## O que mudou
+
+- **Comandos em linguagem natural no chat (Onda 1).** Streamer e moderadores escrevem por extenso e o bot executa o mesmo que `!setgame` e `!settitle`: «Arroba, altere a categoria do jogo para Minecraft ou AION2» troca a categoria e «Arroba, mude o título para o novo texto» troca o título, com a conta autorizada, confirmação no chat marcando quem pediu e registro no Histórico.
+- **Plano B de categoria.** Quando a frase traz alternativas separadas por «ou», o bot tenta os nomes na ordem e usa o primeiro que a Twitch conhecer; se nenhum existir, responde listando o que tentou. A mesma regra de alternativas passa a valer também no `!setgame`, na ação de categoria do fluxo com conteúdo vazio e no Controle por voz — o caminho de execução é um só.
+- **Determinístico e offline, falha fechada.** O entendimento da frase usa vocabulário próprio (verbos de troca, palavras de intenção, acentos e caixa), sem rede e sem IA: o que não cabe no vocabulário não vira adivinhação.
+- **Sempre com a palavra de ativação.** O comando natural só existe quando a frase tem uma das palavras de ativação do Controle por voz (a escuta não precisa estar ligada); sem ela a mensagem é chat normal e continua passando por respostas, fluxos e módulos como antes.
+- **Silêncio na dúvida.** Frase sem verbo de troca, pergunta de valor («para quê?») ou pedido dos dois assuntos na mesma frase não executam e não geram resposta; com a intenção clara e sem o nome, o bot responde o modo de usar.
+- Painel **Controle por voz** ganhou a frase explicativa dos comandos por extenso no chat, ao lado das palavras de ativação. Capítulos 03 e 05 do manual atualizados.
+
+## Como usar
+
+1. Em **Comunidade → Controle por voz**, preencha **Palavras de ativação** (por exemplo `arroba, botlive`). A escuta contínua não precisa estar ligada.
+2. No chat da live, sendo streamer ou moderador, escreva por extenso: «arroba, altere a categoria do jogo para Minecraft ou AION2» ou «arroba, mude o título para Ranked com a comunidade».
+3. O bot confirma no chat com o nome oficial da categoria ou com o título novo. Alternativas de categoria valem até cinco nomes; o título é cortado em 140 caracteres.
+
+## Validação
+
+- `cargo test`: 210 testes, entre eles 9 novos do leitor de frases (o exemplo completo com plano B, acentos e caixa, silêncio sem ativação, dicas de uso, perguntas, bordas e pontuação, e as alternativas do «ou»).
+- `tsc -b` e a checagem estrita com `--noUnusedLocals`/`--noUnusedParameters` limpas; `vitest` 79/79; Playwright 53/53, incluindo o painel de voz com a frase explicativa nova.
+- `npm run docs` (manual com 23 capítulos), `npm run test:updates` e `npm run update:check` antes e depois do `update:prepare`.
+- Captura em 1100px do painel Controle por voz com a frase nova no lugar, sem texto espremido.
+- O caminho de execução é o mesmo do `!setgame` já entregue (busca de categoria, `PATCH channels` e confirmação); a resposta final depende da API da Twitch.
+
+## Limitações
+
+- Só categoria e título nesta onda: silenciar, banir, avisar, VIP e modos do chat continuam pelos comandos nativos (`!timeout` e companhia) ou por fluxos.
+- O gatilho é a palavra de ativação cadastrada, não a menção do bot: escrever apenas «@BotLive, mude o jogo» não executa.
+- Pedido de categoria e título na mesma frase não executa; o bot espera um assunto por comando.
+- O vocabulário é de português com acentos e caixa, mais as palavras inglesas básicas (game, title); frase fora do vocabulário passa em silêncio como chat normal.
+- Nomes de categoria que contenham a palavra «ou» (raros) são lidos como alternativas e tentados na ordem.
+- Quem não é streamer nem moderador não dispara; sem palavra de ativação cadastrada não existe comando natural.
+
+---
+
 # BotLive 0.2.1
 
 ## O que mudou

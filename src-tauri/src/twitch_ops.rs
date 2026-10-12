@@ -215,12 +215,6 @@ async fn lookup_game(rt:&Runtime,p:&Profile,token:&str,name:&str)->Result<Option
  let v:Value=res.json().await.map_err(|_|"Resposta de jogo inválida".to_string())?;
  Ok(Some((v["data"][0]["id"].as_str().unwrap_or("").to_owned(),v["data"][0]["name"].as_str().unwrap_or("").to_owned())).filter(|(id,_)|!id.is_empty()))
 }
-async fn game_id(rt:&Runtime,p:&Profile,token:&str,name:&str)->Result<(String,String),String>{
- if let Some(found)=lookup_game(rt,p,token,name).await?{return Ok(found)}
- let titled=title_case(name);
- if titled!=name{if let Some(found)=lookup_game(rt,p,token,&titled).await?{return Ok(found)}}
- Err(format!("A Twitch não encontrou o jogo {name}. Confira o nome ou configure o jogo fixo no conteúdo da ação."))
-}
 /// Palavras de ligação descartadas das bordas ao extrair o assunto da fala.
 const FILLERS:&[&str]=&["para","pra","pro","o","a","os","as","um","uma","de","do","da","dos","das","no","na","nos","nas","por","favor","porfavor","jogo","categoria","titulo","título","jogar","troca","trocar","muda","mudar","coloca","colocar","bota","botar","ponha","poe","põe","agora","ai","aí","meu","minha"];
 /// Remove a primeira ocorrência de `agulha` em `palheiro` sem diferenciar
@@ -324,7 +318,20 @@ pub async fn run(rt:&Arc<Runtime>,p:&Profile,e:&Event,a:&Action,text:&str,trigge
     name=derive_subject(&strip_activation(&e.message,&cfg.activation),trigger);
    }
    if name.is_empty(){return Err("Não entendi o nome do jogo. Fale como 'troca o jogo para Minecraft' ou configure o jogo fixo no conteúdo da ação.".into())}
-   let (id,official)=game_id(rt,p,&token,&name).await?;
+   // "Minecraft ou AION2" são alternativas: tenta na ordem e usa a primeira
+   // que a Twitch conhecer. Uma grafia só continua com o mesmo erro de antes.
+   let candidates=crate::natural::split_ou(&name);
+   let mut found:Option<(String,String)>=None;
+   for candidate in &candidates{
+    if let Some(hit)=lookup_game(rt,p,&token,candidate).await?{found=Some(hit);break}
+    let titled=title_case(candidate);
+    if &titled!=candidate{if let Some(hit)=lookup_game(rt,p,&token,&titled).await?{found=Some(hit);break}}
+   }
+   let (id,official)=match found{
+    Some(hit)=>hit,
+    None if candidates.len()==1=>return Err(format!("A Twitch não encontrou o jogo {}. Confira o nome ou configure o jogo fixo no conteúdo da ação.",candidates[0])),
+    None=>return Err(format!("Não achei nenhuma categoria destas: {}. Confira os nomes.",candidates.join(", "))),
+   };
    modify_channel(rt,p,&token,json!({"game_id":id}),"Categoria").await?;
    let display=if official.is_empty(){name.clone()}else{official};
    let who=if e.kind=="voice"{p.channel.clone()}else{e.user.clone()};

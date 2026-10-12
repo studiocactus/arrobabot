@@ -179,6 +179,33 @@ pub async fn process(rt:Arc<Runtime>,e:Event){
    }
   }
  }
+ // Comandos naturais no chat: streamer e moderadores escrevem por extenso e
+ // o bot faz o mesmo que !setgame/!settitle. Exige a palavra de ativação do
+ // Controle por voz; sem ela a mensagem segue o chat normal. Só entra no que
+ // o vocabulário cobre — o resto não vira resposta.
+ if e.kind=="chat"&&!e.simulated&&!p.bot_id.is_empty()&&e.user_id!=p.bot_id&&crate::model::permitted("moderator",&e.role){
+  let cfg=crate::listen::Config::read(&rt.db,&p.id);
+  match crate::natural::parse(&e.message,&cfg.activation){
+   crate::natural::Talk::Ignore=>{},
+   crate::natural::Talk::Incomplete(hint)=>{let _=rt.send(&p,&e,hint).await;return},
+   crate::natural::Talk::Title(title)=>{
+    let a=crate::model::Action{kind:"twitch".into(),text:String::new(),target:String::new(),value:0,condition:String::new(),punish:String::new(),tw_op:"title".into(),..Default::default()};
+    match crate::twitch_ops::run(&rt,&p,&e,&a,&title,"",None).await{
+     Ok(msg)=>{let _=rt.send(&p,&e,&msg).await;},
+     Err(err)=>{let _=rt.send(&p,&e,&err).await;}
+    }
+    return;
+   }
+   crate::natural::Talk::Category(names)=>{
+    let a=crate::model::Action{kind:"twitch".into(),text:String::new(),target:String::new(),value:0,condition:String::new(),punish:String::new(),tw_op:"game".into(),..Default::default()};
+    match crate::twitch_ops::run(&rt,&p,&e,&a,&names.join(" ou "),"",None).await{
+     Ok(msg)=>{let _=rt.send(&p,&e,&msg).await;},
+     Err(err)=>{let _=rt.send(&p,&e,&err).await;}
+    }
+    return;
+   }
+  }
+ }
  if e.kind=="voice"&&p.modules["voice"]!=true{rt.log(&p.id,"voice","Controle por voz desativado","info");return}
  rt.log(&p.id,&e.kind,&format!("{}: {}",e.user,e.message),"info");
  rt.emit("platform-event",serde_json::to_value(&e).unwrap());

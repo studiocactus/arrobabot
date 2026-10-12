@@ -150,7 +150,7 @@ O módulo tem dois caminhos: a escuta contínua e a captura por botão. Os dois 
 
 Com a escuta ligada, o BotLive mantém o microfone aberto enquanto a janela está aberta: separa fala de silêncio no próprio computador, manda lotes de 100 milissegundos em PCM16 de 16 kHz para o servidor local e publica cada frase reconhecida. A fala entra no **Histórico**, alimenta a IA e as variáveis `{{lastSpeech}}` e `{{liveSpeech}}`, aparece como legenda no overlay e dispara as automações de **Comando de voz** cujo trecho casar com o texto.
 
-Sem **Palavras de ativação**, toda fala reconhecida pode disparar os fluxos; com o campo preenchido, só as falas que contêm alguma palavra chegam aos fluxos. Mesmo quando nenhuma automação dispara, a fala continua indo para o Histórico, para a IA e para a legenda.
+Sem **Palavras de ativação**, toda fala reconhecida pode disparar os fluxos; com o campo preenchido, só as falas que contêm alguma palavra chegam aos fluxos. Mesmo quando nenhuma automação dispara, a fala continua indo para o Histórico, para a IA e para a legenda. As mesmas palavras liberam no chat os comandos por extenso de categoria e título para streamer e moderadores.
 
 **Ajuste fino do microfone**, dentro do painel:
 
