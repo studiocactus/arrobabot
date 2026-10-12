@@ -18,7 +18,7 @@ export const flows=[
   actions:[act('condition','',{condVar:'reward.cost',condOp:'greater_or_equal',condValue:'100',condFalse:'stop'}),act('chat','Oi {{viewer.name}}'),act('overlay','Aparece na OBS')]}
 ];
 
-export const NAV=['Visão geral','Perfis de bot','Discord','Rótulos OBS','Comandos','Timers','Respostas e sons','Sons','OBS Studio','Voz da live','Contadores','Automações','Inteligência artificial','Memórias','Comunidade','Biblioteca de presets','Histórico','Estatísticas'];
+export const NAV=['Visão geral','Perfis de bot','Discord','Rótulos OBS','Comandos','Timers','Respostas e sons','Sons','OBS Studio','Voz da live','LivePix','Contadores','Automações','Inteligência artificial','Memórias','Comunidade','Biblioteca de presets','Histórico','Estatísticas'];
 
 const LOGS=[
  {id:'l1',profileId:'p1',kind:'run',message:'Execução concluída com sucesso no fluxo de boas-vindas',status:'success',at:'2026-10-07T10:00:00Z'},

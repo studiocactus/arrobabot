@@ -1,11 +1,12 @@
 {
   "name": "botlive",
-  "version": "0.1.97",
+  "version": "0.1.98",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
-    "build": "tsc -b && vite build",
+    "build": "npm run build:overlay && tsc -b && vite build",
+    "build:overlay": "node scripts/build-overlay.cjs",
     "preview": "vite preview --host 127.0.0.1",
     "tauri": "tauri",
     "test": "vitest run",

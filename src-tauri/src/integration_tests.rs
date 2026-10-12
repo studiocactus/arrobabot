@@ -269,6 +269,48 @@ async fn websocket_rejects_unauthorized_and_accepts_events(){
 }
 
 #[tokio::test]
+async fn porta_local_atende_o_overlay_em_http_e_chave_do_overlay_e_somente_leitura(){
+ use futures_util::{SinkExt,StreamExt};use tokio_tungstenite::{connect_async,tungstenite::Message};
+ use tokio::io::{AsyncReadExt,AsyncWriteExt};
+ let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();
+ let probe=std::net::TcpListener::bind("127.0.0.1:0").unwrap();let port=probe.local_addr().unwrap().port();drop(probe);rt.db.set("apiPort",&json!(port)).unwrap();
+ let p=profile("P");rt.db.save_profile(&p).unwrap();
+ let info=livepix::overlay_info(&rt,&p.id).unwrap();let token=info["token"].as_str().unwrap().to_owned();
+ livepix::operation(&rt,&p.id,"livepix.design_save",&json!({"design":{"layout":"ring","width":55.0,"fillStart":"#ff0000"}})).await.unwrap();
+ let server=tokio::spawn(local_api::serve(rt.clone()));
+ for _ in 0..50{if *rt.api_port.lock().unwrap()!=0{break}tokio::time::sleep(std::time::Duration::from_millis(10)).await;}
+
+ // GET /overlay devolve o HTML gerado do código compartilhado
+ let mut s=tokio::net::TcpStream::connect(("127.0.0.1",port)).await.unwrap();
+ s.write_all(b"GET /overlay HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n").await.unwrap();
+ let mut page=String::new();s.read_to_string(&mut page).await.unwrap();
+ assert!(page.starts_with("HTTP/1.1 200"),"{page}");
+ assert!(page.contains("bl-ov-root"),"o HTML servido é o overlay gerado");
+ // caminho qualquer continua sem servir conteúdo
+ let mut s=tokio::net::TcpStream::connect(("127.0.0.1",port)).await.unwrap();
+ s.write_all(b"GET / HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n").await.unwrap();
+ let mut other=String::new();s.read_to_string(&mut other).await.unwrap();
+ assert!(other.starts_with("HTTP/1.1 404"),"{other}");
+
+ // WebSocket com a chave do overlay recebe design + meta e não submete eventos
+ let (mut ws,_)=connect_async(format!("ws://127.0.0.1:{port}")).await.unwrap();
+ ws.send(Message::Text(json!({"token":token}).to_string().into())).await.unwrap();
+ let first=ws.next().await.unwrap().unwrap().into_text().unwrap();
+ assert!(first.contains("design"),"primeira mensagem deve ser o design: {first}");
+ assert!(first.contains("\"layout\": \"ring\"")||first.contains("\"layout\":\"ring\""),"{first}");
+ let second=ws.next().await.unwrap().unwrap().into_text().unwrap();
+ assert!(second.contains("goal"),"depois do design vem o estado da meta: {second}");
+ assert!(second.contains("hidden"),"integração ainda desligada: a meta chega oculta: {second}");
+ ws.send(Message::Text(json!({"type":"event","event":event(&p,"invasao",true)}).to_string().into())).await.unwrap();
+ let answer=tokio::time::timeout(std::time::Duration::from_millis(400),ws.next()).await;
+ if let Ok(Some(Ok(msg)))=answer{
+  let text=msg.to_text().unwrap_or_default();
+  assert!(!text.contains("ack"),"chave do overlay não pode submeter eventos: {text}");
+ }
+ server.abort();
+}
+
+#[tokio::test]
 async fn editor_permissions_are_enforced_by_backend(){
  let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();
  let mut a=profile("A");a.editors=vec!["mod".into()];let b=profile("B");

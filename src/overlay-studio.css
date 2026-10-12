@@ -1,0 +1,52 @@
+/* Estúdio do overlay de meta (LivePix): prévia 1920×1080 + controles de design. */
+
+.lp-studio{display:grid;grid-template-columns:minmax(0,1fr) minmax(340px,400px);gap:var(--s5);align-items:start}
+@media (max-width:960px){.lp-studio{grid-template-columns:minmax(0,1fr)}}
+.lp-preview{display:flex;flex-direction:column;gap:10px;min-width:0}
+.lp-stagebar{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center}
+.lp-segrow{display:flex;gap:6px;flex-wrap:wrap;align-items:center;min-width:0}
+button.lp-seg{height:var(--h-sm);padding:0 11px;font-size:11px;white-space:nowrap}
+
+.lp-controls{display:flex;flex-direction:column;gap:14px;min-width:0}
+.lp-group{border:1px solid var(--border);border-radius:var(--r-md);padding:13px 14px;background:var(--surface2);min-width:0}
+.lp-group h4{margin:0 0 11px;font-size:9px;letter-spacing:1.4px;text-transform:uppercase;color:var(--muted);font-weight:700}
+.lp-ctrl{display:flex;flex-direction:column;gap:7px;margin-bottom:12px;min-width:0}
+.lp-ctrl:last-child{margin-bottom:0}
+.lp-ctrl-label{font-size:9px;letter-spacing:1.1px;text-transform:uppercase;color:var(--muted);font-weight:700}
+.lp-note{font-size:10px;color:var(--muted);line-height:1.5}
+
+.lp-tplrow{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,148px),1fr));gap:8px}
+button.lp-tpl{flex-direction:column;align-items:stretch;gap:3px;height:auto;padding:9px 10px;text-align:left;white-space:normal;font-size:11px;overflow:hidden}
+button.lp-tpl.selected{border-color:var(--accent)}
+.lp-tpl-swatch{display:block;width:100%;height:8px;border-radius:4px;flex:0 0 auto}
+.lp-tpl strong{font-size:11px;font-weight:700;line-height:1.2}
+.lp-tpl small{font-size:9px;color:var(--muted);font-weight:500;line-height:1.35;white-space:normal}
+
+.lp-range{display:flex;flex-direction:column;gap:3px;margin-bottom:11px;min-width:0}
+.lp-range:last-child{margin-bottom:0}
+.lp-range-label{display:flex;justify-content:space-between;gap:10px;align-items:baseline;font-size:9px;letter-spacing:1.1px;text-transform:uppercase;color:var(--muted);font-weight:700}
+.lp-range output{color:var(--text);font-size:11px;font-variant-numeric:tabular-nums;flex:0 0 auto}
+.lp-colors{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,150px),1fr));gap:9px 12px}
+.lp-color{display:flex;flex-direction:column;gap:5px;min-width:0}
+.lp-color span{font-size:9px;letter-spacing:1.1px;text-transform:uppercase;color:var(--muted);font-weight:700}
+.lp-color input[type=color]{height:34px;padding:3px;cursor:pointer}
+.lp-toggles{display:flex;flex-direction:column;gap:9px}
+.lp-toggle{display:flex;align-items:center;gap:9px;font-size:12px;cursor:pointer;min-width:0}
+.lp-toggle input{width:auto;height:auto;margin:0;accent-color:var(--accent);flex:0 0 auto}
+.lp-toggle span{min-width:0}
+
+.lp-save{font-size:9px;letter-spacing:1.1px;text-transform:uppercase;color:var(--muted);font-weight:700}
+.lp-save--saved{color:#7dd58a}
+.lp-save--error{color:#ef999d}
+
+.lp-url{display:flex;gap:10px;align-items:stretch;flex-wrap:wrap;margin:10px 0 4px}
+.lp-url code{flex:1 1 260px;min-width:0;word-break:break-all;white-space:normal;background:var(--bg);border:1px solid var(--border);border-radius:var(--r-md);padding:11px 12px;font-size:12px;line-height:1.5}
+.lp-steps{margin:8px 0 4px;padding-left:22px;font-size:12px;line-height:1.9;color:var(--muted)}
+.lp-steps code{font-size:11px}
+
+/* Quadro1920×1080 em miniatura: o overlay é desenhado em tamanho real e escalado. */
+.lp-frame{position:relative;width:100%;aspect-ratio:16/9;border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden;background:#0d1117}
+.lp-frame[data-bg=checker]{background-color:#12171f;background-image:linear-gradient(45deg,#1b222c 25%,transparent 25%),linear-gradient(-45deg,#1b222c 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#1b222c 75%),linear-gradient(-45deg,transparent 75%,#1b222c 75%);background-size:22px 22px;background-position:0 0,0 11px,11px -11px,-11px 0}
+.lp-frame[data-bg=dark]{background:radial-gradient(130% 130% at 25% 0%,#22344a 0%,#0a0e14 62%)}
+.lp-frame[data-bg=light]{background:linear-gradient(160deg,#93a9bd 0%,#dde7ef 48%,#b3c5d4 100%)}
+.lp-canvas{position:absolute;top:0;left:0;width:1920px;height:1080px;transform-origin:top left}

@@ -89,15 +89,19 @@ Ative **Server Members Intent** e **Message Content Intent** na página do aplic
 
 A tela **Discord** cobre entrada e saída, contador de membros, espelho de chat, notificações, auto-moderação, auditoria, sorteios, XP, aniversários, vínculo de identidade e comandos slash. O passo a passo completo está no capítulo [Discord](09-DISCORD.md).
 
-## LivePix — barra de meta de doações
+## LivePix — meta de doações no overlay
 
-A partir da versão 0.1.97, o BotLive lê as doações da [LivePix](https://livepix.gg) e mostra uma barra de progresso no OBS. Em **Integrações → LivePix**, informe o **Client ID** e o **Client Secret** da aplicação criada no painel da LivePix e use **Salvar no cofre**: as credenciais ficam no cofre do sistema, nunca em código, logs ou presets.
+A partir da versão 0.1.97, o BotLive lê as doações da [LivePix](https://livepix.gg) e mostra uma meta no OBS. Em **Integrações → LivePix**, informe o **Client ID** e o **Client Secret** da aplicação criada no painel da LivePix e use **Salvar no cofre**: as credenciais ficam no cofre do sistema, nunca em código, logs ou presets.
 
-Depois, crie uma meta com título e valor-alvo em centavos (500000 = 5000,00 BRL) e use **Iniciar meta**. O BotLive consulta a API da LivePix a cada 15 segundos — sem webhook e sem endereço público — e envia o estado da meta por WebSocket local (porta 9876).
+Depois, crie uma meta com título e valor-alvo em reais e use **Ativar**. O BotLive consulta a API da LivePix a cada 15 segundos — sem webhook e sem endereço público — e envia o estado da meta por WebSocket local (porta 9876). Metas acrescentadas depois, pelo botão **Nova meta**, entram sem trocar a meta ativa e sem zerar a contagem.
 
-No OBS, adicione uma **Fonte Navegador** apontando para o arquivo `examples/goal-overlay.html` incluído no pacote, com o fragmento `#token=…&profile=…&port=9876` mostrado na própria tela de integração. A barra aceita família de fonte por meta: fontes do Windows (como `Segoe UI`) funcionam sem internet; fontes do Google Fonts exigem conexão no computador que roda o OBS, e sem a fonte instalada a barra volta à fonte padrão do navegador.
+**Estúdio do overlay.** A tela de LivePix virou um estúdio visual: seis modelos prontos (Clean, Aurora, Neon, Sunset, Retro e Royal) e quatro formatos (barra, linha, painel e anel) com controle de cores de gradiente, trilho, texto e painel, cantos arredondados ou retos, espessura da borda, opacidade do fundo, família/peso/tamanho da fonte, brilho, sombra, gradiente animado, pulso ao receber e celebração ao completar 100%. A prévia mostra o quadro de 1920×1080 do OBS em miniatura com fundo transparente, escuro ou claro, e os botões **Simular doação** e **Celebração** mostram os efeitos sem esperar um pagamento real. As alterações são salvas sozinhas e chegam ao OBS na hora, sem recarregar a fonte.
 
-O módulo soma apenas pagamentos da LivePix em BRL; bits e subs da Twitch não entram nesta barra. O atraso de até 15 segundos é esperado pelo intervalo de consulta.
+**No OBS.** A seção **No OBS** mostra o endereço estável do overlay no formato `http://127.0.0.1:9876/overlay#token=…&profile=…`, gerado pelo próprio aplicativo: copie, adicione uma **Fonte Navegador** com Largura 1920 e Altura 1080 e posicione onde quiser. O endereço não depende de arquivo local, a chave é por perfil e continua a mesma depois de reabrir o BotLive; o trecho depois do `#` não é enviado a servidores externos. Para quem prefere arquivo local, `examples/goal-overlay.html` no repositório aceita o mesmo overlay com o fragmento `#token=…&profile=…&port=9876`.
+
+Fontes do Google Fonts (como Orbitron, Bebas Neue e Press Start 2P) exigem internet no computador que roda o OBS; sem internet a barra cai para a fonte do sistema. Fontes do sistema (Segoe UI, Arial) funcionam offline. O overlay desenha enquanto o BotLive está aberto nesta máquina, e uma doação leva até 15 segundos para aparecer pelo intervalo de consulta.
+
+O módulo soma apenas pagamentos da LivePix em BRL; bits e subs da Twitch não entram nesta meta.
 
 ## Voicemod — removido
 

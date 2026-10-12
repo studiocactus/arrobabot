@@ -3,11 +3,15 @@ use serde_json::{json,Value};
 use std::{sync::Arc,time::Duration};
 pub async fn run(rt:Arc<Runtime>){
  let mut tick=tokio::time::interval(Duration::from_secs(30));
+ // A LivePix consulta a API a cada 15 segundos (ritmo do manual), em paralelo
+ // ao tique de 30 segundos que cuida de backup, rótulos e trivia.
+ let mut livepix=tokio::time::interval(Duration::from_secs(15));
+ livepix.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
  loop{
- tick.tick().await;
+ tokio::select!{
+ _=tick.tick()=>{
  crate::backup::tick(&rt);
  crate::labels::tick(&rt).await;
- crate::livepix::tick(&rt).await;
  for p in rt.db.profiles().unwrap_or_default(){
  if crate::discord::online(&rt,&p.id){crate::discord_engage::tick(&rt,&p).await}
  if p.modules["games"]!=true||rt.statuses.lock().unwrap().get(&p.id).map(String::as_str)!=Some("online"){continue}
@@ -39,4 +43,7 @@ pub async fn run(rt:Arc<Runtime>){
  }
  }
  }
+ _=livepix.tick()=>{crate::livepix::tick(&rt).await}
+ }
+}
 }
