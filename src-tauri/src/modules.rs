@@ -26,10 +26,10 @@ pub struct Community {
 #[derive(Default,Clone,Serialize,Deserialize)] pub struct Item {pub id:String,pub name:String,pub cost:i64,pub stock:i64}
 #[derive(Default,Clone,Serialize,Deserialize)] pub struct Raffle {pub open:bool,pub keyword:String,pub price:i64,pub entries:BTreeMap<String,i64>,#[serde(default)] pub weights:BTreeMap<String,i64>,pub winner:String}
 #[derive(Default,Clone,Serialize,Deserialize)] pub struct Prediction {pub open:bool,pub title:String,pub options:Vec<String>,pub bets:BTreeMap<String,(usize,i64)>,pub result:Option<usize>}
-pub fn load(rt:&Runtime,p:&str)->Community {serde_json::from_value(rt.db.module(p,"community")).unwrap_or_default()}
+pub fn load(rt:&Runtime,p:&str)->Community {rt.db.module_cfg(p,"community")}
 /// Nomes de quem já falou no chat deste perfil, para sorteios.
 pub fn chatter_names(db:&crate::db::Db,p:&str)->Vec<String>{
- let state:Community=serde_json::from_value(db.module(p,"community")).unwrap_or_default();
+ let state:Community=db.module_cfg(p,"community");
  state.names.values().filter(|n|!n.trim().is_empty()).cloned().collect()
 }
 /// Sorteia um nome entre quem já falou no chat deste perfil. Sem ninguém no cadastro, não há valor.

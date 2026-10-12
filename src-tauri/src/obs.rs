@@ -14,19 +14,6 @@ pub const MODULE: &str = "obs";
 const DEFAULT_PORT: u16 = 4455;
 /// Operações seguras expostas a automações. Sem stop/exit/delete/settings.
 pub const OPS: &[&str] = &["mute", "unmute", "toggle_mute", "volume", "show", "hide", "toggle_item", "scene"];
-pub fn op_name(op: &str) -> &'static str {
- match op {
-  "mute" => "Mutar entrada",
-  "unmute" => "Desmutar entrada",
-  "toggle_mute" => "Alternar mudo",
-  "volume" => "Volume da entrada",
-  "show" => "Mostrar fonte",
-  "hide" => "Esconder fonte",
-  "toggle_item" => "Alternar fonte",
-  "scene" => "Trocar de cena",
-  _ => "Desconhecida",
- }
-}
 /// Operações que aceitam duração temporária com restauração do estado anterior.
 pub fn temp_ok(op: &str) -> bool {
  matches!(op, "mute" | "unmute" | "volume" | "show" | "hide")
@@ -45,7 +32,7 @@ impl Config {
  }
 }
 pub fn config(rt: &Runtime, p: &str) -> Config {
- let mut c: Config = serde_json::from_value(rt.db.module(p, MODULE)).unwrap_or_default();
+ let mut c: Config = rt.db.module_cfg(p, MODULE);
  if c.port == 0 {
   c.port = DEFAULT_PORT;
  }
@@ -449,10 +436,7 @@ mod tests {
  }
  #[test]
  fn only_safe_ops_exist_and_temp_is_limited() {
-  for op in OPS {
-   assert!(op_name(op) != "Desconhecida");
-  }
-  assert_eq!(OPS.len(), 8);
+  assert_eq!(OPS, &["mute", "unmute", "toggle_mute", "volume", "show", "hide", "toggle_item", "scene"]);
   for op in ["mute", "unmute", "volume", "show", "hide"] {
    assert!(temp_ok(op), "{op} aceita duração");
   }

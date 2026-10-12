@@ -150,8 +150,7 @@ pub async fn post_rich(rt:&Runtime,p:&Profile,channel:&str,r:Rich)->Result<Value
 pub fn art(url:&str,w:u32,h:u32)->String{url.replace("{width}",&w.to_string()).replace("{height}",&h.to_string())}
 /// GET na Helix que nunca falha para fora: erro vira Null.
 async fn twitch_get(rt:&Runtime,p:&Profile,token:&str,path:&str,query:&[(&str,&str)])->Value{
- let mut req=rt.http.get(format!("https://api.twitch.tv/helix/{path}")).header("Client-Id",&p.client_id).bearer_auth(token);
- for (k,v) in query{req=req.query(&[(*k,*v)]);}
+ let req=crate::helix::get(&rt.http,p,token,path,query);
  match req.send().await{Ok(r)=>r.json::<Value>().await.unwrap_or(Value::Null),Err(_)=>Value::Null}
 }
 /// Perfil público da Twitch (login, nome e avatar) pelo id ou login.

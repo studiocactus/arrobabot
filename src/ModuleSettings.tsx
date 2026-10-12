@@ -1,5 +1,5 @@
 import {useEffect,useState,useRef} from 'react';
-import {Mic,Square,Save,Volume2,Shield,Plus,Wand2} from 'lucide-react';
+import {Mic,Square,Save,Volume2,Plus,Wand2} from 'lucide-react';
 import {api,errorText,desktop} from './api';
 import {Field,Toggle} from './components';
 import {activeProfile,listenError,onListenChange,startListen,stopListen,listenFrame} from './listen';

@@ -30,13 +30,13 @@ export const resolveLength=(action:Action,ai:AIConfig)=>action.aiLength||ai.answ
 export const resolveKnowledge=(action:Action,ai:AIConfig)=>action.aiKnowledge==='on'||(action.aiKnowledge!=='off'&&ai.knowledge);
 export const resolveNoRepeat=(action:Action,ai:AIConfig)=>action.aiNoRepeat===null||action.aiNoRepeat===undefined?ai.noRepeat:action.aiNoRepeat;
 
-export const isExcluded=(ai:AIConfig,path:string)=>(ai.knowledgeOff||[]).includes(path);
+const isExcluded=(ai:AIConfig,path:string)=>(ai.knowledgeOff||[]).includes(path);
 export const toggleKnowledgeFile=(ai:AIConfig,path:string):AIConfig=>{
   const off=ai.knowledgeOff||[];
   return {...ai,knowledgeOff:off.includes(path)?off.filter(p=>p!==path):off.concat(path)};
 };
 
-export type KnowledgeGroup={category:string;files:{entry:KnowledgeEntry;included:boolean}[]};
+type KnowledgeGroup={category:string;files:{entry:KnowledgeEntry;included:boolean}[]};
 /** Lista da base agrupada por pasta, na ordem em que a IA lê: primeiro o que estiver ligado. */
 export function knowledgeGroups(items:KnowledgeEntry[],ai:AIConfig):KnowledgeGroup[] {
   const groups=new Map<string,{entry:KnowledgeEntry;included:boolean}[]>();

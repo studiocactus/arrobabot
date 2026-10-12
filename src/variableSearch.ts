@@ -3,7 +3,7 @@ import {variableCatalog,type VariableChoice} from './variableCatalog';
 /** A busca entende maiúsculas e acentos: "custo" acha "Custo", "inscricao" acha "inscrição". */
 export function normalizeQuery(s:string){return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim()}
 
-export type PickerGroup={group:string;items:VariableChoice[]};
+type PickerGroup={group:string;items:VariableChoice[]};
 
 /** Filtra o catálogo pelo nome compreensível, pela categoria ou pelo identificador técnico. */
 export function filterVariables(query:string,list:VariableChoice[]=variableCatalog):VariableChoice[]{

@@ -66,7 +66,7 @@ O preset de IA deixa o modelo vazio: selecione um modelo existente antes de test
 
 ## Personalizar o painel
 
-Em **Configurações → Do seu jeito**, selecione Escuro ou Claro. Escolha **Cor de destaque** para os elementos que usam a cor principal. O texto dos botões principais ajusta o contraste em relação à cor escolhida.
+Em **Configurações → Do seu jeito**, selecione Escuro ou Claro. Escolha **Cor de destaque** para os elementos que usam a cor principal: botões, ícones ativos, bordas realçadas e recuos de caixas seguem a escolha — inclusive os que antes ficavam verdes por padrão. O texto dos botões principais ajusta o contraste em relação à cor escolhida.
 
 **Restaurar padrão** remove a cor personalizada e volta à cor do modo claro/escuro. Não apaga perfis nem configurações de módulos.
 

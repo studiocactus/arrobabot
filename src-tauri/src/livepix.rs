@@ -56,7 +56,7 @@ fn percent_encode(s: &str) -> String {
 // ------- Config / Data -------
 
 pub fn config(rt: &Runtime, p: &str) -> Config {
-    serde_json::from_value(rt.db.module(p, MODULE)).unwrap_or_default()
+    rt.db.module_cfg(p, MODULE)
 }
 
 pub fn data(rt: &Runtime, p: &str) -> Value {
@@ -444,6 +444,18 @@ mod tests {
             ai: Default::default(),
             modules: json!({}),
         }
+    }
+
+    /// As chaves do design vivem em src/overlayDesign.keys.json, lidas pelos dois lados:
+    /// mudar o campo em um idioma sem mudar no outro quebra este teste.
+    #[test]
+    fn as_chaves_do_design_fortem_o_mesmo_conjunto_do_estudio() {
+        let mut shared: Vec<String> =
+            serde_json::from_str(include_str!("../../src/overlayDesign.keys.json")).expect("lista compartilhada de chaves");
+        shared.sort();
+        let mut got: Vec<String> = default_design().as_object().unwrap().keys().cloned().collect();
+        got.sort();
+        assert_eq!(got, shared, "Rust e Estúdio (TS) precisam higienizar as mesmas chaves do design");
     }
 
     #[test]

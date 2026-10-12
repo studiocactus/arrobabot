@@ -40,8 +40,6 @@ pub fn push(db:&Db,profile:&str,text:&str)->R<Vec<String>>{
 }
 /// As falas dentro do tempo útil, mais antiga primeiro.
 pub fn recent(db:&Db,profile:&str)->Vec<String>{load(db,profile).into_iter().map(|(_,line)|line).collect()}
-/// A última fala reconhecida; vazia quando o microfone ainda não ouviu nada.
-pub fn last(db:&Db,profile:&str)->String{recent(db,profile).pop().unwrap_or_default()}
 /// Linha curta para o prompt de sistema da IA.
 pub fn summary(db:&Db,profile:&str)->String{
  let items=recent(db,profile);
@@ -50,7 +48,6 @@ pub fn summary(db:&Db,profile:&str)->String{
  let spoken=tail.into_iter().rev().collect::<Vec<_>>().join(" | ");
  format!("[Últimas falas do streamer na live: {}]",spoken).chars().take(600).collect()
 }
-pub fn clear(db:&Db,profile:&str)->R<()>{db.set_module(profile,KEY,&json!({"items":[]}))}
 #[cfg(test)] mod tests {
  use super::*;
  use crate::model::Profile;
@@ -62,27 +59,29 @@ pub fn clear(db:&Db,profile:&str)->R<()>{db.set_module(profile,KEY,&json!({"item
   db.save_profile(&p).unwrap();
   (dir,db)
  }
+ /// Só nos testes: a última fala da janela, sem manter API morta em produção.
+ fn last(db:&Db)->String{recent(db,PID).last().cloned().unwrap_or_default()}
  #[test] fn a_janela_guarda_as_falas_recentes_e_caiba_no_limite(){
   let (_dir,db)=db();
   assert_eq!(recent(&db,PID),Vec::<String>::new(),"microfone parado não tem fala");
   assert_eq!(summary(&db,PID),"","sem fala não gasta token de contexto");
-  assert_eq!(last(&db,PID),"");
+  assert_eq!(last(&db),"");
   push(&db,PID,"  vamos de ranked  ").unwrap();
-  assert_eq!(last(&db,PID),"vamos de ranked","a fala é guardada limpa");
+  assert_eq!(last(&db),"vamos de ranked","a fala é guardada limpa");
   for i in 0..20 {push(&db,PID,&format!("fala {i}")).unwrap();}
   let items=recent(&db,PID);
   assert_eq!(items.len(),MAX,"a janela não cresce sem limite");
   assert_eq!(items.last().unwrap(),"fala 19","a mais nova fica no fim");
   assert!(summary(&db,PID).contains("fala 19")&&summary(&db,PID).len()<=600);
-  clear(&db,PID).unwrap();assert!(recent(&db,PID).is_empty());
+  save(&db,PID,&[]).unwrap();assert!(recent(&db,PID).is_empty(),"apagar zera a janela");
  }
  #[test] fn fala_antiga_e_linha_longa_sao_tratadas(){
   let (_dir,db)=db();
   save(&db,PID,&[(now()-TTL-1,"já esquecida".into()),(now(),"ainda vale".into())]).unwrap();
   assert_eq!(recent(&db,PID),vec!["ainda vale"],"fala fora do tempo sai da janela");
   push(&db,PID,&"x".repeat(5000)).unwrap();
-  assert_eq!(last(&db,PID).chars().count(),LINE,"linha longa é cortada");
+  assert_eq!(last(&db).chars().count(),LINE,"linha longa é cortada");
   push(&db,PID,"   ").unwrap();
-  assert_eq!(last(&db,PID).chars().count(),LINE,"fala vazia não entra");
+  assert_eq!(last(&db).chars().count(),LINE,"fala vazia não entra");
  }
 }

@@ -1,6 +1,6 @@
 import type {Action} from './types';
 export type FlowNode={id:string;data:{action?:Action;[key:string]:unknown};position:{x:number;y:number}};
-export type FlowEdge={source:string;target:string};
+type FlowEdge={source:string;target:string};
 export function chainIds(nodes:FlowNode[],edges:FlowEdge[]):string[]{
  const ids=new Set(nodes.map(n=>n.id));if(!ids.has('trigger'))throw Error('O fluxo precisa de um gatilho.');
  const seen=new Set<string>();const order:string[]=[];let current='trigger';
@@ -17,8 +17,6 @@ export type StepPlan={positions:Record<string,{x:number;y:number}>;edges:FlowEdg
 type Box={w:number;h:number};type Sizes=Record<string,Box>;
 /** Folga mínima entre blocos ao adicionar ou inserir, em unidades do canvas. */
 const MARGIN=16;
-/** Tamanho estimado da etapa nova, que ainda não existe no canvas para ser medida. */
-const ADDED:Box={w:220,h:80};
 const boxAt=(s:Sizes,id:string)=>s[id]||{w:185,h:70};
 /** Cadeia completa exigida para mexer na estrutura: gatilho presente, sem ciclo, sem ramificação e nenhum bloco solto. */
 export function fullChain(nodes:FlowNode[],edges:FlowEdge[]):string[]{

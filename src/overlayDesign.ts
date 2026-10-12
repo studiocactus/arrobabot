@@ -172,7 +172,6 @@ export function keyTexts(m:GoalModel):Record<string,string>{
 const head=(...ch:Spec[]):Spec=>({c:'bl-ov-head',ch});
 const track=():Spec=>({c:'bl-ov-track',ch:[{c:'bl-ov-fill'}]});
 const foot=(...ch:Spec[]):Spec=>({c:'bl-ov-foot',ch});
-const T=(k:string,cls:string):Spec=>({c:cls,k,t:''});
 
 /** Árvore completa do overlay para o design + textos informados. */
 export function overlayTree(d:OverlayDesign,texts:Record<string,string>):Spec{
@@ -227,7 +226,7 @@ export function ensureFont(familyName:string){
 }
 
 /** CSS escopado — só regras sob `.bl-ov`, sem tocar em body/html do aplicativo. */
-export const OVERLAY_CSS=`
+const OVERLAY_CSS=`
 .bl-ov,.bl-ov *{box-sizing:border-box}
 .bl-ov{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:var(--bl-vjustify);
  padding:2.5%;font-family:var(--bl-font);color:var(--bl-text);font-size:var(--bl-fs);font-weight:var(--bl-fw);

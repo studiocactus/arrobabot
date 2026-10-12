@@ -13,7 +13,6 @@ pub async fn delete_message(rt:&Runtime,p:&Profile,channel:&str,message:&str)->R
  discord::rest(rt,p,"DELETE",&format!("/channels/{channel}/messages/{message}"),None).await?;
  Ok(())
 }
-fn cut(s:&str,n:usize)->String{s.chars().take(n).collect()}
 fn id_ok(s:&str)->bool{s.is_empty()||(s.len()<=24&&s.chars().all(|c|c.is_ascii_digit()))}
 fn pick<'a>(v:&'a Value,path:&[&str])->&'a Value{let mut cur=v;for k in path{cur=&cur[*k]}cur}
 pub fn valid_config(v:&Value)->bool{
@@ -200,11 +199,11 @@ pub async fn action(rt:&Arc<Runtime>,p:&str,args:&Value)->Result<Value,String>{
   if name.is_empty()||name.len()>100{return Err("Dê um nome ao canal".into())}
   let mut body=json!({"name":name,"type":0});
   let topic=args["topic"].as_str().unwrap_or("");
-  if !topic.is_empty(){body["topic"]=json!(cut(topic,1024))}
+  if !topic.is_empty(){body["topic"]=json!(discord::truncate(topic,1024))}
   if !args["parent"].as_str().unwrap_or("").is_empty(){body["parent_id"]=json!(args["parent"])}
   discord::rest(rt,&profile,"POST",&format!("/guilds/{guild}/channels"),Some(body)).await
  },
- "channelEdit"=>{if channel.is_empty(){return Err("Escolha um canal".into())}let mut body=json!({});if let Some(t)=args["name"].as_str(){body["name"]=json!(t)}if let Some(t)=args["topic"].as_str(){body["topic"]=json!(cut(t,1024))}discord::rest(rt,&profile,"PATCH",&format!("/channels/{channel}"),Some(body)).await},
+ "channelEdit"=>{if channel.is_empty(){return Err("Escolha um canal".into())}let mut body=json!({});if let Some(t)=args["name"].as_str(){body["name"]=json!(t)}if let Some(t)=args["topic"].as_str(){body["topic"]=json!(discord::truncate(t,1024))}discord::rest(rt,&profile,"PATCH",&format!("/channels/{channel}"),Some(body)).await},
  "channelDelete"=>{if channel.is_empty(){return Err("Escolha um canal".into())}discord::rest(rt,&profile,"DELETE",&format!("/channels/{channel}"),None).await?;Ok(Value::Null)},
  // ---- moderation
  "ban"|"unban"|"kick"|"timeout"|"untimeout"=>punish_one(rt,&profile,guild,act,target,&reason,args,true).await,
@@ -382,7 +381,7 @@ async fn undo(rt:&Arc<Runtime>,p:&str,profile:&Profile,id:&str)->Result<Value,St
    let author=m["author"].as_str().unwrap_or("").to_owned();
    let content=m["content"].as_str().unwrap_or("");
    if content.trim().is_empty(){continue}
-   if discord::post(rt,profile,ch,&format!("**{author}** · {}",cut(content,1900))).await.is_ok(){restored+=1}
+   if discord::post(rt,profile,ch,&format!("**{author}** · {}",discord::truncate(content,1900))).await.is_ok(){restored+=1}
   }
   if restored==0{return Err("Nenhuma mensagem pôde ser restaurada".into())}
  },

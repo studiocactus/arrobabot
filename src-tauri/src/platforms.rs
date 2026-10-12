@@ -36,7 +36,7 @@ fn chat_body(p:&Profile,text:&str,pin:bool,reply:Option<&str>)->Value{
 }
 async fn chat_message(rt:&Runtime,p:&Profile,token:&str,text:&str,pin:bool,reply:Option<&str>)->Result<(),String>{
  let body=chat_body(p,text,pin,reply);
- let res=rt.http.post("https://api.twitch.tv/helix/chat/messages").header("Client-Id",&p.client_id).bearer_auth(token).json(&body).send().await.map_err(|_|"Não foi possível enviar a mensagem")?;
+ let res=crate::helix::post(&rt.http,p,token,"chat/messages",&[]).json(&body).send().await.map_err(|_|"Não foi possível enviar a mensagem")?;
  if !res.status().is_success(){
   let status=res.status().as_u16();
   if pin&&status==401{return Err(refused("Mensagem fixada",status))}
@@ -53,9 +53,7 @@ async fn announce(rt:&Runtime,p:&Profile,text:&str,color:&str)->Result<(),String
   let moderator=if account=="channel"{p.channel_id.as_str()}else{p.bot_id.as_str()};
   if moderator.is_empty(){continue}
   let token=match oauth::token(&rt.http,p,account).await {Ok(t)=>t,Err(err)=>{token_err=Some(err);continue}};
-  let res=rt.http.post("https://api.twitch.tv/helix/chat/announcements")
-   .query(&[("broadcaster_id",p.channel_id.as_str()),("moderator_id",moderator)])
-   .header("Client-Id",&p.client_id).bearer_auth(token)
+  let res=crate::helix::post(&rt.http,p,&token,"chat/announcements",&[("broadcaster_id",p.channel_id.as_str()),("moderator_id",moderator)])
    .json(&json!({"message":text,"color":color})).send().await.map_err(|_|"Não foi possível enviar o anúncio")?;
   if res.status().is_success(){return Ok(())}
   status=res.status().as_u16();
@@ -70,7 +68,7 @@ pub async fn shoutout(rt:&Runtime,p:&Profile,text:&str)->Result<(),String>{
  if login.len()>25||!login.chars().all(|c|c.is_ascii_alphanumeric()||c=='_'){return Err("No destaque de canal, a mensagem deve ser apenas o nome do canal de destino, sem espaços".into())}
  if p.channel_id.is_empty(){return Err("Autorize a conta do canal no perfil para enviar destaques".into())}
  let token=match oauth::token(&rt.http,p,"bot").await {Ok(t)=>t,Err(err)=>oauth::token(&rt.http,p,"channel").await.map_err(|_|err)?};
- let res=rt.http.get("https://api.twitch.tv/helix/users").query(&[("login",login.as_str())]).header("Client-Id",&p.client_id).bearer_auth(token).send().await.map_err(|_|"Não foi possível consultar o canal de destino")?;
+ let res=crate::helix::get(&rt.http,p,&token,"users",&[("login",login.as_str())]).send().await.map_err(|_|"Não foi possível consultar o canal de destino")?;
  if !res.status().is_success(){return Err(refused("Destaque",res.status().as_u16()))}
  let v:Value=res.json().await.map_err(|_|"Resposta de canal inválida")?;
  let target=v["data"][0]["id"].as_str().ok_or(format!("Canal de destino não encontrado: {login}"))?.to_owned();
@@ -79,9 +77,8 @@ pub async fn shoutout(rt:&Runtime,p:&Profile,text:&str)->Result<(),String>{
   let moderator=if account=="channel"{p.channel_id.as_str()}else{p.bot_id.as_str()};
   if moderator.is_empty(){continue}
   let token=match oauth::token(&rt.http,p,account).await {Ok(t)=>t,Err(err)=>{token_err=Some(err);continue}};
-  let res=rt.http.post("https://api.twitch.tv/helix/chat/shoutouts")
-   .query(&[("from_broadcaster_id",p.channel_id.as_str()),("to_broadcaster_id",target.as_str()),("moderator_id",moderator)])
-   .header("Client-Id",&p.client_id).bearer_auth(token).send().await.map_err(|_|"Não foi possível enviar o destaque")?;
+  let res=crate::helix::post(&rt.http,p,&token,"chat/shoutouts",&[("from_broadcaster_id",p.channel_id.as_str()),("to_broadcaster_id",target.as_str()),("moderator_id",moderator)])
+   .send().await.map_err(|_|"Não foi possível enviar o destaque")?;
   if res.status().is_success(){return Ok(())}
   status=res.status().as_u16();
   if status!=401&&status!=403 {break}
@@ -128,7 +125,7 @@ async fn session_forever(rt:Arc<Runtime>,p:Profile,account:&'static str){
 /// Lê a categoria atual para o estado da live. Qualquer falha é silenciosa: é só um começo.
 async fn seed_category(rt:&Arc<Runtime>,p:&Profile){
  let Ok(token)=oauth::token(&rt.http,p,"channel").await else {return};
- let res=rt.http.get("https://api.twitch.tv/helix/streams").query(&[("user_id",p.channel_id.as_str())]).header("Client-Id",p.client_id.as_str()).bearer_auth(&token).send().await;
+ let res=crate::helix::get(&rt.http,p,&token,"streams",&[("user_id",p.channel_id.as_str())]).send().await;
  let Ok(res)=res else {return};
  if !res.status().is_success(){return;}
  let Ok(v)=res.json::<Value>().await else {return};
@@ -195,7 +192,7 @@ async fn twitch_session(rt:Arc<Runtime>,p:Profile,account:&str)->Result<(),Strin
  }
 }
 async fn subscribe(rt:&Runtime,p:&Profile,token:&str,session:&str,kind:&str,version:&str,condition:Value)->Result<(),String>{
- let res=rt.http.post("https://api.twitch.tv/helix/eventsub/subscriptions").header("Client-Id",&p.client_id).bearer_auth(token).json(&json!({"type":kind,"version":version,"condition":condition,"transport":{"method":"websocket","session_id":session}})).send().await.map_err(|_|"Falha ao assinar evento")?;
+ let res=crate::helix::post(&rt.http,p,token,"eventsub/subscriptions",&[]).json(&json!({"type":kind,"version":version,"condition":condition,"transport":{"method":"websocket","session_id":session}})).send().await.map_err(|_|"Falha ao assinar evento")?;
  if !res.status().is_success(){return Err(format!("HTTP {}: confira escopos e elegibilidade do canal",res.status().as_u16()))}Ok(())
 }
 pub fn normalize_twitch(p:&Profile,v:&Value)->Option<Event>{

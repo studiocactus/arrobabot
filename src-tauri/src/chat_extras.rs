@@ -21,8 +21,8 @@ pub struct Person {#[serde(default="default_trigger")] pub trigger:String,pub id
 pub struct Asset {pub id:String,pub kind:String,pub name:String,pub path:String}
 #[derive(Default)]
 pub struct State {last:HashMap<String,Instant>,seen:HashSet<String>,index:HashMap<String,usize>}
-pub fn config(rt:&Runtime,p:&str)->Config {serde_json::from_value(rt.db.module(p,"chatExtras")).unwrap_or_default()}
-fn assets(rt:&Runtime,p:&str)->Vec<Asset>{serde_json::from_value(rt.db.module(p,"chatAssets")).unwrap_or_default()}
+pub fn config(rt:&Runtime,p:&str)->Config {rt.db.module_cfg(p,"chatExtras")}
+fn assets(rt:&Runtime,p:&str)->Vec<Asset>{rt.db.module_cfg(p,"chatAssets")}
 pub fn asset(rt:&Runtime,p:&str,id:&str,kind:&str)->R<Asset>{assets(rt,p).into_iter().find(|a|a.id==id&&a.kind==kind).ok_or("Selecione um arquivo deste perfil".into())}
 fn read_file(path:&Path,max:u64)->R<Vec<u8>>{
  let f=std::fs::File::open(path).map_err(|_|"Arquivo não encontrado ou sem permissão")?;

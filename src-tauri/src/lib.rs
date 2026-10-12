@@ -16,6 +16,7 @@ mod oauth;
 mod engine;
 mod platforms;
 mod emotes;
+mod helix;
 mod modules;
 mod presets;
 mod local_api;

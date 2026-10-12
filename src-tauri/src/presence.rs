@@ -22,7 +22,7 @@ async fn session(rt:&Runtime,p:&Profile)->Result<(),String>{
  let identity:Value=rt.http.get("https://id.twitch.tv/oauth2/validate").header("Authorization",format!("OAuth {token}")).send().await.map_err(|_|"Falha ao validar monitor de entradas")?.json().await.map_err(|_|"Identidade Twitch inválida")?;
  if !identity["scopes"].as_array().is_some_and(|v|v.iter().any(|s|s=="chat:read")){return Err("Para entradas silenciosas, autorize novamente a conta do bot no perfil (permissão chat:read). As mensagens continuam pelo EventSub.".into())}
  let nick=identity["login"].as_str().filter(|s|login(s)).ok_or("Login do bot inválido")?;
- let channel:Value=rt.http.get("https://api.twitch.tv/helix/users").header("Client-Id",&p.client_id).bearer_auth(&token).query(&[("id",&p.channel_id)]).send().await.map_err(|_|"Falha ao consultar canal para entradas")?.json().await.map_err(|_|"Canal inválido")?;
+ let channel:Value=crate::helix::get(&rt.http,p,&token,"users",&[("id",p.channel_id.as_str())]).send().await.map_err(|_|"Falha ao consultar canal para entradas")?.json().await.map_err(|_|"Canal inválido")?;
  let channel=channel["data"][0]["login"].as_str().filter(|s|login(s)).ok_or("Canal Twitch não encontrado para entradas")?;
  let room=format!("#{channel}");
  let (mut ws,_)=tokio::time::timeout(Duration::from_secs(20),connect_async("wss://irc-ws.chat.twitch.tv:443")).await.map_err(|_|"Tempo esgotado ao conectar entradas Twitch")?.map_err(|_|"Não foi possível conectar entradas Twitch")?;
@@ -56,7 +56,7 @@ async fn session(rt:&Runtime,p:&Profile)->Result<(),String>{
       if present.len()>200{present.clear();present.insert(name.clone());}
       let mut id=String::new();
       if c.people.iter().any(|a|!a.user_id.is_empty()&&a.name.trim().trim_start_matches('@').eq_ignore_ascii_case(&name)){
-       let user:Value=rt.http.get("https://api.twitch.tv/helix/users").header("Client-Id",&p.client_id).bearer_auth(&token).query(&[("login",&name)]).send().await.map_err(|_|"Falha ao identificar entrada Twitch")?.json().await.map_err(|_|"Identidade da entrada inválida")?;
+       let user:Value=crate::helix::get(&rt.http,p,&token,"users",&[("login",name.as_str())]).send().await.map_err(|_|"Falha ao identificar entrada Twitch")?.json().await.map_err(|_|"Identidade da entrada inválida")?;
        id=user["data"][0]["id"].as_str().unwrap_or("").into();
       }
       // Membership alone must not award points or trigger unrelated automations.

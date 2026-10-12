@@ -25,16 +25,16 @@ pub async fn twitch_punish(rt:&Runtime,p:&Profile,action:&str,user_id:&str,reaso
  if p.platform!="twitch"||p.channel_id.is_empty()||user_id.is_empty(){return Err("A moderação da Twitch exige um perfil Twitch com ID de canal e um alvo".into())}
  let token=oauth::token(&rt.http,p,"channel").await?;
  let req=match action{
- "warn"=>rt.http.post("https://api.twitch.tv/helix/moderation/warnings").query(&[("broadcaster_id",p.channel_id.as_str()),("moderator_id",p.channel_id.as_str())]).json(&json!({"data":{"user_id":user_id,"reason":reason}})),
+ "warn"=>crate::helix::post(&rt.http,p,&token,"moderation/warnings",&[("broadcaster_id",p.channel_id.as_str()),("moderator_id",p.channel_id.as_str())]).json(&json!({"data":{"user_id":user_id,"reason":reason}})),
  "timeout"|"ban"=>{
   let mut data=json!({"user_id":user_id,"reason":reason});
   if action=="timeout"{data["duration"]=json!(seconds.clamp(1,1209600));}
-  rt.http.post("https://api.twitch.tv/helix/moderation/bans").query(&[("broadcaster_id",p.channel_id.as_str()),("moderator_id",p.channel_id.as_str())]).json(&json!({"data":data}))
+  crate::helix::post(&rt.http,p,&token,"moderation/bans",&[("broadcaster_id",p.channel_id.as_str()),("moderator_id",p.channel_id.as_str())]).json(&json!({"data":data}))
  },
- "unban"=>rt.http.delete("https://api.twitch.tv/helix/moderation/bans").query(&[("broadcaster_id",p.channel_id.as_str()),("user_id",user_id)]),
+ "unban"=>crate::helix::delete(&rt.http,p,&token,"moderation/bans",&[("broadcaster_id",p.channel_id.as_str()),("user_id",user_id)]),
  _=>return Err("Ação de moderação inválida".into())
  };
- let res=req.header("Client-Id",&p.client_id).bearer_auth(token).send().await.map_err(|_|"Falha ao moderar na Twitch".to_string())?;
+ let res=req.send().await.map_err(|_|"Falha ao moderar na Twitch".to_string())?;
  if !res.status().is_success(){return Err(format!("Moderação recusada pela Twitch: HTTP {}",res.status().as_u16()))}
  Ok(())
 }
@@ -51,7 +51,7 @@ pub async fn twitch_user_id(rt:&Runtime,p:&Profile,login:&str)->Result<String,St
  let login=login.trim_start_matches('@').to_lowercase();
  if login.is_empty()||login.len()>40||!login.chars().all(|c|c.is_ascii_alphanumeric()||c=='_'||c=='-'){return Err("Informe um nome de usuário válido da Twitch".into())}
  let token=oauth::token(&rt.http,p,"channel").await?;
- let res=rt.http.get("https://api.twitch.tv/helix/users").query(&[("login",login.as_str())]).header("Client-Id",&p.client_id).bearer_auth(token).send().await.map_err(|_|"Não foi possível consultar o usuário na Twitch".to_string())?;
+ let res=crate::helix::get(&rt.http,p,&token,"users",&[("login",login.as_str())]).send().await.map_err(|_|"Não foi possível consultar o usuário na Twitch".to_string())?;
  if !res.status().is_success(){return Err(format!("Consulta de usuário recusada pela Twitch: HTTP {}",res.status().as_u16()))}
  let v:Value=res.json().await.map_err(|_|"Resposta inválida da Twitch".to_string())?;
  let id=v["data"][0]["id"].as_str().unwrap_or("").to_owned();

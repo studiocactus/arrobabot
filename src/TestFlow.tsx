@@ -1,7 +1,7 @@
 import {useEffect,useRef,useState} from 'react';
 import {Play} from 'lucide-react';
 import {api,desktop} from './api';
-import {friendlyError,friendlyMessage} from './errors';
+import {friendlyError} from './errors';
 import {actions,triggers,type Flow} from './types';
 import {Modal,Field} from './components';
 import {testVarKeys} from './flow';

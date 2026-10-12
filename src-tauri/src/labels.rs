@@ -53,7 +53,7 @@ fn enabled(c: &Config, key: &str) -> bool {
  c.labels.get(key).map(|l| l.enabled).unwrap_or(true)
 }
 pub fn config(rt: &Runtime, p: &str) -> Config {
- serde_json::from_value(rt.db.module(p, MODULE)).unwrap_or_default()
+ rt.db.module_cfg(p, MODULE)
 }
 fn data(rt: &Runtime, p: &str) -> Value {
  let mut d = rt.db.module(p, DATA);
@@ -163,7 +163,7 @@ fn folder(c: &Config) -> Result<std::path::PathBuf, String> {
  if !path.is_dir() { return Err("O caminho não é uma pasta.".into()); }
  Ok(path.to_path_buf())
 }
-fn write_all(rt: &Runtime, p: &Profile, c: &Config, d: &Value) -> Result<(), String> {
+fn write_all(c: &Config, d: &Value) -> Result<(), String> {
  let dir = folder(c)?;
  let vals = values(d);
  for def in DEFS {
@@ -171,7 +171,6 @@ fn write_all(rt: &Runtime, p: &Profile, c: &Config, d: &Value) -> Result<(), Str
   let text = render(&template_of(c, def.key), &vals.get(def.key).cloned().unwrap_or_default());
   std::fs::write(dir.join(def.file), text).map_err(|_| format!("Não foi possível gravar {}.", def.file))?;
  }
- let _ = rt;
  Ok(())
 }
 /// Soma segundos assistidos por login (minúsculo). Uma transação por chamada.
@@ -201,9 +200,8 @@ pub fn watch_summary(db: &Db, profile: &str) -> (i64, String, i64) {
 pub async fn chatters(rt: &Arc<Runtime>, p: &Profile) -> Result<(i64, Vec<String>), String> {
  if p.platform != "twitch" { return Err("Espectadores ao vivo só na Twitch.".into()); }
  let token = oauth::token(&rt.http, p, "bot").await?;
- let v: Value = rt.http.get("https://api.twitch.tv/helix/chat/chatters")
-  .query(&[("broadcaster_id", p.channel_id.as_str()), ("moderator_id", p.bot_id.as_str()), ("first", "1000")])
-  .header("Client-Id", &p.client_id).bearer_auth(&token)
+ let v: Value = crate::helix::get(&rt.http, p, &token, "chat/chatters",
+  &[("broadcaster_id", p.channel_id.as_str()), ("moderator_id", p.bot_id.as_str()), ("first", "1000")])
   .send().await.map_err(|_| "Falha ao consultar espectadores.".to_string())?
   .json().await.map_err(|_| "Resposta inválida de espectadores.".to_string())?;
  if v["status"].as_u64().is_some_and(|s| s == 401 || s == 403) {
@@ -218,8 +216,7 @@ async fn totals(rt: &Arc<Runtime>, p: &Profile) -> (Option<i64>, Option<i64>, St
  let (followers, subs) = crate::twitch_ops::channel_counts(rt, p).await;
  let mut uptime = String::new();
  if let Ok(token) = oauth::token(&rt.http, p, "channel").await {
-  if let Ok(r) = rt.http.get("https://api.twitch.tv/helix/streams").query(&[("user_id", p.channel_id.as_str())])
-   .header("Client-Id", &p.client_id).bearer_auth(&token).send().await {
+  if let Ok(r) = crate::helix::get(&rt.http, p, &token, "streams", &[("user_id", p.channel_id.as_str())]).send().await {
    if let Ok(v) = r.json::<Value>().await {
     if let Some(s) = v["data"][0]["started_at"].as_str() {
      uptime = uptime_text(s).unwrap_or_default();
@@ -248,7 +245,7 @@ pub async fn refresh(rt: &Arc<Runtime>, p: &Profile) {
  d["top_hours"] = json!(hours_text(top_secs));
  d["refreshed"] = json!(now);
  save_data(rt, &p.id, &d);
- if let Err(err) = write_all(rt, p, &c, &d) { rt.log(&p.id, "labels", &err, "error"); }
+ if let Err(err) = write_all(&c, &d) { rt.log(&p.id, "labels", &err, "error"); }
 }
 /// Eventos de follow/sub/cheer/raid atualizam recentes + sessão na hora, sem rede.
 pub async fn on_event(rt: &Arc<Runtime>, p: &Profile, kind: &str, user: &str, amount: i64, months: i64) {
@@ -269,7 +266,7 @@ pub async fn on_event(rt: &Arc<Runtime>, p: &Profile, kind: &str, user: &str, am
   _ => return,
  }
  save_data(rt, &p.id, &d);
- if let Err(err) = write_all(rt, p, &c, &d) { rt.log(&p.id, "labels", &err, "error"); }
+ if let Err(err) = write_all(&c, &d) { rt.log(&p.id, "labels", &err, "error"); }
  let now = chrono::Utc::now().timestamp();
  if matches!(kind, "follow" | "subscription" | "gift") && stale(&d, now) {
   let rt2 = rt.clone();
@@ -311,7 +308,7 @@ pub async fn tick(rt: &Arc<Runtime>) {
     d["top_watcher"] = json!(top_name);
     d["top_hours"] = json!(hours_text(top_secs));
     save_data(rt, &p.id, &d);
-    if let Err(err) = write_all(rt, &p, &c, &d) { rt.log(&p.id, "labels", &err, "error"); }
+    if let Err(err) = write_all(&c, &d) { rt.log(&p.id, "labels", &err, "error"); }
     if stale(&d, now) { refresh(rt, &p).await; }
    }
    Err(err) => {
@@ -372,7 +369,7 @@ pub async fn operation(rt: &Arc<Runtime>, p: &str, op: &str, args: &Value) -> Re
    }
    rt.db.set_module(p, MODULE, &serde_json::to_value(&c).map_err(|e| e.to_string())?)?;
    let d = data(rt, p);
-   if c.enabled { write_all(rt, &profile, &c, &d)?; }
+   if c.enabled { write_all(&c, &d)?; }
    rt.log(&p, "labels", "Rótulos salvos.", "success");
    Ok(Value::Null)
   }

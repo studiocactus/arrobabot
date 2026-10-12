@@ -50,8 +50,8 @@ pub fn builtin_command(message:&str)->Option<(&str,&str)>{
 /// Falha retorna None e as variáveis ficam vazias, sem quebrar o fluxo.
 pub async fn channel_counts(rt:&Arc<Runtime>,p:&Profile)->(Option<i64>,Option<i64>){
  let Ok(token)=crate::oauth::token(&rt.http,p,"channel").await else{return (None,None)};
- let followers=rt.http.get("https://api.twitch.tv/helix/channels/followers").query(&[("broadcaster_id",p.channel_id.as_str())]).header("Client-Id",&p.client_id).bearer_auth(&token).send().await.ok().filter(|r|r.status().is_success());
- let subs=rt.http.get("https://api.twitch.tv/helix/subscriptions").query(&[("broadcaster_id",p.channel_id.as_str())]).header("Client-Id",&p.client_id).bearer_auth(&token).send().await.ok().filter(|r|r.status().is_success());
+ let followers=crate::helix::get(&rt.http,p,&token,"channels/followers",&[("broadcaster_id",p.channel_id.as_str())]).send().await.ok().filter(|r|r.status().is_success());
+ let subs=crate::helix::get(&rt.http,p,&token,"subscriptions",&[("broadcaster_id",p.channel_id.as_str())]).send().await.ok().filter(|r|r.status().is_success());
  async fn total(res:Option<reqwest::Response>)->Option<i64>{
   let v:Value=res?.json().await.ok()?;
   v["total"].as_i64()
@@ -62,7 +62,7 @@ pub async fn channel_counts(rt:&Arc<Runtime>,p:&Profile)->(Option<i64>,Option<i6
 /// conta do canal; erro vira mensagem para o Histórico de quem chamou.
 pub async fn custom_rewards(rt:&Arc<Runtime>,p:&Profile)->Result<Value,String>{
  let token=channel_creds(rt,p).await?;
- let res=rt.http.get("https://api.twitch.tv/helix/channel_points/custom_rewards").query(&[("broadcaster_id",p.channel_id.as_str())]).header("Client-Id",&p.client_id).bearer_auth(&token).send().await.map_err(|_|"Não foi possível listar as recompensas".to_string())?;
+ let res=crate::helix::get(&rt.http,p,&token,"channel_points/custom_rewards",&[("broadcaster_id",p.channel_id.as_str())]).send().await.map_err(|_|"Não foi possível listar as recompensas".to_string())?;
  if !res.status().is_success(){return Err(format!("Recompensas recusadas pela Twitch: HTTP {}. Reautorize a conta do canal.",res.status().as_u16()))}
  let v:Value=res.json().await.map_err(|_|"Resposta de recompensas inválida".to_string())?;
  let list:Vec<Value>=v["data"].as_array().cloned().unwrap_or_default().into_iter().map(|r|json!({"id":r["id"],"title":r["title"],"cost":r["cost"],"enabled":r["is_enabled"],"paused":r["is_paused"],"input":r["is_user_input_required"],"image":r["image"]["url_2x"].as_str().or(r["default_image"]["url_2x"].as_str()).unwrap_or("")})).collect();
@@ -94,7 +94,7 @@ pub fn reward_rejection(status:u16,twitch_msg:Option<&str>)->String{
 pub async fn create_reward(rt:&Arc<Runtime>,p:&Profile,title:&str,cost:i64,user_input:bool)->Result<Value,String>{
  if let Some(e)=reward_shape_error(title,cost){return Err(e)}
  let token=channel_creds(rt,p).await?;
- let res=rt.http.post("https://api.twitch.tv/helix/channel_points/custom_rewards").query(&[("broadcaster_id",p.channel_id.as_str())]).header("Client-Id",&p.client_id).bearer_auth(&token).json(&json!({"title":title.trim(),"cost":cost,"is_enabled":true,"is_user_input_required":user_input})).send().await.map_err(|_|"Não foi possível criar a recompensa".to_string())?;
+ let res=crate::helix::post(&rt.http,p,&token,"channel_points/custom_rewards",&[("broadcaster_id",p.channel_id.as_str())]).json(&json!({"title":title.trim(),"cost":cost,"is_enabled":true,"is_user_input_required":user_input})).send().await.map_err(|_|"Não foi possível criar a recompensa".to_string())?;
  let status=res.status();
  if !status.is_success(){
   let twitch_msg=res.json::<Value>().await.ok().and_then(|v|v["message"].as_str().map(|s|s.to_string()));
@@ -109,7 +109,7 @@ pub async fn create_reward(rt:&Arc<Runtime>,p:&Profile,title:&str,cost:i64,user_
 /// quem chamou registra no Histórico; sem permissão, pede a reautorização.
 pub async fn fulfill_redemption(rt:&Arc<Runtime>,p:&Profile,reward_id:&str,redemption_id:&str)->Result<(),String>{
  let token=channel_creds(rt,p).await?;
- let res=rt.http.patch("https://api.twitch.tv/helix/channel_points/custom_rewards/redemptions").query(&[("broadcaster_id",p.channel_id.as_str()),("reward_id",reward_id),("id",redemption_id)]).header("Client-Id",&p.client_id).bearer_auth(&token).json(&json!({"status":"FULFILLED"})).send().await.map_err(|_|"Não foi possível marcar o resgate".to_string())?;
+ let res=crate::helix::patch(&rt.http,p,&token,"channel_points/custom_rewards/redemptions",&[("broadcaster_id",p.channel_id.as_str()),("reward_id",reward_id),("id",redemption_id)]).json(&json!({"status":"FULFILLED"})).send().await.map_err(|_|"Não foi possível marcar o resgate".to_string())?;
  if !res.status().is_success(){return Err(format!("Resgate não confirmado pela Twitch: HTTP {}. Sem a permissão de gerenciar resgates, reautorize a conta do canal.",res.status().as_u16()))}
  Ok(())
 }
@@ -210,7 +210,7 @@ async fn twitch_err(res:reqwest::Response,what:&str)->String{
 /// None quando a Twitch não conhece o nome, para o chamador tentar outra
 /// grafia antes de desistir.
 async fn lookup_game(rt:&Runtime,p:&Profile,token:&str,name:&str)->Result<Option<(String,String)>,String>{
- let res=rt.http.get("https://api.twitch.tv/helix/games").query(&[("name",name)]).header("Client-Id",&p.client_id).bearer_auth(token).send().await.map_err(|_|"Não foi possível consultar o jogo na Twitch".to_string())?;
+ let res=crate::helix::get(&rt.http,p,token,"games",&[("name",name)]).send().await.map_err(|_|"Não foi possível consultar o jogo na Twitch".to_string())?;
  if !res.status().is_success(){return Err(twitch_err(res,"Categoria").await)}
  let v:Value=res.json().await.map_err(|_|"Resposta de jogo inválida".to_string())?;
  Ok(Some((v["data"][0]["id"].as_str().unwrap_or("").to_owned(),v["data"][0]["name"].as_str().unwrap_or("").to_owned())).filter(|(id,_)|!id.is_empty()))
@@ -267,34 +267,34 @@ fn title_case(s:&str)->String{
  s.split_whitespace().map(|w|{let mut c=w.chars();match c.next(){None=>String::new(),Some(f)=>f.to_uppercase().collect::<String>()+c.as_str()}}).collect::<Vec<_>>().join(" ")
 }
 async fn modify_channel(rt:&Runtime,p:&Profile,token:&str,body:Value,what:&str)->Result<(),String>{
- let res=rt.http.patch("https://api.twitch.tv/helix/channels").query(&[("broadcaster_id",p.channel_id.as_str())]).header("Client-Id",&p.client_id).bearer_auth(token).json(&body).send().await.map_err(|_|format!("Não foi possível alterar {what}"))?;
+ let res=crate::helix::patch(&rt.http,p,token,"channels",&[("broadcaster_id",p.channel_id.as_str())]).json(&body).send().await.map_err(|_|format!("Não foi possível alterar {what}"))?;
  if !res.status().is_success(){return Err(twitch_err(res,what).await)}
  Ok(())
 }
 async fn punish_as(rt:&Runtime,p:&Profile,token:&str,moderator:&str,action:&str,user_id:&str,reason:&str,seconds:u64)->Result<(),String>{
  let req=match action{
-  "warn"=>rt.http.post("https://api.twitch.tv/helix/moderation/warnings").query(&[("broadcaster_id",p.channel_id.as_str()),("moderator_id",moderator)]).json(&json!({"data":{"user_id":user_id,"reason":reason}})),
+  "warn"=>crate::helix::post(&rt.http,p,token,"moderation/warnings",&[("broadcaster_id",p.channel_id.as_str()),("moderator_id",moderator)]).json(&json!({"data":{"user_id":user_id,"reason":reason}})),
   "timeout"|"ban"=>{
    let mut data=json!({"user_id":user_id,"reason":reason});
    if action=="timeout"{data["duration"]=json!(seconds.clamp(1,1209600));}
-   rt.http.post("https://api.twitch.tv/helix/moderation/bans").query(&[("broadcaster_id",p.channel_id.as_str()),("moderator_id",moderator)]).json(&json!({"data":data}))
+   crate::helix::post(&rt.http,p,token,"moderation/bans",&[("broadcaster_id",p.channel_id.as_str()),("moderator_id",moderator)]).json(&json!({"data":data}))
   },
-  "unban"=>rt.http.delete("https://api.twitch.tv/helix/moderation/bans").query(&[("broadcaster_id",p.channel_id.as_str()),("moderator_id",moderator),("user_id",user_id)]),
+  "unban"=>crate::helix::delete(&rt.http,p,token,"moderation/bans",&[("broadcaster_id",p.channel_id.as_str()),("moderator_id",moderator),("user_id",user_id)]),
   _=>return Err("Operação de moderação inválida".into())
  };
- let res=req.header("Client-Id",&p.client_id).bearer_auth(token).send().await.map_err(|_|"Falha ao moderar na Twitch".to_string())?;
+ let res=req.send().await.map_err(|_|"Falha ao moderar na Twitch".to_string())?;
  if !res.status().is_success(){return Err(twitch_err(res,"Moderação").await)}
  Ok(())
 }
 async fn chat_settings(rt:&Runtime,p:&Profile,token:&str,moderator:&str,body:Value)->Result<(),String>{
- let res=rt.http.patch("https://api.twitch.tv/helix/chat/settings").query(&[("broadcaster_id",p.channel_id.as_str()),("moderator_id",moderator)]).header("Client-Id",&p.client_id).bearer_auth(token).json(&body).send().await.map_err(|_|"Não foi possível ajustar o chat".to_string())?;
+ let res=crate::helix::patch(&rt.http,p,token,"chat/settings",&[("broadcaster_id",p.channel_id.as_str()),("moderator_id",moderator)]).json(&body).send().await.map_err(|_|"Não foi possível ajustar o chat".to_string())?;
  if !res.status().is_success(){return Err(twitch_err(res,"Modo do chat").await)}
  Ok(())
 }
 async fn vip(rt:&Runtime,p:&Profile,token:&str,add:bool,user_id:&str)->Result<(),String>{
  let query=[("broadcaster_id",p.channel_id.as_str()),("user_id",user_id)];
- let res=if add{rt.http.post("https://api.twitch.tv/helix/channels/vips").query(&query).header("Client-Id",&p.client_id).bearer_auth(token).send().await}
-  else{rt.http.delete("https://api.twitch.tv/helix/channels/vips").query(&query).header("Client-Id",&p.client_id).bearer_auth(token).send().await};
+ let res=if add{crate::helix::post(&rt.http,p,token,"channels/vips",&query).send().await}
+ else{crate::helix::delete(&rt.http,p,token,"channels/vips",&query).send().await};
  let res=res.map_err(|_|"Falha ao alterar VIP na Twitch".to_string())?;
  if res.status().as_u16()==409{return Err("Limite de VIPs do canal atingido".into())}
  if !res.status().is_success(){return Err(twitch_err(res,"VIP").await)}
@@ -396,7 +396,7 @@ pub async fn run(rt:&Arc<Runtime>,p:&Profile,e:&Event,a:&Action,text:&str,trigge
    Ok(format!("Resposta enviada para @{login}"))
   }
   "clip"=>{
-   let res=rt.http.post("https://api.twitch.tv/helix/clips").query(&[("broadcaster_id",p.channel_id.as_str())]).header("Client-Id",&p.client_id).bearer_auth(&token).send().await.map_err(|_|"Não foi possível pedir o clipe à Twitch".to_string())?;
+   let res=crate::helix::post(&rt.http,p,&token,"clips",&[("broadcaster_id",p.channel_id.as_str())]).send().await.map_err(|_|"Não foi possível pedir o clipe à Twitch".to_string())?;
    if !res.status().is_success(){
     return Err(if res.status().as_u16()==404{"Só dá para clipar com a live ligada".into()}else{format!("Clipe recusado pela Twitch: HTTP {}. Confira a live e a autorização do bot.",res.status().as_u16())});
    }

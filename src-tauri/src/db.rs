@@ -1,6 +1,6 @@
 use crate::model::*;
 use rusqlite::{params, Connection};
-use serde_json::{json,Value};
+use serde_json::Value;
 use std::{path::Path,sync::Mutex};
 pub struct Db(pub Mutex<Connection>);
 type R<T> = Result<T,String>;
@@ -17,6 +17,8 @@ impl Db {
  CREATE TABLE IF NOT EXISTS presets(id TEXT PRIMARY KEY,data TEXT NOT NULL);
  CREATE TABLE IF NOT EXISTS kv(key TEXT PRIMARY KEY,data TEXT NOT NULL);
  CREATE TABLE IF NOT EXISTS module_state(profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,key TEXT NOT NULL,data TEXT NOT NULL,PRIMARY KEY(profile_id,key));
+ -- Tabela legada: os pontos vivem no estado community; a tabela fica porque o
+ -- backup antigo a transporta e a importação exige que ela exista.
  CREATE TABLE IF NOT EXISTS points(profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,user_id TEXT NOT NULL,balance INTEGER NOT NULL CHECK(balance>=0),PRIMARY KEY(profile_id,user_id));
  CREATE TABLE IF NOT EXISTS watch_time(profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,user_login TEXT NOT NULL,seconds INTEGER NOT NULL DEFAULT 0 CHECK(seconds>=0),PRIMARY KEY(profile_id,user_login));
  CREATE TABLE IF NOT EXISTS variables(profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,scope TEXT NOT NULL,user_id TEXT NOT NULL,name TEXT NOT NULL,data TEXT NOT NULL,PRIMARY KEY(profile_id,scope,user_id,name));
@@ -79,25 +81,14 @@ impl Db {
  pub fn set(&self,key:&str,v:&Value)->R<()> {self.0.lock().unwrap().execute("INSERT INTO kv VALUES(?,?) ON CONFLICT(key) DO UPDATE SET data=excluded.data",params![key,v.to_string()]).map_err(|e|e.to_string())?;Ok(())}
  pub fn module(&self,p:&str,key:&str)->Value {self.0.lock().unwrap().query_row("SELECT data FROM module_state WHERE profile_id=? AND key=?",params![p,key],|r|r.get::<_,String>(0)).ok().and_then(|s|serde_json::from_str(&s).ok()).unwrap_or(Value::Null)}
  pub fn set_module(&self,p:&str,key:&str,v:&Value)->R<()> {self.0.lock().unwrap().execute("INSERT INTO module_state VALUES(?,?,?) ON CONFLICT(profile_id,key) DO UPDATE SET data=excluded.data",params![p,key,v.to_string()]).map_err(|e|e.to_string())?;Ok(())}
- pub fn points(&self,p:&str,user:&str,delta:i64)->R<i64> {
- let mut c=self.0.lock().unwrap();let tx=c.transaction().map_err(|e|e.to_string())?;
- let old:i64=tx.query_row("SELECT balance FROM points WHERE profile_id=? AND user_id=?",params![p,user],|r|r.get(0)).unwrap_or(0);
- let new=old.checked_add(delta).filter(|n|*n>=0).ok_or("Saldo insuficiente ou valor inválido")?;
- tx.execute("INSERT INTO points VALUES(?,?,?) ON CONFLICT(profile_id,user_id) DO UPDATE SET balance=excluded.balance",params![p,user,new]).map_err(|e|e.to_string())?;
- tx.commit().map_err(|e|e.to_string())?;Ok(new)
- }
- pub fn ranking(&self,p:&str)->R<Value> {
- let c=self.0.lock().unwrap();let mut s=c.prepare("SELECT user_id,balance FROM points WHERE profile_id=? ORDER BY balance DESC LIMIT 100").map_err(|e|e.to_string())?;
- let rows=s.query_map([p],|r|Ok(json!({"user":r.get::<_,String>(0)?,"balance":r.get::<_,i64>(1)?}))).map_err(|e|e.to_string())?;
- Ok(Value::Array(rows.collect::<Result<Vec<_>,_>>().map_err(|e|e.to_string())?))
- }
+ /// Configuração de módulo tipada: ausente ou inválida herda o padrão do tipo.
+ pub fn module_cfg<T:serde::de::DeserializeOwned+Default>(&self,p:&str,key:&str)->T {serde_json::from_value(self.module(p,key)).unwrap_or_default()}
 }
 #[cfg(test)] mod tests {
  use super::*;
  fn p()->Profile {Profile{id:uuid::Uuid::new_v4().to_string(),name:"Teste".into(),platform:"twitch".into(),channel:"teste".into(),channel_id:"".into(),bot_id:"".into(),client_id:"".into(),blocklist:vec![],topics:vec![],editors:vec![],ai:AiConfig::default(),modules:Value::Null}}
- #[test] fn isolation_and_points() {
+ #[test] fn isolation_keeps_profiles_apart() {
  let d=Db::open(Path::new(":memory:")).unwrap();let a=p();let b=p();d.save_profile(&a).unwrap();d.save_profile(&b).unwrap();
- assert_eq!(d.points(&a.id,"ana",10).unwrap(),10);assert_eq!(d.points(&b.id,"ana",0).unwrap(),0);assert!(d.points(&a.id,"ana",-11).is_err());
  d.delete_profile(&a.id).unwrap();assert_eq!(d.profiles().unwrap().len(),1);assert!(d.profile(&b.id).is_ok());
  }
 }

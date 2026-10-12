@@ -2,7 +2,6 @@
 //! Permite a moderadores e streamers criar, editar e remover automacoes simples de texto.
 //! Os comandos criados aqui viram fluxos normais e aparecem na pagina Comandos.
 use crate::{db::Db, model::{Action, Flow, Trigger}};
-use serde_json::Value;
 
 /// Operacoes possiveis via !cmd.
 #[derive(Debug, Clone, PartialEq)]
@@ -81,20 +80,12 @@ fn same_command(pattern: &str, name: &str) -> bool {
 
 fn chat_flow(profile_id: &str, id: String, name: &str, response: String) -> Flow {
  Flow {
-  counter: false,
-  timer_seconds: 300,timer_category:"personalizado".into(),timer_priority:"normal".into(),timer_variants:vec![],timer_min_messages:0,timer_window_secs:900,timer_max_session:0,timer_start_delay_secs:0,
-  audio: String::new(),
-  audio_volume: 1.0,
-  send_type: "chat".into(),
-  send_color: "primary".into(),
-  reply_to: false,
   id,
   profile_id: profile_id.to_owned(),
   name: name.to_owned(),
-  enabled: true,
-  trigger: Trigger { kind: "command".into(), pattern: name.to_owned(), permission: "everyone".into(), cooldown: 0, user_cooldown: 0 },
+  trigger: Trigger { kind: "command".into(), pattern: name.to_owned(), ..Default::default() },
   actions: vec![Action { kind: "chat".into(), text: response, ..Default::default() }],
-  layout: Value::Null,
+  ..Default::default()
  }
 }
 

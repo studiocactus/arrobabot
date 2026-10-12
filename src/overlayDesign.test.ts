@@ -1,5 +1,6 @@
 import {describe,expect,it} from 'vitest';
 import {TEMPLATES,defaultDesign,designVars,goalPercent,keyTexts,normalizeDesign,overlayTree,type OverlayDesign,type Spec} from './overlayDesign';
+import sharedKeys from './overlayDesign.keys.json';
 
 const collect=(n:Spec,pick:(s:Spec)=>boolean,out:Spec[]=[]):Spec[]=>{
  if(pick(n))out.push(n);
@@ -37,6 +38,10 @@ describe('estúdio do overlay: normalização',()=>{
  it('aceita dados ausentes devolvendo o visual padrão',()=>{
   expect(normalizeDesign(null)).toEqual(defaultDesign());
   expect(normalizeDesign('nada')).toEqual(defaultDesign());
+ });
+
+ it('tem as mesmas chaves que o higienizador do Rust (paridade com livepix.rs)',()=>{
+  expect(Object.keys(normalizeDesign({})).sort()).toEqual([...sharedKeys].sort());
  });
 });
 

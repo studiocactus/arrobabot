@@ -63,8 +63,7 @@ async fn fetch(rt: &crate::engine::Runtime, p: &Profile) -> Result<Vec<String>, 
     Ok(pick(channel, global))
 }
 async fn helix(rt: &crate::engine::Runtime, p: &Profile, token: &str, broadcaster: Option<&str>) -> Result<Vec<String>, String> {
-    let mut req = rt.http.get("https://api.twitch.tv/helix/chat/emotes")
-        .header("Client-Id", p.client_id.as_str()).bearer_auth(token);
+    let mut req = crate::helix::get(&rt.http, p, token, "chat/emotes", &[]);
     if let Some(id) = broadcaster { req = req.query(&[("broadcaster_id", id)]); }
     let res = req.send().await.map_err(|_| "sem resposta da Twitch".to_owned())?;
     if !res.status().is_success() {

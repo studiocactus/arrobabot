@@ -6,7 +6,7 @@ import {AccessSettings} from './Access';
 import BackupSettings from './BackupSettings';
 import {Save,Copy,Monitor,Sun,Moon,ShieldCheck} from 'lucide-react';
 import {api,errorText} from './api';
-import {Card,Field,Toggle,Tag} from './components';
+import {Card,Field,Tag} from './components';
 export default function Settings({theme,onTheme,notify,dataDir,onLock,profileId}:{profileId:string;theme:string;onTheme:(s:string)=>void;notify:(s:string)=>void;dataDir:string;onLock:()=>void}){
  const [settings,setSettings]=useState<Record<string,unknown>>({});const [show,setShow]=useState(false);const [loaded,setLoaded]=useState(false);
  useEffect(()=>{api<Record<string,unknown>>('settings.get').then(s=>{setSettings(s);setLoaded(true)}).catch(e=>notify(errorText(e)))},[]);

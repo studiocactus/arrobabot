@@ -1,6 +1,6 @@
 import {useEffect,useState} from 'react';
 import ObsidianBridge from './ObsidianBridge';
-import {Sparkles,Save,Play,Plus,Search,FileText,FolderOpen,Trash2,ShieldCheck,KeyRound} from 'lucide-react';
+import {Sparkles,Save,Play,Plus,Search,FileText,FolderOpen,Trash2,ShieldCheck} from 'lucide-react';
 import {api,errorText} from './api';
 import type {Profile,Note,Preset} from './types';
 import {Card,Field,Tag,Toggle,Empty,Modal,Busy} from './components';

@@ -72,6 +72,18 @@ pub const TIMER_PRIORITIES:[&str;3]=["baixa","normal","alta"];
 fn full_volume()->f64{1.0}
 fn send_chat()->String{"chat".into()}
 fn send_primary()->String{"primary".into()}
+/// Fluxo montado em código (comandos, respostas TXT, testes) só declara o que
+/// importa: o resto herda o mesmo padrão que a desserialização aplica.
+impl Default for Flow {
+ fn default()->Self { Self{
+  counter:false,timer_seconds:timer_default(),audio:String::new(),audio_volume:full_volume(),
+  send_type:send_chat(),send_color:send_primary(),reply_to:false,
+  timer_category:timer_category_default(),timer_priority:timer_priority_default(),timer_variants:Vec::new(),
+  timer_min_messages:0,timer_window_secs:timer_window_default(),timer_max_session:0,timer_start_delay_secs:0,
+  id:String::new(),profile_id:String::new(),name:String::new(),enabled:true,
+  trigger:Trigger::default(),actions:Vec::new(),layout:Value::Null,
+ } }
+}
 pub const SEND_TYPES:[&str;4]=["chat","announce","pin","shoutout"];
 pub const SEND_COLORS:[&str;5]=["primary","blue","green","orange","purple"];
 /// Ancoragem da resposta com IA e tamanho máximo dela.
@@ -91,6 +103,9 @@ pub struct Trigger {
  #[serde(default)] pub cooldown:u64, #[serde(default)] pub user_cooldown:u64,
 }
 fn everyone()->String { "everyone".into() }
+impl Default for Trigger {
+ fn default()->Self { Self{kind:"chat".into(),pattern:String::new(),permission:everyone(),cooldown:0,user_cooldown:0} }
+}
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all="camelCase")]
 pub struct Action {
@@ -324,20 +339,20 @@ pub fn validate_flow(f:&Flow)->Result<(),String> {
  use super::*;
  fn e()->Event {Event{id:"x".into(),profile_id:"p".into(),kind:"chat".into(),user:"ana".into(),user_id:"1".into(),role:"everyone".into(),message:"!oi tudo bem".into(),data:Value::Null,simulated:true}}
  #[test] fn command_boundary_and_roles() {
- let mut t=Trigger{kind:"command".into(),pattern:"!oi".into(),permission:"everyone".into(),cooldown:0,user_cooldown:0};
+ let mut t=Trigger{kind:"command".into(),pattern:"!oi".into(),..Default::default()};
  assert!(matches(&t,&e()));t.pattern="!o".into();assert!(!matches(&t,&e()));
  t.pattern="!oi".into();t.permission="moderator".into();assert!(!matches(&t,&e()));
  assert!(permitted("moderator","broadcaster"));assert!(!permitted("broadcaster","moderator"));
  }
  #[test] fn gatilho_de_voz_aceita_variacoes_com_virgula() {
-  let t=Trigger{kind:"voice".into(),pattern:"troca o jogo, minecraft".into(),permission:"everyone".into(),cooldown:0,user_cooldown:0};
+  let t=Trigger{kind:"voice".into(),pattern:"troca o jogo, minecraft".into(),..Default::default()};
   let mut v=e();v.kind="voice".into();v.message="troca o jogo para minecraft".into();
   assert!(matches(&t,&v));
   v.message="muda o jogo agora".into();assert!(!matches(&t,&v));
   v.message="poe minecraft ai".into();assert!(matches(&t,&v));
  }
  #[test] fn preview_event_follows_the_trigger() {
-  let mut f=Flow{counter:false,timer_seconds:300,timer_category:"personalizado".into(),timer_priority:"normal".into(),timer_variants:vec![],timer_min_messages:0,timer_window_secs:900,timer_max_session:0,timer_start_delay_secs:0,audio:String::new(),audio_volume:1.0,send_type:"chat".into(),send_color:"primary".into(),reply_to:false,id:"f".into(),profile_id:"p".into(),name:"Minecraft".into(),enabled:true,trigger:Trigger{kind:"timer".into(),pattern:String::new(),permission:"everyone".into(),cooldown:0,user_cooldown:0},actions:vec![],layout:Value::Null};
+  let mut f=Flow{id:"f".into(),profile_id:"p".into(),name:"Minecraft".into(),trigger:Trigger{kind:"timer".into(),pattern:String::new(),..Default::default()},actions:vec![],..Default::default()};
   let t=preview_event(&f,e());
   assert_eq!((t.kind.as_str(),t.user.as_str(),t.user_id.as_str(),t.message.as_str(),t.simulated),("timer","BotLive","","",true));
   f.trigger.kind="command".into();f.trigger.pattern="!minecraft".into();
@@ -372,7 +387,7 @@ pub fn validate_flow(f:&Flow)->Result<(),String> {
   assert_eq!(TIMER_CATEGORIES.len(),7);assert_eq!(TIMER_PRIORITIES.len(),3);
  }
  #[test] fn contains_trigger_accepts_a_list_separated_by_commas() {
-  let mut t=Trigger{kind:"contains".into(),pattern:"comprei, comprar , gastei".into(),permission:"everyone".into(),cooldown:0,user_cooldown:0};
+  let mut t=Trigger{kind:"contains".into(),pattern:"comprei, comprar , gastei".into(),..Default::default()};
   let mut m=e();
   m.message="amigo comprou ontem".into();assert!(!matches(&t,&m),"não precisa colar com o radical");
   m.message="oi eu comprei sim".into();assert!(matches(&t,&m));
@@ -382,7 +397,7 @@ pub fn validate_flow(f:&Flow)->Result<(),String> {
   t.pattern.clear();assert!(!matches(&t,&m));
  }
  #[test] fn mention_trigger_waits_for_one_of_the_bot_names() {
-  let mut t=Trigger{kind:"mention".into(),pattern:"Arroba, ArrobaSrv, arromba".into(),permission:"everyone".into(),cooldown:0,user_cooldown:0};
+  let mut t=Trigger{kind:"mention".into(),pattern:"Arroba, ArrobaSrv, arromba".into(),..Default::default()};
   let mut m=e();
   m.message="Arroba, chega aí".into();assert!(matches(&t,&m));
   m.message="@arrobasrv bora jogar".into();assert!(matches(&t,&m),"maiúsculas e arroba do Twitter não atrapalham");
@@ -393,13 +408,13 @@ pub fn validate_flow(f:&Flow)->Result<(),String> {
   t.pattern="arromba".into();m.kind="follow".into();assert!(!matches(&t,&m),"só mensagem de chat");
  }
  #[test] fn mention_preview_calls_the_bot_and_the_flow_needs_a_name() {
-  let mut f=Flow{counter:false,timer_seconds:300,timer_category:"personalizado".into(),timer_priority:"normal".into(),timer_variants:vec![],timer_min_messages:0,timer_window_secs:900,timer_max_session:0,timer_start_delay_secs:0,audio:String::new(),audio_volume:1.0,send_type:"chat".into(),send_color:"primary".into(),reply_to:false,id:uuid::Uuid::new_v4().to_string(),profile_id:uuid::Uuid::new_v4().to_string(),name:"Salve".into(),enabled:true,trigger:Trigger{kind:"mention".into(),pattern:"Arroba, arromba".into(),permission:"everyone".into(),cooldown:0,user_cooldown:0},actions:vec![Action{kind:"chat".into(),text:"Oi!".into(),target:String::new(),value:0,condition:String::new(),..Default::default()}],layout:Value::Null};
+  let mut f=Flow{id:uuid::Uuid::new_v4().to_string(),profile_id:uuid::Uuid::new_v4().to_string(),name:"Salve".into(),trigger:Trigger{kind:"mention".into(),pattern:"Arroba, arromba".into(),..Default::default()},actions:vec![Action{kind:"chat".into(),text:"Oi!".into(),target:String::new(),value:0,condition:String::new(),..Default::default()}],..Default::default()};
   assert!(validate_flow(&f).is_ok());
   assert_eq!(preview_event(&f,e()).message,"Arroba !oi tudo bem","a prévia já começa chamando o bot");
   f.trigger.pattern.clear();assert_eq!(validate_flow(&f).unwrap_err(),"Informe pelo menos um nome do bot, separados por vírgula");
  }
  #[test] fn delivery_type_color_and_flow_audio_rules() {
-  let mut f=Flow{counter:false,timer_seconds:300,timer_category:"personalizado".into(),timer_priority:"normal".into(),timer_variants:vec![],timer_min_messages:0,timer_window_secs:900,timer_max_session:0,timer_start_delay_secs:0,audio:String::new(),audio_volume:1.0,send_type:"chat".into(),send_color:"primary".into(),reply_to:false,id:uuid::Uuid::new_v4().to_string(),profile_id:uuid::Uuid::new_v4().to_string(),name:"ifood".into(),enabled:true,trigger:Trigger{kind:"command".into(),pattern:"!ifood".into(),permission:"everyone".into(),cooldown:0,user_cooldown:0},actions:vec![Action{kind:"chat".into(),text:"Bora".into(),target:String::new(),value:0,condition:String::new(),..Default::default()}],layout:Value::Null};
+  let mut f=Flow{id:uuid::Uuid::new_v4().to_string(),profile_id:uuid::Uuid::new_v4().to_string(),name:"ifood".into(),trigger:Trigger{kind:"command".into(),pattern:"!ifood".into(),..Default::default()},actions:vec![Action{kind:"chat".into(),text:"Bora".into(),target:String::new(),value:0,condition:String::new(),..Default::default()}],..Default::default()};
   assert!(validate_flow(&f).is_ok());
   f.send_type="announce".into();f.send_color="purple".into();assert!(validate_flow(&f).is_ok());
   f.send_type="letras".into();assert!(validate_flow(&f).is_err());
@@ -430,7 +445,7 @@ pub fn validate_flow(f:&Flow)->Result<(),String> {
   assert_eq!(KNOWLEDGE_DEPTHS,["light","standard","full"]);
  }
  #[test] fn command_trigger_accepts_variations_separated_by_commas() {
-  let mut t=Trigger{kind:"command".into(),pattern:"!whislist, !whishlist, !wishlist".into(),permission:"everyone".into(),cooldown:0,user_cooldown:0};
+  let mut t=Trigger{kind:"command".into(),pattern:"!whislist, !whishlist, !wishlist".into(),..Default::default()};
   let mut m=e();
   m.message="!whislist por favor".into();assert!(matches(&t,&m));
   m.message="!WHISHLIST".into();assert!(matches(&t,&m),"maiúsculas não atrapalham");
@@ -444,7 +459,7 @@ pub fn validate_flow(f:&Flow)->Result<(),String> {
  }
  #[test] fn obs_action_validates_op_target_and_temp() {
   let a=Action{kind:"obs".into(),obs_op:"mute".into(),obs_target:"Mic".into(),..Default::default()};
-  let mut f=Flow{counter:false,timer_seconds:300,timer_category:"personalizado".into(),timer_priority:"normal".into(),timer_variants:vec![],timer_min_messages:0,timer_window_secs:900,timer_max_session:0,timer_start_delay_secs:0,audio:String::new(),audio_volume:1.0,send_type:"chat".into(),send_color:"primary".into(),reply_to:false,id:uuid::Uuid::new_v4().to_string(),profile_id:uuid::Uuid::new_v4().to_string(),name:"OBS".into(),enabled:true,trigger:Trigger{kind:"command".into(),pattern:"!x".into(),permission:"everyone".into(),cooldown:0,user_cooldown:0},actions:vec![a.clone()],layout:Value::Null};
+  let mut f=Flow{id:uuid::Uuid::new_v4().to_string(),profile_id:uuid::Uuid::new_v4().to_string(),name:"OBS".into(),trigger:Trigger{kind:"command".into(),pattern:"!x".into(),..Default::default()},actions:vec![a.clone()],..Default::default()};
   assert!(validate_flow(&f).is_ok());
   f.actions[0].obs_op="explodir".into();assert!(validate_flow(&f).is_err());
   f.actions[0].obs_op="scene".into();f.actions[0].obs_target=" ".into();assert!(validate_flow(&f).is_err());
@@ -455,9 +470,9 @@ pub fn validate_flow(f:&Flow)->Result<(),String> {
  }
  #[test] fn condition_steps_validate_variable_operator_and_exit() {
   let good=Action{kind:"condition".into(),cond_var:"reward.cost".into(),cond_op:"greater_or_equal".into(),cond_value:"5000".into(),cond_false:"stop".into(),..Default::default()};
-  assert!(validate_flow(&Flow{counter:false,timer_seconds:300,timer_category:"personalizado".into(),timer_priority:"normal".into(),timer_variants:vec![],timer_min_messages:0,timer_window_secs:900,timer_max_session:0,timer_start_delay_secs:0,audio:String::new(),audio_volume:1.0,send_type:"chat".into(),send_color:"primary".into(),reply_to:false,id:uuid::Uuid::new_v4().to_string(),profile_id:uuid::Uuid::new_v4().to_string(),name:"C".into(),enabled:true,trigger:Trigger{kind:"command".into(),pattern:"!c".into(),permission:"everyone".into(),cooldown:0,user_cooldown:0},actions:vec![good.clone()],layout:Value::Null}).is_ok());
+  assert!(validate_flow(&Flow{id:uuid::Uuid::new_v4().to_string(),profile_id:uuid::Uuid::new_v4().to_string(),name:"C".into(),trigger:Trigger{kind:"command".into(),pattern:"!c".into(),..Default::default()},actions:vec![good.clone()],..Default::default()}).is_ok());
   let mut bad=good.clone();bad.cond_op="quase".into();
-  let mut f=Flow{counter:false,timer_seconds:300,timer_category:"personalizado".into(),timer_priority:"normal".into(),timer_variants:vec![],timer_min_messages:0,timer_window_secs:900,timer_max_session:0,timer_start_delay_secs:0,audio:String::new(),audio_volume:1.0,send_type:"chat".into(),send_color:"primary".into(),reply_to:false,id:uuid::Uuid::new_v4().to_string(),profile_id:uuid::Uuid::new_v4().to_string(),name:"C".into(),enabled:true,trigger:Trigger{kind:"command".into(),pattern:"!c".into(),permission:"everyone".into(),cooldown:0,user_cooldown:0},actions:vec![bad],layout:Value::Null};
+  let mut f=Flow{id:uuid::Uuid::new_v4().to_string(),profile_id:uuid::Uuid::new_v4().to_string(),name:"C".into(),trigger:Trigger{kind:"command".into(),pattern:"!c".into(),..Default::default()},actions:vec![bad],..Default::default()};
   assert!(validate_flow(&f).is_err());
   assert!(!crate::variables::COND_OPS.contains(&"quase"),"a lista rejeita quase");
   assert!(crate::variables::COND_OPS.contains(&"equals"));
@@ -469,7 +484,7 @@ pub fn validate_flow(f:&Flow)->Result<(),String> {
  }
  #[test] fn voice_action_validates_name_and_duration() {
   let a=Action{kind:"voiceFx".into(),target:"fina".into(),value:10,..Default::default()};
-  let mut f=Flow{counter:false,timer_seconds:300,timer_category:"personalizado".into(),timer_priority:"normal".into(),timer_variants:vec![],timer_min_messages:0,timer_window_secs:900,timer_max_session:0,timer_start_delay_secs:0,audio:String::new(),audio_volume:1.0,send_type:"chat".into(),send_color:"primary".into(),reply_to:false,id:uuid::Uuid::new_v4().to_string(),profile_id:uuid::Uuid::new_v4().to_string(),name:"Voz".into(),enabled:true,trigger:Trigger{kind:"redemption".into(),pattern:"reward-id".into(),permission:"everyone".into(),cooldown:0,user_cooldown:0},actions:vec![a.clone()],layout:Value::Null};
+  let mut f=Flow{id:uuid::Uuid::new_v4().to_string(),profile_id:uuid::Uuid::new_v4().to_string(),name:"Voz".into(),trigger:Trigger{kind:"redemption".into(),pattern:"reward-id".into(),..Default::default()},actions:vec![a.clone()],..Default::default()};
   assert!(validate_flow(&f).is_ok());
   f.actions[0].target="robô".into();assert!(validate_flow(&f).is_err(),"só vozes da lista passam");
   f.actions[0].target="normal".into();assert!(validate_flow(&f).is_ok(),"normal é aceito (volta ao Pass)");
@@ -480,7 +495,7 @@ pub fn validate_flow(f:&Flow)->Result<(),String> {
  #[test] fn wait_steps_validate_range_and_default_on() {
   let a=Action{kind:"wait".into(),value:3000,..Default::default()};
   assert!(a.enabled,"etapa nasce ligada");
-  let mut f=Flow{counter:false,timer_seconds:300,timer_category:"personalizado".into(),timer_priority:"normal".into(),timer_variants:vec![],timer_min_messages:0,timer_window_secs:900,timer_max_session:0,timer_start_delay_secs:0,audio:String::new(),audio_volume:1.0,send_type:"chat".into(),send_color:"primary".into(),reply_to:false,id:uuid::Uuid::new_v4().to_string(),profile_id:uuid::Uuid::new_v4().to_string(),name:"W".into(),enabled:true,trigger:Trigger{kind:"command".into(),pattern:"!w".into(),permission:"everyone".into(),cooldown:0,user_cooldown:0},actions:vec![a],layout:Value::Null};
+  let mut f=Flow{id:uuid::Uuid::new_v4().to_string(),profile_id:uuid::Uuid::new_v4().to_string(),name:"W".into(),trigger:Trigger{kind:"command".into(),pattern:"!w".into(),..Default::default()},actions:vec![a],..Default::default()};
   assert!(validate_flow(&f).is_ok());
   f.actions[0].value=0;assert!(validate_flow(&f).is_err());
   f.actions[0].value=3600001;assert!(validate_flow(&f).is_err());
@@ -489,7 +504,7 @@ pub fn validate_flow(f:&Flow)->Result<(),String> {
   assert!(old.enabled,"fluxo antigo continua ligado");
  }
  #[test] fn command_variations_and_punish_rules_are_validated() {
-  let mut f=Flow{counter:false,timer_seconds:300,timer_category:"personalizado".into(),timer_priority:"normal".into(),timer_variants:vec![],timer_min_messages:0,timer_window_secs:900,timer_max_session:0,timer_start_delay_secs:0,audio:String::new(),audio_volume:1.0,send_type:"chat".into(),send_color:"primary".into(),reply_to:false,id:uuid::Uuid::new_v4().to_string(),profile_id:uuid::Uuid::new_v4().to_string(),name:"Lista".into(),enabled:true,trigger:Trigger{kind:"command".into(),pattern:"!whislist, !whishlist".into(),permission:"everyone".into(),cooldown:0,user_cooldown:0},actions:vec![Action{kind:"chat".into(),text:"Pronto".into(),target:String::new(),value:0,condition:String::new(),..Default::default()}],layout:Value::Null};
+  let mut f=Flow{id:uuid::Uuid::new_v4().to_string(),profile_id:uuid::Uuid::new_v4().to_string(),name:"Lista".into(),trigger:Trigger{kind:"command".into(),pattern:"!whislist, !whishlist".into(),..Default::default()},actions:vec![Action{kind:"chat".into(),text:"Pronto".into(),target:String::new(),value:0,condition:String::new(),..Default::default()}],..Default::default()};
   assert!(validate_flow(&f).is_ok());
   f.trigger.pattern="!whislist, whishlist".into();
   assert!(validate_flow(&f).is_err(),"cada opção começa com !");
@@ -515,7 +530,7 @@ pub fn validate_flow(f:&Flow)->Result<(),String> {
   let back:Action=serde_json::from_value(saved).unwrap();assert_eq!(back.punish,"");
  }
  #[test] fn redemption_matches_by_reward_id() {
-  let t=Trigger{kind:"redemption".into(),pattern:"".into(),permission:"everyone".into(),cooldown:0,user_cooldown:0};
+  let t=Trigger{kind:"redemption".into(),pattern:"".into(),..Default::default()};
   let e=Event{id:"1".into(),profile_id:"p".into(),kind:"redemption".into(),user:"Ana".into(),user_id:"77".into(),role:"everyone".into(),message:String::new(),data:serde_json::json!({"reward":{"id":"abc","title":"Mute","cost":5000}}),simulated:false};
   assert!(matches(&t,&e),"padrão vazio vale qualquer resgate");
   let one=Trigger{pattern:"abc".into(),..t.clone()};
