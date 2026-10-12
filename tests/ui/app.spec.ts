@@ -122,6 +122,29 @@ test('amostras de tema e de cor aplicam na hora e persistem',async({page})=>{
  await expect(page.getByRole('button',{name:'Cor de destaque: Violeta',exact:true})).toHaveAttribute('aria-pressed','false');
 });
 
+test('tons derivados do menu e das tags seguem a cor de destaque nos dois temas',async({page})=>{
+ await page.goto('/');
+ const nav=page.locator('.nav-item.active');
+ const eyebrow=page.locator('.hero-copy .tag');
+ const escuroPadrao={nav:await nav.evaluate(el=>getComputedStyle(el).color),tag:await eyebrow.evaluate(el=>getComputedStyle(el).color)};
+ await page.getByRole('button',{name:'Configurações',exact:true}).click();
+ await page.getByRole('button',{name:'Cor de destaque: Violeta',exact:true}).click();
+ await page.getByRole('button',{name:'Visão geral',exact:true}).click();
+ expect(await nav.evaluate(el=>getComputedStyle(el).color)).not.toBe(escuroPadrao.nav);
+ expect(await eyebrow.evaluate(el=>getComputedStyle(el).color)).not.toBe(escuroPadrao.tag);
+ await page.getByRole('button',{name:'Configurações',exact:true}).click();
+ await page.getByRole('button',{name:'Tema claro',exact:true}).click();
+ await page.getByRole('button',{name:'Cor de destaque: Azul',exact:true}).click();
+ await page.getByRole('button',{name:'Visão geral',exact:true}).click();
+ const claroAzul=await nav.evaluate(el=>getComputedStyle(el).color);
+ expect(claroAzul).not.toBe('rgb(56, 105, 23)');
+ await page.getByRole('button',{name:'Configurações',exact:true}).click();
+ await page.getByRole('button',{name:'Cor de destaque: Rosa',exact:true}).click();
+ await page.getByRole('button',{name:'Visão geral',exact:true}).click();
+ expect(await nav.evaluate(el=>getComputedStyle(el).color)).not.toBe(claroAzul);
+ await page.screenshot({path:'artifacts/derivados-claro-rosa.png',fullPage:true});
+});
+
 test('catálogo de variáveis insere marcador e informa limite da prévia web',async({page})=>{
  await page.goto('/');
  await page.getByRole('button',{name:'Criar primeiro bot',exact:true}).click();

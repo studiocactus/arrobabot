@@ -72,6 +72,8 @@ Em **Configurações → Do seu jeito**, a seção **Aparência** mostra duas am
 
 **Restaurar padrão** remove a cor personalizada e volta à cor do modo atual. Não apaga perfis nem configurações de módulos.
 
+O item ativo do menu, o link do painel de boas-vindas e as tags seguem a cor de destaque nos dois modos: o tom é derivado do acento misturado com o texto do tema, então permanece legível no escuro e no claro. Estados de resultado (sucesso, aviso, erro) e os tipos de tag (roxo, âmbar, azul) têm tom próprio para cada modo. A ilustração do painel de boas-vindas e os detalhes esverdeados dela são arte da marca e não mudam com a cor.
+
 Não há editor completo de CSS ou de todas as cores da interface.
 
 ## O que não confundir

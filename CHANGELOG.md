@@ -1,5 +1,34 @@
 # Histórico de atualizações
 
+# BotLive 0.2.1
+
+## O que mudou
+
+- **Fecha a pendência declarada na 0.1.99:** as cores derivadas do acento que ficaram fixas agora acompanham a cor de destaque nos dois modos. O item ativo do menu, as tags de acento (padrão/verde) e o link do painel de boas-vindas usam o acento misturado com o texto do tema, então permanecem legíveis no escuro e no claro. No modo claro eles deixaram de ser verdes fixos: com Violeta ou Rosa escolhidos, o menu ativo, a etiqueta e o link do painel viram Violeta ou Rosa de verdade.
+- **Tags de categoria com tom próprio no claro.** Os tipos roxo, âmbar e azul apareciam como texto pastel sobre o branco, com leitura ruim; agora cada um tem tom escuro no modo claro, alinhado às cores de texto já existentes.
+- **Estados de resultado e pílulas de status no claro.** Sucesso/ativo (verde), aguardando (âmbar) e erro (vermelho) ganharam tons escuros no modo claro — no escuro continuam os mesmos. Sobre o branco: sucesso ≈5,3:1, aviso ≈5,6:1 e erro ≈5,9:1.
+- **O que continua verde por decisão:** a ilustração do painel de boas-vindas e os detalhes dela (mascote da marca) e o avatar da Kick (verde da plataforma). São arte e identidade, não elementos de interface que siguem o acento.
+- Teste de tela novo: o menu ativo e a etiqueta do painel mudam com a cor de destaque nos dois modos, e no claro não são mais o verde fixo anterior.
+- Capítulo 06 do manual atualizado com o comportamento dos tons derivados.
+
+## Como usar
+
+Nada muda de fluxo: escolha o modo em Configurações → Do seu jeito → Aparência e a cor em Cor de destaque. Os elementos citados passam a acompanhar a escolha automaticamente. **Restaurar padrão** devolve as cores do modo atual, como antes.
+
+## Validação
+
+- `tsc -b` e a checagem estrita com `--noUnusedLocals`/`--noUnusedParameters` limpas; `vitest` 79/79; Playwright 53/53, com o novo teste de tons derivados (menu ativo e etiqueta do painel seguem o acento no escuro e no claro; o verde fixo antigo do claro não aparece mais).
+- `npm run docs` (manual com 23 capítulos), `npm run test:updates` e `npm run update:check` antes e depois do `update:prepare`.
+- Capturas em 1100px: claro com rosa (menu, etiqueta e link do painel em rosa), escuro com violeta e claro no padrão — o padrão ficou praticamente igual ao anterior. Os estados de resultado/status do claro não aparecem na prévia sem um canal conectado; as cores novas foram conferidas por contraste calculado contra o branco (valores acima).
+
+## Limitações
+
+- A cor de destaque continua única para os dois modos; misturá-la com o texto do tema compensa parte da diferença, mas uma tonalidade muito clara ainda perde leitura no modo claro. As amostras da 0.2.0 existem exatamente para escolher cores que servem nos dois modos.
+- A ilustração do painel de boas-vindas não muda com a cor de destaque: é o verde da marca.
+- Não há variantes novas de tema nem editor de cores da interface.
+
+---
+
 # BotLive 0.2.0
 
 ## O que mudou
