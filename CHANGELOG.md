@@ -1,5 +1,43 @@
 # Histórico de atualizações
 
+# BotLive 0.4.0
+
+## O que mudou
+
+- **Estúdio de Alertas (nova tela).** Em **Alertas**, follows, subs, renovações, subs de presente (individual e em lote), bits e raids viram painéis animados na fonte de navegador do OBS: barra de status, tarja do evento, nome em destaque, linha grande, linha final datilografada e barra de tempo em blocos que corre durante a duração configurada.
+- **Mesmo endereço do overlay da meta.** Os alertas são uma camada da fonte que já existe no OBS: quem tem a Fonte Navegador do overlay da meta não troca nada, basta ligar o interruptor no Estúdio. A config chega ao OBS na hora, sem recarregar a fonte, e a fila é serializada — um painel por vez.
+- **Campos com variáveis, não código.** Cada evento tem quatro textos (Etiqueta, Linha do nome, Linha grande e Linha final) e um som, preenchidos com `{{user}}`, `{{amount}}`, `{{months}}`, `{{tier}}`, `{{sender}}` e `{{message}}` — apelidos como `{{name}}` e `{{viewer}}` também valem `{{user}}`. Ajustes do painel: duração (3 a 20 s), velocidade (50% a 200%), volume, posição na tela, margens, largura, texto da marca, 4 cores, 2 fontes com tamanhos independentes e efeitos (scanline, cantos, partículas e glitch).
+- **Teste por evento pelo caminho real.** O botão **Testar** de cada evento injeta um payload de exemplo pelo mesmo caminho do evento real: a prévia do Estúdio anima e o OBS toca junto — inclusive com os alertas desligados, como faz o botão de teste do widget de referência do StreamElements que serviu de base.
+- **Sons do perfil dentro do alerta.** O seletor de som lista os arquivos enviados em Respostas e sons (WAV, MP3 ou OGG, até 5 MiB); o áudio toca pelo navegador do OBS pela nova rota local `/asset`, que só atende sons registrados do perfil com a chave do overlay.
+- **Manual consertado e ampliado.** O capítulo Rótulos OBS estava de fora do MANUAL.html (grupo de navegação incompleto) e voltou para a seção "Cuide da sua live"; o novo capítulo Alertas da live entrou ao lado.
+
+## Como usar
+
+1. Abra **Alertas** com o perfil do canal e ligue **Alertas no overlay** no cartão do topo.
+2. Escolha o evento nas pílulas (Seguidor, Novo sub, Renovação, Sub de presente, Presentes em lote, Bits, Raid) e edite os quatro textos; as variáveis são preenchidas no momento do alerta.
+3. Para som, envie um WAV, MP3 ou OGG em **Respostas e sons** e escolha o arquivo no campo **Som** do evento.
+4. Clique em **Testar**: a prévia roda a animação completa e o teste também vai para o OBS se a fonte estiver aberta.
+5. Se a fonte de navegador ainda não existe no OBS, copie o endereço no cartão **No OBS** (Fontes → + → Navegador, 1920×1080). É o mesmo endereço do overlay da meta.
+
+## Validação
+
+- `cargo test`: 218 testes, 8 novos — 7 do módulo de alertas (padrões e validação, mapeamento de eventos com gift em lote, disparo respeitando interruptores, botão de teste, mensagem inicial e som servido) e a integração engine → alerta com validação do salvamento; o teste da porta local passou a cobrir também o `/asset` com chave certa e chave errada.
+- `tsc -b` limpo; `vitest` 87/87, com 8 testes novos do motor (normalização com faixas, placeholders com apelidos e utilitários).
+- Playwright 56/56, com a tela nova (sete eventos, salvamento automático por evento, animação do teste terminando limpa e captura em 1100px), o audit de layout percorrendo todas as telas da navegação e o manual verde no desktop, na busca e no mobile.
+- `npm run docs` com manual de 24 capítulos (Rótulos OBS que faltava e Alertas da live), `npm run test:updates` e `npm run update:check`.
+- Captura em 1100px da tela (`artifacts/estudio-alertas-1100.png`): pílulas quebrando em linha limpa, formulário sem texto espremido e prévia do quadro de 1920×1080 em escala.
+
+## Limitações
+
+- Sem editor livre de HTML/CSS/JS nesta onda: o Estúdio trabalha por campos, com um único visual de painel; um modo código pode vir em uma versão futura.
+- Sem botão de pular alerta: cada alerta roda a duração configurada antes de o próximo entrar na fila.
+- A Twitch não informa quem recebeu um sub de presente: em Sub de presente e Presentes em lote, `{{user}}` é quem deu o presente.
+- Doações (LivePix) e resgates de pontos não geram alerta nesta versão.
+- O som vem da biblioteca do perfil (Respostas e sons); o Estúdio não envia arquivo novo.
+- Fontes do Google exigem internet no computador que roda o OBS; fontes do sistema funcionam offline.
+
+---
+
 # BotLive 0.3.0
 
 ## O que mudou

@@ -1,7 +1,7 @@
 /**
- * Overlay de meta servido pelo BotLive (http://127.0.0.1:PORT/overlay) e no
- * arquivo examples/goal-overlay.html. Recebe design + estado da meta por
- * WebSocket local e redesenha sem recarregar a fonte do OBS.
+ * Overlay do BotLive servido em http://127.0.0.1:PORT/overlay e no arquivo
+ * examples/goal-overlay.html. Recebe por WebSocket local a meta, o design e os
+ * alertas do perfil e redesenha sem recarregar a fonte do OBS.
  *
  * Compilado por scripts/build-overlay.cjs para src-tauri/overlay.html.
  */
@@ -9,6 +9,7 @@ import {
  designVars,ensureFont,ensureOverlayStyle,goalPercent,keyTexts,normalizeDesign,overlayTree,
  type GoalModel,type OverlayDesign,type Spec,
 } from './overlayDesign';
+import {alertSoundUrl,isAlertKind,normalizeAlerts,queueAlert,type AlertVars,type AlertsConfig} from './alerts';
 
 const params=new URLSearchParams(location.hash.slice(1));
 const token=params.get('token')||'';
@@ -22,6 +23,8 @@ let model:GoalModel={title:'',current:0,target:0};
 let hidden=true;
 let ws:WebSocket|null=null;
 let retry=3000;
+let alertsCfg:AlertsConfig=normalizeAlerts(null);
+let alertHost:HTMLElement|null=null;
 
 const host=document.getElementById('bl-ov-root') as HTMLDivElement;
 let root:HTMLElement|null=null;
@@ -77,6 +80,25 @@ type Message={type?:string;payload?:Record<string,unknown>};
 
 function handle(msg:Message){
  const payload=msg.payload;
+ if(msg.type==='alerts'){
+  if(profile&&String(payload?.profileId||'')!==profile)return;
+  alertsCfg=normalizeAlerts(payload?.config);
+  return;
+ }
+ if(msg.type==='alert'){
+  if(profile&&String(payload?.profileId||'')!==profile)return;
+  const kind=payload?.kind;
+  if(!isAlertKind(kind))return;
+  if(!alertHost){alertHost=document.createElement('div');document.body.appendChild(alertHost)}
+  const ev=alertsCfg.events[kind];
+  const vars=(payload?.vars&&typeof payload.vars==='object'?payload.vars:{}) as Record<string,unknown>;
+  queueAlert(alertHost,{
+   cfg:alertsCfg,kind,vars:vars as AlertVars,
+   // O som sai da API local com a mesma chave que abriu este overlay.
+   audio:ev.sound?{src:alertSoundUrl(port,token,ev.sound),volume:alertsCfg.volume}:null,
+  });
+  return;
+ }
  if(msg.type==='design'){
   if(profile&&String(payload?.profileId||'')!==profile)return;
   design=normalizeDesign(payload?.design);

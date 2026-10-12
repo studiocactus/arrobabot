@@ -22,7 +22,7 @@ pub struct Asset {pub id:String,pub kind:String,pub name:String,pub path:String}
 #[derive(Default)]
 pub struct State {last:HashMap<String,Instant>,seen:HashSet<String>,index:HashMap<String,usize>}
 pub fn config(rt:&Runtime,p:&str)->Config {rt.db.module_cfg(p,"chatExtras")}
-fn assets(rt:&Runtime,p:&str)->Vec<Asset>{rt.db.module_cfg(p,"chatAssets")}
+pub fn assets(rt:&Runtime,p:&str)->Vec<Asset>{rt.db.module_cfg(p,"chatAssets")}
 pub fn asset(rt:&Runtime,p:&str,id:&str,kind:&str)->R<Asset>{assets(rt,p).into_iter().find(|a|a.id==id&&a.kind==kind).ok_or("Selecione um arquivo deste perfil".into())}
 fn read_file(path:&Path,max:u64)->R<Vec<u8>>{
  let f=std::fs::File::open(path).map_err(|_|"Arquivo não encontrado ou sem permissão")?;
@@ -46,7 +46,7 @@ fn audio_kind(path:&Path,bytes:&[u8])->R<&'static str>{
  _=>Err("Escolha um áudio WAV, MP3 ou OGG válido, até 5 MiB".into())
  }
 }
-fn audio_path(rt:&Runtime,p:&str,a:&Asset)->R<PathBuf>{
+pub fn audio_path(rt:&Runtime,p:&str,a:&Asset)->R<PathBuf>{
  let root=rt.base.join("media").join(p).canonicalize().map_err(|_|"Pasta de sons ausente")?;
  let path=Path::new(&a.path).canonicalize().map_err(|_|"Som não encontrado")?;
  if !path.starts_with(&root)||path==root{return Err("Caminho de som inválido".into())}Ok(path)

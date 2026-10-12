@@ -292,6 +292,20 @@ async fn porta_local_atende_o_overlay_em_http_e_chave_do_overlay_e_somente_leitu
  let mut other=String::new();s.read_to_string(&mut other).await.unwrap();
  assert!(other.starts_with("HTTP/1.1 404"),"{other}");
 
+ // GET /asset devolve som registrado do perfil com a chave do overlay
+ let wav=dir.path().join("jingle.wav");std::fs::write(&wav,b"RIFF0000WAVEfmt ").unwrap();
+ let sid=crate::chat_extras::operation(&rt,&p.id,"chatExtras.import",&json!({"path":wav,"kind":"sound"})).unwrap()["id"].as_str().unwrap().to_owned();
+ let mut s=tokio::net::TcpStream::connect(("127.0.0.1",port)).await.unwrap();
+ s.write_all(format!("GET /asset?token={token}&id={sid} HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n").as_bytes()).await.unwrap();
+ let mut snd=String::new();s.read_to_string(&mut snd).await.unwrap();
+ assert!(snd.starts_with("HTTP/1.1 200"),"{snd}");
+ assert!(snd.contains("audio/wav"),"o som sai com o mime certo: {snd}");
+ // chave errada não devolve som algum
+ let mut s=tokio::net::TcpStream::connect(("127.0.0.1",port)).await.unwrap();
+ s.write_all(format!("GET /asset?token=outra&id={sid} HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n").as_bytes()).await.unwrap();
+ let mut wrong=String::new();s.read_to_string(&mut wrong).await.unwrap();
+ assert!(wrong.starts_with("HTTP/1.1 404"),"{wrong}");
+
  // WebSocket com a chave do overlay recebe design + meta e não submete eventos
  let (mut ws,_)=connect_async(format!("ws://127.0.0.1:{port}")).await.unwrap();
  ws.send(Message::Text(json!({"token":token}).to_string().into())).await.unwrap();
@@ -851,4 +865,41 @@ async fn the_ai_sees_what_the_streamer_just_said_on_the_mic(){
  dispatch(rt.clone(),"ai.preview",json!({"profileId":p.id,"message":"e aí"})).await.unwrap();
  let preview_request=preview_request.await.unwrap();
  assert!(preview_request["messages"][0]["content"].as_str().unwrap().contains("vamos de ranked sem stress"),"a prévia do painel da IA também lê o microfone");
+}
+
+#[tokio::test]
+async fn alertas_seguem_o_engine_e_o_painel_valida_a_configuracao(){
+ let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();
+ let p=profile("Alertas");rt.db.save_profile(&p).unwrap();
+ let mut rx=rt.broadcast.subscribe();
+
+ // o salvamento do Estúdio valida faixa e tipos antes de gravar
+ let mut cfg=crate::alerts::defaults();cfg["enabled"]=json!(true);
+ let bad=dispatch(rt.clone(),"module.config",json!({"profileId":p.id,"key":"alerts","value":{"duration":2}})).await;
+ assert!(bad.is_err(),"duração fora da faixa de 3 a 20 s deve barrar o salvamento");
+
+ // sem config salva, o follow passa e nada toca
+ let follow={let mut e=event(&p,"",false);e.kind="follow".into();e.user="Ana".into();e};
+ engine::process(rt.clone(),follow.clone()).await;
+ assert!(!std::iter::from_fn(||rx.try_recv().ok()).any(|v|v["type"]=="alert"),"sem ligar os alertas nada toca");
+
+ // ligando pelo painel, o evento real vira alerta com as variáveis dos textos
+ dispatch(rt.clone(),"module.config",json!({"profileId":p.id,"key":"alerts","value":cfg})).await.unwrap();
+ engine::process(rt.clone(),follow.clone()).await;
+ let hits:Vec<_>=std::iter::from_fn(||rx.try_recv().ok()).filter(|v|v["type"]=="alert").collect();
+ assert_eq!(hits.len(),1);
+ assert_eq!(hits[0]["payload"]["kind"],"follow");
+ assert_eq!(hits[0]["payload"]["vars"]["name"],"Ana");
+ assert_eq!(hits[0]["payload"]["profileId"],p.id);
+
+ // evento simulado também dispara — é o caminho de teste da live
+ let mut sim=follow.clone();sim.simulated=true;
+ engine::process(rt.clone(),sim).await;
+ assert_eq!(std::iter::from_fn(||rx.try_recv().ok()).filter(|v|v["type"]=="alert").count(),1);
+
+ // cada salvamento retransmite a config nova ao overlay na hora
+ let mut off=cfg.clone();off["enabled"]=json!(false);
+ rt.db.set_module(&p.id,"alerts",&off).unwrap();
+ dispatch(rt.clone(),"module.config",json!({"profileId":p.id,"key":"alerts","value":cfg})).await.unwrap();
+ assert!(std::iter::from_fn(||rx.try_recv().ok()).any(|v|v["type"]=="alerts"),"o overlay recebe a config atualizada");
 }

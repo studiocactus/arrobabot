@@ -23,7 +23,7 @@ pub async fn serve(rt: Arc<Runtime>) -> Result<(), String> {
             // Mesma porta atende a fonte do OBS em HTTP (GET /overlay) e o
             // WebSocket da aplicação; a inspeção só olha, nunca consome os bytes.
             if !is_websocket(&socket).await {
-                let _ = http(socket).await;
+                let _ = http(rt, socket).await;
                 return;
             }
             let config = WebSocketConfig::default().max_message_size(Some(64 * 1024)).max_frame_size(Some(64 * 1024));
@@ -45,6 +45,7 @@ pub async fn serve(rt: Arc<Runtime>) -> Result<(), String> {
                 let design = json!({"type": "design", "payload": {"profileId": pid, "design": livepix::design(&rt, pid)}});
                 if ws.send(Message::Text(design.to_string().into())).await.is_err() { return; }
                 if ws.send(Message::Text(livepix::goal_message(&rt, pid).to_string().into())).await.is_err() { return; }
+                if ws.send(Message::Text(crate::alerts::message(&rt, pid).to_string().into())).await.is_err() { return; }
             } else {
                 if ws.send(Message::Text(json!({"type": "ready", "version": 1}).to_string().into())).await.is_err() { return; }
                 for p in rt.db.profiles().unwrap_or_default() {
@@ -83,7 +84,7 @@ pub async fn serve(rt: Arc<Runtime>) -> Result<(), String> {
                         if let Some(pid) = &overlay_profile {
                             let kind = v["type"].as_str().unwrap_or("");
                             let own = v["payload"]["profileId"].as_str() == Some(pid.as_str());
-                            if !own || (kind != "goal" && kind != "design") { continue; }
+                            if !own || !matches!(kind, "goal" | "design" | "alerts" | "alert") { continue; }
                         }
                         if ws.send(Message::Text(v.to_string().into())).await.is_err() { break }
                     },
@@ -115,8 +116,9 @@ async fn is_websocket(socket: &TcpStream) -> bool {
     }
 }
 
-/// Responde o overlay do OBS (GET /overlay) sem depender de arquivo local.
-async fn http(mut socket: TcpStream) -> Result<(), String> {
+/// Responde a fonte do OBS (GET /overlay) e os sons do alerta
+/// (GET /asset?token=…&id=…), sem depender de arquivo local.
+async fn http(rt: Arc<Runtime>, mut socket: TcpStream) -> Result<(), String> {
     let mut buf = vec![0u8; 8192];
     let mut n = 0usize;
     loop {
@@ -135,18 +137,40 @@ async fn http(mut socket: TcpStream) -> Result<(), String> {
     let method = parts.next().unwrap_or("");
     let target = parts.next().unwrap_or("/");
     let path = target.split('?').next().unwrap_or("/");
-    let (status, body, ctype) = if method == "GET" && path == "/overlay" {
-        ("200 OK", OVERLAY_HTML, "text/html; charset=utf-8")
+    let (status, body, ctype): (&str, Vec<u8>, &str) = if method == "GET" && path == "/overlay" {
+        ("200 OK", OVERLAY_HTML.as_bytes().to_vec(), "text/html; charset=utf-8")
+    } else if method == "GET" && path == "/asset" {
+        match serve_asset(&rt, target) {
+            Ok((bytes, mime)) => ("200 OK", bytes, mime),
+            Err(_) => ("404 Not Found", b"N\xc3\xa3o encontrado.\r\n".to_vec(), "text/plain; charset=utf-8"),
+        }
     } else if method == "GET" {
-        ("404 Not Found", "Não encontrado.\r\n", "text/plain; charset=utf-8")
+        ("404 Not Found", b"N\xc3\xa3o encontrado.\r\n".to_vec(), "text/plain; charset=utf-8")
     } else {
-        ("405 Method Not Allowed", "Método não suportado.\r\n", "text/plain; charset=utf-8")
+        ("405 Method Not Allowed", b"M\xc3\xa9todo n\xc3\xa3o suportado.\r\n".to_vec(), "text/plain; charset=utf-8")
     };
-    let response = format!(
-        "HTTP/1.1 {status}\r\nContent-Type: {ctype}\r\nContent-Length: {}\r\nConnection: close\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\n\r\n{body}",
+    let header = format!(
+        "HTTP/1.1 {status}\r\nContent-Type: {ctype}\r\nContent-Length: {}\r\nConnection: close\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\n\r\n",
         body.len()
     );
-    let _ = socket.write_all(response.as_bytes()).await;
+    let _ = socket.write_all(header.as_bytes()).await;
+    let _ = socket.write_all(&body).await;
     let _ = socket.shutdown().await;
     Ok(())
+}
+
+/// Um som só sai se o token pertencer ao perfil e o id existir na lista de
+/// arquivos dele — a rota nunca serve caminho arbitrário.
+fn serve_asset(rt: &Arc<Runtime>, target: &str) -> Result<(Vec<u8>, &'static str), String> {
+    let token = query(target, "token").ok_or("Chave ausente")?;
+    let id = query(target, "id").ok_or("Som ausente")?;
+    let pid = livepix::overlay_profile(rt, &token).ok_or("Chave de overlay inválida")?;
+    crate::alerts::sound_file(rt, &pid, &id)
+}
+
+fn query(target: &str, key: &str) -> Option<String> {
+    let prefix = format!("{key}=");
+    target.split('?').nth(1)?.split('&').find_map(|part| {
+        part.strip_prefix(prefix.as_str()).filter(|v| !v.is_empty() && v.len() <= 64).map(|v| v.to_string())
+    })
 }

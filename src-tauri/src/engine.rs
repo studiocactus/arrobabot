@@ -214,7 +214,7 @@ pub async fn process(rt:Arc<Runtime>,e:Event){
  if let Some(reply)=crate::discord_engage::link_command(&rt,&p,&e){if let Err(err)=rt.send(&p,&e,&reply).await{rt.log(&p.id,"discord",&err,"error");}return}
  crate::discord::mirror_chat(&rt,&p,&e);
  }
- if matches!(e.kind.as_str(),"follow"|"subscription"|"resub"|"gift"|"cheer"|"raid"){crate::discord::notify(&rt,&p,&e.kind,&e);}
+ if matches!(e.kind.as_str(),"follow"|"subscription"|"resub"|"gift"|"cheer"|"raid"){crate::discord::notify(&rt,&p,&e.kind,&e);crate::alerts::fire(&rt,&p,&e);}
  if (e.kind=="live"||e.kind=="unlive")&&!e.simulated{
   let (rt2,p2,on)=(rt.clone(),p.clone(),e.kind=="live");
   tokio::spawn(async move{crate::discord::live_alert(&rt2,&p2,on);});

@@ -40,6 +40,7 @@ mod discord;
 mod discord_admin;
 mod discord_engage;
 mod livepix;
+mod alerts;
 use engine::Runtime;
 use model::*;
 use serde_json::{json,Value};
@@ -163,8 +164,10 @@ pub async fn dispatch(rt:Arc<Runtime>,op:&str,args:Value)->R<Value>{
  "voice.status"=>Ok(listen::status(&rt,&p)),
  "update.check"=>update::check(&rt,false).await,
  "update.install"=>update::check(&rt,true).await,
- "module.config"=>{rt.db.profile(&p)?;let key=args["key"].as_str().ok_or("Configuração ausente")?;if !["moderation","tts","voice","obsidian","points","songs","discord","discordBot","games"].contains(&key){return Err("Configuração inválida".into())}if key=="moderation"&&!moderation::valid_config(&args["value"]){return Err("Ação inválida".into())}if key=="voice"&&!listen::valid_config(&args["value"]){return Err("Configuração de voz inválida: o servidor de transcrição precisa ser local (127.0.0.1) e os limites do painel têm faixas fixas".into())}if key=="discordBot"&&!discord_admin::valid_config(&args["value"]){return Err("Configuração do Discord inválida. Confira o servidor e os canais informados.".into())}rt.db.set_module(&p,key,&args["value"])?;Ok(Value::Null)},
+ "module.config"=>{rt.db.profile(&p)?;let key=args["key"].as_str().ok_or("Configuração ausente")?;if !["moderation","tts","voice","obsidian","points","songs","discord","discordBot","games","alerts"].contains(&key){return Err("Configuração inválida".into())}if key=="moderation"&&!moderation::valid_config(&args["value"]){return Err("Ação inválida".into())}if key=="voice"&&!listen::valid_config(&args["value"]){return Err("Configuração de voz inválida: o servidor de transcrição precisa ser local (127.0.0.1) e os limites do painel têm faixas fixas".into())}if key=="discordBot"&&!discord_admin::valid_config(&args["value"]){return Err("Configuração do Discord inválida. Confira o servidor e os canais informados.".into())}if key=="alerts"&&!alerts::valid_config(&args["value"]){return Err("Configuração de alertas inválida: confira duração (3 a 20 s), velocidade, cores, fontes e textos de cada evento".into())}rt.db.set_module(&p,key,&args["value"])?;if key=="alerts"{rt.emit("alerts",json!({"profileId":p,"config":args["value"]}));}Ok(Value::Null)},
  "module.config.get"=>{rt.db.profile(&p)?;Ok(rt.db.module(&p,args["key"].as_str().ok_or("Configuração ausente")?))},
+ "alerts.get"=>{let profile=rt.db.profile(&p)?;Ok(json!({"config":alerts::config(&rt,&p),"sounds":alerts::sounds(&rt,&p),"overlay":livepix::overlay_info(&rt,&profile.id)?}))},
+ "alerts.test"=>{let profile=rt.db.profile(&p)?;alerts::test(&rt,&profile,args["kind"].as_str().ok_or("Evento ausente")?)},
  "settings"=>{let key=args["key"].as_str().ok_or("Configuração inválida")?;if !["theme","accent","apiPort","updateEndpoint","updatePublicKey","autoUpdate"].contains(&key){return Err("Configuração não permitida".into())}if key=="accent"&&!args["value"].as_str().is_some_and(|v|v.is_empty()||(v.len()==7&&v.starts_with('#')&&v[1..].chars().all(|c|c.is_ascii_hexdigit()))){return Err("Cor inválida".into())}rt.db.set(key,&args["value"])?;Ok(Value::Null)},
  "settings.get"=>Ok(json!({"theme":rt.db.get("theme"),"accent":rt.db.get("accent"),"apiPort":rt.db.get("apiPort"),"apiToken":rt.api_token,"updateEndpoint":update::endpoint(&rt),"updatePublicKey":update::public_key(&rt),"autoUpdate":rt.db.get("autoUpdate")})),
  "backup.get"=>Ok(backup::config(&rt.db)),

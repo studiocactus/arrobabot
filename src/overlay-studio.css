@@ -39,6 +39,10 @@ button.lp-tpl.selected{border-color:var(--accent)}
 .lp-save--saved{color:#7dd58a}
 .lp-save--error{color:#ef999d}
 
+/* Estúdio de Alertas: seletor de eventos com ponto para os desligados. */
+.al-pills{display:flex;gap:6px;flex-wrap:wrap;min-width:0}
+.al-pill-off{margin-left:6px;color:var(--muted);font-size:14px;line-height:1}
+
 .lp-url{display:flex;gap:10px;align-items:stretch;flex-wrap:wrap;margin:10px 0 4px}
 .lp-url code{flex:1 1 260px;min-width:0;word-break:break-all;white-space:normal;background:var(--bg);border:1px solid var(--border);border-radius:var(--r-md);padding:11px 12px;font-size:12px;line-height:1.5}
 .lp-steps{margin:8px 0 4px;padding-left:22px;font-size:12px;line-height:1.9;color:var(--muted)}
