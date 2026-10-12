@@ -1,6 +1,6 @@
 use crate::{cmd_manager, db::Db,model::*,ai,oauth,platforms,vault,modules};
 use serde_json::{json,Value};
-use std::{collections::HashMap,path::PathBuf,sync::{Arc,Mutex},time::{Instant,Duration}};
+use std::{collections::{HashMap,HashSet},path::PathBuf,sync::{Arc,Mutex},time::{Instant,Duration}};
 use tokio::sync::{broadcast,mpsc,Semaphore};
 use tauri::Emitter;
 pub struct Runtime {
@@ -23,6 +23,7 @@ pub struct Runtime {
  pub voice_fx:crate::voice_fx::Fx,
  pub seen:Mutex<HashMap<String,Instant>>,
  pub seen_chatters:Mutex<HashMap<String,(String,Instant)>>,
+ pub chat_seen:Mutex<HashMap<String,HashSet<String>>>,
  pub module_lock:Mutex<()>,pub vault_lock:Mutex<()>,pub send_locks:Mutex<HashMap<String,Arc<tokio::sync::Mutex<Instant>>>>,
  pub api_token:String,pub api_port:Mutex<u16>,pub actor:Mutex<String>,
 }
@@ -33,7 +34,7 @@ impl Runtime {
  let (tx,rx)=mpsc::channel(512);let (broadcast,_)=broadcast::channel(512);
  let http=reqwest::Client::builder().timeout(Duration::from_secs(30)).redirect(reqwest::redirect::Policy::none()).build().map_err(|e|e.to_string())?;
  let actor=if db.get("accessEnabled")==true{"locked"}else{"owner"}.to_owned();
- let rt=Arc::new(Self{actor:Mutex::new(actor),db,base,http,tx,broadcast,app:Mutex::new(None),connections:Mutex::new(HashMap::new()),statuses:Mutex::new(HashMap::new()),discord_tasks:Mutex::new(HashMap::new()),discord_status:Mutex::new(HashMap::new()),discord_cache:Mutex::new(HashMap::new()),timer_pending:Mutex::new(std::collections::HashSet::new()),cooldowns:Mutex::new(HashMap::new()),conversation:Mutex::new(crate::conversation::History::default()),live:crate::live_state::LiveStates::default(),listen:crate::listen::Sessions::default(),chat_extras:Mutex::new(crate::chat_extras::State::default()),runs:crate::runs::Runs::default(),obs:crate::obs::Locks::default(),voice_fx:crate::voice_fx::Fx::default(),seen:Mutex::new(HashMap::new()),seen_chatters:Mutex::new(HashMap::new()),module_lock:Mutex::new(()),vault_lock:Mutex::new(()),send_locks:Mutex::new(HashMap::new()),api_token:format!("{}{}",uuid::Uuid::new_v4().simple(),uuid::Uuid::new_v4().simple()),api_port:Mutex::new(0)});
+ let rt=Arc::new(Self{actor:Mutex::new(actor),db,base,http,tx,broadcast,app:Mutex::new(None),connections:Mutex::new(HashMap::new()),statuses:Mutex::new(HashMap::new()),discord_tasks:Mutex::new(HashMap::new()),discord_status:Mutex::new(HashMap::new()),discord_cache:Mutex::new(HashMap::new()),timer_pending:Mutex::new(std::collections::HashSet::new()),cooldowns:Mutex::new(HashMap::new()),conversation:Mutex::new(crate::conversation::History::default()),live:crate::live_state::LiveStates::default(),listen:crate::listen::Sessions::default(),chat_extras:Mutex::new(crate::chat_extras::State::default()),runs:crate::runs::Runs::default(),obs:crate::obs::Locks::default(),voice_fx:crate::voice_fx::Fx::default(),seen:Mutex::new(HashMap::new()),seen_chatters:Mutex::new(HashMap::new()),chat_seen:Mutex::new(HashMap::new()),module_lock:Mutex::new(()),vault_lock:Mutex::new(()),send_locks:Mutex::new(HashMap::new()),api_token:format!("{}{}",uuid::Uuid::new_v4().simple(),uuid::Uuid::new_v4().simple()),api_port:Mutex::new(0)});
  tokio::spawn(worker(rt.clone(),rx));Ok(rt)
  }
  pub fn emit(&self,kind:&str,payload:Value){
@@ -110,6 +111,9 @@ impl Runtime {
   if let Some(note)=note{self.log(&p.id,"discord",note,"info");}
  }else{
   platforms::send_as(self,&fresh,text,kind,color,if reply.is_empty(){None}else{Some(reply.as_str())}).await?;
+  // A resposta do bot aparece no chat do overlay junto com as mensagens dos
+  // espectadores, sem exigir nada de quem só assiste.
+  if kind=="chat"{crate::chat_overlay::bot(self,&fresh,text);}
   if kind!="chat"&&fresh.platform!="twitch"{if let Some(note)=note{self.log(&p.id,"chat",note,"info");}}
  }
  if let Some(note)=reply_note{self.log(&p.id,"chat",&note,"info");}
@@ -129,8 +133,14 @@ async fn worker(rt:Arc<Runtime>,mut rx:mpsc::Receiver<Event>){
 pub async fn process(rt:Arc<Runtime>,e:Event){
  let _pending=crate::timers::Pending(rt.clone(),if e.kind=="timer"&&!e.simulated{e.data["timerId"].as_str().map(str::to_owned)}else{None});
  let Ok(p)=rt.db.profile(&e.profile_id) else{return};
+ // Deleções da Twitch (apagar mensagem, limpar chat) só mexem no overlay do
+ // chat: removem o que já estava renderizado e seguem o fluxo do bot.
+ if matches!(e.kind.as_str(),"chat.delete"|"chat.deleteUser"|"chat.clear"){if !e.simulated{crate::chat_overlay::removed(&rt,&p,&e);}return}
  if e.kind=="chat"&&!e.simulated&&!p.bot_id.is_empty()&&e.user_id==p.bot_id{return}
  if e.kind=="chat"{crate::twitch_ops::note_chatter(&rt,&e);}
+ // A mensagem entra no chat do overlay antes dos comandos: o que o espectador
+ // digitou aparece na fonte do OBS mesmo quando o bot responde ou modera.
+ if e.kind=="chat"&&!e.simulated{crate::chat_overlay::fire(&rt,&p,&e);}
   // Novo: Tratar !cmd apenas para moderadores e streamer
   if e.kind=="chat"&&!e.simulated&&!p.bot_id.is_empty()&&e.user_id!=p.bot_id&&e.message.starts_with("!cmd") {
     // Verificar se o usuário tem permissão de moderador ou broadcaster

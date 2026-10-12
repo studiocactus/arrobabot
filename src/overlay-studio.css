@@ -54,3 +54,8 @@ button.lp-tpl.selected{border-color:var(--accent)}
 .lp-frame[data-bg=dark]{background:radial-gradient(130% 130% at 25% 0%,#22344a 0%,#0a0e14 62%)}
 .lp-frame[data-bg=light]{background:linear-gradient(160deg,#93a9bd 0%,#dde7ef 48%,#b3c5d4 100%)}
 .lp-canvas{position:absolute;top:0;left:0;width:1920px;height:1080px;transform-origin:top left}
+
+/* Estúdio de chat: cena escura com a coluna em tamanho real. */
+.ch-stage{position:relative;height:460px;border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden;background:radial-gradient(130% 130% at 25% 0%,#22344a 0%,#0a0e14 62%)}
+.ch-stage-hint{position:absolute;top:10px;left:12px;font-size:10px;letter-spacing:.14em;color:#5b6b80;pointer-events:none}
+.ch-tests{flex-wrap:wrap}

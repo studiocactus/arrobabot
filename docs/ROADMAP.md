@@ -4,6 +4,12 @@ O que já está no BotLive e o que está planejado. Este documento é a referên
 
 ## Entregue
 
+- **0.5 — Chat no overlay (0.5.0)** — a tela **Chat no OBS** transforma o chat da live em uma coluna na mesma fonte de navegador do overlay: badges desenhadas por papel (transmissor, moderador, VIP, inscrito, fundador, Prime, bits, presente), emotes da Twitch em tamanho dobrado quando a mensagem é só de emote, destaque por papel com barra ou fundo, primeira mensagem marcada, listras, quatro animações de entrada, teto de mensagens e some-depois. Filtros de comandos, bots e palavras bloqueadas; mensagens do próprio bot entram como resposta; mensagens apagadas pela moderação somem do overlay na hora (eventos `message_delete`/`clear` da Twitch). Prévia em tamanho real no Estúdio, com os mesmos motores do OBS e testes que seguem os filtros.
+
+- **0.4 — Estúdio de Alertas (0.4.0)** — follows, subs, presentes, bits e raids viram painéis animados ("janela de sistema") na mesma fonte do overlay da meta, com configuração por evento (etiqueta, nome, linha grande, linha final, som), fontes, cores, efeitos e testes que entram pelo mesmo caminho do evento real. Ver [Alertas da live](11-ALERTAS.md).
+
+- **Comandos naturais — onda 1** — streamer e moderadores escrevem por extenso (com a palavra de ativação do Controle por voz) para mudar título e categoria; o parser é determinístico e falha fechado. Silenciar, banir, VIP e moderadores ficam para a onda 2.
+
 - **UX 2.0 (em andamento)** — as primeiras etapas já estão na versão atual:
   - Resumo legível de cada etapa direto no bloco do canvas, com a cadeia empilhada de cima para baixo.
   - **Adicionar etapa** cria a etapa no fim da cadeia já ligada à última, selecionada e com a configuração aberta, em espaço livre e sem redefinir o zoom.

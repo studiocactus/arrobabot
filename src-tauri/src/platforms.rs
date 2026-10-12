@@ -146,8 +146,15 @@ async fn twitch_session(rt:Arc<Runtime>,p:Profile,account:&str)->Result<(),Strin
  match v["metadata"]["message_type"].as_str().unwrap_or(""){
  "session_welcome"=>{
  let session=v["payload"]["session"]["id"].as_str().ok_or("Sessão Twitch inválida")?;
- if account=="bot" {subscribe(&rt,&p,&bot,session,"channel.chat.message","1",json!({"broadcaster_user_id":p.channel_id,"user_id":p.bot_id})).await?;
- rt.status(&p.id,"online");seed_category(&rt,&p).await;}
+ if account=="bot" {
+  subscribe(&rt,&p,&bot,session,"channel.chat.message","1",json!({"broadcaster_user_id":p.channel_id,"user_id":p.bot_id})).await?;
+  // Deleções sincronizam o chat do overlay com a moderação; os escopos do bot
+  // (user:read:chat) já cobrem esses eventos. Falha em um deles não derruba o chat.
+  for kind in ["channel.chat.message_delete","channel.chat.clear","channel.chat.clear_user_messages"]{
+   if let Err(err)=subscribe(&rt,&p,&bot,session,kind,"1",json!({"broadcaster_user_id":p.channel_id,"user_id":p.bot_id})).await{rt.log(&p.id,"subscription",&format!("{kind}: {err}"),"error");}
+  }
+  rt.status(&p.id,"online");seed_category(&rt,&p).await;
+ }
  if account=="channel"{let channel=bot.clone();
  for (kind,version,condition) in [
  ("channel.follow","2",json!({"broadcaster_user_id":p.channel_id,"moderator_user_id":p.channel_id})),
@@ -198,8 +205,8 @@ async fn subscribe(rt:&Runtime,p:&Profile,token:&str,session:&str,kind:&str,vers
 pub fn normalize_twitch(p:&Profile,v:&Value)->Option<Event>{
  let payload=&v["payload"]["event"];
  let kind=match v["metadata"]["subscription_type"].as_str()?{
- "channel.chat.message"=>"chat","channel.follow"=>"follow","channel.subscribe"=>"subscription","channel.subscription.message"=>"resub","channel.subscription.gift"=>"gift","channel.cheer"=>"cheer","channel.raid"=>"raid","channel.channel_points_custom_reward_redemption.add"=>"redemption","channel.update"=>"category","stream.online"=>"live","stream.offline"=>"unlive",_=>return None};
- let user_id=payload["chatter_user_id"].as_str().or(payload["user_id"].as_str()).or(payload["from_broadcaster_user_id"].as_str()).or(payload["broadcaster_user_id"].as_str()).unwrap_or("");
+ "channel.chat.message"=>"chat","channel.chat.message_delete"=>"chat.delete","channel.chat.clear"=>"chat.clear","channel.chat.clear_user_messages"=>"chat.deleteUser","channel.follow"=>"follow","channel.subscribe"=>"subscription","channel.subscription.message"=>"resub","channel.subscription.gift"=>"gift","channel.cheer"=>"cheer","channel.raid"=>"raid","channel.channel_points_custom_reward_redemption.add"=>"redemption","channel.update"=>"category","stream.online"=>"live","stream.offline"=>"unlive",_=>return None};
+ let user_id=payload["chatter_user_id"].as_str().or(payload["user_id"].as_str()).or(payload["target_user_id"].as_str()).or(payload["from_broadcaster_user_id"].as_str()).or(payload["broadcaster_user_id"].as_str()).unwrap_or("");
  if kind!="category"&&user_id==p.bot_id{return None}
  let mut role="everyone";
  if let Some(badges)=payload["badges"].as_array(){
@@ -207,7 +214,7 @@ pub fn normalize_twitch(p:&Profile,v:&Value)->Option<Event>{
  for b in badges{if b["set_id"]=="moderator"{role="moderator"}}
  }
  if user_id==p.channel_id{role="broadcaster"}
- Some(Event{id:v["metadata"]["message_id"].as_str()?.into(),profile_id:p.id.clone(),kind:kind.into(),user:payload["chatter_user_name"].as_str().or(payload["user_name"].as_str()).or(payload["from_broadcaster_user_name"].as_str()).or(payload["broadcaster_user_name"].as_str()).unwrap_or("espectador").into(),user_id:user_id.into(),role:role.into(),message:payload["message"]["text"].as_str().or(payload["message"].as_str()).or(payload["user_input"].as_str()).or(payload["category_name"].as_str()).unwrap_or("").into(),data:payload.clone(),simulated:false})
+ Some(Event{id:v["metadata"]["message_id"].as_str()?.into(),profile_id:p.id.clone(),kind:kind.into(),user:payload["chatter_user_name"].as_str().or(payload["user_name"].as_str()).or(payload["target_user_name"].as_str()).or(payload["from_broadcaster_user_name"].as_str()).or(payload["broadcaster_user_name"].as_str()).unwrap_or("espectador").into(),user_id:user_id.into(),role:role.into(),message:payload["message"]["text"].as_str().or(payload["message"].as_str()).or(payload["message_id"].as_str()).or(payload["user_input"].as_str()).or(payload["category_name"].as_str()).unwrap_or("").into(),data:payload.clone(),simulated:false})
 }
 pub async fn youtube(rt:Arc<Runtime>,p:Profile)->Result<(),String>{
  let token=oauth::token(&rt.http,&p,"bot").await?;

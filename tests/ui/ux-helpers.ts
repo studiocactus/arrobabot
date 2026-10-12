@@ -18,7 +18,7 @@ export const flows=[
   actions:[act('condition','',{condVar:'reward.cost',condOp:'greater_or_equal',condValue:'100',condFalse:'stop'}),act('chat','Oi {{viewer.name}}'),act('overlay','Aparece na OBS')]}
 ];
 
-export const NAV=['Visão geral','Perfis de bot','Discord','Rótulos OBS','Comandos','Timers','Respostas e sons','Sons','OBS Studio','Alertas','Voz da live','LivePix','Contadores','Automações','Inteligência artificial','Memórias','Comunidade','Biblioteca de presets','Histórico','Estatísticas'];
+export const NAV=['Visão geral','Perfis de bot','Discord','Rótulos OBS','Comandos','Timers','Respostas e sons','Sons','OBS Studio','Alertas','Chat no OBS','Voz da live','LivePix','Contadores','Automações','Inteligência artificial','Memórias','Comunidade','Biblioteca de presets','Histórico','Estatísticas'];
 
 const LOGS=[
  {id:'l1',profileId:'p1',kind:'run',message:'Execução concluída com sucesso no fluxo de boas-vindas',status:'success',at:'2026-10-07T10:00:00Z'},
@@ -89,6 +89,7 @@ export async function mock(page:Page){
       case 'chatExtras.get':return {phrases:[],sounds:[]};
       case 'alerts.get':return {config:null,sounds:[{id:'s1',name:'jingle.wav'}],overlay:{token:'preview-token',port:9876,url:'http://127.0.0.1:9876/overlay#token=preview-token&profile=p1'}};
       case 'alerts.test':return {kind:String((payload.args as Record<string,unknown>)?.kind||'follow'),vars:{name:'NovoSeguidor',amount:1,months:1,tier:'TIER 1',message:''}};
+      case 'chat.get':return {config:null,overlay:{token:'preview-token',port:9876,url:'http://127.0.0.1:9876/overlay#token=preview-token&profile=p1'}};
       case 'update.check':return {available:false};
       default:st.unknown.push(op);return lists.includes(op)?[]:null;
      }

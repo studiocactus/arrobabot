@@ -10,6 +10,7 @@ import {
  type GoalModel,type OverlayDesign,type Spec,
 } from './overlayDesign';
 import {alertSoundUrl,isAlertKind,normalizeAlerts,queueAlert,type AlertVars,type AlertsConfig} from './alerts';
+import {chatVisible,clearChat,deleteChat,deleteUserChat,normalizeChat,pushChat,type ChatConfig,type ChatMsg} from './chatOverlay';
 
 const params=new URLSearchParams(location.hash.slice(1));
 const token=params.get('token')||'';
@@ -25,6 +26,19 @@ let ws:WebSocket|null=null;
 let retry=3000;
 let alertsCfg:AlertsConfig=normalizeAlerts(null);
 let alertHost:HTMLElement|null=null;
+let chatCfg:ChatConfig=normalizeChat(null);
+let chatHost:HTMLElement|null=null;
+
+/** Coluna do chat: criada na primeira mensagem e sempre no mesmo lugar. */
+function chatBox():HTMLElement{
+ if(!chatHost){
+  chatHost=document.createElement('div');
+  chatHost.className='bl-chat-col bl-chat-fixed';
+  chatHost.setAttribute('aria-hidden','true');
+  document.body.appendChild(chatHost);
+ }
+ return chatHost;
+}
 
 const host=document.getElementById('bl-ov-root') as HTMLDivElement;
 let root:HTMLElement|null=null;
@@ -97,6 +111,33 @@ function handle(msg:Message){
    // O som sai da API local com a mesma chave que abriu este overlay.
    audio:ev.sound?{src:alertSoundUrl(port,token,ev.sound),volume:alertsCfg.volume}:null,
   });
+  return;
+ }
+ if(msg.type==='chat.config'){
+  if(profile&&String(payload?.profileId||'')!==profile)return;
+  chatCfg=normalizeChat(payload?.config);
+  if(!chatCfg.enabled&&chatHost)clearChat(chatHost);
+  return;
+ }
+ if(msg.type==='chat'){
+  if(profile&&String(payload?.profileId||'')!==profile)return;
+  const m=payload as unknown as ChatMsg;
+  if(chatCfg.enabled&&chatVisible(m,chatCfg))pushChat(chatBox(),m,chatCfg,40);
+  return;
+ }
+ if(msg.type==='chat.delete'){
+  if(profile&&String(payload?.profileId||'')!==profile)return;
+  if(chatHost)deleteChat(chatHost,String(payload?.id||''));
+  return;
+ }
+ if(msg.type==='chat.deleteUser'){
+  if(profile&&String(payload?.profileId||'')!==profile)return;
+  if(chatHost)deleteUserChat(chatHost,String(payload?.userId||''));
+  return;
+ }
+ if(msg.type==='chat.clear'){
+  if(profile&&String(payload?.profileId||'')!==profile)return;
+  if(chatHost)clearChat(chatHost);
   return;
  }
  if(msg.type==='design'){

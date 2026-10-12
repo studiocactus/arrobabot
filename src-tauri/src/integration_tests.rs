@@ -903,3 +903,57 @@ async fn alertas_seguem_o_engine_e_o_painel_valida_a_configuracao(){
  dispatch(rt.clone(),"module.config",json!({"profileId":p.id,"key":"alerts","value":cfg})).await.unwrap();
  assert!(std::iter::from_fn(||rx.try_recv().ok()).any(|v|v["type"]=="alerts"),"o overlay recebe a config atualizada");
 }
+
+#[tokio::test]
+async fn chat_no_overlay_segue_o_motor_e_a_delecao_sincroniza(){
+ let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();
+ let p=profile("Chat");rt.db.save_profile(&p).unwrap();
+ let mut rx=rt.broadcast.subscribe();
+
+ // sem ligar o chat, a mensagem do espectador não vai ao overlay
+ let msg={let mut e=event(&p,"boa noite, canal!",false);e.role="moderator".into();e.data=json!({"message_id":"msg-1","badges":[{"set_id":"moderator"}],"message":{"text":"boa noite, canal!","fragments":[{"type":"text","text":"boa noite, canal!"}]}});e};
+ engine::process(rt.clone(),msg.clone()).await;
+ assert!(!std::iter::from_fn(||rx.try_recv().ok()).any(|v|v["type"]=="chat"),"chat desligado não transmite nada");
+
+ // ligando pelo painel (mesmo caminho do Estúdio), a mensagem leva papel, badges e emotes
+ let mut cfg=crate::chat_overlay::defaults();cfg["enabled"]=json!(true);
+ dispatch(rt.clone(),"module.config",json!({"profileId":p.id,"key":"chatOverlay","value":cfg})).await.unwrap();
+ let msg2={let mut m=msg.clone();m.message="valeu Kappa".into();m.data=json!({"message_id":"msg-1","badges":[{"set_id":"moderator"},{"set_id":"subscriber"}],"message":{"text":"valeu Kappa","fragments":[{"type":"text","text":"valeu "},{"type":"emote","text":"Kappa","emote":{"id":"25"}}]}});m};
+ engine::process(rt.clone(),msg2.clone()).await;
+ let hits:Vec<_>=std::iter::from_fn(||rx.try_recv().ok()).filter(|v|v["type"]=="chat").collect();
+ assert_eq!(hits.len(),1);
+ assert_eq!(hits[0]["payload"]["id"],"msg-1","o overlay remove depois pelo id da mensagem, não da notificação");
+ assert_eq!(hits[0]["payload"]["role"],"moderator");
+ assert_eq!(hits[0]["payload"]["badges"][1],"subscriber");
+ assert_eq!(hits[0]["payload"]["frags"][1]["id"],"25","emote chega com id para a CDN");
+ assert_eq!(hits[0]["payload"]["first"],true,"a primeira mensagem do espectador é marcada");
+ assert_eq!(hits[0]["payload"]["bot"],false);
+
+ // a mesma pessoa de novo não é primeira mensagem
+ engine::process(rt.clone(),msg2.clone()).await;
+ let again:Vec<_>=std::iter::from_fn(||rx.try_recv().ok()).filter(|v|v["type"]=="chat").collect();
+ assert_eq!(again[0]["payload"]["first"],false);
+
+ // teste simulado (fluxo de teste) não vaza no chat do overlay
+ let mut sim=msg2.clone();sim.simulated=true;
+ engine::process(rt.clone(),sim).await;
+ assert!(!std::iter::from_fn(||rx.try_recv().ok()).any(|v|v["type"]=="chat"),"evento simulado não entra no chat do overlay");
+
+ // resposta do bot também entra, com o nome configurado
+ crate::chat_overlay::bot(&rt,&p,"Valeu, Ana!");
+ let bots:Vec<_>=std::iter::from_fn(||rx.try_recv().ok()).filter(|v|v["type"]=="chat").collect();
+ assert_eq!(bots[0]["payload"]["bot"],true);
+ assert_eq!(bots[0]["payload"]["user"],"BotLive");
+
+ // apagar a mensagem na Twitch remove da fonte do OBS
+ let del=platforms::normalize_twitch(&p,&json!({"metadata":{"subscription_type":"channel.chat.message_delete","message_id":"n1"},"payload":{"event":{"broadcaster_user_id":"123","target_user_id":"ana","target_user_name":"Ana","message_id":"msg-1"}}})).unwrap();
+ assert_eq!(del.kind,"chat.delete");assert_eq!(del.message,"msg-1");assert_eq!(del.user,"Ana");
+ engine::process(rt.clone(),del).await;
+ assert!(std::iter::from_fn(||rx.try_recv().ok()).any(|v|v["type"]=="chat.delete"&&v["payload"]["id"]=="msg-1"));
+
+ // limpar o chat zera a coluna
+ let clear=platforms::normalize_twitch(&p,&json!({"metadata":{"subscription_type":"channel.chat.clear","message_id":"n2"},"payload":{"event":{"broadcaster_user_id":"123"}}})).unwrap();
+ assert_eq!(clear.kind,"chat.clear");
+ engine::process(rt.clone(),clear).await;
+ assert!(std::iter::from_fn(||rx.try_recv().ok()).any(|v|v["type"]=="chat.clear"));
+}
