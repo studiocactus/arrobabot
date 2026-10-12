@@ -342,6 +342,8 @@ async fn module_configuration_and_theme_roundtrip(){
  let preset=presets::export(&rt,&a.id,"profile","Completo",vec![]).unwrap();
  presets::apply(&rt,&b.id,&preset,"cancel").unwrap();
  assert_eq!(rt.db.module(&b.id,"points")["amount"],7);assert_eq!(rt.db.get("accent"),"#4466aa");
+ let got=dispatch(rt.clone(),"settings.get",json!({})).await.unwrap();
+ assert_eq!(got["accent"],"#4466aa");assert_eq!(got["theme"],"light");
  let mut e=event(&b,"!pontos",false);e.role="subscriber".into();
  let reply=modules::chat(&rt,&b,&e).unwrap().unwrap();
  assert!(reply.contains("21 folhas"));assert_eq!(modules::load(&rt,&b.id).balances["ana"],21);

@@ -28,7 +28,7 @@ export async function api<T=unknown>(op:string,args:Args={}):Promise<T>{
  case 'presets':result=s.presets;break;
  case 'preset.save':{const p=args.preset as Preset;s.presets=s.presets.filter(x=>x.id!==p.id).concat(p);break}
  case 'settings':if(args.key==='theme')s.theme=String(args.value);if(args.key==='accent')s.accent=String(args.value);break;
- case 'settings.get':result={theme:s.theme,apiPort:9876,apiToken:'Disponível no aplicativo desktop',updateEndpoint:'',updatePublicKey:'',autoUpdate:false};break;
+ case 'settings.get':result={theme:s.theme,accent:s.accent,apiPort:9876,apiToken:'Disponível no aplicativo desktop',updateEndpoint:'',updatePublicKey:'',autoUpdate:false};break;
  case 'secret.status':result={ai:false,bot:false,channel:false};break;
   case 'discord.status':{const c=s.discord||{};result={status:'offline',running:false,enabled:Boolean(c.enabled),hasToken:false,config:c,guilds:[{id:'123456789012345678',name:'Servidor da comunidade'}],guildId:String(c.guildId||''),channels:[{id:'111111111111111111',name:'geral',type:0},{id:'222222222222222222',name:'avisos',type:0},{id:'333333333333333333',name:'sorteios',type:0}],roles:[{id:'444444444444444444',name:'Moderador'},{id:'555555555555555555',name:'Assinante'}],moduleEnabled:false,platform:'twitch',auditCount:0};break}
   case 'discord.save':s.discord=(args.config||{})as Record<string,unknown>;break;

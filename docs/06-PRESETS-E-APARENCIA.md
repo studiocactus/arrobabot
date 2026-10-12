@@ -66,11 +66,13 @@ O preset de IA deixa o modelo vazio: selecione um modelo existente antes de test
 
 ## Personalizar o painel
 
-Em **Configurações → Do seu jeito**, selecione Escuro ou Claro. Escolha **Cor de destaque** para os elementos que usam a cor principal: botões, ícones ativos, bordas realçadas e recuos de caixas seguem a escolha — inclusive os que antes ficavam verdes por padrão. O texto dos botões principais ajusta o contraste em relação à cor escolhida.
+Em **Configurações → Do seu jeito**, a seção **Aparência** mostra duas amostras com prévia do resultado: **Escuro** e **Claro**. Clique na que quiser; o painel inteiro troca na hora e a escolha fica salva. O botão de sol/lua na barra superior alterna o mesmo modo.
 
-**Restaurar padrão** remove a cor personalizada e volta à cor do modo claro/escuro. Não apaga perfis nem configurações de módulos.
+**Cor de destaque** tem uma fila de amostras prontas (coral, âmbar, verde, azul, violeta e rosa) com anel no que está em uso: um clique aplica a cor em todo o painel — botões, ícones ativos, bordas realçadas e recuos seguem a escolha, inclusive os que antes ficavam verdes por padrão. A caixa de cor ao lado escolhe qualquer outra tonalidade. A cor escolhida vale para os dois modos, então as amostras foram escolhidas com luminosidade intermediária, legível no escuro e no claro; cores muito claras perdem leitura no modo claro. O texto dos botões principais ajusta o contraste sozinho.
 
-O botão de sol/lua na barra superior alterna o modo. A preferência fica salva. Não há editor completo de CSS ou de todas as cores da interface.
+**Restaurar padrão** remove a cor personalizada e volta à cor do modo atual. Não apaga perfis nem configurações de módulos.
+
+Não há editor completo de CSS ou de todas as cores da interface.
 
 ## O que não confundir
 

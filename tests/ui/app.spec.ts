@@ -102,6 +102,26 @@ test('cor personalizada persiste e restauração segue o tema',async({page})=>{
  await expect(page.locator('html')).toHaveCSS('--accent','#b7ef72');
 });
 
+test('amostras de tema e de cor aplicam na hora e persistem',async({page})=>{
+ await page.goto('/');
+ await page.getByRole('button',{name:'Configurações',exact:true}).click();
+ await page.getByRole('button',{name:'Cor de destaque: Violeta',exact:true}).click();
+ await expect(page.locator('html')).toHaveCSS('--accent','#8f5fd8');
+ await expect(page.getByRole('button',{name:'Cor de destaque: Violeta',exact:true})).toHaveAttribute('aria-pressed','true');
+ await page.getByRole('button',{name:'Tema claro',exact:true}).click();
+ await expect(page.locator('html')).toHaveAttribute('data-theme','light');
+ await page.screenshot({path:'artifacts/settings-aparencia.png',fullPage:true});
+ await page.reload();
+ await expect(page.locator('html')).toHaveCSS('--accent','#8f5fd8');
+ await expect(page.locator('html')).toHaveAttribute('data-theme','light');
+ await page.getByRole('button',{name:'Configurações',exact:true}).click();
+ await expect(page.getByRole('button',{name:'Cor de destaque: Violeta',exact:true})).toHaveAttribute('aria-pressed','true');
+ await expect(page.getByRole('button',{name:'Tema claro',exact:true})).toHaveAttribute('aria-pressed','true');
+ await page.getByRole('button',{name:'Restaurar padrão'}).click();
+ await expect(page.locator('html')).toHaveCSS('--accent','#44751a');
+ await expect(page.getByRole('button',{name:'Cor de destaque: Violeta',exact:true})).toHaveAttribute('aria-pressed','false');
+});
+
 test('catálogo de variáveis insere marcador e informa limite da prévia web',async({page})=>{
  await page.goto('/');
  await page.getByRole('button',{name:'Criar primeiro bot',exact:true}).click();

@@ -1,5 +1,40 @@
 # Histórico de atualizações
 
+# BotLive 0.2.0
+
+## O que mudou
+
+- **Seletor de aparência no estilo paleta.** Em Configurações → Do seu jeito, "Aparência" ganhou duas amostras de tema com prévia real: fundo, texto e uma barra na cor de destaque que valerá ao clicar. Um clique troca o modo no painel inteiro e a escolha continua salva como antes.
+- **Fila de amostras de cor de destaque.** "Cor de destaque" ganhou seis amostras prontas — Coral, Âmbar, Verde, Azul, Violeta e Rosa — com anel no que está em uso. Clicar aplica na hora (botões, ícones ativos, bordas realçadas e recuos); a caixa de cor continua livre para qualquer tonalidade e **Restaurar padrão** devolve a cor do modo atual.
+- **Cores escolhidas para valerem nos dois modos.** Cada amostra tem luminosidade intermediária: mantém leitura aceitável como texto e ícone no escuro e no claro (contraste mínimo de 3:1 contra os dois fundos, coberto por teste de unidade). O aviso do campo explica que cores muito claras perdem leitura no modo claro.
+- **Correção: a cor salva volta em Configurações.** O comando `settings.get` agora devolve também a cor de destaque. Antes, reabrir a tela mostrava a caixa de cor no padrão mesmo com cor personalizada aplicada — o painel já usava a cor certa; só a caixa mostrava o valor errado. A mesma correção vale para a prévia no navegador.
+- O estilo das amostras segue a linguagem visual dos chips do Estúdio LivePix (seleção com borda no acento, raio pequeno), com regras próprias em `.swatch-row`, `.swatch-theme` e `.swatch-dot`; a regra global de altura de botão passou a isentar `.swatch-theme`, no mesmo padrão de `.lp-tpl`.
+- O capítulo 06 do manual (Presets e aparência) descreve o novo seletor.
+
+## Como usar
+
+1. Abra Configurações → Do seu jeito.
+2. Em **Aparência**, clique em Escuro ou Claro; cada amostra mostra a prévia do modo com a barra na cor que valerá.
+3. Em **Cor de destaque**, clique numa amostra para aplicar de uma vez; use a caixa de cor para escolher outra tonalidade; **Restaurar padrão** devolve a cor do modo atual.
+4. O botão de sol/lua na barra superior continua alternando o modo, e a preferência fica salva.
+
+## Validação
+
+- `cargo test --locked --lib`: 201 testes verdes, incluindo o acréscimo em `module_configuration_and_theme_roundtrip` que cobre o retorno de accent em `settings.get`.
+- `vitest`: 79 testes em 10 arquivos; o novo `src/appearance.test.ts` valida formato, unicidade e contraste mínimo das seis amostras e a aplicação de `--accent`/`--accent-text` para cada uma.
+- Playwright: 52 testes em 15 specs; o novo teste "amostras de tema e de cor aplicam na hora e persistem" cobre clique, anel do que está em uso, troca de tema, persistência após recarregar e restauração.
+- `tsc -b` e a checagem estrita com `--noUnusedLocals`/`--noUnusedParameters` limpas.
+- `npm run docs` (manual com 23 capítulos), `npm run test:updates` e `npm run update:check` antes e depois do `update:prepare`.
+- Layout validado no navegador com capturas em 1100px (escuro no padrão e claro com âmbar), 1440px (claro com violeta) e 1920px (escuro com rosa): sem texto espremido, sem rolagem horizontal e com a fila de amostras inteira visível nos dois modos.
+
+## Limitações
+
+- A cor de destaque continua única para os dois modos: uma tonalidade muito clara aplicada no modo claro perde leitura em textos pequenos. As amostras existem justamente para oferecer cores que servem nos dois modos; a caixa livre aceita qualquer tonalidade e o aviso do campo orienta a escolha.
+- Não há variantes novas de tema (apenas Escuro e Claro) nem editor de CSS: a liberdade de estilização é a mesma da versão anterior.
+- A prévia das amostras de tema usa as cores padrão de fundo e texto de cada modo; o aplicativo não tem tema personalizado para refletir ali.
+
+---
+
 # BotLive 0.1.99
 
 ## O que mudou

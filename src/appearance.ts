@@ -5,3 +5,14 @@ export function applyAccent(color:string){
  const l=rgb[0]*.2126+rgb[1]*.7152+rgb[2]*.0722;
  style.setProperty('--accent',color);style.setProperty('--accent-text',l>.179?'#000000':'#ffffff');
 }
+/** Amostras de cor de destaque: cores escolhidas com luminosidade no meio da faixa,
+ *  de modo que o texto e os ícones que usam o acento continuem legíveis no tema escuro
+ *  e no claro. O teste de aparência cobra esse contraste mínimo nas duas fundos. */
+export const ACCENTS:{name:string;value:string}[]=[
+ {name:'Coral',value:'#d9584a'},
+ {name:'Âmbar',value:'#b07d1a'},
+ {name:'Verde',value:'#28915a'},
+ {name:'Azul',value:'#3b82c4'},
+ {name:'Violeta',value:'#8f5fd8'},
+ {name:'Rosa',value:'#d65597'},
+];
