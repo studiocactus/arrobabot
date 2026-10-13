@@ -22,6 +22,8 @@ export type OverlayDesign={
  font:string;fontSize:number;fontWeight:number;uppercase:boolean;tracking:number;
  glow:number;shadow:number;
  animate:boolean;pulse:boolean;celebrate:boolean;
+ /** Sons da Meta (ids da tela Sons de Live; vazio = sem som) — nada toca no OBS. */
+ soundDonate:string;soundCelebrate:string;
 };
 
 export type GoalModel={title:string;current:number;target:number;hidden?:boolean};
@@ -43,37 +45,37 @@ export const TEMPLATES:Record<string,Template>={
   fillStart:'#b7ef72',fillEnd:'#5bc46b',track:'#1b2634',text:'#e8edf4',muted:'#9fb0c3',
   panel:'#101721dd',border:'#2a3646',borderWidth:1,radius:10,barHeight:26,
   font:'Segoe UI',fontSize:18,fontWeight:700,uppercase:false,tracking:0,
-  glow:25,shadow:45,animate:false,pulse:true,celebrate:true}},
+  glow:25,shadow:45,animate:false,pulse:true,celebrate:true,soundDonate:'',soundCelebrate:''}},
  aurora:{name:'Aurora',hint:'Vidro fosco com gradiente frio',design:{
   template:'aurora',layout:'panel',align:'center',valign:'center',width:62,
   fillStart:'#22d3ee',fillEnd:'#8b5cf6',track:'#1e293b99',text:'#eef4ff',muted:'#a9b7d4',
   panel:'#0b1120b3',border:'#7dd3fc55',borderWidth:1,radius:20,barHeight:30,
   font:'Inter',fontSize:18,fontWeight:700,uppercase:false,tracking:0.3,
-  glow:55,shadow:55,animate:true,pulse:true,celebrate:true}},
+  glow:55,shadow:55,animate:true,pulse:true,celebrate:true,soundDonate:'',soundCelebrate:''}},
  neon:{name:'Neon',hint:'Magenta e ciano brilhando',design:{
   template:'neon',layout:'bar',align:'left',valign:'bottom',width:58,
   fillStart:'#ff2fd6',fillEnd:'#00e5ff',track:'#12081d',text:'#f8f4ff',muted:'#c3aede',
   panel:'#0a0a12e6',border:'#ff2fd666',borderWidth:2,radius:6,barHeight:24,
   font:'Orbitron',fontSize:17,fontWeight:800,uppercase:true,tracking:2,
-  glow:85,shadow:40,animate:true,pulse:true,celebrate:true}},
+  glow:85,shadow:40,animate:true,pulse:true,celebrate:true,soundDonate:'',soundCelebrate:''}},
  sunset:{name:'Sunset',hint:'Pílula quente de laranja a rosa',design:{
   template:'sunset',layout:'row',align:'center',valign:'top',width:72,
   fillStart:'#ff9a3c',fillEnd:'#ff2e93',track:'#3b1420',text:'#fff4ea',muted:'#ffcfb3',
   panel:'#2a0f1ce6',border:'#ff9a3c55',borderWidth:1,radius:48,barHeight:22,
   font:'Poppins',fontSize:17,fontWeight:600,uppercase:false,tracking:0.5,
-  glow:45,shadow:60,animate:true,pulse:true,celebrate:true}},
+  glow:45,shadow:60,animate:true,pulse:true,celebrate:true,soundDonate:'',soundCelebrate:''}},
  retro:{name:'Retro',hint:'Bloco amarelo, cantos retos',design:{
   template:'retro',layout:'bar',align:'right',valign:'top',width:46,
   fillStart:'#ffe14d',fillEnd:'#f47b20',track:'#241f10',text:'#fff6d6',muted:'#d9c887',
   panel:'#12100af2',border:'#ffe14d',borderWidth:3,radius:0,barHeight:28,
   font:'Press Start 2P',fontSize:14,fontWeight:400,uppercase:false,tracking:0,
-  glow:20,shadow:70,animate:false,pulse:true,celebrate:true}},
+  glow:20,shadow:70,animate:false,pulse:true,celebrate:true,soundDonate:'',soundCelebrate:''}},
  royal:{name:'Royal',hint:'Painel profundo com ouro',design:{
   template:'royal',layout:'panel',align:'center',valign:'bottom',width:66,
   fillStart:'#f5c542',fillEnd:'#d99a12',track:'#231a0e',text:'#fff7e2',muted:'#d8c391',
   panel:'#14101ff2',border:'#f5c54288',borderWidth:1,radius:14,barHeight:28,
   font:'Bebas Neue',fontSize:22,fontWeight:700,uppercase:true,tracking:3,
-  glow:50,shadow:65,animate:true,pulse:true,celebrate:true}},
+  glow:50,shadow:65,animate:true,pulse:true,celebrate:true,soundDonate:'',soundCelebrate:''}},
 };
 export const TEMPLATE_IDS=Object.keys(TEMPLATES);
 
@@ -85,6 +87,8 @@ const WEIGHTS_OK=[300,400,500,600,700,800,900];
 const snapWeight=(v:unknown,def:number)=>{const w=Math.round(num(v,def,100,900));return WEIGHTS_OK.includes(w)?w:700};
 const str=(v:unknown,def:string)=>typeof v==='string'&&v?v:def;
 const bool=(v:unknown,def:boolean)=>typeof v==='boolean'?v:def;
+/** Id de arquivo (UUID) da tela Sons de Live; vazio = sem som (mesmo do Rust). */
+const assetId=(v:unknown)=>typeof v==='string'&&v.length<=64?v:'';
 const oneOf=<T extends string>(v:unknown,def:T,allowed:readonly T[]):T=>typeof v==='string'&&(allowed as readonly string[]).includes(v)?v as T:def;
 const HEX=/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/;
 const color=(v:unknown,def:string)=>typeof v==='string'&&HEX.test(v)?v:def;
@@ -118,6 +122,8 @@ export function normalizeDesign(v:unknown):OverlayDesign{
   animate:bool(d.animate,base.animate),
   pulse:bool(d.pulse,base.pulse),
   celebrate:bool(d.celebrate,base.celebrate),
+  soundDonate:assetId(d.soundDonate),
+  soundCelebrate:assetId(d.soundCelebrate),
  };
 }
 

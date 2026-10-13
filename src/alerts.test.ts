@@ -48,6 +48,15 @@ describe('motor de alertas: normalização',()=>{
   }
   expect(isAlertKind('chat')).toBe(false);
  });
+
+ it('cor por evento: vazio = cor global, preserva a escolhida e barra lixo',()=>{
+  // Padrão: nenhuma cor própria — a tarja usa o destaque global do painel.
+  for(const kind of ALERT_KINDS) expect(DEFAULT_ALERTS.events[kind].color).toBe('');
+  const c=normalizeAlerts({events:{follow:{color:'#ff3b30'},raid:{color:'x'.repeat(40)}}});
+  expect(c.events.follow.color).toBe('#ff3b30');
+  expect(c.events.raid.color).toBe(DEFAULT_ALERTS.events.raid.color);
+  expect(c.events.cheer.color).toBe('');
+ });
 });
 
 describe('motor de alertas: placeholders',()=>{

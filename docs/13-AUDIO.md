@@ -2,7 +2,7 @@
 
 A tela **Áudio** reúne todos os sons do bot numa saída só. Em vez de cada origem escolher seu caminho, você aponta **um único aparelho de saída** — por exemplo a entrada **CABLE Input** do VB-Cable — e todos os sons do bot saem por ele. No OBS, isso vira **uma única Fonte de áudio** para o bot inteiro: você controla voz e efeitos num fader só, sem montar um mix de várias fontes.
 
-Os sons cobertos são: **espectador, comandos, timers, automações, resgates e alertas**.
+Os sons cobertos são: **espectador, comandos, timers, automações, resgates, alertas e os sons da Meta** (doação e celebração, escolhidos no Estúdio do overlay em [Integrações](INTEGRACOES.md)).
 
 ## Saída dos sons do bot
 

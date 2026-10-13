@@ -220,7 +220,7 @@ pub fn trigger_matches(trigger:&str,kind:&str)->bool{match trigger{"message"=>ki
 /// Toca um som na **linha de áudio** do aplicativo — a mesma saída que o OBS
 /// captura como fonte única do BotLive. Não existe mais rota pelo navegador:
 /// a fonte do overlay ficou só visual.
-fn play_line(rt:&Runtime,p:&Profile,asset:&str,nickname:Option<&str>,volume:f64){
+pub(crate) fn play_line(rt:&Runtime,p:&Profile,asset:&str,nickname:Option<&str>,volume:f64){
  let volume=if volume.is_finite(){volume.clamp(0.0,1.0)}else{1.0};
  rt.emit("viewer-sound",json!({"profileId":p.id,"asset":asset,"nickname":nickname,"volume":volume,"deviceId":crate::audio::device(rt,&p.id)}));
 }

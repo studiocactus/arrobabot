@@ -1,4 +1,5 @@
 import {test,expect,type Page} from '@playwright/test';
+import {auditPage,fmt} from './ux-helpers';
 
 const profile={id:'p1',name:'Canal de teste',platform:'twitch',channel:'cactus',channelId:'1',botId:'',clientId:'',blocklist:[],topics:[],editors:[],ai:{},modules:{}};
 
@@ -47,6 +48,9 @@ test('estúdio lista os sete eventos, prévia e salvamento automático por event
  // Prévia parada com o padrão do evento selecionado.
  await expect(page.locator('.lp-frame')).toContainText('BEM-VINDO!');
  await expect(page.locator('.lp-frame')).toContainText('SEGUIDOR');
+ // Tarja padrão na cor global do painel, com texto escuro legível por luminância.
+ await expect(page.locator('.bl-alert.is-static .al-tag')).toHaveCSS('background-color','rgb(198, 255, 0)');
+ await expect(page.locator('.bl-alert.is-static .al-tag')).toHaveCSS('color','rgb(15, 15, 15)');
 
  // Trocar de evento muda a prévia e o formulário.
  await pills.getByRole('button',{name:'Bits',exact:true}).click();
@@ -83,11 +87,60 @@ test('botão de teste anima a prévia pelo caminho do evento real e termina limp
  await expect(page.locator('.bl-alert.is-static')).toContainText('500 BITS');
 });
 
-test('estúdio de alertas cabe em janela de 1100px sem espremer texto',async({page})=>{
+test('estúdio de alertas cabe em janela de 1100px e ampla sem espremer texto',async({page})=>{
  await page.setViewportSize({width:1100,height:950});
  await setup(page);
  await expect(page.locator('.bl-alert.is-static')).toBeVisible();
+ const narrow=await page.evaluate(auditPage);
+ expect(fmt(narrow),`${narrow.length} achado(s) em 1100px`).toEqual([]);
  await page.screenshot({path:'artifacts/estudio-alertas-1100.png'});
+
+ await page.setViewportSize({width:1680,height:1000});
+ await page.waitForTimeout(250);
+ const wide=await page.evaluate(auditPage);
+ expect(fmt(wide),`${wide.length} achado(s) em 1680px`).toEqual([]);
+ await page.screenshot({path:'artifacts/estudio-alertas-largo.png'});
+
+ // Nenhuma largura produz rolagem horizontal.
+ const overflow=await page.evaluate(()=>document.documentElement.scrollWidth-document.documentElement.clientWidth);
+ expect(overflow).toBeLessThanOrEqual(1);
+});
+
+test('configurações ficam em acordeão abaixo da prévia',async({page})=>{
+ await setup(page);
+
+ // Prévia em cima, configurações embaixo (ordem do DOM).
+ const previewFirst=await page.evaluate(()=>
+  !!(document.querySelector('.lp-preview')?.compareDocumentPosition(document.querySelector('.lp-controls'))&Node.DOCUMENT_POSITION_FOLLOWING));
+ expect(previewFirst).toBe(true);
+
+ // "Este evento" aberto por padrão; os demais grupos fechados economizam altura.
+ await expect(page.getByLabel('Etiqueta',{exact:true})).toBeVisible();
+ const body=page.locator('#item-body-al-panel');
+ await expect(body).toHaveAttribute('inert');
+ await page.locator('.item-toggle').filter({hasText:'Painel'}).click();
+ await expect(body).not.toHaveAttribute('inert');
+ await expect(page.getByLabel('Duração',{exact:true})).toBeVisible();
+ // Registro do layout: prévia acima, acordeões abertos abaixo.
+ await body.scrollIntoViewIfNeeded();
+ await page.screenshot({path:'artifacts/estudio-alertas-acordeao.png'});
+ // Abrir não mexe no interruptor mestre dos alertas.
+ await expect(page.getByRole('switch',{name:'Ligar alertas no overlay'})).toHaveAttribute('aria-checked','false');
+});
+
+test('cor por evento pinta só a tarja e o botão devolve a cor global',async({page})=>{
+ await setup(page);
+ await page.getByLabel('Cor da tarja').fill('#ff3b30');
+
+ await expect.poll(async()=>(await saved(page))?.value?.events?.follow?.color,{timeout:3000}).toBe('#ff3b30');
+ await expect(page.locator('.bl-alert.is-static .al-tag')).toHaveCSS('background-color','rgb(255, 59, 48)');
+ // Contraste: fundo escuro vira texto branco (não o preto fixo antigo).
+ await expect(page.locator('.bl-alert.is-static .al-tag')).toHaveCSS('color','rgb(255, 255, 255)');
+ // As outras linhas continuam na cor global do painel.
+ await expect(page.locator('.bl-alert.is-static .al-name')).toHaveCSS('color','rgb(198, 255, 0)');
+
+ await page.getByRole('button',{name:'Usar cor global'}).click();
+ await expect.poll(async()=>(await saved(page))?.value?.events?.follow?.color,{timeout:3000}).toBe('');
 });
 
 async function pills_select_bits(page:Page){

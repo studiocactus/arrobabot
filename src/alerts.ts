@@ -31,7 +31,8 @@ export type AlertVars = {
   platform?: string;
 };
 
-export type AlertEventCfg = {on: boolean; tag: string; name: string; big: string; foot: string; sound: string};
+/** `color` só pinta a tarja colorida; vazio = cor global (`accent`). */
+export type AlertEventCfg = {on: boolean; tag: string; name: string; big: string; foot: string; sound: string; color: string};
 
 export type AlertsConfig = {
   enabled: boolean;
@@ -62,13 +63,13 @@ export type AlertsConfig = {
 };
 
 const EVENT_DEFAULTS: Record<AlertKind, AlertEventCfg> = {
-  follow: {on: true, tag: 'SEGUIDOR', name: '{{user}}', big: 'BEM-VINDO!', foot: 'Obrigado por seguir o canal', sound: ''},
-  subscription: {on: true, tag: 'NOVO SUB', name: '{{user}}', big: '{{tier}}', foot: 'Obrigado pelo apoio!', sound: ''},
-  resub: {on: true, tag: 'RENOVAÇÃO', name: '{{user}}', big: '{{months}} MESES', foot: '{{message}}', sound: ''},
-  gift: {on: true, tag: 'SUB DE PRESENTE', name: '{{user}}', big: 'GANHOU UM SUB', foot: 'Obrigado pelo carinho!', sound: ''},
-  giftbulk: {on: true, tag: 'PRESENTES EM LOTE', name: '{{user}}', big: '{{amount}} SUBS', foot: 'Obrigado pelo carinho!', sound: ''},
-  cheer: {on: true, tag: 'BITS', name: '{{user}}', big: '{{amount}} BITS', foot: '{{message}}', sound: ''},
-  raid: {on: true, tag: 'RAID', name: '{{user}}', big: '{{amount}} VIEWERS', foot: 'Sejam todos bem-vindos!', sound: ''},
+  follow: {on: true, tag: 'SEGUIDOR', name: '{{user}}', big: 'BEM-VINDO!', foot: 'Obrigado por seguir o canal', sound: '', color: ''},
+  subscription: {on: true, tag: 'NOVO SUB', name: '{{user}}', big: '{{tier}}', foot: 'Obrigado pelo apoio!', sound: '', color: ''},
+  resub: {on: true, tag: 'RENOVAÇÃO', name: '{{user}}', big: '{{months}} MESES', foot: '{{message}}', sound: '', color: ''},
+  gift: {on: true, tag: 'SUB DE PRESENTE', name: '{{user}}', big: 'GANHOU UM SUB', foot: 'Obrigado pelo carinho!', sound: '', color: ''},
+  giftbulk: {on: true, tag: 'PRESENTES EM LOTE', name: '{{user}}', big: '{{amount}} SUBS', foot: 'Obrigado pelo carinho!', sound: '', color: ''},
+  cheer: {on: true, tag: 'BITS', name: '{{user}}', big: '{{amount}} BITS', foot: '{{message}}', sound: '', color: ''},
+  raid: {on: true, tag: 'RAID', name: '{{user}}', big: '{{amount}} VIEWERS', foot: 'Sejam todos bem-vindos!', sound: '', color: ''},
 };
 
 /** Padrão espelhado em alerts.rs (defaults). */
@@ -131,6 +132,7 @@ export function normalizeAlerts(v: unknown): AlertsConfig {
       big: str(e.big, 160, d.big),
       foot: str(e.foot, 160, d.foot),
       sound: str(e.sound, 64, d.sound),
+      color: str(e.color, 32, d.color),
     };
   }
   const font = (v: unknown, fallback: string): string => (typeof v === 'string' && FONT_SET.has(v) ? v : fallback);
@@ -251,12 +253,25 @@ export function ensureAlertsStyle(): void {
   ensureFont('Montserrat');
 }
 
+/** Texto legível sobre a tarja: preto em fundo claro, branco no escuro. */
+function tagInk(hex: string): string {
+  const m = /^#([0-9a-f]{6})$/i.exec(hex.trim());
+  if (!m) return '#0f0f0f';
+  const n = parseInt(m[1], 16);
+  const lum = (0.2126 * ((n >> 16) & 255) + 0.7152 * ((n >> 8) & 255) + 0.0722 * (n & 255)) / 255;
+  return lum > 0.55 ? '#0f0f0f' : '#ffffff';
+}
+
 /** Painel no estado final — usado na prévia parada e como base da animação. */
 export function buildPanel(cfg: AlertsConfig, kind: AlertKind, vars: AlertVars): HTMLElement {
   const ev = cfg.events[kind];
   const panel = document.createElement('div');
   panel.className = 'bl-alert';
   for (const [k, v] of Object.entries(style(cfg))) panel.style.setProperty(k, v);
+  // Tarja do evento: cor própria quando escolhida, senão a global do painel.
+  const tagBg = ev.color || cfg.accent;
+  panel.style.setProperty('--al-tag-bg', tagBg);
+  panel.style.setProperty('--al-tag-fg', tagInk(tagBg));
   if (cfg.showCorners) {
     for (const corner of ['tl', 'tr', 'bl', 'br']) {
       const c = document.createElement('span');
@@ -482,7 +497,7 @@ const CSS = `
 .al-status{margin-left:auto;display:flex;align-items:center;gap:6px}
 .al-status i{width:7px;height:7px;background:var(--al-accent);animation:al-blink 1s steps(2,end) infinite}
 .al-status b{font-weight:400}
-.al-tag{display:inline-block;align-self:flex-start;background:var(--al-accent);color:#0f0f0f;padding:4px 9px;font-size:var(--al-fs-tag)}
+.al-tag{display:inline-block;align-self:flex-start;background:var(--al-tag-bg,var(--al-accent));color:var(--al-tag-fg,#0f0f0f);padding:4px 9px;font-size:var(--al-fs-tag)}
 .al-name{font-family:var(--al-font-big);font-size:var(--al-fs-name);font-weight:700;color:var(--al-accent);overflow-wrap:anywhere}
 .al-big{font-family:var(--al-font-big);font-size:var(--al-fs-big);font-weight:900;line-height:1.08;text-transform:uppercase;overflow-wrap:anywhere}
 .al-foot{font-size:var(--al-fs-foot);opacity:.82;min-height:1.2em;overflow-wrap:anywhere;white-space:pre-wrap}

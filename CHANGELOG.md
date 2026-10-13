@@ -1,5 +1,48 @@
 # Histórico de atualizações
 
+# BotLive 0.7.1
+
+## O que mudou
+
+Cinco entregas da mesma rodada de melhorias: o bug do endereço da Meta, sons escolhíveis para a Meta, volume real nos alertas, cor por evento na tarja dos alertas e um Estúdio de Alertas com layout vertical. A numeração volta a ser sequencial: depois de 0.7.0 vêm 0.7.1, 0.7.2 e assim por diante, sem pular números (registrado em `docs/ATUALIZACOES.md`).
+
+**Meta — endereço do overlay corrigido.** A tela Meta ficava presa em "Gerando o endereço do overlay…" e o design salvo não voltava a carregar: as chamadas `livepix.design_get` e `livepix.overlay_info` não enviavam o `profileId`, o backend respondia "Perfil não encontrado" e o erro era engolido. Ambas as chamadas agora enviam o id, o endereço da camada (`mode=goal`) aparece normalmente e o Estúdio volta a abrir com o design salvo. Um teste Playwright reproduz o contrato do backend (falha sem `profileId`) e trava a regressão.
+
+**Meta — som de doação e som de celebração.** O grupo **Efeitos** do Estúdio do overlay ganhou dois seletores: **Som de doação** (toca a cada pagamento que sobe a barra da meta) e **Som de celebração** (toca no lugar do de doação quando a meta cruza 100% — o pagamento que completa a Meta não toca os dois). A lista vem da biblioteca **Sons de Live** do perfil, com **Sem som** como padrão (nascem desligados). Os sons saem pela **linha de áudio do app** (mesma saída escolhida na tela Áudio, evento `viewer-sound`, volume cheio) e **nunca pela fonte do OBS**: o overlay continua só com a parte visual. O design aceita `soundDonate`/`soundCelebrate` (ids de arquivo ≤64 caracteres, higienizados dos dois lados), trocar de modelo preserva a escolha, e um arquivo apagado depois da escolha é silenciado em vez de gerar erro. Os botões **Simular doação** e **Celebração** passaram a ouvir a escolha na hora, na mesma saída do OBS.
+
+**Alertas — volume do som corrigido.** O volume salvo (0–100) era repassado cru ao player, que corta em `Math.min(1, volume)`: na prática qualquer volume de 1 a 100 tocava a 100% e só o 0 silenciava. O backend agora converte para a escala 0–1 (`volume/100` limitado à faixa) antes de emitir o evento da linha; um teste Rust trava a conversão (70 → 0.7).
+
+**Alertas — cor por evento (só a tarja).** O grupo **Este evento** ganhou **Cor da tarja**: escolha uma cor para aquele evento (Bits vermelho, Raid azul, etc.) e **somente a tarja colorida** muda — nome, linhas e moldura continuam nas cores globais do painel. Vazio (padrão) usa o **Destaque** global, e o botão **Usar cor global** devolve esse padrão. O texto dentro da tarja escolhe preto ou branco sozinho pela luminosidade da cor, para nunca sumir em fundo escuro. A validação no backend exige string vazia ou cor bem formada; caractere fora do formato barra o salvamento.
+
+**Alertas — layout vertical.** O Estúdio ficou com a **prévia em cima** e as configurações **em acordeão abaixo**: **Este evento** abre por padrão (é o que se edita) e **Painel**, **Cores**, **Fontes** e **Efeitos** abrem pelo título, com um resumo do que está configurado ao lado de cada um. O interruptor de exibir/ocultar o evento foi para o cabeçalho do grupo **Este evento**. O conteúdo fica centralizado com teto de 980px para o palco 16:9 não virar gigante em monitores largos.
+
+## Como usar
+
+- **Sons da Meta:** envie os áudios em **Sons de Live**, abra **Integrações → Meta**, desça até o grupo **Efeitos** e escolha **Som de doação** e **Som de celebração** (ou **Sem som**). Clique em **Simular doação** e **Celebração** para ouvir antes de gravar. A saída é a escolhida em **Áudio → Dispositivo de saída dos sons** (ex.: CABLE Input) — no OBS, a mesma Fonte de áudio de sempre já carrega esses sons.
+- **Endereço da Meta:** em **Integrações → Meta → No OBS**, o endereço da camada (`mode=goal`) aparece pronto para copiar; crie a Fonte de navegador só para ele. Nada muda em instalações que já tinham a fonte.
+- **Volume dos alertas:** em **Alertas → Estúdio → Painel**, **Volume do som** agora vale de verdade (10% toca baixo, 0 silencia).
+- **Cor por evento:** em **Alertas → Estúdio → Este evento**, use **Cor da tarja**; **Usar cor global** volta ao Destaque do painel.
+- **Novo layout dos Alertas:** prévia em cima; clique nos títulos dos grupos abaixo para abrir cada um.
+
+## Validação
+
+Executada nesta preparação, no Windows:
+
+- `cargo test` em `src-tauri`: **233 testes, 0 falhas** — incluem os novos: volume 70 → 0.7 no evento da linha; cor por evento aceita vazio/`#hex` e barra caractere inválido e campo ausente; sons da Meta tocam na linha com o aparelho da tela Áudio e volume 1.0, silenciam sem escolha e sem arquivo removido; celebração substitui o som da doação; sanitização do design mantém as mesmas chaves do `overlayDesign.keys.json`.
+- `npm test` (vitest): **99 testes, 0 falhas** — incluem a normalização de `color` por evento (padrão vazio, preservação, limite de tamanho).
+- `npx playwright test`: suíte completa verdes, incluindo: contrato do `livepix.*` com `profileId` e endereço `mode=goal` fora do "Gerando…"; sons da Meta no grupo Efeitos sobrevivem a troca de modelo; acordeão dos Alertas (fechado por padrão, abre sem mexer no interruptor mestre); cor por evento pinta só a tarja (fundo `rgb(255,59,48)` com texto branco) e **Usar cor global** devolve o padrão; tarja padrão clara com texto escuro.
+- Regras de tela: o teste de layout dos Alertas audita a página (`auditPage`) em **1100px e 1680px sem achados**, verifica ausência de rolagem horizontal nas duas larguras e grava as capturas `artifacts/estudio-alertas-1100.png`, `estudio-alertas-largo.png` e `artifacts/estudio-alertas-acordeao.png`; o estúdio da Meta grava `artifacts/estudio-livepix-sons.png` (além de `estudio-livepix-1100/largo`), e as quatro capturas foram revisadas visualmente nesta entrega.
+- `npm run build` (overlay gerado + tsc + vite) sem erros; `npm run update:check` executado antes do push.
+
+## Limitações
+
+- A prévia de som da Meta toca no aplicativo (na saída da tela Áudio); o toque real depende de um pagamento na meta ativa — em CI/headless o som não é audível, a validação confere o evento emitido e os campos (aparelho, volume, asset).
+- O som da Meta toca em volume cheio (1.0) na linha; não há volume por som dentro da Meta — o ajuste é o do aparelho/volume do sistema.
+- A interface de cor por evento gera o formato do seletor nativo (`#rrggbb`); o validador do backend também aceita nomes de cor/`rgb()`, mas a tela não escreve esses formatos.
+- O layout vertical dos Alertas é a nova estrutura da tela; a aparência do painel no OBS (animações, cores, fontes) não muda.
+
+---
+
 # BotLive 0.7.0
 
 # BotLive 0.7.0

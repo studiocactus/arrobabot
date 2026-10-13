@@ -22,7 +22,7 @@ Em versões antigas, o resultado podia aparecer apenas num aviso temporário, e 
 ## O que cada commit precisa trazer
 
 1. Código, testes e documentação relacionados à mudança.
-2. Uma versão nova no formato X.Y.Z, inclusive para correções de documentação.
+2. Uma versão nova no formato X.Y.Z, inclusive para correções de documentação. A numeração segue em sequência sem pular números: depois de 0.7.0 vêm 0.7.1, 0.7.2, 0.7.3 e assim por diante.
 3. Notas em updates/X.Y.Z.md com O que mudou, Como usar, Validação e Limitações.
 4. updates/latest.json e CHANGELOG.md atualizados pelo script.
 5. Versão sincronizada em package.json, package-lock.json, Cargo.toml, Cargo.lock e tauri.conf.json.

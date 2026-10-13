@@ -88,6 +88,15 @@ export async function mock(page:Page){
       case 'labels.list':return [];
       case 'chatExtras.get':return {config:{presenceEnabled:false,audioDeviceId:'',repliesEnabled:true,soundsEnabled:true,replies:[],people:[]},assets:[{id:'txt1',kind:'txt',name:'respostas.txt'},{id:'snd1',kind:'sound',name:'ping.wav'}]};
       case 'alerts.get':return {config:null,sounds:[{id:'s1',name:'jingle.wav'}],overlay:{token:'preview-token',port:9876,url:'http://127.0.0.1:9876/overlay#token=preview-token&profile=p1'}};
+      // Contrato do backend: sem profileId as ops do livepix falham (bug da 0.7.1
+      // travava o endereço da Meta no "Gerando…" justamente por não passar o id).
+      case 'livepix.design_get':
+      case 'livepix.overlay_info':{
+       if(!((payload.args as Record<string,unknown>)||{}).profileId)throw new Error('Perfil não encontrado');
+       return op==='livepix.design_get'
+        ?{template:'clean',layout:'bar',align:'center',valign:'bottom',width:80,font:'Segoe UI',fontSize:18,fontWeight:700,animate:false,celebrate:true,soundDonate:'',soundCelebrate:''}
+        :{token:'goal-token',port:9876,url:'http://127.0.0.1:9876/overlay#token=goal-token&profile=p1'};
+      }
       case 'alerts.test':return {kind:String((payload.args as Record<string,unknown>)?.kind||'follow'),vars:{name:'NovoSeguidor',amount:1,months:1,tier:'TIER 1',message:''}};
       case 'chat.get':return {config:null,overlay:{token:'preview-token',port:9876,url:'http://127.0.0.1:9876/overlay#token=preview-token&profile=p1'}};
       case 'audio.get':return {config:null,voiceFx:{selection:{input:'Microfone (Realtek)',output:'CABLE Input (VB-Audio Virtual Cable)'},devices:{inputs:[{name:'Microfone (Realtek)',default:true}],outputs:[{name:'CABLE Input (VB-Audio Virtual Cable)',default:true}]}},status:{phase:'off',message:'Prévia no navegador: a voz ao vivo só existe no aplicativo desktop.',input:'',output:''}};

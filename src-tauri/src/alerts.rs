@@ -21,7 +21,7 @@ fn event_default(kind: &str) -> Value {
         "cheer" => ("BITS", "{{user}}", "{{amount}} BITS", "{{message}}"),
         _ => ("RAID", "{{user}}", "{{amount}} VIEWERS", "Sejam todos bem-vindos!"),
     };
-    json!({"on": true, "tag": tag, "name": name, "big": big, "foot": foot, "sound": ""})
+    json!({"on": true, "tag": tag, "name": name, "big": big, "foot": foot, "sound": "", "color": ""})
 }
 
 /// Configuração padrão: desligada até o streamer ativar, textos em pt-BR.
@@ -104,6 +104,8 @@ pub fn valid_config(v: &Value) -> bool {
             && text_ok(&e["big"], 160)
             && text_ok(&e["foot"], 160)
             && text_ok(&e["sound"], 64)
+            // Cor da tarja: vazio = cor global do painel.
+            && (e["color"].as_str().is_some_and(|s| s.is_empty()) || color_ok(&e["color"]))
     })
 }
 
@@ -175,7 +177,9 @@ fn line_sound(rt: &Runtime, p: &Profile, kind: &str) {
         json!({
             "profileId": p.id,
             "src": format!("http://127.0.0.1:{}/asset?token={}&id={}", info["port"], info["token"], sound),
-            "volume": cfg["volume"].as_f64().unwrap_or(1.0),
+            // O volume salvo é 0–100, mas o player da linha aceita 0–1
+            // (Math.min(1, volume) engolia qualquer valor acima de 1).
+            "volume": (cfg["volume"].as_f64().unwrap_or(70.0) / 100.0).clamp(0.0, 1.0),
             "deviceId": crate::audio::device(rt, &p.id),
         }),
     );
@@ -313,6 +317,20 @@ mod tests {
     }
 
     #[test]
+    fn validation_accepts_empty_or_hex_event_tag_color() {
+        let mut v = defaults();
+        v["events"]["follow"]["color"] = json!("");
+        assert!(valid_config(&v), "vazio = cor global do painel");
+        v["events"]["follow"]["color"] = json!("#c6ff00");
+        assert!(valid_config(&v), "cor por evento válida");
+        v["events"]["follow"]["color"] = json!("verde!");
+        assert!(!valid_config(&v), "caractere fora do formato é barrado");
+        let mut v = defaults();
+        v["events"]["follow"].as_object_mut().unwrap().remove("color");
+        assert!(!valid_config(&v), "campo presente e sempre string");
+    }
+
+    #[test]
     fn event_mapping_extracts_amounts_and_splits_bulk_gifts() {
         let p = p();
         assert_eq!(vars(&e(&p, "follow", json!({}))).unwrap().0, "follow");
@@ -412,7 +430,7 @@ mod tests {
         std::fs::write(&file, b"RIFF0000WAVEfmt ").unwrap();
         let id = crate::chat_extras::operation(&rt, &p.id, "chatExtras.import", &json!({"path": file, "kind": "sound"}))
             .unwrap()["id"].as_str().unwrap().to_string();
-        save(&rt, &p, json!({"enabled": true, "events": {"follow": {"on": true, "sound": id}}}));
+        save(&rt, &p, json!({"enabled": true, "volume": 70, "events": {"follow": {"on": true, "sound": id}}}));
         rt.db.set_module(&p.id, "audio", &json!({"device": "cable-3"})).unwrap();
         let mut rx = rt.broadcast.subscribe();
         fire(&rt, &p, &e(&p, "follow", json!({})));
@@ -422,6 +440,10 @@ mod tests {
         assert!(src.contains("/asset?token="), "som servido pela API local: {src}");
         assert!(src.contains(&id));
         assert_eq!(line[0]["payload"]["deviceId"], "cable-3", "aparelho vem da aba Áudio");
+        assert_eq!(
+            line[0]["payload"]["volume"], 0.7,
+            "volume salvo 0–100 chega ao player como 0–1 (senão Math.min(1,…) engolia tudo acima de 1 e tocava 100%)"
+        );
         // Sem som escolhido no alerta não há linha — o painel continua visual.
         save(&rt, &p, json!({"events": {"follow": {"sound": ""}}}));
         let mut rx = rt.broadcast.subscribe();

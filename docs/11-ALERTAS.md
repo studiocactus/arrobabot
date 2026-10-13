@@ -26,9 +26,13 @@ Enquanto os alertas estão desligados, nada toca na live; os botões de teste co
 | Bits | Cheer com bits | `{{user}}`, `{{amount}}`, `{{message}}` |
 | Raid | Raid recebido | `{{user}}`, `{{amount}}` |
 
-Os quatro textos de cada evento são **Etiqueta** (a tarja colorida), **Linha do nome**, **Linha grande** e **Linha final**. Em qualquer um deles você pode usar `{{user}}`, `{{amount}}`, `{{months}}`, `{{tier}}`, `{{sender}}` e `{{message}}`; apelidos como `{{name}}`, `{{username}}` e `{{viewer}}` também valem `{{user}}`. Quando a informação não existe (uma mensagem vazia, por exemplo), a variável vira espaço em branco e a linha continua limpa. Cada evento tem interruptor próprio: desligue só o que não quiser sem mexer nos demais.
+Os quatro textos de cada evento são **Etiqueta** (a tarja colorida), **Linha do nome**, **Linha grande** e **Linha final**. Em qualquer um deles você pode usar `{{user}}`, `{{amount}}`, `{{months}}`, `{{tier}}`, `{{sender}}` e `{{message}}`; apelidos como `{{name}}`, `{{username}}` e `{{viewer}}` também valem `{{user}}`. Quando a informação não existe (uma mensagem vazia, por exemplo), a variável vira espaço em branco e a linha continua limpa. O interruptor de cada evento fica no cabeçalho do grupo **Este evento**: desligue só o que não quiser sem mexer nos demais.
+
+O seletor **Cor da tarja** pinta **somente a tarja colorida** daquele evento — o resto do painel continua nas cores globais do grupo **Cores**. Sem cor escolhida, a tarja usa o Destaque do painel, e o botão **Usar cor global** devolve esse padrão. O texto dentro da tarja escolhe preto ou branco sozinho conforme a clareza da cor, para não sumir em fundo escuro.
 
 ## Ajustes do painel
+
+O Estúdio é vertical: a **prévia fica em cima** e as configurações, **em acordeão abaixo**, ocupando só a altura do grupo aberto. **Este evento** já nasce aberto; clique nos títulos **Painel**, **Cores**, **Fontes** e **Efeitos** para abrir cada um (um resumo do que está configurado aparece ao lado do título).
 
 O grupo **Painel** controla duração (3 a 20 s), velocidade das animações (50% a 200%), volume do som, posição na tela (topo/meio/base e esquerda/centro/direita), margens, largura do painel e o texto da marca. **Cores** tem quatro seletores (destaque, texto, fundo e linhas) e **Fontes** escolhe a fonte pequena (barra e tarja) e a grande (nomes e linhas), com tamanhos independentes. **Efeitos** liga e desliga scanline, cantos da moldura, partículas e glitch no impacto.
 

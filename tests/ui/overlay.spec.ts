@@ -27,10 +27,31 @@ test('estúdio do overlay: prévia e controles em janela estreita e ampla',async
  await page.getByRole('button',{name:'Meta',exact:true}).click();
  await expect(page.getByRole('heading',{name:'Estúdio do overlay'})).toBeVisible();
 
+ // O endereço da camada sai do "Gerando…" porque as ops do livepix recebem
+ // profileId (regressão do bug travado na 0.7.0 — mock falha sem o id).
+ const address=page.locator('code').filter({hasText:/^http/});
+ await expect(address).toBeVisible();
+ await expect(address).toHaveText(/mode=goal$/);
+ await expect(page.getByText('Gerando o endereço do overlay…')).toHaveCount(0);
+
  // trocar modelo e simular doação mexem na prévia na hora
  await page.getByRole('button',{name:/^Neon/}).click();
  await page.getByRole('button',{name:'Simular doação'}).click();
  await expect(page.locator('.bl-ov-pct')).not.toHaveText('62%');
+
+ // Sons da Meta: escolher da biblioteca no grupo Efeitos e trocar de modelo
+ // não pode perder a escolha (0.7.1).
+ await page.getByLabel('Som de doação').scrollIntoViewIfNeeded();
+ await page.getByLabel('Som de doação').selectOption('snd1');
+ await expect(page.getByLabel('Som de doação')).toHaveValue('snd1');
+ await expect(page.getByLabel('Som de celebração')).toHaveValue('');
+ await page.getByRole('button',{name:/^Clean/}).click();
+ await expect(page.getByLabel('Som de doação')).toHaveValue('snd1');
+ // Espera o autosave assentar e volta a olhar o grupo Efeitos para o registro.
+ await expect(page.locator('.lp-save')).toHaveText('Salvo');
+ await page.getByLabel('Som de doação').scrollIntoViewIfNeeded();
+ await page.waitForTimeout(250);
+ await page.screenshot({path:'artifacts/estudio-livepix-sons.png'});
 
  await page.setViewportSize({width:1100,height:800});
  await page.locator('.lp-studio').scrollIntoViewIfNeeded();

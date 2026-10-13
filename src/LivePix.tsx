@@ -2,6 +2,7 @@ import {useCallback,useEffect,useRef,useState} from 'react';
 import {Play,Square,Trash2,Plus,Copy,Check,RefreshCw,Pencil} from 'lucide-react';
 import {api,desktop,errorText} from './api';
 import {Card,Field} from './components';
+import {playViewerSound} from './viewerSound';
 import './overlay-studio.css';
 import OverlayPreview,{type StageBg} from './OverlayPreview';
 import {TEMPLATE_IDS,TEMPLATES,defaultDesign,fontGroups,normalizeDesign,type Align,type Layout,type OverlayDesign,type VAlign} from './overlayDesign';
@@ -10,6 +11,7 @@ type GoalDef={title:string;target:number;fontFamily?:string};
 type Config={enabled?:boolean;clientId?:string;activeGoal?:string;goals?:Record<string,GoalDef>};
 type Data={current?:number;active_goal?:string;last_error?:string};
 type Info={token:string;port:number;url:string};
+type Sound={id:string;name:string};
 
 const LAYOUTS:[Layout,string][]=[['bar','Barra'],['row','Linha'],['panel','Painel'],['ring','Anel']];
 const ALIGNS:[Align,string][]=[['left','Esquerda'],['center','Centro'],['right','Direita']];
@@ -47,6 +49,8 @@ export default function LivePix({profileId,notify}:{profileId:string;notify:(s:s
  const [celebrateKey,setCelebrateKey]=useState(0);
  const [copied,setCopied]=useState(false);
  const [editing,setEditing]=useState('');
+ const [sounds,setSounds]=useState<Sound[]>([]);
+ const [audioDevice,setAudioDevice]=useState('');
  const hydrated=useRef(false);
  const lastSaved=useRef('');
 
@@ -54,8 +58,13 @@ export default function LivePix({profileId,notify}:{profileId:string;notify:(s:s
   if(!desktop)return;
   try{const c=await api<Config>('module.config.get',{profileId,key:'livepix'});setConfig(c||{});if(c?.clientId)setClientId(c.clientId)}catch{}
   try{setData(await api<Data>('module.config.get',{profileId,key:'livepix_data'}))}catch{}
-  try{const d=normalizeDesign(await api<unknown>('livepix.design_get'));lastSaved.current=JSON.stringify(d);setDesign(d)}catch{}
-  try{const i=await api<Info|null>('livepix.overlay_info');setInfo(i&&i.token?i:null)}catch{}
+  // As duas ops do livepix exigem profileId — sem ele o backend responde
+  // "Perfil não encontrado" e o endereço nunca sairia do "Gerando…".
+  try{const d=normalizeDesign(await api<unknown>('livepix.design_get',{profileId}));lastSaved.current=JSON.stringify(d);setDesign(d)}catch{}
+  try{const i=await api<Info|null>('livepix.overlay_info',{profileId});setInfo(i&&i.token?i:null)}catch{}
+  // Sons da Meta e a saída da tela Áudio (a prévia deve ouvir na mesma saída do OBS).
+  try{const g=await api<{assets:{id:string;kind:string;name:string}[]}>('chatExtras.get',{profileId});setSounds((g.assets||[]).filter(a=>a.kind==='sound'))}catch{}
+  try{const a=await api<{device?:string}|null>('module.config.get',{profileId,key:'audio'});setAudioDevice(a?.device||'')}catch{}
   hydrated.current=true;
  },[profileId,desktop]);
  useEffect(()=>{if(desktop)void load()},[load]);
@@ -123,12 +132,18 @@ export default function LivePix({profileId,notify}:{profileId:string;notify:(s:s
  const pct=target>0?Math.round(current*100/target):0;
 
  // Prévia: doação simulada sobe a barra; a celebração leva a 100% e dispara o efeito.
+ // Os dois botões também ouvem o som escolhido na mesma saída do OBS.
  const simulate=()=>{
   if(current>=target)setSim(Math.round(target*0.3));
   else setSim(Math.min(Math.round(target*0.97),current+Math.max(Math.round(target*0.17),1000)));
   setGainKey(k=>k+1);
+  previewSound(design.soundDonate);
  };
- const celebrate=()=>{setSim(target);setCelebrateKey(k=>k+1)};
+ const celebrate=()=>{setSim(target);setCelebrateKey(k=>k+1);previewSound(design.soundCelebrate)};
+ const previewSound=(asset:string)=>{
+  if(!desktop||!asset)return;
+  void playViewerSound({profileId,asset,volume:1,deviceId:audioDevice||undefined}).catch(e=>notify(errorText(e)));
+ };
 
  const set=(patch:Partial<OverlayDesign>)=>setDesign(d=>({...d,...patch}));
 
@@ -186,7 +201,7 @@ export default function LivePix({profileId,notify}:{profileId:string;notify:(s:s
        {TEMPLATE_IDS.map(id=>{
         const t=TEMPLATES[id];
         return <button key={id} type="button" className={'lp-tpl'+(design.template===id?' selected':'')} aria-pressed={design.template===id}
-         onClick={()=>setDesign({...t.design})}>
+         onClick={()=>setDesign(d=>({...t.design,soundDonate:d.soundDonate,soundCelebrate:d.soundCelebrate}))}>
          <span className="lp-tpl-swatch" style={{background:`linear-gradient(90deg,${t.design.fillStart},${t.design.fillEnd})`}}></span>
          <strong>{t.name}</strong><small>{t.hint}</small>
         </button>;
@@ -252,6 +267,22 @@ export default function LivePix({profileId,notify}:{profileId:string;notify:(s:s
        <Toggle label="Gradiente animado" checked={design.animate} onChange={v=>set({animate:v})}/>
        <Toggle label="Pulso ao receber doação" checked={design.pulse} onChange={v=>set({pulse:v})}/>
        <Toggle label="Celebração ao completar 100%" checked={design.celebrate} onChange={v=>set({celebrate:v})}/>
+      </div>
+      <div className="lp-ctrl">
+       <span className="lp-ctrl-label">Som de doação</span>
+       <select value={design.soundDonate} aria-label="Som de doação" onChange={e=>set({soundDonate:e.target.value})}>
+        <option value="">Sem som</option>
+        {sounds.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
+       </select>
+       <small className="lp-note">Toca na saída escolhida na tela Áudio a cada doação que sobe a barra. Envie áudios na tela Sons de Live.</small>
+      </div>
+      <div className="lp-ctrl">
+       <span className="lp-ctrl-label">Som de celebração</span>
+       <select value={design.soundCelebrate} aria-label="Som de celebração" onChange={e=>set({soundCelebrate:e.target.value})}>
+        <option value="">Sem som</option>
+        {sounds.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
+       </select>
+       <small className="lp-note">Toca no lugar do som de doação quando a meta chega a 100%. Os botões Simular doação e Celebração ouvem a escolha.</small>
       </div>
      </div>
     </div>

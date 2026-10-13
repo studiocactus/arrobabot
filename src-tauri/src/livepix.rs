@@ -1,4 +1,4 @@
-use crate::{engine::Runtime, secrets};
+use crate::{engine::Runtime, model::Profile, secrets};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{
@@ -111,6 +111,16 @@ fn free_text(v: &str, def: &str, max: usize) -> String {
     if ok { v.to_owned() } else { def.to_owned() }
 }
 
+/// Id de arquivo enviado na tela Sons de Live (UUID); vazio = sem som.
+fn asset_id(v: &Value) -> String {
+    let s = v.as_str().unwrap_or("");
+    if s.chars().count() <= 64 && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
+        s.to_owned()
+    } else {
+        String::new()
+    }
+}
+
 /// Lê o design do painel e devolve somente os campos conhecidos, dentro das faixas.
 pub fn sanitize_design(v: &Value) -> Value {
     let map = v.as_object();
@@ -145,6 +155,8 @@ pub fn sanitize_design(v: &Value) -> Value {
         "animate": flag(g("animate"), false),
         "pulse": flag(g("pulse"), true),
         "celebrate": flag(g("celebrate"), true),
+        "soundDonate": asset_id(g("soundDonate")),
+        "soundCelebrate": asset_id(g("soundCelebrate")),
     })
 }
 
@@ -181,6 +193,22 @@ pub fn goal_message(rt: &Runtime, p: &str) -> Value {
 
 fn publish_goal(rt: &Runtime, p: &str) {
     let _ = rt.broadcast.send(goal_message(rt, p));
+}
+
+/// Sons escolhidos no Estúdio da Meta: saem pela linha de áudio do app
+/// (evento viewer-sound, volume cheio), nunca pela fonte do OBS. `key` é a
+/// chave do design — vazia (sem escolha) ou arquivo removido não toca nada.
+fn goal_sound(rt: &Runtime, profile: &Profile, key: &str) {
+    if key.is_empty() { return; }
+    let asset = asset_id(&design(rt, &profile.id)[key]);
+    if asset.is_empty() || crate::chat_extras::asset(rt, &profile.id, &asset, "sound").is_err() { return; }
+    crate::chat_extras::play_line(rt, profile, &asset, None, 1.0);
+}
+
+/// Doação nova toca o som de doação; ao cruzar o alvo a celebração substitui
+/// (pagamento que completa a meta não toca os dois sons de uma vez).
+fn goal_sound_key(celebrate: bool, gained: bool) -> &'static str {
+    if celebrate { "soundCelebrate" } else if gained { "soundDonate" } else { "" }
 }
 
 // ---- Chave estável do overlay ----
@@ -332,6 +360,8 @@ pub async fn tick(rt: &Arc<Runtime>) {
                 "celebrate": celebrate,
             }
         }));
+        // Sons da Meta: o broadcast acima é só visual (overlay/estúdio).
+        goal_sound(rt, &profile, goal_sound_key(celebrate, new > old));
     }
 }
 
@@ -521,6 +551,52 @@ mod tests {
         assert_eq!(d["fontSize"].as_i64(), Some(18));
         assert_eq!(d["animate"].as_bool(), Some(false));
         assert_eq!(d["celebrate"].as_bool(), Some(true));
+        assert_eq!(d["soundDonate"], "", "sem som escolhido por padrão");
+        assert_eq!(d["soundCelebrate"], "");
+    }
+
+    #[tokio::test]
+    async fn sons_da_meta_saim_pela_linha_somente_com_escolha_valida() {
+        let dir = tempfile::tempdir().unwrap();
+        let rt = Runtime::new(dir.path().into()).unwrap();
+        let p = profile("P");
+        rt.db.save_profile(&p).unwrap();
+        rt.db.set_module(&p.id, "audio", &json!({"device": "cable-3"})).unwrap();
+        let mut rx = rt.broadcast.subscribe();
+        // Sem escolha no design não toca nada.
+        goal_sound(&rt, &p, "soundDonate");
+        goal_sound(&rt, &p, "soundCelebrate");
+        assert!(!std::iter::from_fn(|| rx.try_recv().ok()).any(|v| v["type"] == "viewer-sound"), "nada sem escolha");
+        // Com escolha, toca na linha do app com o aparelho da tela Áudio.
+        let file = dir.path().join("jingle.wav");
+        std::fs::write(&file, b"RIFF0000WAVEfmt ").unwrap();
+        let id = crate::chat_extras::operation(&rt, &p.id, "chatExtras.import", &json!({"path": file, "kind": "sound"}))
+            .unwrap()["id"].as_str().unwrap().to_string();
+        let mut d = default_design();
+        d["soundDonate"] = json!(&id);
+        d["soundCelebrate"] = json!(&id);
+        rt.db.set_module(&p.id, DESIGN, &d).unwrap();
+        goal_sound(&rt, &p, "soundDonate");
+        goal_sound(&rt, &p, "soundCelebrate");
+        let seen: Vec<_> = std::iter::from_fn(|| rx.try_recv().ok()).filter(|v| v["type"] == "viewer-sound").collect();
+        assert_eq!(seen.len(), 2, "doação e celebração tocam");
+        assert_eq!(seen[0]["payload"]["deviceId"], "cable-3", "aparelho vem da aba Áudio");
+        assert_eq!(seen[0]["payload"]["asset"], json!(id));
+        assert_eq!(seen[0]["payload"]["volume"], 1.0, "volume cheio na escala 0–1");
+        // Arquivo removido depois da escolha: silencia em vez de notificar erro.
+        rt.db.set_module(&p.id, DESIGN, &default_design()).unwrap();
+        goal_sound(&rt, &p, "soundDonate");
+        assert!(std::iter::from_fn(|| rx.try_recv().ok()).next().is_none(), "asset removido não toca");
+        // Higienização: id fora do formato vira vazio (sem som).
+        assert_eq!(asset_id(&json!("x; drop table")), "");
+        assert_eq!(asset_id(&json!(id)), id, "UUID passa");
+    }
+
+    #[test]
+    fn celebracao_substitui_o_som_da_doacao() {
+        assert_eq!(goal_sound_key(true, true), "soundCelebrate");
+        assert_eq!(goal_sound_key(false, true), "soundDonate");
+        assert_eq!(goal_sound_key(false, false), "");
     }
 
     #[test]

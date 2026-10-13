@@ -2,6 +2,10 @@
 
 .lp-studio{display:grid;grid-template-columns:minmax(0,1fr) minmax(340px,400px);gap:var(--s5);align-items:start}
 @media (max-width:960px){.lp-studio{grid-template-columns:minmax(0,1fr)}}
+/* Alertas: prévia em cima e configurações em acordeão abaixo, em toda largura.
+   O teto de largura evita um palco 16:9 gigante em monitores largos. */
+.lp-studio--stack{grid-template-columns:minmax(0,1fr)}
+.lp-studio--stack .lp-preview,.lp-studio--stack .lp-controls{max-width:980px;width:100%;margin-inline:auto}
 .lp-preview{display:flex;flex-direction:column;gap:10px;min-width:0}
 .lp-stagebar{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center}
 .lp-segrow{display:flex;gap:6px;flex-wrap:wrap;align-items:center;min-width:0}
@@ -30,7 +34,7 @@ button.lp-tpl.selected{border-color:var(--accent)}
 .lp-color{display:flex;flex-direction:column;gap:5px;min-width:0}
 .lp-color span{font-size:9px;letter-spacing:1.1px;text-transform:uppercase;color:var(--muted);font-weight:700}
 .lp-color input[type=color]{height:34px;padding:3px;cursor:pointer}
-.lp-toggles{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,150px),1fr));gap:4px 12px}
+.lp-toggles{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,150px),1fr));gap:4px 12px;margin-bottom:12px}
 .lp-toggle{display:flex;align-items:center;gap:9px;font-size:12px;cursor:pointer;min-width:0}
 .lp-toggle input{width:auto;height:auto;margin:0;accent-color:var(--accent);flex:0 0 auto}
 .lp-toggle span{min-width:0}

@@ -40,7 +40,9 @@ export function Busy({children,busy}:{children:ReactNode;busy:boolean}){return <
 export function Tag({children,color='green'}:{children:ReactNode;color?:string}){return <span className={'tag '+color}>{children}</span>}
 export function Jump({children,onClick}:{children:ReactNode;onClick:()=>void}){return <button className="text-button" onClick={onClick}>{children}<ArrowUpRight size={15}/></button>}
 export function ItemStack({children}:{children:ReactNode}){return <div className="item-stack">{children}</div>}
-export function AccordionItem({id,open,enabled,enabledLabel,title,meta,onToggle,onEnabled,children}:{id:string;open:boolean;enabled:boolean;enabledLabel:string;title:string;meta:string[];onToggle:()=>void;onEnabled:(v:boolean)=>void;children:ReactNode}){
+/** Acordeão do inspetor. `onEnabled` é opcional: sem ele o item não mostra
+ *  interruptor (grupos que não têm ligar/desligar, como Cores ou Fontes). */
+export function AccordionItem({id,open,enabled=true,enabledLabel,title,meta=[],onToggle,onEnabled,children}:{id:string;open:boolean;enabled?:boolean;enabledLabel?:string;title:string;meta?:string[];onToggle:()=>void;onEnabled?:(v:boolean)=>void;children:ReactNode}){
  const body='item-body-'+id;
  return <section className={'item'+(open?' open':'')+(enabled?' on':' off')}>
   <div className="item-head">
@@ -50,7 +52,7 @@ export function AccordionItem({id,open,enabled,enabledLabel,title,meta,onToggle,
     <span className="item-meta">{meta.filter(Boolean).map((m,k)=><span key={k}>{m}</span>)}</span>
     <ChevronDown size={16} className="item-chevron" aria-hidden="true"/>
    </button>
-   <Toggle checked={enabled} onChange={onEnabled} label={enabledLabel}/>
+   {onEnabled&&<Toggle checked={enabled} onChange={onEnabled} label={enabledLabel||title}/>}
   </div>
   <div className="item-body" id={body} inert={!open}>
    <div className="item-inner"><div className="item-pad">{children}</div></div>
