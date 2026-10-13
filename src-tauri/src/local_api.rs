@@ -85,7 +85,7 @@ pub async fn serve(rt: Arc<Runtime>) -> Result<(), String> {
                         if let Some(pid) = &overlay_profile {
                             let kind = v["type"].as_str().unwrap_or("");
                             let own = v["payload"]["profileId"].as_str() == Some(pid.as_str());
-                            if !own || !matches!(kind, "goal" | "design" | "alerts" | "alert" | "chat" | "chat.config" | "chat.delete" | "chat.deleteUser" | "chat.clear") { continue; }
+                            if !own || !matches!(kind, "goal" | "design" | "alerts" | "alert" | "chat" | "chat.config" | "chat.event" | "chat.delete" | "chat.deleteUser" | "chat.clear") { continue; }
                         }
                         if ws.send(Message::Text(v.to_string().into())).await.is_err() { break }
                     },

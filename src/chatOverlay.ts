@@ -13,9 +13,32 @@ export type ChatFrag={t:'t'|'e';v:string;id?:string};
 export type ChatMsg={
  id:string;user:string;userId:string;role:string;text:string;
  badges:string[];frags:ChatFrag[];first:boolean;bot:boolean;
+ /** Cor real escolhida na Twitch (hex); vazia quando o espectador nunca escolheu. */
+ color?:string;
 };
 
 export type BadgeKey='broadcaster'|'moderator'|'vip'|'subscriber'|'founder'|'prime'|'bits'|'gift'|'other';
+
+/** Eventos que viram caixa própria dentro da coluna (mesmos do Estúdio de alertas). */
+export const CHAT_EVENT_KINDS=['follow','subscription','resub','gift','giftbulk','cheer','raid'] as const;
+export type ChatEventKind=(typeof CHAT_EVENT_KINDS)[number];
+export function isChatEventKind(k:string):k is ChatEventKind{
+ return (CHAT_EVENT_KINDS as readonly string[]).includes(k);
+}
+export type ChatEventCfg={on:boolean;color:string;sound:string;text:string};
+
+/** Rótulos em pt-BR das caixas de evento (Estúdio de chat). */
+export const CHAT_EVENT_LABELS:Record<ChatEventKind,string>={
+ follow:'Follow',subscription:'Sub',resub:'Renovação',gift:'Sub presente',
+ giftbulk:'Presentes em lote',cheer:'Bits',raid:'Raid',
+};
+
+/** Origem da cor do nome: cor real da Twitch, cor por espectador ou cor fixa. */
+export type NameMode='twitch'|'custom'|'fixed';
+
+/** Modo código do streamer: HTML, CSS e JS extras sobre a camada. */
+export type {CodeBlock} from './codeMode';
+import type {CodeBlock} from './codeMode';
 
 export type ChatConfig={
  enabled:boolean;
@@ -24,11 +47,16 @@ export type ChatConfig={
  direction:'up'|'down';max:number;hideAfter:number;enter:'fade'|'slide'|'pixel'|'type';
  stripes:boolean;align:'left'|'center'|'right';width:number;
  upper:boolean;nameFixed:string;color:string;
+ nameMode:NameMode;
+ prefixOn:boolean;prefix:string;prefixColor:string;
  font:string;fontSize:number;nameSize:number;
  badges:Record<BadgeKey,boolean>;
  hlMode:'none'|'bar'|'bg'|'both';
  hl:{broadcaster:string;moderator:string;vip:string;subscriber:string};
  firstOn:boolean;firstColor:string;
+ eventsOn:boolean;evShowMsg:boolean;
+ ev:Record<ChatEventKind,ChatEventCfg>;
+ code:CodeBlock;
 };
 
 /** Padrão espelhado em chat_overlay.rs (defaults). */
@@ -38,11 +66,24 @@ export const DEFAULT_CHAT:ChatConfig={
  direction:'up',max:100,hideAfter:0,enter:'fade',
  stripes:false,align:'left',width:360,
  upper:false,nameFixed:'',color:'#ffffff',
+ nameMode:'twitch',
+ prefixOn:true,prefix:'> ',prefixColor:'#c6ff00',
  font:'Segoe UI',fontSize:16,nameSize:16,
  badges:{broadcaster:true,moderator:true,vip:true,subscriber:true,founder:true,prime:true,bits:true,gift:true,other:true},
  hlMode:'bar',
  hl:{broadcaster:'#e91916',moderator:'#00ad03',vip:'#e005b9',subscriber:'#1f9bff'},
  firstOn:true,firstColor:'#ffb26b',
+ eventsOn:false,evShowMsg:true,
+ ev:{
+  follow:{on:true,color:'#c6ff00',sound:'',text:'NOVO FOLLOW / {name}'},
+  subscription:{on:true,color:'#b388ff',sound:'',text:'NOVO SUB / {name} / {tier}'},
+  resub:{on:true,color:'#8c9eff',sound:'',text:'RESUB / {name} / {months} MESES / {tier}'},
+  gift:{on:true,color:'#ff7ad9',sound:'',text:'SUB PRESENTE / {sender} > {name}'},
+  giftbulk:{on:true,color:'#ff4db8',sound:'',text:'{name} PRESENTEOU {amount} SUBS'},
+  cheer:{on:true,color:'#ffd24d',sound:'',text:'{name} / {amount} BITS'},
+  raid:{on:true,color:'#ff8a3d',sound:'',text:'RAID / {name} / {amount} VIEWERS'},
+ },
+ code:{html:'',css:'',js:''},
 };
 
 const clamp=(v:unknown,min:number,max:number,fallback:number):number=>{
@@ -69,6 +110,8 @@ export function normalizeChat(v:unknown):ChatConfig{
  for(const k of BADGE_KEYS)badges[k]=bool(rawBadges[k],DEFAULT_CHAT.badges[k]);
  const rawHl=(o.hl&&typeof o.hl==='object'?o.hl:{}) as Record<string,unknown>;
  const font=typeof o.font==='string'&&FONT_SET.has(o.font)?o.font:DEFAULT_CHAT.font;
+ const ev=normalizeEvents(o);
+ const code=normalizeCode(o);
  return{
   enabled:bool(o.enabled,DEFAULT_CHAT.enabled),
   botName:str(o.botName,64,DEFAULT_CHAT.botName),
@@ -98,16 +141,59 @@ export function normalizeChat(v:unknown):ChatConfig{
   },
   firstOn:bool(o.firstOn,DEFAULT_CHAT.firstOn),
   firstColor:color(o.firstColor,DEFAULT_CHAT.firstColor),
+  nameMode:pick(o.nameMode,['twitch','custom','fixed'] as const,DEFAULT_CHAT.nameMode),
+  prefixOn:bool(o.prefixOn,DEFAULT_CHAT.prefixOn),
+  prefix:str(o.prefix,16,DEFAULT_CHAT.prefix),
+  prefixColor:color(o.prefixColor,DEFAULT_CHAT.prefixColor),
+  eventsOn:bool(o.eventsOn,DEFAULT_CHAT.eventsOn),
+  evShowMsg:bool(o.evShowMsg,DEFAULT_CHAT.evShowMsg),
+  ev,
+  code,
  };
 }
 
-// A Twitch não expõe a cor do nome pelo EventSub; usamos uma cor estável por
-// espectador, tirada do id, da própria paleta de cores da Twitch.
+/** Normaliza os 7 eventos: interruptor, cor, som da biblioteca e texto com {marcadores}. */
+function normalizeEvents(o:Record<string,unknown>):Record<ChatEventKind,ChatEventCfg>{
+ const raw=(o.ev&&typeof o.ev==='object'?o.ev:{}) as Record<string,unknown>;
+ const out={} as Record<ChatEventKind,ChatEventCfg>;
+ for(const k of CHAT_EVENT_KINDS){
+  const e=(raw[k]&&typeof raw[k]==='object'?raw[k]:{}) as Record<string,unknown>;
+  const d=DEFAULT_CHAT.ev[k];
+  out[k]={
+   on:bool(e.on,d.on),
+   color:color(e.color,d.color),
+   sound:str(e.sound,64,d.sound),
+   text:str(e.text,160,d.text),
+  };
+ }
+ return out;
+}
+
+function normalizeCode(o:Record<string,unknown>):CodeBlock{
+ const raw=(o.code&&typeof o.code==='object'?o.code:{}) as Record<string,unknown>;
+ return{html:str(raw.html,20_000,''),css:str(raw.css,20_000,''),js:str(raw.js,20_000,'')};
+}
+
+// Cor estável por espectador (tirada do id), da própria paleta de cores da
+// Twitch: cobre quem nunca escolheu cor e o modo "personalizadas".
 const TWITCH_COLORS=['#e91916','#e4690f','#b98500','#00b509','#0f9c9c','#1f70c7','#5c16c5','#a02886'];
 export function userColor(userId:string):string{
  let h=5381;
  for(let i=0;i<userId.length;i++)h=((h<<5)+h+userId.charCodeAt(i))>>>0;
  return TWITCH_COLORS[h%TWITCH_COLORS.length];
+}
+
+/**
+ * Cor do nome segundo a origem escolhida: `twitch` usa a cor real enviada na
+ * mensagem (vazia = nunca escolheu, cai no hash), `custom` é sempre o hash por
+ * espectador e `fixed` é a cor fixa do perfil.
+ */
+export function nameColor(msg:ChatMsg,cfg:ChatConfig):string{
+ if(cfg.nameMode==='fixed'&&cfg.nameFixed)return cfg.nameFixed;
+ // Hex estrito: o backend já filtra, aqui é a segunda rede.
+ const real=msg.color||'';
+ if(cfg.nameMode==='twitch'&&/^#[0-9a-fA-F]{6}$/.test(real))return real;
+ return userColor(msg.userId);
 }
 
 const csv=(v:string):string[]=>v.split(',').map(s=>s.trim().toLowerCase()).filter(Boolean);
@@ -164,11 +250,17 @@ export function ensureChatStyle():void{
 .bl-chat-msg.hl-bg .bl-chat-tint{background:var(--hl,#000);opacity:.16}
 .bl-chat-msg.hl-bar{border-left:3px solid var(--hl,transparent)}
 .bl-chat-name{font-weight:700}
+.bl-chat-prefix{font-weight:700;white-space:pre}
 .bl-chat-sep{opacity:.7;margin-left:-3px}
 .bl-chat-badge{display:inline-flex;align-items:center;align-self:center}
 .bl-chat-badge svg{width:100%;height:100%;display:block}
 .bl-chat-text{flex:1 1 auto;min-width:0;word-break:break-word}
 .bl-chat-emote{vertical-align:-.25em;margin:0 1px}
+/* Evento na coluna: caixa própria com a cor do evento, como o widget de
+   referência — mesma listra, mesma onda e o mesmo some-apois das mensagens. */
+.bl-chat-ev{row-gap:0}
+.bl-evbox{display:block;box-sizing:border-box;border:1px solid var(--ec,#c6ff00);background-color:var(--ecg,rgba(255,255,255,.12));background-image:linear-gradient(rgba(0,0,0,.6),rgba(0,0,0,.6));padding:6px 9px;font-weight:700;letter-spacing:.03em;box-shadow:0 1px 0 rgba(0,0,0,.35)}
+.bl-evmsg{display:block;font-weight:400;letter-spacing:0;opacity:.85;margin-top:3px}
 @keyframes bl-chat-fade{from{opacity:0}to{opacity:1}}
 @keyframes bl-chat-slide{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
 @keyframes bl-chat-pixel{from{opacity:0}50%{opacity:.5}to{opacity:1}}
@@ -217,6 +309,15 @@ function buildMessage(msg:ChatMsg,cfg:ChatConfig):HTMLElement{
  const tint=document.createElement('span');
  tint.className='bl-chat-tint';
  el.appendChild(tint);
+ // Prefixo do estilo do widget de referência: vem antes das badges.
+ if(cfg.prefixOn&&cfg.prefix){
+  const pre=document.createElement('span');
+  pre.className='bl-chat-prefix';
+  pre.textContent=cfg.prefix;
+  pre.style.color=cfg.prefixColor;
+  pre.style.fontSize=cfg.nameSize+'px';
+  el.appendChild(pre);
+ }
  const badgePx=Math.max(11,Math.round(cfg.nameSize*1.05));
  const seen=new Set<BadgeKey>();
  for(const raw of msg.badges){
@@ -234,7 +335,7 @@ function buildMessage(msg:ChatMsg,cfg:ChatConfig):HTMLElement{
  const name=document.createElement('span');
  name.className='bl-chat-name';
  name.textContent=cfg.upper?msg.user.toUpperCase():msg.user;
- name.style.color=cfg.nameFixed||userColor(msg.userId);
+ name.style.color=nameColor(msg,cfg);
  name.style.fontSize=cfg.nameSize+'px';
  el.appendChild(name);
  const hlColor=highlightOf(msg,cfg);
@@ -274,10 +375,9 @@ type Timed=HTMLElement&{_blTimer?:number};
 const clearTimer=(node:Element)=>{const t=(node as Element&{_blTimer?:number})._blTimer;if(t){window.clearTimeout(t);(node as Element&{_blTimer?:number})._blTimer=0}};
 const leave=(node:Element)=>{clearTimer(node);node.classList.add('bl-leaving');window.setTimeout(()=>node.remove(),320)};
 
-/** Empurra a mensagem na coluna, respeitando direção, teto e some-apois. */
-export function pushChat(host:HTMLElement,msg:ChatMsg,cfg:ChatConfig,inset=24):void{
+/** Insere um nó na coluna: mesma onda de entrada, mesmo teto e some-apois. */
+function insert(host:HTMLElement,cfg:ChatConfig,node:HTMLElement,inset:number):void{
  layoutChat(host,cfg,inset);
- const node=buildMessage(msg,cfg) as Timed;
  node.classList.add('bl-enter-'+cfg.enter);
  if(cfg.direction==='down')host.prepend(node);else host.appendChild(node);
  while(host.childElementCount>cfg.max){
@@ -285,7 +385,49 @@ export function pushChat(host:HTMLElement,msg:ChatMsg,cfg:ChatConfig,inset=24):v
   if(!old)break;
   clearTimer(old);old.remove();
  }
- if(cfg.hideAfter>0)node._blTimer=window.setTimeout(()=>leave(node),cfg.hideAfter*1000);
+ const timed=node as Timed;
+ if(cfg.hideAfter>0)timed._blTimer=window.setTimeout(()=>leave(node),cfg.hideAfter*1000);
+}
+
+/** Empurra a mensagem na coluna, respeitando direção, teto e some-apois. */
+export function pushChat(host:HTMLElement,msg:ChatMsg,cfg:ChatConfig,inset=24):void{
+ insert(host,cfg,buildMessage(msg,cfg),inset);
+}
+
+/** Fundo da caixa: a própria cor do evento a 16% de opacidade. */
+function eventTint(c:string):string{
+ const m=/^#([0-9a-fA-F]{6})$/.exec(c||'');
+ if(!m)return 'rgba(255,255,255,.12)';
+ const n=parseInt(m[1],16);
+ return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},.16)`;
+}
+
+/**
+ * Caixa de evento inline na coluna do chat: o texto já chega preenchido e
+ * escapado pelo backend (ou por fillEventText no Estúdio) e a cor é a do
+ * próprio evento.
+ */
+export function buildChatEvent(cfg:ChatConfig,kind:ChatEventKind,text:string,eventColor:string):HTMLElement{
+ const el=document.createElement('div');
+ el.className='bl-chat-msg bl-chat-ev';
+ el.setAttribute('data-ev',kind);
+ const tint=document.createElement('span');
+ tint.className='bl-chat-tint';
+ el.appendChild(tint);
+ const c=eventColor||cfg.ev[kind].color;
+ el.style.setProperty('--ec',c);
+ el.style.setProperty('--ecg',eventTint(c));
+ const box=document.createElement('span');
+ box.className='bl-evbox';
+ box.style.fontSize=cfg.fontSize+'px';
+ box.innerHTML=text;
+ el.appendChild(box);
+ return el;
+}
+
+/** Empurra a caixa de evento na coluna pelo mesmo caminho das mensagens. */
+export function pushChatEvent(host:HTMLElement,cfg:ChatConfig,kind:ChatEventKind,text:string,eventColor:string,inset=24):void{
+ insert(host,cfg,buildChatEvent(cfg,kind,text,eventColor),inset);
 }
 
 const byAttr=(host:HTMLElement,name:string,value:string):Element|undefined=>
@@ -333,4 +475,41 @@ export function chatSample(kind:ChatSample):ChatMsg{
   case 'bot':return base({user:DEFAULT_CHAT.botName,userId:'bot',bot:true,text:'Boa noite, Ana! Comando registrado.'});
   default:return base({});
  }
+}
+
+// Variáveis dos eventos de teste do Estúdio, no mesmo formato que o backend
+// monta (presente: {name} é quem ganhou e {sender} quem deu).
+export const CHAT_EVENT_SAMPLES:Record<ChatEventKind,Record<string,string|number>>={
+ follow:{name:'Sortuda',amount:1,months:1,tier:'TIER 1',sender:'Sortuda',message:''},
+ subscription:{name:'Sortuda',amount:1,months:1,tier:'TIER 1',sender:'Sortuda',message:''},
+ resub:{name:'Sortuda',amount:14,months:14,tier:'TIER 3',sender:'Sortuda',message:'já são 14 meses de live!'},
+ gift:{name:'Sortudo',amount:1,months:1,tier:'TIER 1',sender:'Generoso',message:''},
+ giftbulk:{name:'Generoso123',amount:10,months:1,tier:'TIER 1',sender:'Generoso123',message:''},
+ cheer:{name:'Sortuda',amount:500,months:1,tier:'TIER 1',sender:'Sortuda',message:'manda ver!'},
+ raid:{name:'NoiteNaTwitch',amount:12,months:1,tier:'TIER 1',sender:'NoiteNaTwitch',message:''},
+};
+
+const HTML_ESCAPES:Record<string,string>={'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'};
+export function escHtml(s:string):string{return s.replace(/[<>&"']/g,c=>HTML_ESCAPES[c]||c)}
+
+/** Preenche `{name} {amount} {months} {tier} {sender} {message}` escapando valores. */
+export function fillEventText(tpl:string,vars:Record<string,string|number>):string{
+ let out=tpl;
+ for(const k of ['name','amount','months','tier','sender','message'] as const){
+  const v=vars[k];
+  out=out.split(`{${k}}`).join(v===undefined||v===null?'':escHtml(String(v)));
+ }
+ return out;
+}
+
+/**
+ * HTML da caixa de evento para a prévia do Estúdio — espelho do backend:
+ * template preenchido e, quando ligado, a linha com a mensagem do espectador.
+ */
+export function eventBoxHtml(cfg:ChatConfig,kind:ChatEventKind):string{
+ const vars=CHAT_EVENT_SAMPLES[kind];
+ let html=fillEventText(cfg.ev[kind].text,vars);
+ const msg=String(vars.message||'');
+ if(cfg.evShowMsg&&msg)html+=`<span class="bl-evmsg">${escHtml(msg)}</span>`;
+ return html;
 }

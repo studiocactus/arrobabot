@@ -38,6 +38,7 @@ pub fn defaults() -> Value {
     });
     let events: Value = KINDS.iter().map(|k| (k.to_string(), event_default(k))).collect();
     v["events"] = events;
+    v["code"] = json!({"html": "", "css": "", "js": ""});
     v
 }
 
@@ -94,6 +95,10 @@ pub fn valid_config(v: &Value) -> bool {
         return false;
     }
     if !text_ok(&v["brandText"], 32) {
+        return false;
+    }
+    // Modo código: HTML, CSS e JS do próprio streamer (vazios por padrão).
+    if !["html", "css", "js"].iter().all(|k| text_ok(&v["code"][k], 20_000)) {
         return false;
     }
     KINDS.iter().all(|kind| {

@@ -63,3 +63,11 @@ button.lp-tpl.selected{border-color:var(--accent)}
 .ch-stage{position:relative;height:460px;border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden;background:radial-gradient(130% 130% at 25% 0%,#22344a 0%,#0a0e14 62%)}
 .ch-stage-hint{position:absolute;top:10px;left:12px;font-size:10px;letter-spacing:.14em;color:#5b6b80;pointer-events:none}
 .ch-tests{flex-wrap:wrap}
+
+/* Modo código (chat e alertas): abas Fields · HTML · CSS · JS · Data. */
+.cd-tabs{display:flex;flex-direction:column;gap:11px;min-width:0}
+.cd-tabbar{display:flex;gap:6px;flex-wrap:wrap;align-items:center;border-bottom:1px solid var(--border);padding-bottom:9px}
+.cd-fields{display:flex;flex-direction:column;gap:14px;min-width:0}
+.cd-panel{display:flex;flex-direction:column;gap:8px;min-width:0}
+.cd-code{width:100%;min-height:230px;resize:vertical;font-family:Consolas,'Courier New',monospace;font-size:12px;line-height:1.55;tab-size:2}
+.cd-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap}

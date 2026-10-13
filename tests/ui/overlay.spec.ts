@@ -153,3 +153,65 @@ test('overlay desenha design, meta, perfil, celebração e formato anel',async({
  expect(dash).not.toBe('');
  await page.screenshot({path:'artifacts/overlay-02-anel.png'});
 });
+
+test('camada de chat no OBS: cor da Twitch, evento inline e modo código com escopo',async({page})=>{
+ await page.addInitScript(()=>{
+  const w=window as unknown as {__made:FakeWS[];__sent:string[]};
+  w.__made=[];w.__sent=[];
+  const made=w.__made,sent=w.__sent;
+  class Fake implements FakeWS{
+   url:string;
+   onopen:((e:unknown)=>void)|null=null;
+   onmessage:((e:unknown)=>void)|null=null;
+   onclose:((e:unknown)=>void)|null=null;
+   onerror:((e:unknown)=>void)|null=null;
+   constructor(u:string){this.url=u;made.push(this);setTimeout(()=>this.onopen&&this.onopen({}),0)}
+   send(d:string){sent.push(d)}
+   close(){this.onclose&&this.onclose({})}
+  }
+  (window as unknown as {WebSocket:unknown}).WebSocket=Fake;
+ });
+ await page.goto(overlayUrl+'&mode=chat');
+ // o motor só despacha depois do handshake (mesma espera dos testes vizinhos)
+ await page.waitForFunction(()=>(window as unknown as {__sent:string[]}).__sent.length>0);
+
+ const emit=async(msg:{type:string;payload:Record<string,unknown>})=>{
+  await page.evaluate(m=>{
+   const f=(window as unknown as {__made:FakeWS[]}).__made[0];
+   f.onmessage&&f.onmessage({data:JSON.stringify(m)});
+  },msg);
+ };
+
+ // Coluna ligada com eventos e CSS do modo código.
+ const config={enabled:true,eventsOn:true,code:{html:'',css:'.bl-chat-msg{background:#001122}',js:''}};
+ await emit({type:'chat.config',payload:{profileId:'p1',config}});
+
+ // Mensagem real: prefixo antes das badges e a cor real da Twitch no nome.
+ await emit({type:'chat',payload:{profileId:'p1',id:'m1',user:'Ana',userId:'ana',role:'everyone',text:'oi tudo bem',
+  badges:['moderator'],frags:[{t:'t',v:'oi tudo bem'}],first:false,bot:false,color:'#9146ff'}});
+ const col=page.locator('.bl-chat-col');
+ await expect(col).toContainText('Ana');
+ await expect(col.locator('.bl-chat-prefix')).toHaveText(/^>/);
+ await expect(col.locator('.bl-chat-name')).toHaveCSS('color','rgb(145, 70, 255)');
+ await expect(col.locator('.bl-chat-msg').first()).toHaveCSS('background-color','rgb(0, 17, 34)');
+ // No overlay o escopo do CSS é o body inteiro (mesma regra com prefixo da prévia).
+ await expect.poll(async()=>(await page.locator('#bl-code-chat').textContent())||'')
+  .toContain('body .bl-chat-msg');
+
+ // Evento inline: caixa com a cor própria do evento, mesma coluna.
+ await emit({type:'chat.event',payload:{profileId:'p1',kind:'raid',text:'RAID / ana / 9 VIEWERS',color:'#ff8a3d'}});
+ const box=col.locator('.bl-chat-ev');
+ await expect(box).toHaveAttribute('data-ev','raid');
+ await expect(box).toContainText('RAID / ana / 9 VIEWERS');
+ expect(await box.evaluate(el=>el.style.getPropertyValue('--ec'))).toBe('#ff8a3d');
+ // Base escura sob a cor: o texto branco da caixa lê em qualquer cena.
+ await expect.poll(()=>box.locator('.bl-evbox').evaluate(el=>getComputedStyle(el).backgroundImage))
+  .toContain('rgba(0, 0, 0, 0.6)');
+ // Captura depois da animação de entrada, para o registro sair assentado.
+ await page.waitForTimeout(600);
+ await page.screenshot({path:'artifacts/overlay-chat-camada.png'});
+
+ // Tipo fora do catálogo não desenha nada, mesmo com o mestre ligado.
+ await emit({type:'chat.event',payload:{profileId:'p1',kind:'tip',text:'não pode aparecer',color:'#ffffff'}});
+ await expect(col.locator('.bl-chat-ev')).toHaveCount(1);
+});

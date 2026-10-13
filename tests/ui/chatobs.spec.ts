@@ -1,4 +1,5 @@
 import {test,expect,type Page} from '@playwright/test';
+import {auditPage,fmt} from './ux-helpers';
 
 const profile={id:'p1',name:'Canal de teste',platform:'twitch',channel:'cactus',channelId:'1',botId:'',clientId:'',blocklist:[],topics:[],editors:[],ai:{},modules:{}};
 
@@ -16,6 +17,7 @@ async function setup(page:Page){
      if(op==='command.counters')return {};
      if(op==='settings.get')return {theme:'dark',apiPort:9876,apiToken:'',updateEndpoint:'',updatePublicKey:'',autoUpdate:false};
      if(op==='chat.get')return {config:null,overlay:{token:'tok',port:9876,url:'http://127.0.0.1:9876/overlay#token=tok&profile=p1'}};
+    if(op==='chatExtras.get')return {config:{audioDeviceId:''},assets:[{id:'snd1',kind:'sound',name:'ping.wav'}]};
      if(op==='module.config'){
       sessionStorage.setItem('chatSave',JSON.stringify({key:args.key,value:args.value}));
       return null;
@@ -81,7 +83,7 @@ test('filtros do estúdio escondem os exemplos correspondentes',async({page})=>{
  await expect(page.locator('.ch-stage .bl-chat-col')).toContainText('BotLive');
 });
 
-test('estúdio de chat cabe em janela de 1100px sem espremer texto',async({page})=>{
+test('estúdio de chat cabe em janela de 1100px e ampla sem espremer texto',async({page})=>{
  await page.setViewportSize({width:1100,height:950});
  await setup(page);
  await page.getByRole('button',{name:/Moderador/}).click();
@@ -90,5 +92,120 @@ test('estúdio de chat cabe em janela de 1100px sem espremer texto',async({page}
  const col=page.locator('.ch-stage .bl-chat-col');
  await expect(col).toContainText('ModeradorAna');
  await col.scrollIntoViewIfNeeded();
+ const narrow=await page.evaluate(auditPage);
+ expect(fmt(narrow),`${narrow.length} achado(s) em 1100px`).toEqual([]);
  await page.screenshot({path:'artifacts/estudio-chat-1100.png'});
+
+ await page.setViewportSize({width:1680,height:1000});
+ await page.waitForTimeout(250);
+ const wide=await page.evaluate(auditPage);
+ expect(fmt(wide),`${wide.length} achado(s) em 1680px`).toEqual([]);
+ await page.screenshot({path:'artifacts/estudio-chat-largo.png'});
+ const overflow=await page.evaluate(()=>document.documentElement.scrollWidth-document.documentElement.clientWidth);
+ expect(overflow).toBeLessThanOrEqual(1);
+});
+
+test('origem da cor do nome em 3 vias e prefixo antes das badges',async({page})=>{
+ await setup(page);
+
+ // Personalizadas e Fixa salvam; Fixa revela o seletor de cor.
+ await page.getByRole('button',{name:'Personalizadas',exact:true}).click();
+ await expect.poll(async()=>(await saved(page))?.value?.nameMode,{timeout:3000}).toBe('custom');
+ await page.getByRole('button',{name:'Fixa',exact:true}).click();
+ await expect(page.getByLabel('Cor do nome',{exact:true})).toBeVisible();
+ await expect.poll(async()=>(await saved(page))?.value?.nameMode,{timeout:3000}).toBe('fixed');
+
+ // Prefixo: desligar some, ligar volta com o texto editado.
+ const prefix=page.getByRole('switch',{name:'Prefixo antes do nome'});
+ await prefix.click();
+ await expect.poll(async()=>(await saved(page))?.value?.prefixOn,{timeout:3000}).toBe(false);
+ await prefix.click();
+ await page.getByLabel('Texto do prefixo').fill('» ');
+ await expect.poll(async()=>(await saved(page))?.value?.prefix,{timeout:3000}).toBe('» ');
+
+ // A mensagem de teste entra com o prefixo antes das badges, como o widget.
+ await page.getByRole('button',{name:/Moderador/}).click();
+ const col=page.locator('.ch-stage .bl-chat-col');
+ await expect(col.locator('.bl-chat-prefix')).toHaveText('» ');
+ const order=await col.locator('.bl-chat-msg').first().evaluate(el=>{
+  const html=el.innerHTML;
+  return html.indexOf('bl-chat-prefix')<html.indexOf('bl-chat-badge');
+ });
+ expect(order).toBe(true);
+});
+
+test('eventos na coluna: caixa por evento com cor, texto, som e interruptor',async({page})=>{
+ await setup(page);
+
+ // Mestre desligado não mostra nada; ligando, os sete tipos aparecem.
+ await page.getByRole('switch',{name:'Eventos no chat'}).click();
+ await expect.poll(async()=>(await saved(page))?.value?.eventsOn,{timeout:3000}).toBe(true);
+ const pills=page.locator('.al-pills');
+ for(const label of ['Follow','Sub','Renovação','Sub presente','Presentes em lote','Bits','Raid']){
+  await expect(pills.getByRole('button',{name:label,exact:true})).toBeVisible();
+ }
+
+ // Raid selecionada: cor própria salva, som da biblioteca e teste desenha a caixa.
+ await pills.getByRole('button',{name:'Raid',exact:true}).click();
+ await expect(page.getByLabel('Texto da caixa')).toHaveValue('RAID / {name} / {amount} VIEWERS');
+ await page.getByLabel('Cor do evento').fill('#336699');
+ await expect.poll(async()=>(await saved(page))?.value?.ev?.raid?.color,{timeout:3000}).toBe('#336699');
+ await page.getByLabel('Som de Raid').selectOption('snd1');
+ await expect.poll(async()=>(await saved(page))?.value?.ev?.raid?.sound,{timeout:3000}).toBe('snd1');
+
+ await page.getByRole('button',{name:/Testar raid/}).click();
+ const box=page.locator('.ch-stage .bl-chat-ev');
+ await expect(box).toHaveAttribute('data-ev','raid');
+ await expect(box).toContainText('RAID / NoiteNaTwitch / 12 VIEWERS');
+ expect(await box.evaluate(el=>el.style.getPropertyValue('--ec'))).toBe('#336699');
+
+ // Desligar só o raid some com o pontinho na pílula.
+ await page.getByRole('switch',{name:'Exibir caixa de raid'}).click();
+ await expect.poll(async()=>(await saved(page))?.value?.ev?.raid?.on,{timeout:3000}).toBe(false);
+ await expect(pills.locator('button').filter({hasText:'Raid'})).toContainText('•');
+});
+
+test('modo código do chat aplica HTML, CSS e JS na prévia como o OBS faria',async({page})=>{
+ await setup(page);
+ await page.getByRole('button',{name:/Comum/}).click();
+ const col=page.locator('.ch-stage .bl-chat-col');
+ await expect(col).toContainText('Ana');
+
+ // CSS: seletor prefixado com o escopo da prévia e efeito imediato no palco.
+ await page.getByRole('tab',{name:'CSS'}).click();
+ await page.locator('.cd-panel .cd-code').fill('.bl-chat-msg{background:#001122}');
+ await expect(col.locator('.bl-chat-msg').first()).toHaveCSS('background-color','rgb(0, 17, 34)');
+ await expect.poll(async()=>(await page.locator('#bl-code-chat').textContent())||'')
+  .toContain('.ch-stage .bl-chat-msg');
+
+ // JS: roda com root = a camada (mesma prévia que o OBS executa).
+ await page.getByRole('tab',{name:'JS'}).click();
+ await page.locator('.cd-panel .cd-code').fill('root.setAttribute("data-js","ok")');
+ await expect(page.locator('.ch-stage')).toHaveAttribute('data-js','ok');
+
+ // HTML: markup extra entra no topo do escopo.
+ await page.getByRole('tab',{name:'HTML'}).click();
+ await page.locator('.cd-panel .cd-code').fill('<div class="miro">moldura</div>');
+ await expect(page.locator('.ch-stage [data-bl-code="chat"] .miro')).toHaveText('moldura');
+
+ // Restaurar padrão limpa só o bloco da aba (o CSS continua até a aba CSS).
+ await page.getByRole('button',{name:'Restaurar padrão'}).click();
+ await expect(page.locator('.ch-stage [data-bl-code="chat"]')).toHaveCount(0);
+
+ // Data: JSON da própria tela; erro fora do formato e aplicação normalizada.
+ await page.getByRole('tab',{name:'Data'}).click();
+ const data=page.locator('.cd-panel .cd-code');
+ await expect(data).toHaveValue(/"nameMode"/);
+ await data.fill('{quebrado');
+ await page.getByRole('button',{name:'Aplicar'}).click();
+ await expect(page.getByRole('alert')).toContainText('JSON inválido');
+ await data.fill('[]');
+ await page.getByRole('button',{name:'Aplicar'}).click();
+ await expect(page.getByRole('alert')).toContainText('Esperado um objeto');
+ await data.fill(JSON.stringify({nameMode:'custom',max:42}));
+ await page.getByRole('button',{name:'Aplicar'}).click();
+ await expect.poll(async()=>(await saved(page))?.value?.nameMode,{timeout:3000}).toBe('custom');
+ await expect.poll(async()=>(await saved(page))?.value?.max,{timeout:3000}).toBe(42);
+ // Sucesso devolve à aba Fields com o formulário completo.
+ await expect(page.getByRole('heading',{name:'Coluna',exact:true})).toBeVisible();
 });

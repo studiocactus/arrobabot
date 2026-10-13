@@ -15,7 +15,8 @@ import {
  type GoalModel,type OverlayDesign,type Spec,
 } from './overlayDesign';
 import {isAlertKind,normalizeAlerts,queueAlert,type AlertVars,type AlertsConfig} from './alerts';
-import {chatVisible,clearChat,deleteChat,deleteUserChat,normalizeChat,pushChat,type ChatConfig,type ChatMsg} from './chatOverlay';
+import {chatVisible,clearChat,deleteChat,deleteUserChat,isChatEventKind,normalizeChat,pushChat,pushChatEvent,type ChatConfig,type ChatMsg} from './chatOverlay';
+import {applyCode} from './codeMode';
 
 const params=new URLSearchParams(location.hash.slice(1));
 const token=params.get('token')||'';
@@ -115,6 +116,7 @@ function handle(msg:Message){
  if(msg.type==='alerts'){
   if(profile&&String(payload?.profileId||'')!==profile)return;
   alertsCfg=normalizeAlerts(payload?.config);
+  applyCode(document.body,alertsCfg.code,'alerts');
   return;
  }
  if(msg.type==='alert'){
@@ -134,6 +136,16 @@ function handle(msg:Message){
   if(profile&&String(payload?.profileId||'')!==profile)return;
   chatCfg=normalizeChat(payload?.config);
   if(!chatCfg.enabled&&chatHost)clearChat(chatHost);
+  applyCode(document.body,chatCfg.code,'chat');
+  return;
+ }
+ if(msg.type==='chat.event'){
+  if(profile&&String(payload?.profileId||'')!==profile)return;
+  const kind=String(payload?.kind||'');
+  // O backend já barra evento desligado; aqui só valida o tipo e desenha.
+  if(chatCfg.enabled&&chatCfg.eventsOn&&isChatEventKind(kind)){
+   pushChatEvent(chatBox(),chatCfg,kind,String(payload?.text||''),String(payload?.color||''),40);
+  }
   return;
  }
  if(msg.type==='chat'){

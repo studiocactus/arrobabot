@@ -4,9 +4,11 @@ import {api,desktop,errorText} from './api';
 import {AccordionItem,Card,Check as ToggleCheck,Field,ItemStack,Toggle} from './components';
 import {fontGroups} from './overlayDesign';
 import {
- ALERT_KINDS,ALERT_LABELS,normalizeAlerts,queueAlert,renderStatic,sampleVars,
+ ALERT_KINDS,ALERT_LABELS,DEFAULT_ALERTS,normalizeAlerts,queueAlert,renderStatic,sampleVars,
  type AlertKind,type AlertsConfig,
 } from './alerts';
+import {applyCode} from './codeMode';
+import {CodeTabs} from './CodeTabs';
 import './overlay-studio.css';
 
 type Sound={id:string;name:string};
@@ -64,10 +66,12 @@ export default function Alertas({profileId,notify}:{profileId:string;notify:(s:s
   return()=>ro.disconnect();
  },[]);
 
- // Prévia parada redesenhada quando nenhum alerta está animando.
+ // Prévia parada redesenhada quando nenhum alerta está animando — depois o
+ // modo código se reencaixa por cima (o redesenho substitui os filhos).
  useEffect(()=>{
   if(animating||!stage.current)return;
   renderStatic(stage.current,cfg,sel,sampleVars(sel));
+  applyCode(stage.current,cfg.code,'alerts');
  },[cfg,sel,animating]);
 
  // Autosave curto: o backend valida e retransmite a config ao OBS na hora.
@@ -92,6 +96,15 @@ export default function Alertas({profileId,notify}:{profileId:string;notify:(s:s
  const setEv=(patch:Partial<AlertsConfig['events'][AlertKind]>)=>
   setCfg(c=>({...c,events:{...c.events,[sel]:{...c.events[sel],...patch}}}));
  const flip=(k:keyof typeof openGroups)=>setOpenGroups(o=>({...o,[k]:!o[k]}));
+
+ /** Aba Data: aplica o JSON pelo mesmo normalizador do formulário. */
+ const applyData=(json:string):string|null=>{
+  let parsed:unknown;
+  try{parsed=JSON.parse(json)}catch(e){return 'JSON inválido: '+(e instanceof Error?e.message:'confira vírgulas e aspas.')}
+  if(!parsed||typeof parsed!=='object'||Array.isArray(parsed))return 'Esperado um objeto JSON com os campos desta tela.';
+  setCfg(normalizeAlerts(parsed));
+  return null;
+ };
 
  const test=async()=>{
   if(testing)return;
@@ -144,7 +157,7 @@ export default function Alertas({profileId,notify}:{profileId:string;notify:(s:s
 
      <div className="lp-frame" data-bg="dark" ref={frame}>
       <div className="lp-canvas" style={{transform:`scale(${scale})`}}>
-       <div ref={stage}></div>
+       <div className="al-stage" ref={stage}></div>
       </div>
      </div>
 
@@ -152,6 +165,9 @@ export default function Alertas({profileId,notify}:{profileId:string;notify:(s:s
     </div>
 
     <div className="lp-controls">
+     <CodeTabs code={cfg.code} onChange={c=>set({code:c})}
+      dataJson={JSON.stringify(cfg,null,2)} defaultData={JSON.stringify(DEFAULT_ALERTS,null,2)}
+      onApplyData={applyData}>
      <ItemStack>
       <AccordionItem id="al-event" open={openGroups.event} enabled={ev.on}
        enabledLabel={'Exibir '+ALERT_LABELS[sel].toLowerCase()} title="Este evento" meta={[ALERT_LABELS[sel]]}
@@ -226,6 +242,7 @@ export default function Alertas({profileId,notify}:{profileId:string;notify:(s:s
        </div>
       </AccordionItem>
      </ItemStack>
+     </CodeTabs>
     </div>
    </div>
   </Card>

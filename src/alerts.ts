@@ -8,6 +8,7 @@
  * datilografada e barra de tempo em blocos.
  */
 import {ensureFont} from './overlayDesign';
+import type {CodeBlock} from './codeMode';
 
 export const ALERT_KINDS = ['follow', 'subscription', 'resub', 'gift', 'giftbulk', 'cheer', 'raid'] as const;
 export type AlertKind = (typeof ALERT_KINDS)[number];
@@ -60,6 +61,8 @@ export type AlertsConfig = {
   showParticles: boolean;
   showGlitch: boolean;
   events: Record<AlertKind, AlertEventCfg>;
+  /** Modo código: HTML, CSS e JS próprios sobre a camada de alertas. */
+  code: CodeBlock;
 };
 
 const EVENT_DEFAULTS: Record<AlertKind, AlertEventCfg> = {
@@ -99,6 +102,7 @@ export const DEFAULT_ALERTS: AlertsConfig = {
   showParticles: true,
   showGlitch: true,
   events: structuredClone(EVENT_DEFAULTS),
+  code: {html: '', css: '', js: ''},
 };
 
 const clamp = (v: unknown, min: number, max: number, fallback: number): number => {
@@ -162,6 +166,17 @@ export function normalizeAlerts(v: unknown): AlertsConfig {
     showParticles: bool(o.showParticles, DEFAULT_ALERTS.showParticles),
     showGlitch: bool(o.showGlitch, DEFAULT_ALERTS.showGlitch),
     events,
+    code: normalizeCode(o),
+  };
+}
+
+/** Modo código: strings de até 20 mil caracteres; ausente = vazio. */
+function normalizeCode(o: Record<string, unknown>): CodeBlock {
+  const raw = (o.code && typeof o.code === 'object' ? o.code : {}) as Record<string, unknown>;
+  return {
+    html: str(raw.html, 20_000, ''),
+    css: str(raw.css, 20_000, ''),
+    js: str(raw.js, 20_000, ''),
   };
 }
 

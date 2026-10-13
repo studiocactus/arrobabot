@@ -211,6 +211,7 @@ pub fn normalize_twitch(p:&Profile,v:&Value)->Option<Event>{
  let mut role="everyone";
  if let Some(badges)=payload["badges"].as_array(){
  for b in badges{if b["set_id"]=="subscriber"{role="subscriber"}}
+ for b in badges{if b["set_id"]=="vip"{role="vip"}}
  for b in badges{if b["set_id"]=="moderator"{role="moderator"}}
  }
  if user_id==p.channel_id{role="broadcaster"}

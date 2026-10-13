@@ -121,8 +121,9 @@ test('configurações ficam em acordeão abaixo da prévia',async({page})=>{
  await page.locator('.item-toggle').filter({hasText:'Painel'}).click();
  await expect(body).not.toHaveAttribute('inert');
  await expect(page.getByLabel('Duração',{exact:true})).toBeVisible();
- // Registro do layout: prévia acima, acordeões abertos abaixo.
+ // Registro do layout: abas do modo código acima do acordeão, grupo aberto.
  await body.scrollIntoViewIfNeeded();
+ await page.locator('.cd-tabbar').scrollIntoViewIfNeeded();
  await page.screenshot({path:'artifacts/estudio-alertas-acordeao.png'});
  // Abrir não mexe no interruptor mestre dos alertas.
  await expect(page.getByRole('switch',{name:'Ligar alertas no overlay'})).toHaveAttribute('aria-checked','false');
@@ -141,6 +142,42 @@ test('cor por evento pinta só a tarja e o botão devolve a cor global',async({p
 
  await page.getByRole('button',{name:'Usar cor global'}).click();
  await expect.poll(async()=>(await saved(page))?.value?.events?.follow?.color,{timeout:3000}).toBe('');
+});
+
+test('modo código dos alertas aplica CSS no palco e a aba Data recusa o que não é objeto',async({page})=>{
+ await setup(page);
+
+ // CSS prefixado com o escopo do palco (não pinta o app) e efeito imediato.
+ await page.getByRole('tab',{name:'CSS'}).click();
+ await page.locator('.cd-panel .cd-code').fill('.al-tag{word-spacing:7px}');
+ await expect.poll(async()=>(await page.locator('#bl-code-alerts').textContent())||'')
+  .toContain('.al-stage .al-tag');
+ await expect(page.locator('.bl-alert.is-static .al-tag')).toHaveCSS('word-spacing','7px');
+
+ // Restaurar padrão limpa o bloco e a prévia volta ao normal.
+ await page.getByRole('button',{name:'Restaurar padrão'}).click();
+ await expect(page.locator('#bl-code-alerts')).toHaveCount(0);
+ await expect(page.locator('.bl-alert.is-static .al-tag')).toHaveCSS('word-spacing','0px');
+
+ // Data: JSON inválido e não-objeto barrados com a mensagem certa.
+ await page.getByRole('tab',{name:'Data'}).click();
+ const data=page.locator('.cd-panel .cd-code');
+ await expect(data).toHaveValue(/"panelWidth"/);
+ const original=await data.inputValue();
+ await data.fill('oi');
+ await page.getByRole('button',{name:'Aplicar'}).click();
+ await expect(page.getByRole('alert')).toContainText('JSON inválido');
+ await data.fill('42');
+ await page.getByRole('button',{name:'Aplicar'}).click();
+ await expect(page.getByRole('alert')).toContainText('Esperado um objeto');
+
+ // Objeto válido normaliza pelo formulário e devolve à aba Fields.
+ const obj=JSON.parse(original) as Record<string,unknown>;
+ obj.duration=6;
+ await data.fill(JSON.stringify(obj));
+ await page.getByRole('button',{name:'Aplicar'}).click();
+ await expect.poll(async()=>(await saved(page))?.value?.duration,{timeout:3000}).toBe(6);
+ await expect(page.getByLabel('Etiqueta',{exact:true})).toBeVisible();
 });
 
 async function pills_select_bits(page:Page){

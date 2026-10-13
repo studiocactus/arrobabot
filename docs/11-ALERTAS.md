@@ -38,13 +38,25 @@ O grupo **Painel** controla duração (3 a 20 s), velocidade das animações (50
 
 As alterações salvam sozinhas e chegam ao OBS na hora, sem recarregar a fonte.
 
+## Modo código
+
+Acima do acordeão, as abas **Fields · HTML · CSS · JS · Data** abrem o código da própria camada:
+
+- **Fields** é o formulário desta tela (o acordeão de sempre).
+- **HTML** é markup extra no topo do painel — moldura, fundo, ornamento; `scripts` não executam aqui.
+- **CSS** são estilos próprios valendo **só dentro da camada**: no Estúdio eles não pintam a interface do aplicativo e no OBS valem a cena.
+- **JS** roda na prévia e no OBS com `root` = a própria camada; erro de sintaxe vai ao console sem derrubar o resto.
+- **Data** mostra a configuração desta tela em JSON; **Aplicar** normaliza como o formulário faria e devolve à aba Fields, e objeto fora do formato é recusado com o motivo.
+
+**Restaurar padrão** limpa o bloco da aba — HTML, CSS e JS começam vazios, e o visual continua sendo o do Estúdio até você escrever código. O que você escrever salva sozinho, como no formulário.
+
 ## Sons
 
 O seletor **Som** de cada evento lista os arquivos enviados na tela [Sons de Live](RESPOSTAS-E-SONS.md) (WAV, MP3 ou OGG, até 5 MiB). O áudio toca na **saída dos sons do bot** — o aparelho escolhido na tela [Áudio](13-AUDIO.md) — junto com o painel, usando o volume ajustado no grupo Painel. Sem som selecionado, o alerta é silencioso. Capture essa saída no OBS (por exemplo, a fonte de áudio apontando para o CABLE Output) para ouvir os alertas na live.
 
 ## Limitações desta primeira versão
 
-- Não existe editor de HTML/CSS/JS livre: o Estúdio trabalha por campos, com um único visual de painel. Um modo código pode vir em uma versão futura.
+- No modo código, `scripts` dentro do HTML não executam (o que é código entra na aba JS), e imagens ou fontes externas do seu CSS podem ser bloqueadas na prévia do aplicativo pela política de segurança — na fonte do OBS elas carregam. O JS roda sem sandbox além do escopo: escreva só código seu.
 - Não há botão de pular alerta: cada alerta roda a duração configurada antes do próximo entrar na fila.
 - A Twitch não informa quem recebeu um sub de presente; em **Sub de presente** e **Presentes em lote**, `{{user}}` é quem deu o presente.
 - Doações (LivePix) e resgates de pontos não geram alerta nesta versão.
