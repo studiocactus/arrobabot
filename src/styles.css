@@ -174,3 +174,12 @@ button.swatch-theme.selected,button.swatch-dot.selected{border-color:var(--accen
 [data-theme=light] .outcome.ok{color:#2c7a3f;border-color:#2c7a3f44;background:#2c7a3f12}
 [data-theme=light] .outcome.warn{color:#8a5f10;border-color:#8a5f1044;background:#8a5f1012}
 [data-theme=light] .outcome.bad{color:#b23a41;border-color:#b23a4144;background:#b23a4112}
+
+/* Central de Áudio: rótulos dos interruptores e pílula de salvamento. */
+.au-save{font-size:10px;color:var(--muted);border:1px solid var(--border);border-radius:var(--r-pill);padding:4px 11px;white-space:nowrap}
+.au-save--saved{color:var(--accent);border-color:color-mix(in srgb, var(--accent) 35%, var(--border))}
+.au-save--error{color:#f79195;border-color:#f7919544}
+.au-routes{display:flex;gap:16px;flex-wrap:wrap;align-items:center}
+.au-route{display:inline-flex;align-items:center;gap:7px;font-size:11px;color:var(--muted);white-space:nowrap}
+.au-fixed{font-size:10px;font-weight:700;color:var(--muted);border:1px solid var(--border);border-radius:var(--r-pill);padding:3px 9px;white-space:nowrap}
+[data-theme=light] .au-save--saved{color:#2c7a3f;border-color:#2c7a3f55}

@@ -7,6 +7,7 @@ import {
  ALERT_KINDS,ALERT_LABELS,alertSoundUrl,normalizeAlerts,queueAlert,renderStatic,sampleVars,
  type AlertKind,type AlertsConfig,
 } from './alerts';
+import {normalizeAudio,type AudioConfig} from './audio';
 import './overlay-studio.css';
 
 type Sound={id:string;name:string};
@@ -25,6 +26,7 @@ const POSH:[PosH,string][]=[['left','Esquerda'],['center','Centro'],['right','Di
  */
 export default function Alertas({profileId,notify}:{profileId:string;notify:(s:string)=>void}){
  const [cfg,setCfg]=useState<AlertsConfig>(()=>normalizeAlerts(null));
+ const [audioCfg,setAudioCfg]=useState<AudioConfig>(()=>normalizeAudio(null));
  const [sounds,setSounds]=useState<Sound[]>([]);
  const [info,setInfo]=useState<OverlayInfo|null>(null);
  const [sel,setSel]=useState<AlertKind>('follow');
@@ -49,6 +51,8 @@ export default function Alertas({profileId,notify}:{profileId:string;notify:(s:s
    setSounds(g.sounds||[]);
    setInfo(g.overlay&&g.overlay.token?g.overlay:null);
   }catch{}
+  // A prévia só toca o som se a Central de Áudio deixar "Navegador" ligado.
+  try{const a=await api<{config:unknown}>('audio.get',{profileId});setAudioCfg(normalizeAudio(a?.config))}catch{}
   hydrated.current=true;
  },[profileId,desktop]);
  useEffect(()=>{if(desktop)void load()},[load]);
@@ -99,7 +103,7 @@ export default function Alertas({profileId,notify}:{profileId:string;notify:(s:s
     const sound=cfg.events[r.kind].sound;
     await queueAlert(stage.current,{
      cfg,kind:r.kind,vars:r.vars,
-     audio:sound&&info?{src:alertSoundUrl(info.port,info.token,sound),volume:cfg.volume}:null,
+     audio:sound&&info&&audioCfg.alertBrowser?{src:alertSoundUrl(info.port,info.token,sound),volume:cfg.volume}:null,
     });
    }
   }catch(e){notify(errorText(e))}

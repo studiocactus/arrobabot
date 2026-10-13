@@ -196,7 +196,7 @@ pub fn overlay_profile(rt: &Runtime, token: &str) -> Option<String> {
 }
 
 /// Gera (uma única vez) e devolve a chave estável + o endereço do overlay no OBS.
-pub fn overlay_info(rt: &Arc<Runtime>, p: &str) -> Result<Value, String> {
+pub fn overlay_info(rt: &Runtime, p: &str) -> Result<Value, String> {
     let mut cfg = config(rt, p);
     if cfg.overlay_token.is_empty() {
         cfg.overlay_token = format!(

@@ -1,4 +1,3 @@
-import AudioOutput from './AudioOutput';
 import {useEffect,useState} from 'react';
 import {open} from '@tauri-apps/plugin-dialog';
 import {api,desktop,errorText} from './api';
@@ -65,7 +64,7 @@ export default function ChatExtras({profileId}:{profileId:string}){
  <button onClick={addReply}>Adicionar resposta TXT</button>
  {preview&&<div aria-live="polite"><p>{preview.count} respostas encontradas. Primeiras 10:</p><pre className="variable-output">{preview.lines.join('\n')}</pre>{preview.issues&&preview.issues.length>0&&<div className="inline-warning"><strong>Variáveis para conferir:</strong>{preview.issues.map((w,i)=><p key={i}>Linha {w.line}: <code>{`{{${w.marker}}}`}</code> não existe{w.suggestion?<> — quis dizer <code>{`{{${w.suggestion}}}`}</code>?</>:'.'}</p>)}</div>}</div>}</Card>
  <Card title="Sons por espectador"><Toggle label="Ativar sons por espectador" checked={config.soundsEnabled} onChange={soundsEnabled=>setConfig({...config,soundsEnabled})}/><p className="help">Escolha se cada pessoa deve tocar ao falar, entrar no chat ou em ambos os casos. Na Twitch, a entrada silenciosa exige ativar o monitor abaixo e autorizar novamente a conta do bot. Informe o nome exato do chat ou o ID da plataforma; o apelido serve para sua organização. Áudios são copiados para o BotLive, limitados a 5 MiB e reproduzidos por até 15 segundos. Capture o áudio do BotLive ou do desktop no OBS.</p>
- <Toggle label="Monitorar entradas silenciosas na Twitch" checked={config.presenceEnabled} onChange={presenceEnabled=>setConfig({...config,presenceEnabled})}/><p className="help">Detecta conexões ao chat, não quem está assistindo ao vídeo. A Twitch pode atrasar ou omitir entradas. Pessoas já presentes ao conectar o bot não disparam som. No YouTube, use mensagens; outras plataformas precisam de uma ponte de entrada.</p><AudioOutput value={config.audioDeviceId} onChange={audioDeviceId=>setConfig({...config,audioDeviceId})}/>
+ <Toggle label="Monitorar entradas silenciosas na Twitch" checked={config.presenceEnabled} onChange={presenceEnabled=>setConfig({...config,presenceEnabled})}/><p className="help">Detecta conexões ao chat, não quem está assistindo ao vídeo. A Twitch pode atrasar ou omitir entradas. Pessoas já presentes ao conectar o bot não disparam som. No YouTube, use mensagens; outras plataformas precisam de uma ponte de entrada.</p><p className="help">Para onde estes sons saem — linha de áudio ou navegador, e qual aparelho — fica na tela <strong>Áudio</strong> (Central de áudio). O Testar som de cada pessoa segue a saída escolhida lá.</p>
  {config.people.length===0
   ?<p className="help">Nenhuma pessoa cadastrada ainda. Clique em Adicionar pessoa para escolher o áudio e definir quando ele toca.</p>
   :<>

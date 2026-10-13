@@ -54,7 +54,7 @@ pub fn audio_path(rt:&Runtime,p:&str,a:&Asset)->R<PathBuf>{
 pub fn operation(rt:&Runtime,p:&str,op:&str,args:&Value)->R<Value>{
  rt.db.profile(p)?;
  match op {
- "chatExtras.get"=>Ok(json!({"config":config(rt,p),"assets":assets(rt,p).iter().map(|a|json!({"id":a.id,"name":a.name,"kind":a.kind})).collect::<Vec<_>>() })),
+ "chatExtras.get"=>{let mut c=config(rt,p);c.audio_device_id=crate::audio::device(rt,p);Ok(json!({"config":c,"assets":assets(rt,p).iter().map(|a|json!({"id":a.id,"name":a.name,"kind":a.kind})).collect::<Vec<_>>() }))},
  "chatExtras.import"=>{
  let _guard=rt.module_lock.lock().unwrap();
  let kind=args["kind"].as_str().unwrap_or("");let source=Path::new(args["path"].as_str().ok_or("Escolha um arquivo")?).canonicalize().map_err(|_|"Arquivo não encontrado")?;
@@ -168,6 +168,34 @@ fn available(s:&State,key:&str,seconds:u64)->bool{!s.last.get(key).is_some_and(|
   c.sounds_enabled=true;c.people[0].user_id="".into();c.people[0].name="@ana".into();save(&rt,&p,&c);event.kind="join".into();sound(&rt,&p,&event);assert_eq!(rx.try_recv().unwrap()["type"],"viewer-sound");
   c.people.push(c.people[0].clone());assert!(operation(&rt,&p.id,"chatExtras.save",&json!({"config":c})).is_err());
  }
+ #[tokio::test] async fn central_de_audio_reparte_sons_entre_linha_e_navegador(){
+  let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().join("app")).unwrap();let p=p();rt.db.save_profile(&p).unwrap();let path=dir.path().join("som.wav");std::fs::write(&path,b"RIFF0000WAVEfmt ").unwrap();let id=register(&rt,&p,&path,"sound");std::fs::remove_file(path).unwrap();
+  let person=Person{trigger:"either".into(),id:uuid::Uuid::new_v4().to_string(),enabled:true,name:"Ana".into(),nickname:"Aninha".into(),user_id:"123".into(),asset:id.clone(),mode:"interval".into(),cooldown:5,volume:0.7};
+  save(&rt,&p,&Config{sounds_enabled:true,people:vec![person],..Default::default()});
+  let event=e(&p);
+  let mut audio=crate::audio::defaults();audio["peopleLine"]=json!(false);audio["peopleBrowser"]=json!(true);audio["device"]=json!("cable");rt.db.set_module(&p.id,"audio",&audio).unwrap();
+  let mut rx=rt.broadcast.subscribe();
+  sound(&rt,&p,&event);
+  let seen:Vec<_>=std::iter::from_fn(||rx.try_recv().ok()).collect();
+  assert!(seen.iter().any(|v|v["type"]=="sound"),"navegador ouve");
+  assert!(!seen.iter().any(|v|v["type"]=="viewer-sound"),"linha ficou muda");
+  // Os dois caminhos ligados: linha e navegador tocam juntos.
+  audio["peopleLine"]=json!(true);rt.db.set_module(&p.id,"audio",&audio).unwrap();
+  rt.chat_extras.lock().unwrap().last.clear();
+  let mut rx=rt.broadcast.subscribe();
+  sound(&rt,&p,&event);
+  let seen:Vec<_>=std::iter::from_fn(||rx.try_recv().ok()).collect();
+  assert!(seen.iter().any(|v|v["type"]=="viewer-sound"&&v["payload"]["deviceId"]=="cable"),"linha toca no aparelho da Central");
+  assert!(seen.iter().any(|v|v["type"]=="sound"),"navegador continua ouvindo");
+  // Sons de fluxo têm interruptores próprios.
+  let flow=crate::model::Flow{id:"f".into(),profile_id:p.id.clone(),name:"Teste".into(),audio:id,audio_volume:0.5,..Default::default()};
+  audio["flowLine"]=json!(false);audio["flowBrowser"]=json!(true);rt.db.set_module(&p.id,"audio",&audio).unwrap();
+  let mut rx=rt.broadcast.subscribe();
+  play_flow(&rt,&p,&flow,&event);
+  let seen:Vec<_>=std::iter::from_fn(||rx.try_recv().ok()).collect();
+  assert!(seen.iter().any(|v|v["type"]=="sound"),"fluxo vai para o navegador");
+  assert!(!seen.iter().any(|v|v["type"]=="viewer-sound"),"fluxo não vai para a linha");
+ }
  #[tokio::test] async fn sound_remove_deletes_record_and_copy(){
   let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().join("app")).unwrap();let p=p();rt.db.save_profile(&p).unwrap();let path=dir.path().join("sair.wav");std::fs::write(&path,b"RIFF0000WAVEfmt ").unwrap();let id=register(&rt,&p,&path,"sound");
   assert!(operation(&rt,&p.id,"chatExtras.remove",&json!({"asset":"inexistente"})).is_err());
@@ -177,6 +205,20 @@ fn available(s:&State,key:&str,seconds:u64)->bool{!s.last.get(key).is_some_and(|
  }
 }
 pub fn trigger_matches(trigger:&str,kind:&str)->bool{match trigger{"message"=>kind=="chat","join"=>kind=="join","either"=>kind=="chat"||kind=="join",_=>false}}
+/// Manda o som para as saídas escolhidas na Central de Áudio: a linha do
+/// aplicativo (o app toca e você roteia no Windows) e o navegador (a fonte do
+/// overlay toca dentro do OBS). Os dois podem estar ligados ao mesmo tempo.
+fn route(rt:&Runtime,p:&Profile,origin:&str,asset:&str,nickname:Option<&str>,volume:f64){
+ let r=crate::audio::routes(rt,&p.id,origin);
+ let line=r["line"].as_bool().unwrap_or(false);
+ let browser=r["browser"].as_bool().unwrap_or(false);
+ if line{
+  rt.emit("viewer-sound",json!({"profileId":p.id,"asset":asset,"nickname":nickname,"volume":volume,"deviceId":r["device"].as_str().unwrap_or("")}));
+ }
+ if browser{
+  rt.emit("sound",json!({"profileId":p.id,"asset":asset,"nickname":nickname,"volume":volume}));
+ }
+}
 pub fn sound(rt:&Runtime,p:&Profile,e:&Event){
  if e.kind!="chat"&&e.kind!="join"{return}let c=config(rt,&p.id);if !c.sounds_enabled{return}
  let person=c.people.iter().find(|a|a.enabled&&!a.user_id.is_empty()&&a.user_id==e.user_id).or_else(||c.people.iter().find(|a|a.enabled&&a.user_id.is_empty()&&normalize(&a.name)==normalize(&e.user)));let Some(person)=person else{return};
@@ -186,7 +228,7 @@ pub fn sound(rt:&Runtime,p:&Profile,e:&Event){
  if (person.mode=="first"&&s.seen.contains(&key))||!available(&s,&key,person.cooldown)||!available(&s,&global,5){return}
  if e.simulated{drop(s);rt.log(&p.id,"sound",&format!("[Simulação] Tocaria o som de {}",person.nickname),"info");return}
  s.seen.insert(key.clone());s.last.insert(key,Instant::now());s.last.insert(global,Instant::now());drop(s);
- rt.emit("viewer-sound",json!({"profileId":p.id,"asset":person.asset,"nickname":person.nickname,"volume":person.volume,"deviceId":c.audio_device_id}));
+ route(rt,p,"people",&person.asset,Some(&person.nickname),person.volume);
  rt.log(&p.id,"sound",&format!("Som solicitado para {}",person.nickname),"info");
 }
 /// Toca o áudio escolhido no comando, timer ou automação assim que ele dispara.
@@ -194,9 +236,8 @@ pub fn play_flow(rt:&Runtime,p:&Profile,f:&Flow,e:&Event){
  if f.audio.is_empty(){return}
  if e.simulated{rt.log(&p.id,"sound","[Simulação] Tocaria o áudio do fluxo","info");return}
  if asset(rt,&p.id,&f.audio,"sound").is_err(){rt.log(&p.id,"sound","O áudio deste fluxo não existe mais; escolha outro em Respostas e sons","error");return}
- let c=config(rt,&p.id);
  let volume=if f.audio_volume.is_finite(){f.audio_volume.clamp(0.0,1.0)}else{1.0};
- rt.emit("viewer-sound",json!({"profileId":p.id,"asset":f.audio,"volume":volume,"deviceId":c.audio_device_id}));
+ route(rt,p,"flow",&f.audio,None,volume);
  rt.log(&p.id,"sound",&format!("Áudio solicitado: {}",f.name),"info");
 }
 pub fn response(rt:&Runtime,p:&Profile,e:&Event)->R<Option<(String,bool)>>{

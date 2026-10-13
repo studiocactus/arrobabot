@@ -10,6 +10,7 @@ import {
  type GoalModel,type OverlayDesign,type Spec,
 } from './overlayDesign';
 import {alertSoundUrl,isAlertKind,normalizeAlerts,queueAlert,type AlertVars,type AlertsConfig} from './alerts';
+import {normalizeAudio,type AudioConfig} from './audio';
 import {chatVisible,clearChat,deleteChat,deleteUserChat,normalizeChat,pushChat,type ChatConfig,type ChatMsg} from './chatOverlay';
 
 const params=new URLSearchParams(location.hash.slice(1));
@@ -25,6 +26,7 @@ let hidden=true;
 let ws:WebSocket|null=null;
 let retry=3000;
 let alertsCfg:AlertsConfig=normalizeAlerts(null);
+let audioCfg:AudioConfig=normalizeAudio(null);
 let alertHost:HTMLElement|null=null;
 let chatCfg:ChatConfig=normalizeChat(null);
 let chatHost:HTMLElement|null=null;
@@ -99,6 +101,11 @@ function handle(msg:Message){
   alertsCfg=normalizeAlerts(payload?.config);
   return;
  }
+ if(msg.type==='audio.config'){
+  if(profile&&String(payload?.profileId||'')!==profile)return;
+  audioCfg=normalizeAudio(payload?.config);
+  return;
+ }
  if(msg.type==='alert'){
   if(profile&&String(payload?.profileId||'')!==profile)return;
   const kind=payload?.kind;
@@ -108,9 +115,20 @@ function handle(msg:Message){
   const vars=(payload?.vars&&typeof payload.vars==='object'?payload.vars:{}) as Record<string,unknown>;
   queueAlert(alertHost,{
    cfg:alertsCfg,kind,vars:vars as AlertVars,
-   // O som sai da API local com a mesma chave que abriu este overlay.
-   audio:ev.sound?{src:alertSoundUrl(port,token,ev.sound),volume:alertsCfg.volume}:null,
+   // O som sai da API local com a mesma chave que abriu este overlay —
+   // a menos que a Central de Áudio tenha mandado só para a linha.
+   audio:ev.sound&&audioCfg.alertBrowser?{src:alertSoundUrl(port,token,ev.sound),volume:alertsCfg.volume}:null,
   });
+  return;
+ }
+ if(msg.type==='sound'){
+  // Som de espectador/fluxo roteado para o navegador pela Central de Áudio.
+  if(profile&&String(payload?.profileId||'')!==profile)return;
+  const asset=String(payload?.asset||'');
+  if(!asset)return;
+  const a=new Audio(alertSoundUrl(port,token,asset));
+  a.volume=Math.max(0,Math.min(1,Number(payload?.volume)||0));
+  void a.play().catch(()=>{});
   return;
  }
  if(msg.type==='chat.config'){
