@@ -1,12 +1,10 @@
-/* Estúdio do overlay de meta (LivePix): prévia 1920×1080 + controles de design. */
+/* Estúdios (Meta, Alertas e Chat no OBS): prévia + ajustes no padrão da casa. */
 
+/* Padrão Estúdio: prévia à esquerda, fixa (sticky) enquanto os ajustes rolam
+   à direita — a mesma grade nas três telas, sem espaço vazio ao lado. */
 .lp-studio{display:grid;grid-template-columns:minmax(0,1fr) minmax(340px,400px);gap:var(--s5);align-items:start}
-@media (max-width:960px){.lp-studio{grid-template-columns:minmax(0,1fr)}}
-/* Alertas: prévia em cima e configurações em acordeão abaixo, em toda largura.
-   O teto de largura evita um palco 16:9 gigante em monitores largos. */
-.lp-studio--stack{grid-template-columns:minmax(0,1fr)}
-.lp-studio--stack .lp-preview,.lp-studio--stack .lp-controls{max-width:980px;width:100%;margin-inline:auto}
-.lp-preview{display:flex;flex-direction:column;gap:10px;min-width:0}
+@media (max-width:960px){.lp-studio{grid-template-columns:minmax(0,1fr)}.lp-preview{position:static}}
+.lp-preview{display:flex;flex-direction:column;gap:10px;min-width:0;position:sticky;top:16px}
 .lp-stagebar{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center}
 .lp-segrow{display:flex;gap:6px;flex-wrap:wrap;align-items:center;min-width:0}
 button.lp-seg{height:var(--h-sm);padding:0 11px;font-size:11px;white-space:nowrap}

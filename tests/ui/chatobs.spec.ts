@@ -86,6 +86,8 @@ test('filtros do estúdio escondem os exemplos correspondentes',async({page})=>{
 test('estúdio de chat cabe em janela de 1100px e ampla sem espremer texto',async({page})=>{
  await page.setViewportSize({width:1100,height:950});
  await setup(page);
+ // Padrão Estúdio: a prévia fica fixa enquanto os ajustes rolam ao lado.
+ await expect(page.locator('.lp-preview')).toHaveCSS('position','sticky');
  await page.getByRole('button',{name:/Moderador/}).click();
  await page.getByRole('button',{name:/Em emote/}).click();
  await page.getByRole('button',{name:/Primeira vez/}).click();

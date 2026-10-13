@@ -91,6 +91,8 @@ test('estúdio de alertas cabe em janela de 1100px e ampla sem espremer texto',a
  await page.setViewportSize({width:1100,height:950});
  await setup(page);
  await expect(page.locator('.bl-alert.is-static')).toBeVisible();
+ // Padrão Estúdio: a prévia fica fixa enquanto os ajustes rolam ao lado.
+ await expect(page.locator('.lp-preview')).toHaveCSS('position','sticky');
  const narrow=await page.evaluate(auditPage);
  expect(fmt(narrow),`${narrow.length} achado(s) em 1100px`).toEqual([]);
  await page.screenshot({path:'artifacts/estudio-alertas-1100.png'});
@@ -106,10 +108,10 @@ test('estúdio de alertas cabe em janela de 1100px e ampla sem espremer texto',a
  expect(overflow).toBeLessThanOrEqual(1);
 });
 
-test('configurações ficam em acordeão abaixo da prévia',async({page})=>{
+test('configurações ficam em acordeão ao lado da prévia, no padrão do estúdio',async({page})=>{
  await setup(page);
 
- // Prévia em cima, configurações embaixo (ordem do DOM).
+ // Prévia à esquerda, configurações à direita (ordem do DOM).
  const previewFirst=await page.evaluate(()=>
   !!(document.querySelector('.lp-preview')?.compareDocumentPosition(document.querySelector('.lp-controls'))&Node.DOCUMENT_POSITION_FOLLOWING));
  expect(previewFirst).toBe(true);

@@ -144,7 +144,7 @@ export default function Alertas({profileId,notify}:{profileId:string;notify:(s:s
   <Card title="Estúdio de alertas" action={<span className={'lp-save lp-save--'+saveState}>{saveState==='saving'?'Salvando…':saveState==='saved'?'Salvo':saveState==='error'?'Não salvou':'Alterações salvam sozinhas'}</span>}>
    <p className="help">Escolha o evento, edite os textos e toque em <strong>Testar</strong>: a prévia roda a mesma animação que o OBS desenha, e o teste também vai para a live (mesmo com os alertas desligados).</p>
 
-   <div className="lp-studio lp-studio--stack">
+   <div className="lp-studio">
     <div className="lp-preview">
      <div className="lp-stagebar">
       <div className="al-pills" role="group" aria-label="Eventos de alerta">

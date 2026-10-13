@@ -32,7 +32,7 @@ O seletor **Cor da tarja** pinta **somente a tarja colorida** daquele evento —
 
 ## Ajustes do painel
 
-O Estúdio é vertical: a **prévia fica em cima** e as configurações, **em acordeão abaixo**, ocupando só a altura do grupo aberto. **Este evento** já nasce aberto; clique nos títulos **Painel**, **Cores**, **Fontes** e **Efeitos** para abrir cada um (um resumo do que está configurado aparece ao lado do título).
+O Estúdio segue o padrão das telas de prévia do BotLive: a **prévia fica à esquerda e acompanha a rolagem** (fixa na tela enquanto você ajusta), e as configurações, **em acordeão à direita**, ocupam só a altura do grupo aberto. **Este evento** já nasce aberto; clique nos títulos **Painel**, **Cores**, **Fontes** e **Efeitos** para abrir cada um (um resumo do que está configurado aparece ao lado do título). Em janela estreita, a prévia vai para cima e as configurações ficam embaixo.
 
 O grupo **Painel** controla duração (3 a 20 s), velocidade das animações (50% a 200%), volume do som, posição na tela (topo/meio/base e esquerda/centro/direita), margens, largura do painel e o texto da marca. **Cores** tem quatro seletores (destaque, texto, fundo e linhas) e **Fontes** escolhe a fonte pequena (barra e tarja) e a grande (nomes e linhas), com tamanhos independentes. **Efeitos** liga e desliga scanline, cantos da moldura, partículas e glitch no impacto.
 

@@ -58,6 +58,8 @@ test('estúdio do overlay: prévia e controles em janela estreita e ampla',async
  await page.waitForTimeout(250);
  const narrow=await page.evaluate(auditPage);
  expect(fmt(narrow),`${narrow.length} achado(s) em 1100px`).toEqual([]);
+ // Padrão Estúdio: a prévia fica fixa enquanto os ajustes rolam ao lado.
+ await expect(page.locator('.lp-preview')).toHaveCSS('position','sticky');
  await page.screenshot({path:'artifacts/estudio-livepix-1100.png'});
 
  await page.setViewportSize({width:1680,height:1000});
