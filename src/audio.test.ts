@@ -1,13 +1,14 @@
 import {expect,it} from 'vitest';
 import {DEFAULT_AUDIO,beepDataUri,normalizeAudio} from './audio';
 
-it('padrão espelha o backend e valores inválidos voltam ao normal',()=>{
+it('padrão espelha o backend e aparelho inválido volta ao normal',()=>{
  expect(normalizeAudio(null)).toEqual(DEFAULT_AUDIO);
- expect(normalizeAudio({peopleBrowser:true,flowLine:false,flowBrowser:true,alertLine:true,device:'cable'}))
-  .toEqual({peopleLine:true,peopleBrowser:true,flowLine:false,flowBrowser:true,alertLine:true,alertBrowser:true,device:'cable'});
- // Interruptor que chegou como texto volta ao padrão da origem.
- expect(normalizeAudio({peopleLine:'on',flowBrowser:'sim'}).peopleLine).toBe(true);
- expect(normalizeAudio({peopleLine:'on'}).flowBrowser).toBe(false);
+ // Formato antigo (com interruptores por origem): só o aparelho vale.
+ expect(normalizeAudio({peopleLine:true,peopleBrowser:false,flowLine:true,flowBrowser:true,alertLine:false,alertBrowser:true,device:'cable'}))
+  .toEqual({device:'cable'});
+ // Sem aparelho ou com tipo errado, volta ao padrão do Windows.
+ expect(normalizeAudio({}).device).toBe('');
+ expect(normalizeAudio({device:12}).device).toBe('');
  // Dispositivo gigante é cortado no limite do backend.
  expect(normalizeAudio({device:'x'.repeat(900)}).device).toHaveLength(512);
 });

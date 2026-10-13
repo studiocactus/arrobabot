@@ -1,13 +1,12 @@
 import {useCallback,useEffect,useRef,useState} from 'react';
 import {Check,Copy,Play} from 'lucide-react';
 import {api,desktop,errorText} from './api';
-import {Card,Field,Toggle} from './components';
+import {Card,Check as ToggleCheck,Field,Toggle} from './components';
 import {fontGroups} from './overlayDesign';
 import {
- ALERT_KINDS,ALERT_LABELS,alertSoundUrl,normalizeAlerts,queueAlert,renderStatic,sampleVars,
+ ALERT_KINDS,ALERT_LABELS,normalizeAlerts,queueAlert,renderStatic,sampleVars,
  type AlertKind,type AlertsConfig,
 } from './alerts';
-import {normalizeAudio,type AudioConfig} from './audio';
 import './overlay-studio.css';
 
 type Sound={id:string;name:string};
@@ -22,11 +21,11 @@ const POSH:[PosH,string][]=[['left','Esquerda'],['center','Centro'],['right','Di
 /**
  * Estúdio de Alertas: configura a camada de alertas do overlay do OBS com
  * prévia animada e botões de teste por evento. O teste entra pelo mesmo
- * caminho do evento real — o OBS toca junto com a prévia do app.
+ * caminho do evento real — o OBS toca junto com a prévia do app, e o som
+ * sai na saída de áudio do bot (tela Áudio), nunca na fonte de navegador.
  */
 export default function Alertas({profileId,notify}:{profileId:string;notify:(s:string)=>void}){
  const [cfg,setCfg]=useState<AlertsConfig>(()=>normalizeAlerts(null));
- const [audioCfg,setAudioCfg]=useState<AudioConfig>(()=>normalizeAudio(null));
  const [sounds,setSounds]=useState<Sound[]>([]);
  const [info,setInfo]=useState<OverlayInfo|null>(null);
  const [sel,setSel]=useState<AlertKind>('follow');
@@ -51,8 +50,6 @@ export default function Alertas({profileId,notify}:{profileId:string;notify:(s:s
    setSounds(g.sounds||[]);
    setInfo(g.overlay&&g.overlay.token?g.overlay:null);
   }catch{}
-  // A prévia só toca o som se a Central de Áudio deixar "Navegador" ligado.
-  try{const a=await api<{config:unknown}>('audio.get',{profileId});setAudioCfg(normalizeAudio(a?.config))}catch{}
   hydrated.current=true;
  },[profileId,desktop]);
  useEffect(()=>{if(desktop)void load()},[load]);
@@ -100,11 +97,8 @@ export default function Alertas({profileId,notify}:{profileId:string;notify:(s:s
    // Mesmo caminho do evento real: o OBS toca este alerta junto com a prévia.
    const r=await api<{kind:AlertKind;vars:Record<string,unknown>}>('alerts.test',{profileId,kind:sel});
    if(stage.current){
-    const sound=cfg.events[r.kind].sound;
-    await queueAlert(stage.current,{
-     cfg,kind:r.kind,vars:r.vars,
-     audio:sound&&info&&audioCfg.alertBrowser?{src:alertSoundUrl(info.port,info.token,sound),volume:cfg.volume}:null,
-    });
+    // O som sai pela linha de áudio do app (evento alert-sound); a prévia é visual.
+    await queueAlert(stage.current,{cfg,kind:r.kind,vars:r.vars,audio:null});
    }
   }catch(e){notify(errorText(e))}
   setTesting(false);setAnimating(false);
@@ -113,15 +107,17 @@ export default function Alertas({profileId,notify}:{profileId:string;notify:(s:s
  const copyUrl=async()=>{
   if(!info)return;
   try{
-   await navigator.clipboard.writeText(info.url);
+   await navigator.clipboard.writeText(layerUrl());
    setCopied(true);setTimeout(()=>setCopied(false),2200);
-   notify('Endereço do overlay copiado.');
+   notify('Endereço da camada de alertas copiado.');
   }catch{notify('Não foi possível copiar. Selecione o endereço e copie manualmente.')}
  };
+ /** Endereço da camada de alertas: mesma base do overlay com mode=alerts. */
+ const layerUrl=()=>info?info.url+'&mode=alerts':'';
 
  return <div>
   <Card title="Alertas da live" action={<span className={'status-pill '+(cfg.enabled?'on':'off')}><span className="status-dot" aria-hidden="true"></span>{cfg.enabled?'Ligados':'Desligados'}</span>}>
-   <p className="help">Follows, subs, presentes, bits e raids viram painéis animados na sua fonte de navegador. Tudo acontece no mesmo endereço do overlay da meta — ligar os alertas não exige trocar a fonte no OBS.</p>
+   <p className="help">Follows, subs, presentes, bits e raids viram painéis animados na sua fonte de navegador. A camada de alertas tem um <strong>endereço próprio</strong> (com <code>mode=alerts</code>): crie uma Fonte de navegador só para ela e ajuste posição e tamanho sem mexer na meta nem no chat.</p>
    <div className="list-row">
     <div><strong>Alertas no overlay</strong><small>{cfg.enabled?'Eventos reais tocam no OBS':'Nada toca até você ligar; os botões de teste sempre funcionam'}</small></div>
     <Toggle label="Ligar alertas no overlay" checked={cfg.enabled} onChange={v=>set({enabled:v})}/>
@@ -156,12 +152,12 @@ export default function Alertas({profileId,notify}:{profileId:string;notify:(s:s
      <div className="lp-group">
       <h4>Este evento</h4>
       <div className="lp-ctrl">
-       <Toggle label={'Exibir '+ALERT_LABELS[sel].toLowerCase()} checked={ev.on} onChange={v=>setEv({on:v})}/>
+       <ToggleCheck label={'Exibir '+ALERT_LABELS[sel].toLowerCase()} hint="Desligado, o evento chega ao log mas não desenha nada no OBS." checked={ev.on} onChange={v=>setEv({on:v})}/>
       </div>
       <Field label="Etiqueta" hint="A tarja colorida no topo do painel."><input value={ev.tag} maxLength={160} onChange={e=>setEv({tag:e.target.value})}/></Field>
-      <Field label="Linha do nome"><input value={ev.name} maxLength={160} onChange={e=>setEv({name:e.target.value})}/></Field>
-      <Field label="Linha grande"><input value={ev.big} maxLength={160} onChange={e=>setEv({big:e.target.value})}/></Field>
-      <Field label="Linha final"><input value={ev.foot} maxLength={160} onChange={e=>setEv({foot:e.target.value})}/></Field>
+      <Field label="Linha do nome" hint="Quem disparou o alerta, por padrão."><input value={ev.name} maxLength={160} onChange={e=>setEv({name:e.target.value})}/></Field>
+      <Field label="Linha grande" hint="A frase de destaque do painel."><input value={ev.big} maxLength={160} onChange={e=>setEv({big:e.target.value})}/></Field>
+      <Field label="Linha final" hint="A rodapé do painel — mensagens, meses, valores."><input value={ev.foot} maxLength={160} onChange={e=>setEv({foot:e.target.value})}/></Field>
       <p className="lp-note">Variáveis em qualquer texto: <code>{'{{user}}'}</code> <code>{'{{amount}}'}</code> <code>{'{{months}}'}</code> <code>{'{{tier}}'}</code> <code>{'{{sender}}'}</code> <code>{'{{message}}'}</code>. Vazias viram espaço em branco.</p>
       <div className="lp-ctrl">
        <span className="lp-ctrl-label">Som</span>
@@ -169,30 +165,30 @@ export default function Alertas({profileId,notify}:{profileId:string;notify:(s:s
         <option value="">Sem som</option>
         {sounds.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
        </select>
-       <small className="lp-note">{sounds.length?'Sons enviados na tela Respostas e sons; tocam pelo navegador do OBS.':'Nenhum som neste perfil ainda — envie um WAV, MP3 ou OGG na tela Respostas e sons.'}</small>
+       <small className="lp-note">{sounds.length?'O som toca na saída dos sons do bot (tela Áudio) junto com o painel. Envie áudios na tela Sons de Live.':'Nenhum som neste perfil ainda — envie um WAV, MP3 ou OGG na tela Sons de Live.'}</small>
       </div>
      </div>
 
      <div className="lp-group">
       <h4>Painel</h4>
-      <RangeRow label="Duração" min={3} max={20} step={1} value={cfg.duration} fmt={v=>v+' s'} onChange={v=>set({duration:v})}/>
-      <RangeRow label="Velocidade das animações" min={50} max={200} step={5} value={cfg.speed} fmt={v=>v+'%'} onChange={v=>set({speed:v})}/>
-      <RangeRow label="Volume do som" min={0} max={100} step={5} value={cfg.volume} fmt={v=>v+'%'} onChange={v=>set({volume:v})}/>
-      <Seg label="Altura na tela" value={cfg.posV} options={POSV} onChange={v=>set({posV:v})}/>
-      <Seg label="Lado na tela" value={cfg.posH} options={POSH} onChange={v=>set({posH:v})}/>
-      <RangeRow label="Margem lateral" min={0} max={400} step={4} value={cfg.marginX} fmt={v=>v+'px'} onChange={v=>set({marginX:v})}/>
-      <RangeRow label="Margem vertical" min={0} max={400} step={4} value={cfg.marginY} fmt={v=>v+'px'} onChange={v=>set({marginY:v})}/>
-      <RangeRow label="Largura do painel" min={320} max={1760} step={20} value={cfg.panelWidth} fmt={v=>v+'px'} onChange={v=>set({panelWidth:v})}/>
+      <RangeRow label="Duração" hint="Por quanto tempo o painel fica na tela." min={3} max={20} step={1} value={cfg.duration} fmt={v=>v+' s'} onChange={v=>set({duration:v})}/>
+      <RangeRow label="Velocidade das animações" hint="100% = normal; menos é mais lento." min={50} max={200} step={5} value={cfg.speed} fmt={v=>v+'%'} onChange={v=>set({speed:v})}/>
+      <RangeRow label="Volume do som" hint="Volume do som do alerta na saída dos sons do bot." min={0} max={100} step={5} value={cfg.volume} fmt={v=>v+'%'} onChange={v=>set({volume:v})}/>
+      <Seg label="Altura na tela" hint="Onde o painel aparece na vertical." value={cfg.posV} options={POSV} onChange={v=>set({posV:v})}/>
+      <Seg label="Lado na tela" hint="Onde o painel aparece na horizontal." value={cfg.posH} options={POSH} onChange={v=>set({posH:v})}/>
+      <RangeRow label="Margem lateral" hint="Distância até a borda esquerda/direita." min={0} max={400} step={4} value={cfg.marginX} fmt={v=>v+'px'} onChange={v=>set({marginX:v})}/>
+      <RangeRow label="Margem vertical" hint="Distância até o topo/base da cena." min={0} max={400} step={4} value={cfg.marginY} fmt={v=>v+'px'} onChange={v=>set({marginY:v})}/>
+      <RangeRow label="Largura do painel" hint="Largura máxima do painel dentro da cena 1920×1080." min={320} max={1760} step={20} value={cfg.panelWidth} fmt={v=>v+'px'} onChange={v=>set({panelWidth:v})}/>
       <Field label="Texto da marca" hint="Canto superior esquerdo do painel."><input value={cfg.brandText} maxLength={32} onChange={e=>set({brandText:e.target.value})}/></Field>
      </div>
 
      <div className="lp-group">
       <h4>Cores</h4>
       <div className="lp-colors">
-       <ColorRow label="Destaque" value={cfg.accent} onChange={v=>set({accent:v})}/>
-       <ColorRow label="Texto" value={cfg.text} onChange={v=>set({text:v})}/>
-       <ColorRow label="Fundo do painel" value={cfg.bg} onChange={v=>set({bg:v})}/>
-       <ColorRow label="Linhas" value={cfg.line} onChange={v=>set({line:v})}/>
+       <ColorRow label="Destaque" hint="Cor da etiqueta e dos detalhes." value={cfg.accent} onChange={v=>set({accent:v})}/>
+       <ColorRow label="Texto" hint="Todas as linhas escritas do painel." value={cfg.text} onChange={v=>set({text:v})}/>
+       <ColorRow label="Fundo do painel" hint="Fundo atrás das informações." value={cfg.bg} onChange={v=>set({bg:v})}/>
+       <ColorRow label="Linhas" hint="Bordas e divisórias do painel." value={cfg.line} onChange={v=>set({line:v})}/>
       </div>
      </div>
 
@@ -200,30 +196,30 @@ export default function Alertas({profileId,notify}:{profileId:string;notify:(s:s
       <h4>Fontes</h4>
       <div className="lp-ctrl">
        <span className="lp-ctrl-label">Fonte pequena (barra e etiqueta)</span>
-       <select value={cfg.fontSmall} onChange={e=>set({fontSmall:e.target.value})}>
+       <select value={cfg.fontSmall} aria-label="Fonte pequena" onChange={e=>set({fontSmall:e.target.value})}>
         {fontGroups.map(g=><optgroup key={g.label} label={g.label}>{g.fonts.map(f=><option key={f} value={f}>{f}</option>)}</optgroup>)}
        </select>
       </div>
       <div className="lp-ctrl">
        <span className="lp-ctrl-label">Fonte grande (nomes e linhas)</span>
-       <select value={cfg.fontBig} onChange={e=>set({fontBig:e.target.value})}>
+       <select value={cfg.fontBig} aria-label="Fonte grande" onChange={e=>set({fontBig:e.target.value})}>
         {fontGroups.map(g=><optgroup key={g.label} label={g.label}>{g.fonts.map(f=><option key={f} value={f}>{f}</option>)}</optgroup>)}
        </select>
        <small className="lp-note">Google Fonts exigem internet no computador do OBS; fontes do sistema funcionam offline.</small>
       </div>
-      <RangeRow label="Tamanho da etiqueta" min={8} max={40} step={1} value={cfg.tagSize} fmt={v=>v+'px'} onChange={v=>set({tagSize:v})}/>
-      <RangeRow label="Tamanho do nome" min={8} max={72} step={1} value={cfg.nameSize} fmt={v=>v+'px'} onChange={v=>set({nameSize:v})}/>
-      <RangeRow label="Tamanho da linha grande" min={8} max={72} step={1} value={cfg.bigSize} fmt={v=>v+'px'} onChange={v=>set({bigSize:v})}/>
-      <RangeRow label="Tamanho da linha final" min={8} max={40} step={1} value={cfg.footSize} fmt={v=>v+'px'} onChange={v=>set({footSize:v})}/>
+      <RangeRow label="Tamanho da etiqueta" hint="Letras da tarja colorida no topo." min={8} max={40} step={1} value={cfg.tagSize} fmt={v=>v+'px'} onChange={v=>set({tagSize:v})}/>
+      <RangeRow label="Tamanho do nome" hint="Nome de quem disparou o alerta." min={8} max={72} step={1} value={cfg.nameSize} fmt={v=>v+'px'} onChange={v=>set({nameSize:v})}/>
+      <RangeRow label="Tamanho da linha grande" hint="Frase de destaque do painel." min={8} max={72} step={1} value={cfg.bigSize} fmt={v=>v+'px'} onChange={v=>set({bigSize:v})}/>
+      <RangeRow label="Tamanho da linha final" hint="Rodapé com mensagem, meses ou valores." min={8} max={40} step={1} value={cfg.footSize} fmt={v=>v+'px'} onChange={v=>set({footSize:v})}/>
      </div>
 
      <div className="lp-group">
       <h4>Efeitos</h4>
       <div className="lp-toggles">
-       <Toggle label="Linhas de scanline" checked={cfg.showScanlines} onChange={v=>set({showScanlines:v})}/>
-       <Toggle label="Cantos da moldura" checked={cfg.showCorners} onChange={v=>set({showCorners:v})}/>
-       <Toggle label="Partículas no impacto" checked={cfg.showParticles} onChange={v=>set({showParticles:v})}/>
-       <Toggle label="Glitch no impacto" checked={cfg.showGlitch} onChange={v=>set({showGlitch:v})}/>
+       <ToggleCheck label="Linhas de scanline" hint="Textura de TV antiga no painel." checked={cfg.showScanlines} onChange={v=>set({showScanlines:v})}/>
+       <ToggleCheck label="Cantos da moldura" hint="Cantos decorativos nos quatro extremos." checked={cfg.showCorners} onChange={v=>set({showCorners:v})}/>
+       <ToggleCheck label="Partículas no impacto" hint="Faíscas quando o painel entra." checked={cfg.showParticles} onChange={v=>set({showParticles:v})}/>
+       <ToggleCheck label="Glitch no impacto" hint="Tremida curta na entrada do painel." checked={cfg.showGlitch} onChange={v=>set({showGlitch:v})}/>
       </div>
      </div>
     </div>
@@ -232,14 +228,14 @@ export default function Alertas({profileId,notify}:{profileId:string;notify:(s:s
 
   <Card title="No OBS" action={info?<span className="status-pill on"><span className="status-dot" aria-hidden="true"></span>Pronto</span>:undefined}>
    {info?<>
-    <p className="help">É o <strong>mesmo endereço do overlay da meta</strong>: a camada de alertas usa a fonte de navegador que você já tem no OBS. Se ainda não adicionou, siga os passos abaixo.</p>
+    <p className="help">Este é o <strong>endereço da camada de alertas</strong> (o parâmetro <code>mode=alerts</code> deixa só os alertas nesta fonte). Cada camada — meta, alertas e chat — fica na sua própria Fonte de navegador, com posição e tamanho independentes.</p>
     <div className="lp-url">
-     <code>{info.url}</code>
+     <code>{layerUrl()}</code>
      <button className="primary" onClick={()=>void copyUrl()}>{copied?<Check size={15}/>:<Copy size={15}/>}{copied?'Copiado':'Copiar endereço'}</button>
     </div>
     <ol className="lp-steps">
      <li>No OBS: <strong>Fontes → + → Navegador</strong>.</li>
-     <li>Cole o endereço acima (o <code>#</code> traz a chave e o perfil).</li>
+     <li>Cole o endereço acima (o <code>#</code> traz a chave, o perfil e a camada).</li>
      <li>Defina <strong>Largura 1920</strong> e <strong>Altura 1080</strong>.</li>
      <li>Deixe <strong>Atualizar navegador quando a cena ficar ativa</strong> desmarcado: o overlay reconecta sozinho.</li>
     </ol>
@@ -250,26 +246,29 @@ export default function Alertas({profileId,notify}:{profileId:string;notify:(s:s
 }
 
 /** Grupo de botões lado a lado (posição na tela). */
-function Seg<T extends string>({label,value,options,onChange}:{label:string;value:T;options:[T,string][];onChange:(v:T)=>void}){
+function Seg<T extends string>({label,hint,value,options,onChange}:{label:string;hint?:string;value:T;options:[T,string][];onChange:(v:T)=>void}){
  return <div className="lp-ctrl">
   <span className="lp-ctrl-label">{label}</span>
   <div className="lp-segrow" role="group" aria-label={label}>
    {options.map(([v,l])=><button key={v} type="button" className={'lp-seg'+(value===v?' selected':'')} aria-pressed={value===v} onClick={()=>onChange(v)}>{l}</button>)}
   </div>
+  {hint&&<small className="lp-note">{hint}</small>}
  </div>;
 }
 
-function RangeRow({label,min,max,step,value,fmt,onChange}:{label:string;min:number;max:number;step:number;value:number;fmt:(v:number)=>string;onChange:(v:number)=>void}){
+function RangeRow({label,hint,min,max,step,value,fmt,onChange}:{label:string;hint?:string;min:number;max:number;step:number;value:number;fmt:(v:number)=>string;onChange:(v:number)=>void}){
  return <div className="lp-range">
   <span className="lp-range-label">{label}<output>{fmt(value)}</output></span>
   <input type="range" min={min} max={max} step={step} value={value} aria-label={label} onChange={e=>onChange(Number(e.target.value))}/>
+  {hint&&<small className="lp-note">{hint}</small>}
  </div>;
 }
 
-function ColorRow({label,value,onChange}:{label:string;value:string;onChange:(v:string)=>void}){
+function ColorRow({label,hint,value,onChange}:{label:string;hint?:string;value:string;onChange:(v:string)=>void}){
  const rgb=/^#[0-9a-fA-F]{6}$/.test(value)?value:'#101721';
  return <div className="lp-color">
   <span>{label}</span>
   <input type="color" value={rgb} aria-label={label} onChange={e=>onChange(e.target.value)}/>
+  {hint&&<small className="lp-note">{hint}</small>}
  </div>;
 }

@@ -154,8 +154,8 @@ pub fn vars(e: &Event) -> Option<(String, Value)> {
 }
 
 /// Transmite o alerta para as fontes do OBS (e para a prévia que escutar).
-/// Se a Central de Áudio marcar "Linha" nos alertas, o aplicativo toca o som
-/// também — no aparelho de saída escolhido lá na Central.
+/// O som sai sempre na linha de áudio do aplicativo — o aparelho escolhido na
+/// aba Áudio, que o OBS captura como fonte única do bot.
 fn dispatch(rt: &Runtime, p: &Profile, kind: &str, vars: Value) {
     let _ = rt.emit(
         "alert",
@@ -164,12 +164,9 @@ fn dispatch(rt: &Runtime, p: &Profile, kind: &str, vars: Value) {
     line_sound(rt, p, kind);
 }
 
-/// Som do alerta na linha de áudio do aplicativo (o navegador do overlay já
-/// cuida dele quando "Navegador" está ligado na Central).
+/// Som do alerta na linha de áudio do aplicativo — a mesma saída que o OBS
+/// captura como fonte única do bot. A fonte de navegador ficou só visual.
 fn line_sound(rt: &Runtime, p: &Profile, kind: &str) {
-    if !crate::audio::alerts_line(rt, &p.id) {
-        return;
-    }
     let cfg = config(rt, &p.id);
     let Some(sound) = cfg["events"][kind]["sound"].as_str().filter(|s| !s.is_empty()) else { return };
     let Ok(info) = crate::livepix::overlay_info(rt, &p.id) else { return };
@@ -406,7 +403,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn som_do_alerta_tambem_sai_pela_linha_quando_a_central_manda() {
+    async fn som_do_alerta_sai_sempre_na_linha_do_aplicativo() {
         let dir = tempfile::tempdir().unwrap();
         let rt = Runtime::new(dir.path().join("app")).unwrap();
         let p = p();
@@ -416,26 +413,16 @@ mod tests {
         let id = crate::chat_extras::operation(&rt, &p.id, "chatExtras.import", &json!({"path": file, "kind": "sound"}))
             .unwrap()["id"].as_str().unwrap().to_string();
         save(&rt, &p, json!({"enabled": true, "events": {"follow": {"on": true, "sound": id}}}));
-        let mut audio = crate::audio::defaults();
-        audio["alertLine"] = json!(true);
-        rt.db.set_module(&p.id, "audio", &audio).unwrap();
+        rt.db.set_module(&p.id, "audio", &json!({"device": "cable-3"})).unwrap();
         let mut rx = rt.broadcast.subscribe();
         fire(&rt, &p, &e(&p, "follow", json!({})));
         let line: Vec<_> = std::iter::from_fn(|| rx.try_recv().ok()).filter(|v| v["type"] == "alert-sound").collect();
-        assert_eq!(line.len(), 1, "a linha toca junto com o navegador");
+        assert_eq!(line.len(), 1, "o alerta toca na linha");
         let src = line[0]["payload"]["src"].as_str().unwrap();
         assert!(src.contains("/asset?token="), "som servido pela API local: {src}");
         assert!(src.contains(&id));
-        assert_eq!(line[0]["payload"]["deviceId"], "", "aparelho vem da Central");
-        // Linha desligada: só o navegador recebe o alerta.
-        audio["alertLine"] = json!(false);
-        rt.db.set_module(&p.id, "audio", &audio).unwrap();
-        let mut rx = rt.broadcast.subscribe();
-        fire(&rt, &p, &e(&p, "follow", json!({})));
-        assert!(!std::iter::from_fn(|| rx.try_recv().ok()).any(|v| v["type"] == "alert-sound"), "linha fica muda");
-        // Som vazio na Central: nada extra mesmo com a linha ligada.
-        audio["alertLine"] = json!(true);
-        rt.db.set_module(&p.id, "audio", &audio).unwrap();
+        assert_eq!(line[0]["payload"]["deviceId"], "cable-3", "aparelho vem da aba Áudio");
+        // Sem som escolhido no alerta não há linha — o painel continua visual.
         save(&rt, &p, json!({"events": {"follow": {"sound": ""}}}));
         let mut rx = rt.broadcast.subscribe();
         fire(&rt, &p, &e(&p, "follow", json!({})));

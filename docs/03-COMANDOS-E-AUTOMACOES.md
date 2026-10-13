@@ -2,7 +2,7 @@
 
 **Escolha rápida:** comando responde a alguém; timer publica pelo tempo; contador guarda quantas vezes um comando foi aceito. Cada um tem sua própria tela: **Comandos**, **Timers** e **Contadores**. Veja [passos e exemplos completos](TIMERS-E-CONTADORES.md) ou o [catálogo de receitas](EXEMPLOS-DE-USO.md).
 
-Para responder a palavras usando linhas de um arquivo externo, abra **Respostas TXT e sons**. Consulte o [guia de respostas TXT e sons por espectador](RESPOSTAS-E-SONS.md), com configuração, exemplo de arquivo, intervalos e teste sem publicar.
+Para responder a palavras usando linhas de um arquivo externo, abra **Respostas** no menu lateral. Consulte o [guia de respostas TXT e sons por espectador](RESPOSTAS-E-SONS.md), com configuração, exemplo de arquivo, intervalos e teste sem publicar.
 
 ## Inserir informações na mensagem com um clique
 
@@ -65,13 +65,13 @@ O fio vale para a forma escolhida em **Como enviar na Twitch**; se você trocar 
 
 ## Tocar áudio ao disparar
 
-**Tocar áudio ao disparar** escolhe um som da biblioteca de **Respostas e sons** para tocar quando o comando, o timer ou a automação executar. O som sai na saída de áudio do BotLive: capture essa saída no OBS para a live ouvir. Use **Escolher som** para importar um arquivo novo, **Testar som** para ouvir antes de salvar e **Volume** para ajustar a intensidade.
+**Tocar áudio ao disparar** escolhe um som da biblioteca de **Sons de Live** para tocar quando o comando, o timer ou a automação executar. O som sai na saída de áudio do BotLive (a escolhida na tela [Áudio](13-AUDIO.md)): capture essa saída no OBS para a live ouvir. Use **Escolher som** para importar um arquivo novo, **Testar som** para ouvir antes de salvar e **Volume** para ajustar a intensidade.
 
 O áudio é solicitado antes das ações, na mesma execução da contagem do comando. Com **Contar usos deste comando** ativado, a resposta `O ifood já passou a milhão na rua {{commandCount}} vezes!` sai com o número certo enquanto o som toca. Escrever `{{commandCount}}` na resposta já liga **Contar usos deste comando** sozinho quando você salva: não é preciso lembrar do interruptor.
 
 - **Nenhum áudio** é o padrão: nada é tocado e a execução é igual à de antes.
 - A simulação nunca toca som; o **Histórico** mostra `[Simulação] Tocaria o áudio do fluxo`.
-- Se o arquivo for apagado de **Respostas e sons**, o fluxo continua sem som e o **Histórico** pede para escolher outro.
+- Se o arquivo for apagado de **Sons de Live**, o fluxo continua sem som e o **Histórico** pede para escolher outro.
 - O áudio do fluxo não depende de **Ativar sons por espectador** e não usa os intervalos daqueles sons.
 
 ## Permissão e intervalos

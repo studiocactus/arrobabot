@@ -2,7 +2,7 @@ import {useCallback,useEffect,useRef,useState} from 'react';
 import {listen} from '@tauri-apps/api/event';
 import {Check,Copy,Play,Trash2,Zap} from 'lucide-react';
 import {api,desktop,errorText} from './api';
-import {Card,Field,Toggle} from './components';
+import {Card,Check as ToggleCheck,Field,Toggle} from './components';
 import {fontGroups} from './overlayDesign';
 import {
  CHAT_SAMPLES,clearChat,chatSample,chatVisible,deleteChat,deleteUserChat,layoutChat,normalizeChat,pushChat,
@@ -107,15 +107,17 @@ export default function ChatObs({profileId,notify}:{profileId:string;notify:(s:s
  const copyUrl=async()=>{
   if(!info)return;
   try{
-   await navigator.clipboard.writeText(info.url);
+   await navigator.clipboard.writeText(layerUrl());
    setCopied(true);setTimeout(()=>setCopied(false),2200);
-   notify('Endereço do overlay copiado.');
+   notify('Endereço da camada de chat copiado.');
   }catch{notify('Não foi possível copiar. Selecione o endereço e copie manualmente.')}
  };
+ /** Endereço da camada de chat: mesma base do overlay com mode=chat. */
+ const layerUrl=()=>info?info.url+'&mode=chat':'';
 
  return <div>
   <Card title="Chat no overlay" action={<span className={'status-pill '+(cfg.enabled?'on':'off')}><span className="status-dot" aria-hidden="true"></span>{cfg.enabled?'Ligado':'Desligado'}</span>}>
-   <p className="help">As mensagens do chat viram uma coluna na sua fonte de navegador: badges de moderador/VIP/sub, emotes do canal, destaque por papel e sincronização com a moderação (mensagem apagada some do overlay). Usa o mesmo endereço do overlay da meta e dos alertas.</p>
+   <p className="help">As mensagens do chat viram uma coluna na sua fonte de navegador: badges de moderador/VIP/sub, emotes do canal, destaque por papel e sincronização com a moderação (mensagem apagada some do overlay). A camada de chat tem um <strong>endereço próprio</strong> (com <code>mode=chat</code>): crie uma Fonte de navegador só para ela e coloque a coluna onde quiser, sem mexer na meta nem nos alertas.</p>
    <div className="list-row">
     <div><strong>Chat no overlay</strong><small>{cfg.enabled?(live?'Mensagens reais já estão correndo na prévia':'Mensagens reais aparecem no OBS'):'Nada aparece até você ligar; os botões de teste sempre funcionam'}</small></div>
     <Toggle label="Ligar chat no overlay" checked={cfg.enabled} onChange={v=>set({enabled:v})}/>
@@ -145,14 +147,14 @@ export default function ChatObs({profileId,notify}:{profileId:string;notify:(s:s
     <div className="lp-controls">
      <div className="lp-group">
       <h4>Coluna</h4>
-      <Seg label="Fluxo das mensagens" value={cfg.direction} options={DIRECTIONS} onChange={v=>set({direction:v})}/>
-      <RangeRow label="Máximo de mensagens" min={10} max={300} step={5} value={cfg.max} fmt={v=>String(v)} onChange={v=>set({max:v})}/>
-      <RangeRow label="Some depois de" min={0} max={120} step={5} value={cfg.hideAfter} fmt={v=>v===0?'nunca':v+' s'} onChange={v=>set({hideAfter:v})}/>
-      <Seg label="Entrada das mensagens" value={cfg.enter} options={ENTERS} onChange={v=>set({enter:v})}/>
-      <RangeRow label="Largura da coluna" min={240} max={960} step={20} value={cfg.width} fmt={v=>v+'px'} onChange={v=>set({width:v})}/>
-      <Seg label="Lado na tela" value={cfg.align} options={ALIGNS} onChange={v=>set({align:v})}/>
+      <Seg label="Fluxo das mensagens" hint="Novas embaixo empilha de baixo para cima, como o chat normal." value={cfg.direction} options={DIRECTIONS} onChange={v=>set({direction:v})}/>
+      <RangeRow label="Máximo de mensagens" hint="Quantas mensagens ficam na coluna antes de sair a mais antiga." min={10} max={300} step={5} value={cfg.max} fmt={v=>String(v)} onChange={v=>set({max:v})}/>
+      <RangeRow label="Some depois de" hint="Tempo até a mensagem sumir da tela; nunca mantém sempre." min={0} max={120} step={5} value={cfg.hideAfter} fmt={v=>v===0?'nunca':v+' s'} onChange={v=>set({hideAfter:v})}/>
+      <Seg label="Entrada das mensagens" hint="Como a mensagem aparece ao entrar." value={cfg.enter} options={ENTERS} onChange={v=>set({enter:v})}/>
+      <RangeRow label="Largura da coluna" hint="Largura da coluna dentro da cena 1920×1080." min={240} max={960} step={20} value={cfg.width} fmt={v=>v+'px'} onChange={v=>set({width:v})}/>
+      <Seg label="Lado na tela" hint="Qual canto da cena a coluna ocupa." value={cfg.align} options={ALIGNS} onChange={v=>set({align:v})}/>
       <div className="lp-ctrl">
-       <Toggle label="Listras alternadas no fundo" checked={cfg.stripes} onChange={v=>set({stripes:v})}/>
+       <ToggleCheck label="Listras alternadas no fundo" hint="Zebra sutil atrás de cada mensagem." checked={cfg.stripes} onChange={v=>set({stripes:v})}/>
       </div>
      </div>
 
@@ -160,59 +162,58 @@ export default function ChatObs({profileId,notify}:{profileId:string;notify:(s:s
       <h4>Mensagem</h4>
       <div className="lp-ctrl">
        <span className="lp-ctrl-label">Fonte</span>
-       <select value={cfg.font} onChange={e=>set({font:e.target.value})}>
+       <select value={cfg.font} aria-label="Fonte do chat" onChange={e=>set({font:e.target.value})}>
         {fontGroups.map(g=><optgroup key={g.label} label={g.label}>{g.fonts.map(f=><option key={f} value={f}>{f}</option>)}</optgroup>)}
        </select>
        <small className="lp-note">Google Fonts exigem internet no computador do OBS; fontes do sistema funcionam offline.</small>
       </div>
-      <RangeRow label="Tamanho do texto" min={10} max={28} step={1} value={cfg.fontSize} fmt={v=>v+'px'} onChange={v=>set({fontSize:v})}/>
-      <RangeRow label="Tamanho do nome" min={10} max={36} step={1} value={cfg.nameSize} fmt={v=>v+'px'} onChange={v=>set({nameSize:v})}/>
-      <ColorRow label="Cor do texto" value={cfg.color} onChange={v=>set({color:v})}/>
+      <RangeRow label="Tamanho do texto" hint="Tamanho das mensagens." min={10} max={28} step={1} value={cfg.fontSize} fmt={v=>v+'px'} onChange={v=>set({fontSize:v})}/>
+      <RangeRow label="Tamanho do nome" hint="Tamanho do nome de quem falou." min={10} max={36} step={1} value={cfg.nameSize} fmt={v=>v+'px'} onChange={v=>set({nameSize:v})}/>
+      <ColorRow label="Cor do texto" hint="Cor da mensagem; o nome pode ter cor própria." value={cfg.color} onChange={v=>set({color:v})}/>
       <div className="lp-ctrl">
-       <Toggle label="Nome em caixa alta" checked={cfg.upper} onChange={v=>set({upper:v})}/>
+       <ToggleCheck label="Nome em caixa alta" hint="Deixa o nome todo em maiúsculas." checked={cfg.upper} onChange={v=>set({upper:v})}/>
       </div>
       <div className="lp-ctrl">
-       <Toggle label="Cor fixa no nome" checked={!!cfg.nameFixed} onChange={v=>set({nameFixed:v?'#ffffff':''})}/>
+       <ToggleCheck label="Cor fixa no nome" hint="Um nome cor fixa; desligado, cada espectador ganha uma cor estável própria (a Twitch não expõe a cor real pelo caminho que o bot usa)." checked={!!cfg.nameFixed} onChange={v=>set({nameFixed:v?'#ffffff':''})}/>
        {cfg.nameFixed&&<ColorRow label="Cor do nome" value={cfg.nameFixed} onChange={v=>set({nameFixed:v})}/>}
-       <small className="lp-note">Desligado, cada espectador ganha uma cor estável própria (a Twitch não expõe a cor real pelo caminho que o bot usa).</small>
       </div>
      </div>
 
      <div className="lp-group">
       <h4>Badges</h4>
+      <p className="lp-note">Qual insígnia aparece ao lado do nome. Desligue as que não quiser exibir.</p>
       <div className="lp-toggles">
-       {BADGE_LABELS.map(([k,l])=><Toggle key={k} label={l} checked={cfg.badges[k]} onChange={v=>setCfg(c=>({...c,badges:{...c.badges,[k]:v}}))}/>)}
+       {BADGE_LABELS.map(([k,l])=><ToggleCheck key={k} label={l} checked={cfg.badges[k]} onChange={v=>setCfg(c=>({...c,badges:{...c.badges,[k]:v}}))}/>)}
       </div>
      </div>
 
      <div className="lp-group">
       <h4>Destaques por papel</h4>
-      <Seg label="Como destacar" value={cfg.hlMode} options={HLMODES} onChange={v=>set({hlMode:v})}/>
+      <Seg label="Como destacar" hint="O que a cor do papel pinta na mensagem." value={cfg.hlMode} options={HLMODES} onChange={v=>set({hlMode:v})}/>
       <div className="lp-colors">
-       <ColorRow label="Transmissor" value={cfg.hl.broadcaster} onChange={v=>set({hl:{...cfg.hl,broadcaster:v}})}/>
-       <ColorRow label="Moderador" value={cfg.hl.moderator} onChange={v=>set({hl:{...cfg.hl,moderator:v}})}/>
-       <ColorRow label="VIP" value={cfg.hl.vip} onChange={v=>set({hl:{...cfg.hl,vip:v}})}/>
-       <ColorRow label="Inscrito" value={cfg.hl.subscriber} onChange={v=>set({hl:{...cfg.hl,subscriber:v}})}/>
+       <ColorRow label="Transmissor" hint="Cor do seu nome no chat." value={cfg.hl.broadcaster} onChange={v=>set({hl:{...cfg.hl,broadcaster:v}})}/>
+       <ColorRow label="Moderador" hint="Cor dos moderadores." value={cfg.hl.moderator} onChange={v=>set({hl:{...cfg.hl,moderator:v}})}/>
+       <ColorRow label="VIP" hint="Cor dos VIPs." value={cfg.hl.vip} onChange={v=>set({hl:{...cfg.hl,vip:v}})}/>
+       <ColorRow label="Inscrito" hint="Cor dos inscritos." value={cfg.hl.subscriber} onChange={v=>set({hl:{...cfg.hl,subscriber:v}})}/>
       </div>
       <div className="lp-ctrl">
-       <Toggle label="Destacar a primeira mensagem" checked={cfg.firstOn} onChange={v=>set({firstOn:v})}/>
+       <ToggleCheck label="Destacar a primeira mensagem" hint="“Primeira vez” é desde que o BotLive abriu, não a primeira da vida no canal." checked={cfg.firstOn} onChange={v=>set({firstOn:v})}/>
        {cfg.firstOn&&<ColorRow label="Cor da primeira mensagem" value={cfg.firstColor} onChange={v=>set({firstColor:v})}/>}
-       <small className="lp-note">“Primeira vez” é desde que o BotLive abriu, não a primeira da vida no canal.</small>
       </div>
      </div>
 
      <div className="lp-group">
       <h4>Filtros</h4>
       <div className="lp-ctrl">
-       <Toggle label="Mostrar as mensagens do bot" checked={cfg.showBot} onChange={v=>set({showBot:v})}/>
-       <Field label="Nome do bot no chat"><input value={cfg.botName} maxLength={64} onChange={e=>set({botName:e.target.value})}/></Field>
+       <ToggleCheck label="Mostrar as mensagens do bot" hint="Inclui o próprio bot na coluna." checked={cfg.showBot} onChange={v=>set({showBot:v})}/>
+       <Field label="Nome do bot no chat" hint="Como o bot aparece no chat da plataforma."><input value={cfg.botName} maxLength={64} onChange={e=>set({botName:e.target.value})}/></Field>
       </div>
       <div className="lp-ctrl">
-       <Toggle label="Esconder outros bots" checked={cfg.hideBots} onChange={v=>set({hideBots:v})}/>
+       <ToggleCheck label="Esconder outros bots" hint="Some com robôs que falam no chat." checked={cfg.hideBots} onChange={v=>set({hideBots:v})}/>
        <Field label="Lista de bots" hint="Nomes separados por vírgula; nomes terminados em “bot” já são escondidos."><input value={cfg.bots} maxLength={200} onChange={e=>set({bots:e.target.value})}/></Field>
       </div>
       <div className="lp-ctrl">
-       <Toggle label="Esconder comandos (!)" checked={cfg.hideCommands} onChange={v=>set({hideCommands:v})}/>
+       <ToggleCheck label="Esconder comandos (!)" hint="Mensagens que começam com ! ou / não aparecem." checked={cfg.hideCommands} onChange={v=>set({hideCommands:v})}/>
       </div>
       <Field label="Palavras bloqueadas" hint="Separadas por vírgula; a mensagem que contiver alguma delas não aparece."><input value={cfg.blocked} maxLength={200} onChange={e=>set({blocked:e.target.value})}/></Field>
      </div>
@@ -222,14 +223,14 @@ export default function ChatObs({profileId,notify}:{profileId:string;notify:(s:s
 
   <Card title="No OBS" action={info?<span className="status-pill on"><span className="status-dot" aria-hidden="true"></span>Pronto</span>:undefined}>
    {info?<>
-    <p className="help">É o <strong>mesmo endereço do overlay da meta e dos alertas</strong>: a camada de chat entra na fonte de navegador que você já tem no OBS. Coloque a coluna onde o chat não cubra a cena — o alinhamento acima define o lado.</p>
+    <p className="help">Este é o <strong>endereço da camada de chat</strong> (o parâmetro <code>mode=chat</code> deixa só o chat nesta fonte). Cada camada — meta, alertas e chat — fica na sua própria Fonte de navegador. Coloque a coluna onde o chat não cubra a cena — o alinhamento acima define o lado.</p>
     <div className="lp-url">
-     <code>{info.url}</code>
+     <code>{layerUrl()}</code>
      <button className="primary" onClick={()=>void copyUrl()}>{copied?<Check size={15}/>:<Copy size={15}/>}{copied?'Copiado':'Copiar endereço'}</button>
     </div>
     <ol className="lp-steps">
      <li>No OBS: <strong>Fontes → + → Navegador</strong>.</li>
-     <li>Cole o endereço acima (o <code>#</code> traz a chave e o perfil).</li>
+     <li>Cole o endereço acima (o <code>#</code> traz a chave, o perfil e a camada).</li>
      <li>Defina <strong>Largura 1920</strong> e <strong>Altura 1080</strong>.</li>
      <li>Deixe <strong>Atualizar navegador quando a cena ficar ativa</strong> desmarcado: o overlay reconecta sozinho.</li>
     </ol>
@@ -240,26 +241,29 @@ export default function ChatObs({profileId,notify}:{profileId:string;notify:(s:s
 }
 
 /** Grupo de botões lado a lado. */
-function Seg<T extends string>({label,value,options,onChange}:{label:string;value:T;options:[T,string][];onChange:(v:T)=>void}){
+function Seg<T extends string>({label,hint,value,options,onChange}:{label:string;hint?:string;value:T;options:[T,string][];onChange:(v:T)=>void}){
  return <div className="lp-ctrl">
   <span className="lp-ctrl-label">{label}</span>
   <div className="lp-segrow" role="group" aria-label={label}>
    {options.map(([v,l])=><button key={v} type="button" className={'lp-seg'+(value===v?' selected':'')} aria-pressed={value===v} onClick={()=>onChange(v)}>{l}</button>)}
   </div>
+  {hint&&<small className="lp-note">{hint}</small>}
  </div>;
 }
 
-function RangeRow({label,min,max,step,value,fmt,onChange}:{label:string;min:number;max:number;step:number;value:number;fmt:(v:number)=>string;onChange:(v:number)=>void}){
+function RangeRow({label,hint,min,max,step,value,fmt,onChange}:{label:string;hint?:string;min:number;max:number;step:number;value:number;fmt:(v:number)=>string;onChange:(v:number)=>void}){
  return <div className="lp-range">
   <span className="lp-range-label">{label}<output>{fmt(value)}</output></span>
   <input type="range" min={min} max={max} step={step} value={value} aria-label={label} onChange={e=>onChange(Number(e.target.value))}/>
+  {hint&&<small className="lp-note">{hint}</small>}
  </div>;
 }
 
-function ColorRow({label,value,onChange}:{label:string;value:string;onChange:(v:string)=>void}){
+function ColorRow({label,hint,value,onChange}:{label:string;hint?:string;value:string;onChange:(v:string)=>void}){
  const rgb=/^#[0-9a-fA-F]{6}$/.test(value)?value:'#101721';
  return <div className="lp-color">
   <span>{label}</span>
   <input type="color" value={rgb} aria-label={label} onChange={e=>onChange(e.target.value)}/>
+  {hint&&<small className="lp-note">{hint}</small>}
  </div>;
 }

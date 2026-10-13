@@ -30,7 +30,7 @@ button.lp-tpl.selected{border-color:var(--accent)}
 .lp-color{display:flex;flex-direction:column;gap:5px;min-width:0}
 .lp-color span{font-size:9px;letter-spacing:1.1px;text-transform:uppercase;color:var(--muted);font-weight:700}
 .lp-color input[type=color]{height:34px;padding:3px;cursor:pointer}
-.lp-toggles{display:flex;flex-direction:column;gap:9px}
+.lp-toggles{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,150px),1fr));gap:4px 12px}
 .lp-toggle{display:flex;align-items:center;gap:9px;font-size:12px;cursor:pointer;min-width:0}
 .lp-toggle input{width:auto;height:auto;margin:0;accent-color:var(--accent);flex:0 0 auto}
 .lp-toggle span{min-width:0}

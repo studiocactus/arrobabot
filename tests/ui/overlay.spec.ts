@@ -24,7 +24,7 @@ const overlayUrl=pathToFileURL(resolve('examples/goal-overlay.html')).href+'#tok
 test('estúdio do overlay: prévia e controles em janela estreita e ampla',async({page})=>{
  await mock(page);
  await page.goto('/');
- await page.getByRole('button',{name:'LivePix',exact:true}).click();
+ await page.getByRole('button',{name:'Meta',exact:true}).click();
  await expect(page.getByRole('heading',{name:'Estúdio do overlay'})).toBeVisible();
 
  // trocar modelo e simular doação mexem na prévia na hora

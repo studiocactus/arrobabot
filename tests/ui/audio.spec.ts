@@ -2,7 +2,7 @@ import {test,expect,type Page} from '@playwright/test';
 
 const profile={id:'p1',name:'Canal de teste',platform:'twitch',channel:'cactus',channelId:'1',botId:'',clientId:'',blocklist:[],topics:[],editors:[],ai:{},modules:{}};
 
-/** Mock desktop: `audio.get` devolve a config da Central e os aparelhos da voz. */
+/** Mock desktop: `audio.get` devolve a config da tela Áudio e os aparelhos da voz. */
 async function setup(page:Page){
  await page.addInitScript(p=>{
   Object.assign(window,{isTauri:true,
@@ -15,11 +15,16 @@ async function setup(page:Page){
      if(op==='flows')return [];
      if(op==='command.counters')return {};
      if(op==='settings.get')return {theme:'dark',apiPort:9876,apiToken:'',updateEndpoint:'',updatePublicKey:'',autoUpdate:false};
-     if(op==='audio.get')return {config:null,voiceFx:{selection:{input:'Microfone (Realtek)',output:'CABLE Input (VB-Audio Virtual Cable)'},devices:{inputs:[{name:'Microfone (Realtek)',default:true}],outputs:[{name:'CABLE Input (VB-Audio Virtual Cable)',default:true}]}},status:{phase:'off',message:'Prévia no navegador: a voz ao vivo só existe no aplicativo desktop.',input:'',output:''}};
+     if(op==='audio.get')return {config:{device:''},voiceFx:{selection:{input:'Microfone (Realtek)',output:'CABLE Input (VB-Audio Virtual Cable)'},devices:{inputs:[{name:'Microfone (Realtek)',default:true}],outputs:[{name:'CABLE Input (VB-Audio Virtual Cable)',default:true}]}},status:{phase:'off',message:'Prévia no navegador: a voz ao vivo só existe no aplicativo desktop.',input:'',output:''}};
      if(op==='voiceFx.saveSelection'){sessionStorage.setItem('voiceSave',JSON.stringify(args));return null}
      if(op==='module.config'){sessionStorage.setItem('audioSave',JSON.stringify({key:args.key,value:args.value}));return null}
      return null;
     }}});
+  // Uma saída só no seletor: o CABLE que o OBS captura como fonte única.
+  Object.defineProperty(navigator,'mediaDevices',{configurable:true,value:{
+   enumerateDevices:async()=>[{kind:'audiooutput',deviceId:'cable-1',label:'CABLE Input (VB-Audio)',groupId:''}],
+   addEventListener:()=>{},removeEventListener:()=>{}
+  }});
   sessionStorage.removeItem('audioSave');
  },profile);
  await page.goto('/');
@@ -28,48 +33,42 @@ async function setup(page:Page){
 
 const saved=async(page:Page)=>JSON.parse(await page.evaluate(()=>sessionStorage.getItem('audioSave')||'null'));
 
-test('central de áudio roteia cada origem por linha e navegador e salva sozinha',async({page})=>{
+test('tela Áudio leva todos os sons para uma saída só e salva o aparelho',async({page})=>{
  await setup(page);
 
- await expect(page.getByRole('heading',{name:'Para onde vai cada som'})).toBeVisible();
+ await expect(page.getByRole('heading',{name:'Saída dos sons do bot'})).toBeVisible();
 
- // Padrão do backend: sons na linha, alertas no navegador.
- await expect(page.getByRole('switch',{name:'Sons de espectador na linha de áudio'})).toHaveAttribute('aria-checked','true');
- await expect(page.getByRole('switch',{name:'Sons de espectador no navegador'})).toHaveAttribute('aria-checked','false');
- await expect(page.getByRole('switch',{name:'Alertas da live no navegador'})).toHaveAttribute('aria-checked','true');
- await expect(page.getByRole('switch',{name:'Alertas da live na linha de áudio'})).toHaveAttribute('aria-checked','false');
+ // O modelo novo dito na própria tela: uma fonte de áudio no OBS para o bot inteiro.
+ await expect(page.getByText('uma única Fonte de áudio')).toBeVisible();
 
- // Ligar a linha dos alertas salva a configuração inteira com a chave certa.
- await page.getByRole('switch',{name:'Alertas da live na linha de áudio'}).click();
+ // Escolher o aparelho grava a config {device} sozinha, com a chave certa.
+ const device=page.getByRole('combobox',{name:'Dispositivo de saída dos sons'});
+ await expect(device).toHaveValue('');
+ await device.selectOption('cable-1');
  await expect.poll(async()=>(await saved(page))?.key,{timeout:3000}).toBe('audio');
- await expect.poll(async()=>(await saved(page))?.value?.alertLine,{timeout:3000}).toBe(true);
+ await expect.poll(async()=>(await saved(page))?.value?.device,{timeout:3000}).toBe('cable-1');
 
- // Som do espectador para o navegador, fora da linha.
- await page.getByRole('switch',{name:'Sons de espectador no navegador'}).click();
- await page.getByRole('switch',{name:'Sons de espectador na linha de áudio'}).click();
- await expect.poll(async()=>{const v=(await saved(page))?.value;return [v?.peopleLine,v?.peopleBrowser]},{timeout:3000}).toEqual([false,true]);
+ // Os interruptores por origem não existem mais: só a saída e a voz.
+ await expect(page.getByRole('switch',{name:'Sons de espectador na linha de áudio'})).toHaveCount(0);
+ await expect(page.getByRole('heading',{name:'Voz da live — linha do microfone'})).toBeVisible();
 
- // Origens independentes: o fluxo não acompanha o espectador.
- await expect(page.getByRole('switch',{name:'Sons de fluxo na linha de áudio'})).toHaveAttribute('aria-checked','true');
+ // O TTS declara a limitação: saída padrão do Windows.
+ await expect(page.getByText('saída padrão do Windows').first()).toBeVisible();
 });
 
-test('aparelhos da linha e da voz da live ficam na mesma tela com o TTS declarado',async({page})=>{
+test('aparelhos da voz da live ficam na mesma tela e salvam ao trocar',async({page})=>{
  await setup(page);
 
- // Voz da live: aparelhos vindos do voiceFx, salvos ao trocar.
  const mic=page.getByRole('combobox',{name:'Microfone de entrada'});
  await expect(mic).toHaveValue('Microfone (Realtek)');
  await expect(page.getByRole('combobox',{name:'Saída da linha (VB-Cable)'})).toHaveValue('CABLE Input (VB-Audio Virtual Cable)');
  await mic.selectOption('');
  await expect.poll(async()=>page.evaluate(()=>sessionStorage.getItem('voiceSave')),{timeout:3000}).toContain('"input":""');
-
- // O TTS aparece com a limitação declarada: saída padrão do Windows.
- await expect(page.getByText('saída padrão do Windows').first()).toBeVisible();
 });
 
-test('central de áudio cabe em 1100px sem espremer texto',async({page})=>{
+test('tela de áudio cabe em 1100px sem espremer texto',async({page})=>{
  await page.setViewportSize({width:1100,height:950});
  await setup(page);
- await expect(page.getByRole('heading',{name:'Voz da live — linha do microfone'})).toBeVisible();
- await page.screenshot({path:'artifacts/central-audio-1100.png'});
+ await expect(page.getByRole('heading',{name:'Saída dos sons do bot'})).toBeVisible();
+ await page.screenshot({path:'artifacts/saida-audio-1100.png'});
 });

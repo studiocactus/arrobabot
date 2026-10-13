@@ -10,8 +10,9 @@ type R<T> = Result<T,String>;
 pub struct Config {pub presence_enabled:bool,pub audio_device_id:String,pub replies_enabled:bool,pub sounds_enabled:bool,pub replies:Vec<Reply>,pub people:Vec<Person>}
 #[derive(Clone,Serialize,Deserialize)]
 #[serde(rename_all="camelCase")]
-pub struct Reply {pub id:String,pub enabled:bool,pub keyword:String,pub matching:String,pub selection:String,pub asset:String,pub cooldown:u64,pub user_cooldown:u64,#[serde(default="reply_yes")] pub reply:bool}
+pub struct Reply {pub id:String,pub enabled:bool,pub keyword:String,pub matching:String,pub selection:String,pub asset:String,pub cooldown:u64,pub user_cooldown:u64,#[serde(default="reply_yes")] pub reply:bool,#[serde(default)] pub sound:String,#[serde(default="vol_one")] pub sound_volume:f64}
 fn reply_yes()->bool{true}
+fn vol_one()->f64{1.0}
 fn default_trigger()->String{"message".into()}
 #[derive(Clone,Serialize,Deserialize)]
 #[serde(rename_all="camelCase")]
@@ -80,6 +81,7 @@ pub fn operation(rt:&Runtime,p:&str,op:&str,args:&Value)->R<Value>{
  for r in &c.replies{
  if !valid_id(&r.id)||!ids.insert(r.id.clone())||r.keyword.trim().is_empty()||r.keyword.len()>200||!["contains","word"].contains(&r.matching.as_str())||!["random","sequence"].contains(&r.selection.as_str())||!(1..=86400).contains(&r.cooldown)||r.user_cooldown>86400{return Err("Confira palavra, modo e intervalos das respostas".into())}
  asset(rt,p,&r.asset,"txt")?;
+ if !r.sound.is_empty(){asset(rt,p,&r.sound,"sound")?;if !r.sound_volume.is_finite()||!(0.0..=1.0).contains(&r.sound_volume){return Err("Volume do som da resposta precisa ficar entre 0% e 100%".into())}}
  }
  for person in &c.people{
  let identity=if person.user_id.trim().is_empty(){format!("name:{}",normalize(&person.name))}else{format!("id:{}",person.user_id.trim())};
@@ -126,7 +128,7 @@ fn available(s:&State,key:&str,seconds:u64)->bool{!s.last.get(key).is_some_and(|
  fn p()->Profile{serde_json::from_value(json!({"id":uuid::Uuid::new_v4(),"name":"Teste","platform":"twitch","channel":"canal","blocklist":["bloqueado"]})).unwrap()}
  fn e(p:&Profile)->Event{serde_json::from_value(json!({"id":"1","profileId":p.id,"kind":"chat","user":"ANA","userId":"123","message":"Olá, café!"})).unwrap()}
  fn register(rt:&Runtime,p:&Profile,path:&Path,kind:&str)->String{operation(rt,&p.id,"chatExtras.import",&json!({"path":path,"kind":kind})).unwrap()["id"].as_str().unwrap().into()}
- fn rule(asset:String)->Reply{Reply{id:uuid::Uuid::new_v4().to_string(),enabled:true,keyword:"café".into(),matching:"word".into(),selection:"sequence".into(),asset,cooldown:30,user_cooldown:60,reply:true}}
+ fn rule(asset:String)->Reply{Reply{id:uuid::Uuid::new_v4().to_string(),enabled:true,keyword:"café".into(),matching:"word".into(),selection:"sequence".into(),asset,cooldown:30,user_cooldown:60,reply:true,sound:String::new(),sound_volume:1.0}}
  fn save(rt:&Runtime,p:&Profile,c:&Config){operation(rt,&p.id,"chatExtras.save",&json!({"config":c})).unwrap();}
  #[test] fn matching_and_txt_validation(){
   assert!(keyword_matches("CAFÉ!","café","word"));assert!(!keyword_matches("cafés","café","word"));assert!(keyword_matches("cafés","café","contains"));assert!(keyword_matches("um bom dia!","bom dia","word"));assert!(!keyword_matches("bom diazão","bom dia","word"));
@@ -168,33 +170,43 @@ fn available(s:&State,key:&str,seconds:u64)->bool{!s.last.get(key).is_some_and(|
   c.sounds_enabled=true;c.people[0].user_id="".into();c.people[0].name="@ana".into();save(&rt,&p,&c);event.kind="join".into();sound(&rt,&p,&event);assert_eq!(rx.try_recv().unwrap()["type"],"viewer-sound");
   c.people.push(c.people[0].clone());assert!(operation(&rt,&p.id,"chatExtras.save",&json!({"config":c})).is_err());
  }
- #[tokio::test] async fn central_de_audio_reparte_sons_entre_linha_e_navegador(){
+ #[tokio::test] async fn todos_os_sons_sao_para_a_mesma_linha_com_o_aparelho_escolhido(){
   let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().join("app")).unwrap();let p=p();rt.db.save_profile(&p).unwrap();let path=dir.path().join("som.wav");std::fs::write(&path,b"RIFF0000WAVEfmt ").unwrap();let id=register(&rt,&p,&path,"sound");std::fs::remove_file(path).unwrap();
   let person=Person{trigger:"either".into(),id:uuid::Uuid::new_v4().to_string(),enabled:true,name:"Ana".into(),nickname:"Aninha".into(),user_id:"123".into(),asset:id.clone(),mode:"interval".into(),cooldown:5,volume:0.7};
   save(&rt,&p,&Config{sounds_enabled:true,people:vec![person],..Default::default()});
   let event=e(&p);
-  let mut audio=crate::audio::defaults();audio["peopleLine"]=json!(false);audio["peopleBrowser"]=json!(true);audio["device"]=json!("cable");rt.db.set_module(&p.id,"audio",&audio).unwrap();
+  rt.db.set_module(&p.id,"audio",&json!({"device":"cable"})).unwrap();
   let mut rx=rt.broadcast.subscribe();
   sound(&rt,&p,&event);
   let seen:Vec<_>=std::iter::from_fn(||rx.try_recv().ok()).collect();
-  assert!(seen.iter().any(|v|v["type"]=="sound"),"navegador ouve");
-  assert!(!seen.iter().any(|v|v["type"]=="viewer-sound"),"linha ficou muda");
-  // Os dois caminhos ligados: linha e navegador tocam juntos.
-  audio["peopleLine"]=json!(true);rt.db.set_module(&p.id,"audio",&audio).unwrap();
-  rt.chat_extras.lock().unwrap().last.clear();
-  let mut rx=rt.broadcast.subscribe();
-  sound(&rt,&p,&event);
-  let seen:Vec<_>=std::iter::from_fn(||rx.try_recv().ok()).collect();
-  assert!(seen.iter().any(|v|v["type"]=="viewer-sound"&&v["payload"]["deviceId"]=="cable"),"linha toca no aparelho da Central");
-  assert!(seen.iter().any(|v|v["type"]=="sound"),"navegador continua ouvindo");
-  // Sons de fluxo têm interruptores próprios.
+  assert!(seen.iter().any(|v|v["type"]=="viewer-sound"&&v["payload"]["deviceId"]=="cable"),"espectador toca na linha");
+  assert!(!seen.iter().any(|v|v["type"]=="sound"),"não existe mais som pelo navegador");
+  // Fluxo (comando, timer, automação ou resgate) usa a mesma saída.
   let flow=crate::model::Flow{id:"f".into(),profile_id:p.id.clone(),name:"Teste".into(),audio:id,audio_volume:0.5,..Default::default()};
-  audio["flowLine"]=json!(false);audio["flowBrowser"]=json!(true);rt.db.set_module(&p.id,"audio",&audio).unwrap();
   let mut rx=rt.broadcast.subscribe();
   play_flow(&rt,&p,&flow,&event);
   let seen:Vec<_>=std::iter::from_fn(||rx.try_recv().ok()).collect();
-  assert!(seen.iter().any(|v|v["type"]=="sound"),"fluxo vai para o navegador");
-  assert!(!seen.iter().any(|v|v["type"]=="viewer-sound"),"fluxo não vai para a linha");
+  assert!(seen.iter().any(|v|v["type"]=="viewer-sound"&&v["payload"]["deviceId"]=="cable"&&v["payload"]["volume"].as_f64()==Some(0.5)),"fluxo toca na mesma linha");
+ }
+ #[tokio::test] async fn regra_txt_pode_puxar_um_som_da_biblioteca(){
+  let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().join("app")).unwrap();let p=p();rt.db.save_profile(&p).unwrap();let txtpath=dir.path().join("respostas.txt");std::fs::write(&txtpath,"Boa noite").unwrap();
+  let txt=register(&rt,&p,&txtpath,"txt");let wav=dir.path().join("ping.wav");std::fs::write(&wav,b"RIFF0000WAVEfmt ").unwrap();let sid=register(&rt,&p,&wav,"sound");
+  let mut rule=rule(txt);rule.keyword="boa noite".into();rule.sound=sid.clone();rule.sound_volume=0.5;
+  save(&rt,&p,&Config{replies_enabled:true,replies:vec![rule.clone()],..Default::default()});
+  let mut event=e(&p);event.message="boa noite".into();
+  // Som inexistente nem salva.
+  let mut bad=rule.clone();bad.sound="fantasma".into();assert!(operation(&rt,&p.id,"chatExtras.save",&json!({"config":Config{replies_enabled:true,replies:vec![bad],..Default::default()}})).is_err());
+  let mut rx=rt.broadcast.subscribe();
+  assert_eq!(response(&rt,&p,&event).unwrap(),Some(("Boa noite".into(),true)));
+  let seen:Vec<_>=std::iter::from_fn(||rx.try_recv().ok()).filter(|v|v["type"]=="viewer-sound").collect();
+  assert_eq!(seen.len(),1,"a regra toca o som junto");
+  assert_eq!(seen[0]["payload"]["asset"],json!(sid));
+  assert_eq!(seen[0]["payload"]["volume"].as_f64(),Some(0.5));
+  // Simulação não toca som.
+  rt.chat_extras.lock().unwrap().last.clear();
+  event.simulated=true;let mut rx=rt.broadcast.subscribe();
+  response(&rt,&p,&event).unwrap();
+  assert!(rx.try_recv().is_err(),"simulação fica muda");
  }
  #[tokio::test] async fn sound_remove_deletes_record_and_copy(){
   let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().join("app")).unwrap();let p=p();rt.db.save_profile(&p).unwrap();let path=dir.path().join("sair.wav");std::fs::write(&path,b"RIFF0000WAVEfmt ").unwrap();let id=register(&rt,&p,&path,"sound");
@@ -205,19 +217,12 @@ fn available(s:&State,key:&str,seconds:u64)->bool{!s.last.get(key).is_some_and(|
  }
 }
 pub fn trigger_matches(trigger:&str,kind:&str)->bool{match trigger{"message"=>kind=="chat","join"=>kind=="join","either"=>kind=="chat"||kind=="join",_=>false}}
-/// Manda o som para as saídas escolhidas na Central de Áudio: a linha do
-/// aplicativo (o app toca e você roteia no Windows) e o navegador (a fonte do
-/// overlay toca dentro do OBS). Os dois podem estar ligados ao mesmo tempo.
-fn route(rt:&Runtime,p:&Profile,origin:&str,asset:&str,nickname:Option<&str>,volume:f64){
- let r=crate::audio::routes(rt,&p.id,origin);
- let line=r["line"].as_bool().unwrap_or(false);
- let browser=r["browser"].as_bool().unwrap_or(false);
- if line{
-  rt.emit("viewer-sound",json!({"profileId":p.id,"asset":asset,"nickname":nickname,"volume":volume,"deviceId":r["device"].as_str().unwrap_or("")}));
- }
- if browser{
-  rt.emit("sound",json!({"profileId":p.id,"asset":asset,"nickname":nickname,"volume":volume}));
- }
+/// Toca um som na **linha de áudio** do aplicativo — a mesma saída que o OBS
+/// captura como fonte única do BotLive. Não existe mais rota pelo navegador:
+/// a fonte do overlay ficou só visual.
+fn play_line(rt:&Runtime,p:&Profile,asset:&str,nickname:Option<&str>,volume:f64){
+ let volume=if volume.is_finite(){volume.clamp(0.0,1.0)}else{1.0};
+ rt.emit("viewer-sound",json!({"profileId":p.id,"asset":asset,"nickname":nickname,"volume":volume,"deviceId":crate::audio::device(rt,&p.id)}));
 }
 pub fn sound(rt:&Runtime,p:&Profile,e:&Event){
  if e.kind!="chat"&&e.kind!="join"{return}let c=config(rt,&p.id);if !c.sounds_enabled{return}
@@ -228,16 +233,16 @@ pub fn sound(rt:&Runtime,p:&Profile,e:&Event){
  if (person.mode=="first"&&s.seen.contains(&key))||!available(&s,&key,person.cooldown)||!available(&s,&global,5){return}
  if e.simulated{drop(s);rt.log(&p.id,"sound",&format!("[Simulação] Tocaria o som de {}",person.nickname),"info");return}
  s.seen.insert(key.clone());s.last.insert(key,Instant::now());s.last.insert(global,Instant::now());drop(s);
- route(rt,p,"people",&person.asset,Some(&person.nickname),person.volume);
+ play_line(rt,p,&person.asset,Some(&person.nickname),person.volume);
  rt.log(&p.id,"sound",&format!("Som solicitado para {}",person.nickname),"info");
 }
 /// Toca o áudio escolhido no comando, timer ou automação assim que ele dispara.
 pub fn play_flow(rt:&Runtime,p:&Profile,f:&Flow,e:&Event){
  if f.audio.is_empty(){return}
  if e.simulated{rt.log(&p.id,"sound","[Simulação] Tocaria o áudio do fluxo","info");return}
- if asset(rt,&p.id,&f.audio,"sound").is_err(){rt.log(&p.id,"sound","O áudio deste fluxo não existe mais; escolha outro em Respostas e sons","error");return}
+ if asset(rt,&p.id,&f.audio,"sound").is_err(){rt.log(&p.id,"sound","O áudio deste fluxo não existe mais; escolha outro em Sons de Live","error");return}
  let volume=if f.audio_volume.is_finite(){f.audio_volume.clamp(0.0,1.0)}else{1.0};
- route(rt,p,"flow",&f.audio,None,volume);
+ play_line(rt,p,&f.audio,None,volume);
  rt.log(&p.id,"sound",&format!("Áudio solicitado: {}",f.name),"info");
 }
 pub fn response(rt:&Runtime,p:&Profile,e:&Event)->R<Option<(String,bool)>>{
@@ -254,6 +259,8 @@ pub fn response(rt:&Runtime,p:&Profile,e:&Event)->R<Option<(String,bool)>>{
  if blocked(&text,p){return Err("Resposta TXT bloqueada pelas restrições do perfil".into())}
  if text.trim().is_empty()||text.chars().count()>450{return Err("Resposta TXT expandida vazia ou maior que 450 caracteres".into())}
  if !e.simulated{s.last.insert(key.clone(),Instant::now());s.last.insert(user,Instant::now());s.index.insert(key,index);}
+ // Som opcional da regra: sai na mesma linha de áudio do bot, junto com a resposta TXT.
+ if !e.simulated&&!r.sound.is_empty(){play_line(rt,p,&r.sound,None,r.sound_volume);}
  return Ok(Some((text,r.reply)))
  }Ok(None)
 }

@@ -1,39 +1,23 @@
-/** Configuração da Central de áudio — espelhada em src-tauri/src/audio.rs.
+/** Configuração de áudio do BotLive — espelhada em src-tauri/src/audio.rs.
  *
- * Duas saídas possíveis por origem de som: a **linha de áudio** (o aplicativo
- * toca no aparelho escolhido, que você aponta para um cabo virtual e captura
- * no OBS) e o **navegador** (a fonte do overlay toca dentro do painel do OBS).
- * Cada origem tem seus próprios interruptores.
+ * Todos os sons do bot (espectador, fluxo, resgates e alertas) saem pela
+ * **linha de áudio**: o aparelho de saída escolhido aqui, que você captura
+ * no OBS como uma única fonte. Não existe mais rota pelo navegador — a fonte
+ * do overlay ficou só visual.
  */
 export type AudioConfig={
-  peopleLine:boolean;      // sons de espectador na linha do aplicativo
-  peopleBrowser:boolean;   // ... e no navegador (fonte do overlay)
-  flowLine:boolean;        // sons de fluxo na linha do aplicativo
-  flowBrowser:boolean;     // ... e no navegador
-  alertLine:boolean;       // som dos alertas na linha do aplicativo
-  alertBrowser:boolean;    // ... e no navegador (como sempre foi)
-  device:string;           // aparelho de saída (setSinkId); vazio = padrão do Windows
+  device:string;  // aparelho de saída (setSinkId); vazio = padrão do Windows
 };
 
-/** Espelhada em audio.rs: sons na linha, alertas no navegador. */
-export const DEFAULT_AUDIO:AudioConfig={
-  peopleLine:true,peopleBrowser:false,flowLine:true,flowBrowser:false,
-  alertLine:false,alertBrowser:true,device:'',
-};
+/** Espelhada em audio.rs: saída padrão do Windows até você escolher. */
+export const DEFAULT_AUDIO:AudioConfig={device:''};
 
 export function normalizeAudio(v:unknown):AudioConfig{
   const o=(v&&typeof v==='object'?v:{}) as Record<string,unknown>;
-  type Flag=Exclude<keyof AudioConfig,'device'>;
-  const b=(k:Flag)=>typeof o[k]==='boolean'?o[k]===true:DEFAULT_AUDIO[k];
-  return {
-    peopleLine:b('peopleLine'),peopleBrowser:b('peopleBrowser'),
-    flowLine:b('flowLine'),flowBrowser:b('flowBrowser'),
-    alertLine:b('alertLine'),alertBrowser:b('alertBrowser'),
-    device:typeof o.device==='string'?o.device.slice(0,512):'',
-  };
+  return {device:typeof o.device==='string'?o.device.slice(0,512):''};
 }
 
-/** Bipe curto (WAV 8 kHz mono) para o botão "Testar linha" da Central. */
+/** Bipe curto (WAV 8 kHz mono) para o botão "Testar saída" da tela Áudio. */
 export function beepDataUri(hz=440,seconds=0.35):string{
   const rate=8000;const n=Math.round(rate*seconds);
   const bytes=new Uint8Array(44+n*2);const view=new DataView(bytes.buffer);

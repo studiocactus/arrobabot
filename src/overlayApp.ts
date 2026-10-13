@@ -3,20 +3,26 @@
  * examples/goal-overlay.html. Recebe por WebSocket local a meta, o design e os
  * alertas do perfil e redesenha sem recarregar a fonte do OBS.
  *
+ * O parâmetro `mode=` na URL deixa cada Fonte de navegador mostrar só a sua
+ * camada: `goal` (meta), `alerts` (alertas) ou `chat` (chat). Sem o parâmetro,
+ * a fonte continua mostrando tudo (compatibilidade com fontes já criadas).
+ * A fonte do overlay é só visual: todo som sai pela linha de áudio do app.
+ *
  * Compilado por scripts/build-overlay.cjs para src-tauri/overlay.html.
  */
 import {
  designVars,ensureFont,ensureOverlayStyle,goalPercent,keyTexts,normalizeDesign,overlayTree,
  type GoalModel,type OverlayDesign,type Spec,
 } from './overlayDesign';
-import {alertSoundUrl,isAlertKind,normalizeAlerts,queueAlert,type AlertVars,type AlertsConfig} from './alerts';
-import {normalizeAudio,type AudioConfig} from './audio';
+import {isAlertKind,normalizeAlerts,queueAlert,type AlertVars,type AlertsConfig} from './alerts';
 import {chatVisible,clearChat,deleteChat,deleteUserChat,normalizeChat,pushChat,type ChatConfig,type ChatMsg} from './chatOverlay';
 
 const params=new URLSearchParams(location.hash.slice(1));
 const token=params.get('token')||'';
 const profile=params.get('profile')||'';
 const port=Number(params.get('port')||location.port||9876)||9876;
+/** Camada desta fonte de navegador; vazio = todas as camadas (fonte única). */
+const mode=params.get('mode')||'';
 
 ensureOverlayStyle();
 
@@ -26,10 +32,17 @@ let hidden=true;
 let ws:WebSocket|null=null;
 let retry=3000;
 let alertsCfg:AlertsConfig=normalizeAlerts(null);
-let audioCfg:AudioConfig=normalizeAudio(null);
 let alertHost:HTMLElement|null=null;
 let chatCfg:ChatConfig=normalizeChat(null);
 let chatHost:HTMLElement|null=null;
+
+/** Qual camada o tipo de mensagem pertence; vazio = mensagem de controle. */
+function layerOf(type:string):string{
+ if(type==='goal'||type==='design')return 'goal';
+ if(type==='alerts'||type==='alert')return 'alerts';
+ if(type.startsWith('chat'))return 'chat';
+ return '';
+}
 
 /** Coluna do chat: criada na primeira mensagem e sempre no mesmo lugar. */
 function chatBox():HTMLElement{
@@ -96,14 +109,12 @@ type Message={type?:string;payload?:Record<string,unknown>};
 
 function handle(msg:Message){
  const payload=msg.payload;
+ // Fonte de camada única só atende a própria camada.
+ const layer=layerOf(msg.type||'');
+ if(mode&&layer&&layer!==mode)return;
  if(msg.type==='alerts'){
   if(profile&&String(payload?.profileId||'')!==profile)return;
   alertsCfg=normalizeAlerts(payload?.config);
-  return;
- }
- if(msg.type==='audio.config'){
-  if(profile&&String(payload?.profileId||'')!==profile)return;
-  audioCfg=normalizeAudio(payload?.config);
   return;
  }
  if(msg.type==='alert'){
@@ -111,24 +122,12 @@ function handle(msg:Message){
   const kind=payload?.kind;
   if(!isAlertKind(kind))return;
   if(!alertHost){alertHost=document.createElement('div');document.body.appendChild(alertHost)}
-  const ev=alertsCfg.events[kind];
   const vars=(payload?.vars&&typeof payload.vars==='object'?payload.vars:{}) as Record<string,unknown>;
   queueAlert(alertHost,{
    cfg:alertsCfg,kind,vars:vars as AlertVars,
-   // O som sai da API local com a mesma chave que abriu este overlay —
-   // a menos que a Central de Áudio tenha mandado só para a linha.
-   audio:ev.sound&&audioCfg.alertBrowser?{src:alertSoundUrl(port,token,ev.sound),volume:alertsCfg.volume}:null,
+   // A fonte do overlay é só visual: o som sai na linha de áudio do app.
+   audio:null,
   });
-  return;
- }
- if(msg.type==='sound'){
-  // Som de espectador/fluxo roteado para o navegador pela Central de Áudio.
-  if(profile&&String(payload?.profileId||'')!==profile)return;
-  const asset=String(payload?.asset||'');
-  if(!asset)return;
-  const a=new Audio(alertSoundUrl(port,token,asset));
-  a.volume=Math.max(0,Math.min(1,Number(payload?.volume)||0));
-  void a.play().catch(()=>{});
   return;
  }
  if(msg.type==='chat.config'){

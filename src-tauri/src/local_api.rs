@@ -47,7 +47,6 @@ pub async fn serve(rt: Arc<Runtime>) -> Result<(), String> {
                 if ws.send(Message::Text(livepix::goal_message(&rt, pid).to_string().into())).await.is_err() { return; }
                 if ws.send(Message::Text(crate::alerts::message(&rt, pid).to_string().into())).await.is_err() { return; }
                 if ws.send(Message::Text(crate::chat_overlay::message(&rt, pid).to_string().into())).await.is_err() { return; }
-                if ws.send(Message::Text(crate::audio::message(&rt, pid).to_string().into())).await.is_err() { return; }
             } else {
                 if ws.send(Message::Text(json!({"type": "ready", "version": 1}).to_string().into())).await.is_err() { return; }
                 for p in rt.db.profiles().unwrap_or_default() {
@@ -86,7 +85,7 @@ pub async fn serve(rt: Arc<Runtime>) -> Result<(), String> {
                         if let Some(pid) = &overlay_profile {
                             let kind = v["type"].as_str().unwrap_or("");
                             let own = v["payload"]["profileId"].as_str() == Some(pid.as_str());
-                            if !own || !matches!(kind, "goal" | "design" | "alerts" | "alert" | "chat" | "chat.config" | "chat.delete" | "chat.deleteUser" | "chat.clear" | "audio.config" | "sound") { continue; }
+                            if !own || !matches!(kind, "goal" | "design" | "alerts" | "alert" | "chat" | "chat.config" | "chat.delete" | "chat.deleteUser" | "chat.clear") { continue; }
                         }
                         if ws.send(Message::Text(v.to_string().into())).await.is_err() { break }
                     },

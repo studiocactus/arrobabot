@@ -32,7 +32,7 @@ Siga os passos completos em [Comandos e automações](03-COMANDOS-E-AUTOMACOES.m
 
 ### Arquivo de respostas para “café”
 
-**Onde:** Respostas e sons → Adicionar resposta TXT.
+**Onde:** Respostas → Adicionar resposta TXT.
 
 Salve um arquivo chamado cafe.txt como UTF-8, com este conteúdo:
 

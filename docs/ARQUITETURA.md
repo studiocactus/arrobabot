@@ -12,7 +12,7 @@ SQLite armazena perfis, fluxos, presets, configurações, histórico e estado do
 
 ## Organização
 
-- `src/App.tsx`: navegação e estado da interface. O grupo Seu espaço separa Comandos, Timers, Respostas e sons, Contadores e Automações.
+- `src/App.tsx`: navegação e estado da interface. O grupo Seu espaço separa Comandos, Timers, Respostas, Sons de Live, Contadores e Automações. O grupo Overlays do OBS reúne Meta, Alertas e Chat no OBS.
 - `src/FlowTools.tsx`: diálogo de criação/edição, simulação, ajuste de contador e ações de linha compartilhados por essas telas.
 - `src/Timers.tsx`, `src/Counters.tsx`, `src/ChatExtras.tsx`: listas de timers, totais por comando e respostas TXT/sons.
 - `src/FlowEditor.tsx`: edição visual e validação da sequência.

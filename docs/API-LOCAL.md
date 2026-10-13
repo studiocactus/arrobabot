@@ -37,6 +37,19 @@ file:///C:/BotLive/examples/overlay.html#token=TOKEN_DA_SESSAO&profile=UUID_DO_P
 
 Use barras / na URL. Para nomes de pasta com espaços, use %20. No OBS, utilize o campo de URL da fonte de navegador para conservar o fragmento iniciado por #, em vez de selecionar apenas um arquivo sem os parâmetros.
 
+## Camadas do overlay: parâmetro mode
+
+O overlay servido pelo BotLive (`http://127.0.0.1:9876/overlay#token=…&profile=…`) pode mostrar as três camadas numa fonte só ou cada camada na sua própria Fonte de navegador. O parâmetro `mode`, acrescentado ao final do endereço, escolhe qual camada aquela fonte mostra:
+
+| mode | Camada | Tela que gera o endereço |
+|---|---|---|
+| `mode=goal` | Meta (LivePix) | Meta |
+| `mode=alerts` | Alertas da live | Alertas |
+| `mode=chat` | Coluna de chat | Chat no OBS |
+| (sem mode) | As três camadas juntas | Qualquer uma das telas |
+
+Cada tela do grupo **Overlays do OBS** copia o endereço da sua camada já com o `mode` certo — basta colar numa Fonte de navegador própria e ajustar posição e tamanho sem mexer nas demais. O endereço é estável e não muda ao reabrir o BotLive. Quem já usa uma fonte única, sem o parâmetro, continua vendo tudo como antes.
+
 O exemplo tem fundo transparente, mostra texto por dez segundos e não executa HTML recebido. A simulação do BotLive só registra a ação; não altera o overlay real.
 
 Sem o parâmetro profile, o exemplo pode mostrar eventos de qualquer perfil. Após reiniciar o BotLive, atualize o token na fonte do OBS.

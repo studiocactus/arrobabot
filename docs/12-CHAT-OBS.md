@@ -2,7 +2,7 @@
 
 A tela **Chat no OBS** transforma o chat da live em uma coluna dentro da sua fonte de navegador: mensagens com badges de moderador/VIP/sub, emotes da Twitch, destaque por papel, listras de fundo e sincronização com a moderação — quando alguém apaga uma mensagem no chat, ela some do overlay na hora.
 
-A coluna usa o **mesmo endereço do overlay da meta e dos alertas**: quem já tem a Fonte Navegador no OBS não troca nada — basta ligar o chat no Estúdio.
+A coluna de chat fica numa **camada de overlay própria**, com um endereço próprio que carrega o parâmetro `mode=chat`. Crie uma **Fonte de navegador só para o chat** e posicione a coluna onde quiser, sem mexer na meta nem nos alertas. (Sem o parâmetro, o endereço do overlay mostra as três camadas juntas, para quem já usa uma fonte única.)
 
 ## Ligar o chat
 

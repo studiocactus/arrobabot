@@ -271,6 +271,15 @@ async fn fetch_token(rt: &Arc<Runtime>, profile_id: &str) -> Result<String, Stri
 
 // ---- Tick ----
 
+/// Guarda o último problema na própria meta (chave `last_error`) para a tela
+/// mostrar o aviso na hora certa — token recusado não fica só no log.
+fn note_error(rt: &Runtime, p: &str, msg: &str) {
+    let mut d = data(rt, p);
+    d["last_error"] = json!(msg);
+    d["last_error_at"] = json!(now_seconds());
+    save_data(rt, p, &d);
+}
+
 pub async fn tick(rt: &Arc<Runtime>) {
     for profile in rt.db.profiles().unwrap_or_default() {
         let cfg = config(rt, &profile.id);
@@ -278,14 +287,15 @@ pub async fn tick(rt: &Arc<Runtime>) {
         let goal = match cfg.goals.get(&cfg.active_goal) { Some(g) => g.clone(), None => continue };
         let token = match fetch_token(rt, &profile.id).await {
             Ok(t) => t,
-            Err(e) => { rt.log(&profile.id, "livepix", &format!("token: {e}"), "warn"); continue; }
+            Err(e) => { rt.log(&profile.id, "livepix", &format!("token: {e}"), "warn"); note_error(rt, &profile.id, &format!("Não foi possível renovar o acesso da LivePix ({e}). Confira as credenciais na aba Conta.")); continue; }
         };
         let url = format!("https://api.livepix.gg/v2/payments?limit=100&currency=BRL");
         let resp = rt.http.get(&url).bearer_auth(&token).timeout(Duration::from_secs(20)).send().await;
-        let resp = match resp { Ok(r) => r, Err(e) => { rt.log(&profile.id, "livepix", &e.to_string(), "error"); continue; } };
+        let resp = match resp { Ok(r) => r, Err(e) => { rt.log(&profile.id, "livepix", &e.to_string(), "error"); note_error(rt, &profile.id, &format!("A API da LivePix não respondeu ({e}).")); continue; } };
         if resp.status().as_u16() == 401 {
             forget_token(&profile.id);
             rt.log(&profile.id, "livepix", "Token da LivePix recusado; será renovado na próxima consulta.", "warn");
+            note_error(rt, &profile.id, "O acesso da LivePix foi recusado (token expirado). Salve as credenciais novamente para renovar — o contador para enquanto isso.");
             continue;
         }
         let body: Value = match resp.json().await { Ok(b) => b, Err(_) => continue };
@@ -299,6 +309,8 @@ pub async fn tick(rt: &Arc<Runtime>) {
         let mut d = data(rt, &profile.id);
         let old = d["current"].as_i64().unwrap_or(0);
         let new = old.max(total);
+        // Pagamento chegou: o aviso antigo de acesso perde o sentido.
+        d.as_object_mut().map(|o| { o.remove("last_error"); o.remove("last_error_at"); });
         d["current"] = json!(new);
         d["updated_at"] = json!(now_seconds());
         d["active_goal"] = json!(&cfg.active_goal);
@@ -346,6 +358,7 @@ pub async fn operation(rt: &Arc<Runtime>, p: &str, op: &str, args: &Value) -> Re
             if goals.is_empty() { return Err("Adicione ao menos uma meta".into()); }
             let mut cfg = config(rt, p);
             cfg.enabled = true;
+            let previous = cfg.active_goal.clone();
             cfg.goals.clear();
             for (i, g) in goals.iter().enumerate() {
                 let title = g["title"].as_str().unwrap_or("Meta").to_owned();
@@ -353,10 +366,19 @@ pub async fn operation(rt: &Arc<Runtime>, p: &str, op: &str, args: &Value) -> Re
                 let font = g["font_family"].as_str().unwrap_or("").to_owned();
                 cfg.goals.insert(format!("goal_{i}"), GoalDef { title, target, font_family: font });
             }
-            cfg.active_goal = cfg.goals.keys().next().cloned().unwrap_or_default();
-            cfg.start_timestamp = now_seconds();
+            // Reativar mantém a meta e o progresso: o contador só muda com
+            // dinheiro entrando ou com um "Reiniciar contador" pedido.
+            cfg.active_goal = if previous.is_empty() { String::new() } else { previous };
+            if !cfg.goals.contains_key(&cfg.active_goal) {
+                cfg.active_goal = cfg.goals.keys().next().cloned().unwrap_or_default();
+            }
+            let mut d = data(rt, p);
+            let stamp = d["start_timestamp"].as_i64().filter(|v| *v > 0).unwrap_or_else(now_seconds);
+            d["start_timestamp"] = json!(stamp);
+            if d["current"].is_null() { d["current"] = json!(0); }
+            d["active_goal"] = json!(cfg.active_goal);
+            cfg.start_timestamp = stamp;
             rt.db.set_module(p, MODULE, &serde_json::to_value(&cfg).map_err(|e| e.to_string())?)?;
-            let d = json!({"current":0,"updated_at":now_seconds(),"start_timestamp":cfg.start_timestamp,"active_goal":cfg.active_goal});
             save_data(rt, p, &d);
             publish_goal(rt, p);
             rt.log(p, "livepix", "Integração LivePix ativada.", "info");
@@ -367,9 +389,37 @@ pub async fn operation(rt: &Arc<Runtime>, p: &str, op: &str, args: &Value) -> Re
             cfg.enabled = false;
             cfg.active_goal = String::new();
             rt.db.set_module(p, MODULE, &serde_json::to_value(&cfg).map_err(|e| e.to_string())?)?;
-            save_data(rt, p, &json!({}));
+            // O progresso fica guardado: desligar a integração esconde a meta
+            // no overlay sem apagar quanto já entrou.
             publish_goal(rt, p);
             rt.log(p, "livepix", "Integração LivePix desativada.", "info");
+            Ok(Value::Null)
+        }
+        "livepix.update_goal" => {
+            let gid = args["goalId"].as_str().ok_or("Meta ausente")?;
+            let title = args["title"].as_str().map(str::trim).filter(|s| !s.is_empty()).ok_or("Informe o título da meta")?.to_owned();
+            let target = args["target"].as_i64().unwrap_or(0);
+            if target <= 0 { return Err("Informe um valor-alvo maior que zero".into()); }
+            let mut cfg = config(rt, p);
+            let Some(goal) = cfg.goals.get_mut(gid) else { return Err("Meta inválida".into()); };
+            goal.title = title;
+            goal.target = target;
+            rt.db.set_module(p, MODULE, &serde_json::to_value(&cfg).map_err(|e| e.to_string())?)?;
+            publish_goal(rt, p);
+            rt.log(p, "livepix", "Meta atualizada no estúdio.", "info");
+            Ok(serde_json::to_value(&cfg).map_err(|e| e.to_string())?)
+        }
+        "livepix.reset_counter" => {
+            let mut cfg = config(rt, p);
+            if cfg.active_goal.is_empty() { return Err("Ative uma meta antes de reiniciar a contagem".into()); }
+            cfg.start_timestamp = now_seconds();
+            rt.db.set_module(p, MODULE, &serde_json::to_value(&cfg).map_err(|e| e.to_string())?)?;
+            let mut d = data(rt, p);
+            d["current"] = json!(0);
+            d["start_timestamp"] = json!(cfg.start_timestamp);
+            save_data(rt, p, &d);
+            publish_goal(rt, p);
+            rt.log(p, "livepix", "Contador da meta reiniciado.", "info");
             Ok(Value::Null)
         }
         "livepix.set_active_goal" => {
@@ -389,9 +439,10 @@ pub async fn operation(rt: &Arc<Runtime>, p: &str, op: &str, args: &Value) -> Re
         "livepix.remove_goal" => {
             let gid = args["goalId"].as_str().ok_or("Meta ausente")?;
             let mut cfg = config(rt, p);
-            if cfg.goals.remove(gid).is_none() { return Err("Meta inválida".into()); }
+            let Some(gone) = cfg.goals.remove(gid) else { return Err("Meta inválida".into()); };
             if cfg.active_goal == gid { cfg.active_goal = String::new(); }
             rt.db.set_module(p, MODULE, &serde_json::to_value(&cfg).map_err(|e| e.to_string())?)?;
+            rt.log(p, "livepix", &format!("Meta \"{}\" removida do estúdio.", gone.title), "info");
             Ok(serde_json::to_value(&cfg).map_err(|e| e.to_string())?)
         }
         // Adiciona meta sem tocar na meta ativa nem zerar o contador (diferente
@@ -572,6 +623,58 @@ mod tests {
         assert_eq!(keys, vec!["goal_1".to_string(), "goal_2".to_string()]);
         assert_eq!(cfg["activeGoal"], json!("goal_2"));
         assert_eq!(data(&rt, &p.id)["current"].as_i64(), Some(12500));
+    }
+
+    #[tokio::test]
+    async fn ligar_de_novo_nao_zera_a_contagem_e_pegar_apaga() {
+        let dir = tempfile::tempdir().unwrap();
+        let rt = Arc::new(Runtime::new(dir.path().into()).unwrap());
+        let p = profile("P");
+        rt.db.save_profile(&p).unwrap();
+
+        operation(&rt, &p.id, "livepix.add_goal", &json!({"title": "Meta A", "target": 50000})).await.unwrap();
+        rt.db.set_module(&p.id, DATA, &json!({"current": 12500, "start_timestamp": 1728000000i64})).unwrap();
+
+        // Desligar guarda o progresso e só esconde a meta no overlay.
+        operation(&rt, &p.id, "livepix.disable", &json!({})).await.unwrap();
+        assert_eq!(data(&rt, &p.id)["current"].as_i64(), Some(12500));
+        assert_eq!(goal_message(&rt, &p.id)["payload"]["hidden"], json!(true));
+
+        // Ligar de novo mantém o contador e o marco de início (o dinheiro
+        // desde o começo da meta continua contando).
+        let cfg: Value = operation(&rt, &p.id, "livepix.enable", &json!({"goals": [{"title": "Meta A", "target": 50000}]})).await.unwrap();
+        assert_eq!(cfg["activeGoal"], json!("goal_0"));
+        assert_eq!(data(&rt, &p.id)["current"].as_i64(), Some(12500));
+        assert_eq!(data(&rt, &p.id)["start_timestamp"].as_i64(), Some(1728000000));
+        assert_eq!(goal_message(&rt, &p.id)["payload"]["current"].as_i64(), Some(12500));
+
+        // Reiniciar contador é um passo à parte, pedido de propósito.
+        operation(&rt, &p.id, "livepix.reset_counter", &json!({})).await.unwrap();
+        assert_eq!(data(&rt, &p.id)["current"].as_i64(), Some(0));
+    }
+
+    #[tokio::test]
+    async fn editar_meta_muda_titulo_e_alvo_e_publica_na_hora() {
+        let dir = tempfile::tempdir().unwrap();
+        let rt = Arc::new(Runtime::new(dir.path().into()).unwrap());
+        let p = profile("P");
+        rt.db.save_profile(&p).unwrap();
+
+        assert!(operation(&rt, &p.id, "livepix.update_goal", &json!({"goalId": "goal_0", "title": "Nova", "target": 10})).await.is_err());
+        operation(&rt, &p.id, "livepix.add_goal", &json!({"title": "Meta A", "target": 50000})).await.unwrap();
+        assert!(operation(&rt, &p.id, "livepix.update_goal", &json!({"goalId": "goal_0", "title": "  ", "target": 10})).await.is_err());
+        assert!(operation(&rt, &p.id, "livepix.update_goal", &json!({"goalId": "goal_0", "title": "Nova", "target": 0})).await.is_err());
+
+        // Ligar a integração com a meta pronta e a contagem andando.
+        rt.db.set_module(&p.id, DATA, &json!({"current": 25000})).unwrap();
+        operation(&rt, &p.id, "livepix.enable", &json!({"goals": [{"title": "Meta A", "target": 50000}]})).await.unwrap();
+
+        let cfg: Value = operation(&rt, &p.id, "livepix.update_goal", &json!({"goalId": "goal_0", "title": "Meta Mensal", "target": 100000})).await.unwrap();
+        assert_eq!(cfg["goals"]["goal_0"]["title"], json!("Meta Mensal"));
+        assert_eq!(cfg["goals"]["goal_0"]["target"].as_i64(), Some(100000));
+        let msg = goal_message(&rt, &p.id);
+        assert_eq!(msg["payload"]["title"], json!("Meta Mensal"));
+        assert_eq!(msg["payload"]["percent"].as_i64(), Some(25));
     }
 }
 

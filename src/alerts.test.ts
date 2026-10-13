@@ -1,6 +1,6 @@
 import {describe,expect,it} from 'vitest';
 import {
- ALERT_KINDS,DEFAULT_ALERTS,alertSoundUrl,fillText,isAlertKind,normalizeAlerts,sampleVars,
+ ALERT_KINDS,DEFAULT_ALERTS,fillText,isAlertKind,normalizeAlerts,sampleVars,
 } from './alerts';
 
 describe('motor de alertas: normalização',()=>{
@@ -66,11 +66,5 @@ describe('motor de alertas: placeholders',()=>{
   expect(fillText('{{user}} deu {{amount}} subs',{name:'Generoso123',count:10})).toBe('Generoso123 deu 10 subs');
   expect(fillText('{{viewer}} assiste',{name:'Ana'})).toBe('Ana assiste');
   expect(fillText('{{amount}} VIEWERS',{viewers:37})).toBe('37 VIEWERS');
- });
-});
-
-describe('motor de alertas: utilitários',()=>{
- it('monta o endereço do som com a chave do overlay',()=>{
-  expect(alertSoundUrl(9876,'abc','som1')).toBe('http://127.0.0.1:9876/asset?token=abc&id=som1');
  });
 });

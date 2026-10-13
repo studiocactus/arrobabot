@@ -217,11 +217,6 @@ export function sampleVars(kind: AlertKind): AlertVars {
   }
 }
 
-/** Endereço de um som servido pela API local (rota /asset com a chave do overlay). */
-export function alertSoundUrl(port: number, token: string, id: string): string {
-  return `http://127.0.0.1:${port}/asset?token=${encodeURIComponent(token)}&id=${encodeURIComponent(id)}`;
-}
-
 // ---------------------------------------------------------------- DOM ------
 
 const BAR_BLOCKS = 32;

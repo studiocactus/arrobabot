@@ -1,8 +1,15 @@
 # Respostas TXT e sons por espectador
 
-Abra **Respostas e sons** no menu lateral ou o botão **Respostas TXT e sons** em **Comunidade**. Escolha o perfil correto. As alterações entram em vigor ao clicar em **Salvar respostas e sons**. Somente o proprietário pode vincular arquivos, salvar configurações e reiniciar a sessão; moderadores autorizados podem consultar e testar arquivos já cadastrados. O navegador mostra os controles, mas os arquivos e a execução dependem do aplicativo desktop.
+A partir da versão 0.7.0, respostas e sons por espectador moram em **duas telas separadas**, ambos no grupo **Seu espaço** do menu lateral:
 
-Cada regra e cada pessoa aparecem como uma linha compacta com um ponto de situação, o nome do cadastro, os resumos em pastilhas, o controle de ativar e uma seta. Clique no título da linha para abrir ou fechar o formulário; **Expandir todos** e **Recolher todos** fazem o mesmo com a lista inteira, e o contador ao lado informa quantos cadastros existem. Com mais de cinco itens, o campo **Filtrar** localiza um cadastro pelo nome, pela palavra-chave ou pelo arquivo. Uma regra ou pessoa recém-adicionada já abre sozinha, e o conteúdo fechado sai da ordem de tabulação do teclado. Quando a lista está vazia, use o botão **Adicionar resposta TXT** ou **Adicionar pessoa** logo abaixo da explicação.
+- **Respostas** — as regras de resposta em texto (TXT), cada uma com um som opcional da biblioteca.
+- **Sons de Live** — a biblioteca de áudios e os sons por espectador, com a sessão de sons.
+
+O botão **Respostas** em **Comunidade** abre a tela de Respostas. Escolha o perfil correto em ambas. Cada tela tem seu próprio botão de salvar (**Salvar respostas** e **Salvar sons por espectador**); as alterações só entram em vigor ao salvar. O navegador mostra os controles, mas os arquivos e a execução dependem do aplicativo desktop.
+
+Nas duas telas, cada regra ou pessoa aparece como uma linha compacta com um ponto de situação, o nome, os resumos em pastilhas, o controle de ativar e uma seta. Clique no título para abrir ou fechar o formulário; **Expandir todos** e **Recolher todos** trabalham na lista inteira, e o contador informa quantos cadastros existem. Com mais de cinco itens, o campo **Filtrar** localiza pelo nome ou arquivo. Um cadastro recém-adicionado já abre sozinha, e o conteúdo fechado sai da tabulação do teclado. Quando a lista está vazia, o botão **Adicionar** fica logo abaixo da explicação.
+
+Somente o proprietário pode vincular arquivos e salvar; moderadores autorizados podem consultar e testar arquivos já cadastrados.
 
 ## Responder a uma palavra usando um TXT
 
@@ -16,7 +23,11 @@ Ao vincular um TXT, o BotLive confere as variáveis de todas as linhas na hora e
 4. Escolha **Aleatória, sem repetir a última** ou **Em sequência**. Uma única linha pode repetir; a sequência volta ao início ao terminar.
 5. Ajuste os intervalos da regra e por pessoa, em minutos. Os padrões são 0,5 e 1 minuto. A regra exige pelo menos um segundo; zero desativa somente o intervalo por pessoa.
 6. Use **Conferir linhas** para visualizar as primeiras dez respostas e a quantidade total, sem publicar.
-7. Ative a regra e **Ativar respostas TXT**, depois clique em **Salvar respostas e sons**.
+7. Ative a regra e **Ativar respostas TXT**, depois clique em **Salvar respostas**.
+
+### Som junto com a resposta
+
+Cada regra pode tocar um áudio da biblioteca no mesmo instante da resposta. No campo **Som junto com a resposta (opcional)**, escolha um som já importado em **Sons de Live** (ou **Sem som**). O áudio toca na saída dos sons do bot (a escolhida na tela [Áudio](13-AUDIO.md)). Use **Testar som** para ouvir pelo mesmo aparelho da live e ajuste o **Volume do som** (aparece quando um som está escolhido). Escolher som é opcional: regras sem som respondem em silêncio.
 
 Exemplo de arquivo:
 
@@ -34,29 +45,33 @@ Expressões bloqueadas no perfil continuam sendo verificadas. Os marcadores do T
 
 São permitidas 100 regras por perfil. **Remover regra** remove a configuração após salvar; o arquivo original é preservado.
 
-## Cadastrar um som para uma pessoa
+## Sons de Live: biblioteca e sons por espectador
 
-A tela **Sons** é a biblioteca central de áudios: adicione WAV, MP3 ou OGG (até 5 MiB), ouça para conferir e apague quando não servir mais. Tudo que usa som (comandos, timers, automações e sons por pessoa) escolhe dessa biblioteca. Apagar um som em uso deixa os cadastros sem áudio até escolher outro.
+A tela **Sons de Live** tem duas partes. A **Biblioteca de sons** é o depósito central de áudios: adicione WAV, MP3 ou OGG (até 5 MiB), ouça para conferir e apague quando não servir mais. Tudo que usa som — comandos, timers, automações, resgates de pontos, alertas e respostas — escolhe daqui. Um som apagado fica sem áudio onde estiver em uso, até você escolher outro. A saída de todos eles é a mesma, a escolhida na tela [Áudio](13-AUDIO.md).
+
+Abaixo fica o cartão **Sons por espectador**: para cada pessoa, o áudio e quando ele toca.
 
 Clique em **Adicionar pessoa** e preencha:
 
 - **Nome no chat**: nome exato recebido da plataforma, sem depender de maiúsculas ou do @ inicial.
-- **Apelido**: como você deseja identificar a pessoa no painel e nos registros; não substitui a identificação da conta.
+- **Apelido**: como você deseja identificar a pessoa na lista; não substitui a identificação da conta.
 - **ID da pessoa (opcional)**: quando informado, a identificação usa esse ID. Recomendado para nomes exibidos iguais. Correspondências por ID têm prioridade sobre nome.
-- **Escolher som**: selecione WAV, MP3 ou OGG, até 5 MiB. O aplicativo guarda uma cópia; mover o original não quebra o som.
+- **Som da pessoa**: escolha um áudio da biblioteca; toca na saída dos sons do bot. **Testar som** ouve antes da live, mesmo com a função desativada.
 - **Disparar som**: quando enviar mensagem, quando entrar mesmo sem falar, ou ao entrar ou enviar mensagem.
-- **Quando tocar**: uma vez por sessão ou repetir com intervalo, em minutos. O intervalo individual mínimo é 0,5 minuto; o padrão é um minuto.
-- **Volume**: ajuste a intensidade e use **Testar som** para ouvir antes da live. O teste reproduz mesmo com a função desativada.
+- **Quando tocar**: uma vez por sessão ou repetir com intervalo, em minutos. O intervalo individual mínimo é 5 minutos; o padrão é um minuto.
+- **Volume**: ajuste a intensidade do áudio daquela pessoa.
 
-Ative a pessoa e **Ativar sons por espectador**, depois clique em **Salvar respostas e sons**. Para suspender, desligue o controle geral ou o individual e salve. Remover uma pessoa também exige salvar. Mudanças valem para novos eventos; áudio já em reprodução ou na fila termina normalmente.
+Ative a pessoa e **Ativar sons por espectador**, depois clique em **Salvar sons por espectador**. Para suspender, desligue o controle geral ou o individual e salve. Remover uma pessoa também exige salvar. Mudanças valem para novos eventos; áudio já em reprodução ou na fila termina normalmente.
+
+**Reiniciar sessão de sons** libera novamente as pessoas deste perfil para tocar de novo, sem mexer nas regras TXT. Há um intervalo geral de 5 segundos entre sons; uma pessoa ignorada nesse intervalo poderá tocar na próxima participação. A sessão reinicia ao fechar o aplicativo. Mensagens barradas pela moderação e mensagens da própria conta do bot não disparam sons. O player toca um som por vez, aceita até cinco solicitações pendentes e interrompe cada áudio após quinze segundos. Falhas de reprodução aparecem no aviso da interface; **Som solicitado** no Histórico confirma o pedido, não comprova áudio na transmissão. Um pedido já emitido consome a primeira participação, mesmo se a reprodução falhar; após corrigir, reinicie a sessão.
 
 ### Usar um som em um comando, timer ou automação
 
-Os sons importados aqui também ficam disponíveis em **Comandos**, **Timers** e **Automações**: no campo **Tocar áudio ao disparar**, escolha **Escolher som** para importar ou selecione um som já cadastrado, ajuste o **Volume** e use **Testar som**. O som toca quando o fluxo executa, independentemente de **Ativar sons por espectador**. Veja o passo a passo em [Comandos e automações](03-COMANDOS-E-AUTOMACOES.md).
+Os sons importados na biblioteca também ficam disponíveis em **Comandos**, **Timers** e **Automações**: no campo **Tocar áudio ao disparar**, escolha **Escolher som** para importar ou selecione um som já cadastrado, ajuste o **Volume** e use **Testar som**. O som toca quando o fluxo executa, independentemente de **Ativar sons por espectador**. Veja o passo a passo em [Comandos e automações](03-COMANDOS-E-AUTOMACOES.md).
 
 ### Entrada silenciosa na Twitch
 
-1. Ative **Monitorar entradas silenciosas na Twitch** e escolha **Quando entrar, mesmo sem falar** ou **Ao entrar ou enviar mensagem** para a pessoa.
+1. Ative **Monitorar entradas silenciosas na Twitch** (no cartão Sons por espectador) e escolha **Quando entrar, mesmo sem falar** ou **Ao entrar ou enviar mensagem** para a pessoa.
 2. Em **Nome no chat**, informe o login atual da conta Twitch (não o nome decorativo). Mesmo com ID preenchido, esse login é necessário para localizar a entrada; o ID informado continua sendo conferido.
 3. Salve. No perfil, autorize novamente a conta do bot para conceder a permissão chat:read, depois conecte o perfil.
 4. Confira no Histórico o registro **Monitor de entradas ativo**. Se faltar autorização, o Histórico explica como corrigir; as mensagens continuam pelo conector normal.
@@ -66,21 +81,17 @@ A Twitch informa conexões ao chat por IRC; isso não comprova que alguém está
 
 No YouTube, use mensagem: o conector não fornece presença silenciosa. Uma ponte autorizada pode enviar join com identidade pela API local em outras plataformas. Entradas contam para a mesma sessão de sons; com **Uma vez por sessão**, uma mensagem posterior não toca novamente. Cadastros antigos assumem **Quando enviar mensagem**, sem habilitar observação silenciosa automaticamente.
 
-Uma sessão começa ao abrir o aplicativo. **Reiniciar sessão de sons** libera novamente as pessoas deste perfil, sem alterar intervalos TXT. Desconectar e reconectar não reinicia a sessão. Participações enquanto a função está desativada não consomem a primeira reprodução. Existe intervalo global de cinco segundos; uma pessoa ignorada nesse intervalo poderá tocar na próxima participação. Mensagens barradas pela moderação e mensagens da própria conta do bot não disparam sons.
-
-O player toca um som por vez, aceita até cinco solicitações pendentes e interrompe cada áudio após quinze segundos. Falhas de reprodução aparecem no aviso da interface; **Som solicitado** no Histórico confirma o pedido, não comprova áudio na transmissão. Um pedido já emitido consome a primeira participação, mesmo se a reprodução falhar; após corrigir, reinicie a sessão.
-
 ## Fazer o som sair na live
 
-Escolha **Dispositivo de saída dos sons** no painel, clique em **Salvar respostas e sons** e use **Testar som**. A seleção é por perfil e aplica-se somente aos sons por espectador, não ao texto para fala. **Padrão do Windows** acompanha a saída padrão. **Atualizar dispositivos** recarrega a lista; nomes e disponibilidade dependem das permissões do Windows/WebView. Se o ambiente não oferecer seleção, use o Mixer de volume do Windows. Se uma saída salva desaparecer ou for recusada, o player informa erro e não muda silenciosamente para outra saída; escolha novamente e salve.
+A saída dos sons é escolhida na tela [Áudio](13-AUDIO.md), no cartão **Saída dos sons do bot** — não há seletor de aparelho nesta tela. Escolha lá o aparelho (por exemplo, **CABLE Input** do VB-Cable), use **Testar saída** e **Testar som** daqui para confirmar que o áudio passa pelo mesmo aparelho da live.
 
-Mantenha o BotLive aberto e desbloqueado e use **Testar som**. No OBS, inclua o áudio do desktop correspondente à saída usada pelo BotLive, ou uma captura de áudio do aplicativo. Confira o medidor e faça uma gravação local para validar volume e roteamento. Esta versão reproduz no computador; não configura o OBS automaticamente nem fornece um player de áudio em fonte de navegador. Evite capturar o mesmo áudio duas vezes.
+No OBS, inclua o áudio do aparelho correspondente (por exemplo, uma fonte de áudio da área de trabalho apontando para **CABLE Output**). Confira o medidor e faça uma gravação local para validar volume e roteamento. Evite capturar o mesmo áudio duas vezes. O BotLive não altera o mixer da transmissão.
 
-A simulação registra que tocaria o som, sem reproduzir ou consumir a sessão real. Há até 200 pessoas e 300 arquivos cadastrados por perfil (TXT e sons somados). Remover regras ou pessoas mantém os arquivos registrados para reutilização; não apaga originais nem cópias do áudio. Arquivos de áudio corrompidos podem ser recusados pelo player mesmo com extensão válida.
+Há até 200 pessoas e 300 arquivos cadastrados por perfil (TXT e sons somados). Remover regras ou pessoas mantém os arquivos registrados para reutilização; não apaga originais nem cópias do áudio. Arquivos de áudio corrompidos podem ser recusados pelo player mesmo com extensão válida.
 
 ## Backup e migração
 
-As configurações ficam no banco. Preserve também a pasta **media** dentro da pasta de dados, que contém as cópias dos áudios. Os TXT ficam nos caminhos externos escolhidos e precisam de cópia separada. Estes recursos não são transportados pelos presets. Ao mudar de computador, selecione novamente o dispositivo de áudio: o identificador é local. Ao mudar a pasta de dados ou de computador, vincule novamente os arquivos para atualizar os caminhos registrados. Apagar um perfil remove seu cadastro do banco, mas conserva suas cópias de áudio no disco; elas não são executadas sem cadastro.
+As configurações ficam no banco. Preserve também a pasta **media** dentro da pasta de dados, que contém as cópias dos áudios. Os TXT ficam nos caminhos externos escolhidos e precisam de cópia separada. Estes recursos não são transportados pelos presets. Ao mudar de computador, selecione novamente a saída de áudio na tela **Áudio**: o identificador é local. Ao mudar a pasta de dados ou de computador, vincule novamente os arquivos para atualizar os caminhos registrados. Apagar um perfil remove seu cadastro do banco, mas conserva suas cópias de áudio no disco; elas não são executadas sem cadastro.
 
 ## Resolver problemas
 

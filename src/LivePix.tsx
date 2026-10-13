@@ -1,5 +1,5 @@
 import {useCallback,useEffect,useRef,useState} from 'react';
-import {Play,Square,Trash2,Plus,Copy,Check} from 'lucide-react';
+import {Play,Square,Trash2,Plus,Copy,Check,RefreshCw,Pencil} from 'lucide-react';
 import {api,desktop,errorText} from './api';
 import {Card,Field} from './components';
 import './overlay-studio.css';
@@ -8,7 +8,7 @@ import {TEMPLATE_IDS,TEMPLATES,defaultDesign,fontGroups,normalizeDesign,type Ali
 
 type GoalDef={title:string;target:number;fontFamily?:string};
 type Config={enabled?:boolean;clientId?:string;activeGoal?:string;goals?:Record<string,GoalDef>};
-type Data={current?:number;active_goal?:string};
+type Data={current?:number;active_goal?:string;last_error?:string};
 type Info={token:string;port:number;url:string};
 
 const LAYOUTS:[Layout,string][]=[['bar','Barra'],['row','Linha'],['panel','Painel'],['ring','Anel']];
@@ -46,6 +46,7 @@ export default function LivePix({profileId,notify}:{profileId:string;notify:(s:s
  const [gainKey,setGainKey]=useState(0);
  const [celebrateKey,setCelebrateKey]=useState(0);
  const [copied,setCopied]=useState(false);
+ const [editing,setEditing]=useState('');
  const hydrated=useRef(false);
  const lastSaved=useRef('');
 
@@ -103,11 +104,13 @@ export default function LivePix({profileId,notify}:{profileId:string;notify:(s:s
  const copyUrl=async()=>{
   if(!info)return;
   try{
-   await navigator.clipboard.writeText(info.url);
+   await navigator.clipboard.writeText(layerUrl());
    setCopied(true);setTimeout(()=>setCopied(false),2200);
-   notify('Endereço do overlay copiado.');
+   notify('Endereço da camada da meta copiado.');
   }catch{notify('Não foi possível copiar. Selecione o endereço e copie manualmente.')}
  };
+ /** Endereço da camada da meta: mesma base do overlay com mode=goal. */
+ const layerUrl=()=>info?info.url+'&mode=goal':'';
 
  const fmt=(cents:number)=>(cents/100).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
  const active=config?.activeGoal||'';
@@ -131,7 +134,7 @@ export default function LivePix({profileId,notify}:{profileId:string;notify:(s:s
 
  return <div>
   <Card title="LivePix — Meta de doações" action={<span className={'status-pill '+(config?.enabled?'on':'off')}><span className="status-dot" aria-hidden="true"></span>{config?.enabled?'Ativa':'Desligada'}</span>}>
-   <p className="help">Conecte sua conta LivePix para exibir uma meta no OBS. O BotLive consulta a API a cada 15 segundos e envia o estado por WebSocket local (porta 9876).</p>
+   <p className="help">Conecte sua conta LivePix para exibir uma meta no OBS. O BotLive consulta a API a cada 15 segundos e envia o estado por WebSocket local (porta 9876). Desligar e ligar a integração <strong>não apaga o progresso</strong>: o contador só muda com dinheiro entrando ou com o botão Reiniciar contador nas Metas.</p>
 
    <div className="form-grid">
     <Field label="Client ID" hint="UUID da aplicação criada no painel da LivePix."><input value={clientId} onChange={e=>setClientId(e.target.value)} placeholder="Ex.: 12345678-abcd-..."/></Field>
@@ -139,6 +142,7 @@ export default function LivePix({profileId,notify}:{profileId:string;notify:(s:s
    </div>
    <button disabled={busy||(!clientId.trim()&&!clientSecret)} onClick={()=>void saveCreds()}>Salvar no cofre</button>
 
+   {data?.last_error&&<div className="inline-warning" role="alert"><strong>Problema na integração:</strong><p>{data.last_error}</p></div>}
    {error&&<p role="alert" className="inline-error">{error}</p>}
 
    <div className="list-row" style={{marginTop:16}}>
@@ -255,7 +259,7 @@ export default function LivePix({profileId,notify}:{profileId:string;notify:(s:s
   </Card>
 
   <Card title="Metas">
-   <p className="help">Cada meta tem título e valor-alvo em reais. A aparência — cores, fonte, bordas — fica no Estúdio acima. A meta ativa é consultada a cada 15 segundos.</p>
+   <p className="help">Cada meta tem título e valor-alvo em reais. A aparência — cores, fonte, bordas — fica no Estúdio acima. A meta ativa é consultada a cada 15 segundos. Excluir uma meta pede confirmação: o progresso dela não pode ser recuperado.</p>
    {config?.goals&&Object.entries(config.goals).map(([gid,g])=>
     <div key={gid} className="list-row">
      <div><strong>{g.title}</strong><small>{fmt(g.target)} BRL</small></div>
@@ -263,18 +267,29 @@ export default function LivePix({profileId,notify}:{profileId:string;notify:(s:s
       {config.activeGoal===gid
        ?<span className="status-pill on"><span className="status-dot" aria-hidden="true"></span>Ativa</span>
        :<button disabled={busy||!config.enabled} onClick={()=>void call('livepix.set_active_goal',{goalId:gid})}>Ativar</button>}
-      <button disabled={busy} onClick={()=>void call('livepix.remove_goal',{goalId:gid})}><Trash2 size={14}/></button>
+      <button disabled={busy} onClick={()=>setEditing(editing===gid?'':gid)}><Pencil size={14}/>Editar</button>
+      <button className="icon-button danger" aria-label={'Excluir meta '+g.title} disabled={busy} onClick={()=>{
+       if(window.confirm(`Excluir a meta “${g.title}”? O progresso dela não pode ser recuperado.`))void call('livepix.remove_goal',{goalId:gid});
+      }}><Trash2 size={15}/></button>
      </div>
+     {editing===gid&&<EditGoal key={gid} initial={g} disabled={busy} onCancel={()=>setEditing('')} onSave={async(title,target)=>{
+      await call('livepix.update_goal',{goalId:gid,title,target});setEditing('');
+     }}/>}
     </div>
    )}
+   {config?.enabled&&active&&<div className="row">
+    <button disabled={busy} onClick={()=>{
+     if(window.confirm('Reiniciar a contagem da meta ativa? O valor acumulado volta a zero.'))void call('livepix.reset_counter',{});
+    }}><RefreshCw size={14}/>Reiniciar contador</button>
+   </div>}
    <AddGoal onAdd={g=>{void call('livepix.add_goal',{title:g.title,target:g.target})}} disabled={busy}/>
   </Card>
 
   <Card title="No OBS" action={info?<span className="status-pill on"><span className="status-dot" aria-hidden="true"></span>Pronto</span>:undefined}>
    {info?<>
-    <p className="help">Adicione uma <strong>Fonte Navegador</strong> no OBS com este endereço. O endereço é estável: não muda ao reabrir o BotLive e não precisa de arquivo local.</p>
+    <p className="help">Este é o <strong>endereço da camada da meta</strong> (o parâmetro <code>mode=goal</code> deixa só a meta nesta fonte). Cada camada — meta, alertas e chat — fica na sua própria Fonte de navegador, com posição e tamanho independentes. O endereço é estável: não muda ao reabrir o BotLive e não precisa de arquivo local.</p>
     <div className="lp-url">
-     <code>{info.url}</code>
+     <code>{layerUrl()}</code>
      <button className="primary" onClick={()=>void copyUrl()}>{copied?<Check size={15}/>:<Copy size={15}/>}{copied?'Copiado':'Copiar endereço'}</button>
     </div>
     <ol className="lp-steps">
@@ -317,15 +332,40 @@ function Toggle({label,checked,onChange}:{label:string;checked:boolean;onChange:
  return <label className="lp-toggle"><input type="checkbox" checked={checked} onChange={e=>onChange(e.target.checked)}/><span>{label}</span></label>;
 }
 
+/** Edição de meta existente: título e alvo, com o mesmo formato do AddGoal. */
+function EditGoal({initial,disabled,onSave,onCancel}:{initial:GoalDef;disabled:boolean;onSave:(title:string,target:number)=>void;onCancel:()=>void}){
+ const [title,setTitle]=useState(initial.title);
+ const [target,setTarget]=useState(String(initial.target/100));
+ const cents=parseBrl(target);
+ const ok=title.trim()&&cents>0;
+ return <div className="form-grid" style={{marginTop:8}}>
+  <Field label="Título da meta"><input value={title} onChange={e=>setTitle(e.target.value)}/></Field>
+  <Field label="Valor-alvo (R$)" hint="Aceita vírgula ou ponto: 500,00 ou 500."><input inputMode="decimal" value={target} onChange={e=>setTarget(e.target.value)}/></Field>
+  <div className="row">
+   <button className="primary" disabled={disabled||!ok} onClick={()=>onSave(title.trim(),cents)}>Salvar meta</button>
+   <button disabled={disabled} onClick={onCancel}>Cancelar</button>
+  </div>
+ </div>;
+}
+
+/** "500,00", "1.500,00" e "500" → centavos. Com vírgula, ponto é milhar. */
+function parseBrl(v:string):number{
+ const s=String(v).trim();
+ const normalized=s.includes(',')?s.replace(/\./g,'').replace(',','.'):s;
+ const n=Number(normalized);
+ return Number.isFinite(n)?Math.round(n*100):0;
+}
+
 function AddGoal({onAdd,disabled}:{onAdd:(g:{title:string;target:number})=>void;disabled:boolean}){
  const [title,setTitle]=useState('');
  const [target,setTarget]=useState('');
- const ok=title.trim()&&Number(target)>0;
+ const cents=parseBrl(target);
+ const ok=title.trim()&&cents>0;
  return <details style={{marginTop:12}}><summary><Plus size={14} style={{verticalAlign:'middle'}}/> Nova meta</summary>
   <div className="form-grid" style={{marginTop:8}}>
    <Field label="Título"><input value={title} onChange={e=>setTitle(e.target.value)} placeholder="Ex.: Meta do mês"/></Field>
-   <Field label="Valor-alvo (R$)"><input type="number" min="1" step="0.01" value={target} onChange={e=>setTarget(e.target.value)} placeholder="Ex.: 500"/></Field>
+   <Field label="Valor-alvo (R$)" hint="Aceita vírgula ou ponto: 500,00 ou 500."><input inputMode="decimal" value={target} onChange={e=>setTarget(e.target.value)} placeholder="Ex.: 500"/></Field>
   </div>
-  <button disabled={disabled||!ok} onClick={()=>{onAdd({title:title.trim(),target:Math.round(Number(target)*100)});setTitle('');setTarget('')}}>Adicionar meta</button>
+  <button disabled={disabled||!ok} onClick={()=>{onAdd({title:title.trim(),target:cents});setTitle('');setTarget('')}}>Adicionar meta</button>
  </details>;
 }

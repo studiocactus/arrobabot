@@ -2,7 +2,7 @@
 
 A tela **Alertas** transforma follows, subs, presentes, bits e raids em painéis animados dentro da sua fonte de navegador do OBS. O painel é uma "janela de sistema" com barra de status, tarja do evento, nome em destaque, linha grande, linha final datilografada e uma barra de tempo que corre durante o alerta.
 
-Os alertas usam o **mesmo endereço do overlay da meta**: quem já tem a Fonte Navegador no OBS não troca nada — basta ligar os alertas no Estúdio.
+Os alertas ficam numa **camada de overlay própria**, com um endereço próprio que carrega o parâmetro `mode=alerts`. Isso significa que você cria uma **Fonte de navegador só para os alertas** e ajusta posição e tamanho sem mexer na meta nem no chat. O endereço é estável — não muda ao reabrir o BotLive e não precisa de arquivo local. (Sem o parâmetro, o endereço do overlay mostra as três camadas juntas, para quem já usa uma fonte única.)
 
 ## Ligar os alertas
 
@@ -36,7 +36,7 @@ As alterações salvam sozinhas e chegam ao OBS na hora, sem recarregar a fonte.
 
 ## Sons
 
-O seletor **Som** de cada evento lista os arquivos enviados na tela [Respostas TXT e sons](RESPOSTAS-E-SONS.md) (WAV, MP3 ou OGG, até 5 MiB). O áudio toca pelo próprio navegador do OBS, na mesma hora do painel, usando o volume ajustado no grupo Painel. Sem som selecionado, o alerta é silencioso.
+O seletor **Som** de cada evento lista os arquivos enviados na tela [Sons de Live](RESPOSTAS-E-SONS.md) (WAV, MP3 ou OGG, até 5 MiB). O áudio toca na **saída dos sons do bot** — o aparelho escolhido na tela [Áudio](13-AUDIO.md) — junto com o painel, usando o volume ajustado no grupo Painel. Sem som selecionado, o alerta é silencioso. Capture essa saída no OBS (por exemplo, a fonte de áudio apontando para o CABLE Output) para ouvir os alertas na live.
 
 ## Limitações desta primeira versão
 

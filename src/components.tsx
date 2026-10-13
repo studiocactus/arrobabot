@@ -25,7 +25,17 @@ export function Modal({title,children,onClose,wide=false}:{title:string;children
 export function Field({label,children,hint}:{label:string;children:ReactNode;hint?:string}){return <div className="field"><label><span>{label}</span>{children}</label>{hint&&<small>{hint}</small>}</div>}
 export function Empty({title,children,action}:{title:string;children:ReactNode;action?:ReactNode}){return <div className="empty"><span className="empty-icon"><Inbox size={28}/></span><h3>{title}</h3><p>{children}</p>{action}</div>}
 export function Card({title,children,action,className=''}:{title?:string;children:ReactNode;action?:ReactNode;className?:string}){return <section className={'card '+className}>{title&&<div className="card-heading"><h3>{title}</h3>{action}</div>}{children}</section>}
-export function Toggle({checked,onChange,label}:{checked:boolean;onChange:(v:boolean)=>void;label:string}){return <button type="button" className={'toggle '+(checked?'on':'')} role="switch" aria-checked={checked} aria-label={label} onClick={()=>onChange(!checked)}><span/></button>}
+export function Toggle({checked,onChange,label}:{checked:boolean;onChange:(v:boolean)=>void;label:string}){
+ return <button type="button" className={'toggle '+(checked?'on':'')} role="switch" aria-checked={checked} aria-label={label} onClick={()=>onChange(!checked)}><span/></button>;
+}
+/** Interruptor com o texto visível ao lado da pílula — o nome acessível
+ *  continua sendo o mesmo texto (leitores de tela e testes não mudam). */
+export function Check({checked,onChange,label,hint}:{checked:boolean;onChange:(v:boolean)=>void;label:string;hint?:string}){
+ return <label className={'check'+(hint?' check--stack':'')}>
+  <Toggle checked={checked} onChange={onChange} label={label}/>
+  <span className="check-text"><span>{label}</span>{hint&&<small>{hint}</small>}</span>
+ </label>;
+}
 export function Busy({children,busy}:{children:ReactNode;busy:boolean}){return <>{busy&&<LoaderCircle className="spin" size={16}/>} {children}</>}
 export function Tag({children,color='green'}:{children:ReactNode;color?:string}){return <span className={'tag '+color}>{children}</span>}
 export function Jump({children,onClick}:{children:ReactNode;onClick:()=>void}){return <button className="text-button" onClick={onClick}>{children}<ArrowUpRight size={15}/></button>}

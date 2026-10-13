@@ -18,7 +18,7 @@ export const flows=[
   actions:[act('condition','',{condVar:'reward.cost',condOp:'greater_or_equal',condValue:'100',condFalse:'stop'}),act('chat','Oi {{viewer.name}}'),act('overlay','Aparece na OBS')]}
 ];
 
-export const NAV=['Visão geral','Perfis de bot','Discord','Rótulos OBS','Comandos','Timers','Respostas e sons','Sons','OBS Studio','Alertas','Chat no OBS','Áudio','Voz da live','LivePix','Contadores','Automações','Inteligência artificial','Memórias','Comunidade','Biblioteca de presets','Histórico','Estatísticas'];
+export const NAV=['Visão geral','Perfis de bot','Discord','Rótulos OBS','Comandos','Timers','Respostas','Sons de Live','Contadores','Automações','OBS Studio','Áudio','Voz da live','Meta','Alertas','Chat no OBS','Inteligência artificial','Memórias','Comunidade','Biblioteca de presets','Histórico','Estatísticas'];
 
 const LOGS=[
  {id:'l1',profileId:'p1',kind:'run',message:'Execução concluída com sucesso no fluxo de boas-vindas',status:'success',at:'2026-10-07T10:00:00Z'},
@@ -86,7 +86,7 @@ export async function mock(page:Page){
       case 'discord.status':return {online:false};
       case 'access.status':return {user:'owner',enabled:false};
       case 'labels.list':return [];
-      case 'chatExtras.get':return {phrases:[],sounds:[]};
+      case 'chatExtras.get':return {config:{presenceEnabled:false,audioDeviceId:'',repliesEnabled:true,soundsEnabled:true,replies:[],people:[]},assets:[{id:'txt1',kind:'txt',name:'respostas.txt'},{id:'snd1',kind:'sound',name:'ping.wav'}]};
       case 'alerts.get':return {config:null,sounds:[{id:'s1',name:'jingle.wav'}],overlay:{token:'preview-token',port:9876,url:'http://127.0.0.1:9876/overlay#token=preview-token&profile=p1'}};
       case 'alerts.test':return {kind:String((payload.args as Record<string,unknown>)?.kind||'follow'),vars:{name:'NovoSeguidor',amount:1,months:1,tier:'TIER 1',message:''}};
       case 'chat.get':return {config:null,overlay:{token:'preview-token',port:9876,url:'http://127.0.0.1:9876/overlay#token=preview-token&profile=p1'}};
