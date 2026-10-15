@@ -2,8 +2,9 @@ import {invoke,isTauri} from '@tauri-apps/api/core';
 import type {Profile,Flow,Note,Preset,Snapshot} from './types';
 export const desktop=isTauri();
 type Args=Record<string,unknown>;
-type Preview={profiles:Profile[];flows:Flow[];notes:Record<string,Note[]>;presets:Preset[];theme:string;accent?:string;discord?:Record<string,unknown>};
+type Preview={profiles:Profile[];flows:Flow[];notes:Record<string,Note[]>;presets:Preset[];theme:string;accent?:string;discord?:Record<string,unknown>;modules?:Record<string,Record<string,unknown>>};
 const initial:Preview={profiles:[],flows:[],notes:{},presets:[],theme:'dark'};
+function communityPreview(){return {balances:{},names:{},queue:[],songs:[],raffle:{open:false,keyword:'!sorteio',price:0,entries:{},winner:''},prediction:{open:false,title:'',options:[],bets:{},result:null},shop:[],redemptions:[],trivia:{}}}
 function read():Preview{try{return {...initial,...JSON.parse(localStorage.getItem('botlive-preview')||'{}')}}catch{return structuredClone(initial)}}
 function save(s:Preview){localStorage.setItem('botlive-preview',JSON.stringify(s))}
 export async function api<T=unknown>(op:string,args:Args={}):Promise<T>{
@@ -37,7 +38,10 @@ export async function api<T=unknown>(op:string,args:Args={}):Promise<T>{
   case 'discord.disconnect':break;
   case 'discord.action':{const a=String(args.action||'');if(a==='members')result=[{user:{id:'999999999999999999',username:'apoiador',global_name:'Apoiador'},nick:null}];else if(a==='linkCreate')result={code:'482913',hint:'Código gerado.'};else if(a==='linkList')result={links:[{discordId:'999999999999999999',twitchId:'482115'}],pending:{}};else if(a==='xpRank')result=[{id:'999999999999999999',name:'Apoiador',xp:120,level:1,next:400}];else if(a==='auditExport')result='acao,alvo,plataformas,motivo\\nwarn,Apoiador,discord+twitch,Prova de auditoria\\n';else if(a==='audit')result=[{id:'a1',action:'warn',target:'999999999999999999',targetName:'Apoiador',reason:'Prova de auditoria',platforms:['discord','twitch'],undoable:true,at:'25/09/2026 10:00'}];else if(a==='warnlist')result=[{target:'999999999999999999',targetName:'Apoiador',reason:'Prova de auditoria',date:'25/09/2026'}];else if(a==='birthdayList')result=[{user:'999999999999999999',name:'Apoiador',day:25,month:9,year:1990}];else if(a==='giveawayList')result=[{id:'g1',prize:'Nitro',status:'open',entries:['999999999999999999']}];else result=null;break}
   case 'secret.save':break;
- case 'community':result={balances:{},names:{},queue:[],songs:[],raffle:{open:false,keyword:'!sorteio',price:0,entries:{},winner:''},prediction:{open:false,title:'',options:[],bets:{},result:null},shop:[],redemptions:[],trivia:{}};break;
+ case 'community':result=communityPreview();break;
+  case 'community.action':result=communityPreview();break;
+  case 'module.config.get':result=(s.modules?.[`${id}:${String(args.key)}`])||{};break;
+  case 'module.config':{const key=`${id}:${String(args.key)}`;s.modules={...(s.modules||{}),[key]:(args.value||{})as Record<string,unknown>};break}
  default:throw Error('Abra o aplicativo desktop para usar esta função. Esta prévia permite editar perfis, comandos e notas; conexões e execução dependem do núcleo Rust.');
  }
  save(s);return result as T;

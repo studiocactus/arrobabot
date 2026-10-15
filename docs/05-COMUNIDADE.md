@@ -123,6 +123,34 @@ Padrões: cinco minutos sem novas mensagens e quinze minutos entre perguntas. O 
 
 A pergunta automática é publicada no chat, vale cinquenta pontos e tem prazo de cinco minutos, verificado pelo agendador enquanto o recurso permanece ativo e conectado.
 
+## Match do chat
+
+Ative **Match do chat** para a comunidade brincar de casal sem aprender comando: quem escreve uma palavra do tipo — `amor`, `paixão`, `crush`, `casal`, `beijo` ou `namorar` — leva um par sorteado entre quem falou no chat nos últimos dez minutos, com uma porcentagem de compatibilidade e a mensagem da faixa correspondente.
+
+A detecção é por **palavra inteira**: `amor` dispara em "você é meu amor!", mas `amortecedor` não. Mensagens que começam com `!` são comandos e não disparam. Se a pessoa marcar alguém com `@` na mesma mensagem e a pessoa marcada tiver falado no chat nos últimos dez minutos, ela vira o par; sem menção (ou com a pessoa ausente), o par é sorteado. Sem uma segunda pessoa no chat, não há match a anunciar.
+
+Em **Avançado**, configure:
+
+| Campo | Padrão | Intervalo aceito |
+|---|---|---|
+| Palavras-gatilho | amor, paixão, crush, casal, beijo, namorar | Até 300 caracteres, termos separados por vírgula |
+| Comando do par | !match | Até 30 caracteres, começa com ! e não tem espaço |
+| Intervalo entre matches | 2 minutos | 0 a 1440 minutos |
+| Intervalo por pessoa | 5 minutos | 0 a 1440 minutos |
+| A live como par | Fora do sorteio | Fora do sorteio ou pode ser sorteada |
+| Mensagens por faixa | Cinco textos prontos | Uma linha por faixa, até 500 caracteres cada |
+
+A **porcentagem vem de um hash dos dois nomes**, não de um sorteio: o mesmo casal dá sempre o mesmo resultado, em qualquer dia e para qualquer pessoa que perguntar. Por isso o chat pode discutir "o bot é injusto, a gente deu 12% de novo" — e é por isso que a frase segue a faixa certa sempre. `!match nome1 nome2` usa a mesma conta para comparar dois nomes quaisquer, mesmo quem não está no chat; a ordem dos nomes não muda o resultado.
+
+As **mensagens por faixa** aceitam `{{user1}}` (quem falou), `{{user2}}` (o par) e `{{pct}}` (a porcentagem). Uma linha vazia usa o texto padrão daquela faixa. O intervalo entre matches vale para a palavra e para o comando; dentro do intervalo, o chat não recebe resposta.
+
+Limitações desta versão:
+
+- Comando com erro (faltando nomes, ou os dois nomes iguais) é registrado no Histórico do app, sem resposta no chat — o mesmo comportamento dos demais comandos do módulo.
+- Bots de terceiros (alertas de doação e afins) não são identificados como bots: se a mensagem de um deles contiver a palavra inteira e houver gente no chat, o match pode disparar. Combine com a Moderação se isso incomodar.
+- A janela de "quem está no chat" é de dez minutos e começa a contar da primeira mensagem do próprio BotLive aberto; quem só assiste sem falar não entra no sorteio.
+- O mesmo casal pode ser sorteado repetidas vezes; não há memória de casais já anunciados.
+
 ## Texto para voz
 
 1. Ative Texto para voz.
@@ -206,6 +234,7 @@ São detectadas expressões proibidas, links com http://, https:// ou www. e rep
 | !entrar, !sair, !fila | Fila para jogar |
 | !musica link, !musicas, !minhamusica, !removermusica | Música |
 | !roleta valor, !duelo nome valor, !aceitar, !bingo | Jogos |
+| !match nome1 nome2 (ou o comando configurado) | Match do chat |
 | !discord | Discord |
 
 Esses comandos dependem da ativação dos módulos. Valores de aposta, transferência e quantidades interpretadas pelos comandos devem ser inteiros positivos, até 1.000.000, sujeitos a saldo, estoque e demais limites.

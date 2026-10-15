@@ -11,7 +11,7 @@ pub const OPS:&[&str]=&["game","title","timeout","ban","unban","warn","vip","unv
 /// Quem passou pelo chat fica aqui por 24 h para a fala livre achar nomes sem @.
 const SEEN_TTL:Duration=Duration::from_secs(86400);
 const SEEN_CAP:usize=2000;
-fn login_chars(s:&str)->bool{!s.is_empty()&&s.len()<=25&&s.chars().all(|c|c.is_ascii_alphanumeric()||c=='_'||c=='-')}
+pub(crate) fn login_chars(s:&str)->bool{!s.is_empty()&&s.len()<=25&&s.chars().all(|c|c.is_ascii_alphanumeric()||c=='_'||c=='-')}
 fn mention_ok(s:&str)->bool{s.len()>=2&&login_chars(s)}
 fn bare_ok(s:&str)->bool{s.len()>=4&&login_chars(s)}
 /// Tira pontuação das bordas e minúsculas: "Maria," vira "maria".

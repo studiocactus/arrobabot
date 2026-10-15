@@ -1,5 +1,45 @@
 # Histórico de atualizações
 
+# BotLive 0.7.4
+
+## O que mudou
+
+**Match do chat (novo módulo em Comunidade).** A comunidade brinca de casal sem aprender comando: quem escreve uma palavra romântica — amor, paixão, crush, casal, beijo ou namorar — leva um par sorteado entre quem falou no chat nos últimos dez minutos, e a porcentagem de compatibilidade sai na mensagem da faixa certa.
+
+O desenho, item por item:
+
+- **Palavra inteira.** "amor" dispara em "você é meu amor!", mas "amortecedor" não; mensagens que começam com `!` são comandos e não disparam.
+- **Par por menção ou sorteio.** Se a pessoa marcar alguém com `@` e a pessoa marcada tiver falado no chat nos últimos dez minutos, ela vira o par; sem menção (ou com a pessoa ausente), o par sai do sorteio de quem está ativo. Sem uma segunda pessoa no chat, não há match a anunciar.
+- **% por hash dos nomes.** O número vem de um hash FNV-1a dos dois nomes em ordem canônica — o mesmo casal dá sempre o mesmo resultado, e a ordem dos nomes não muda nada. O chat pode discutir "o bot é injusto, a gente deu 12% de novo" o quanto quiser.
+- **Cinco faixas com mensagens editáveis** (0–20, 21–40, 41–60, 61–80 e 81–100%), com os campos `{{user1}}`, `{{user2}}` e `{{pct}}`, partindo dos cinco textos prontos.
+- **Anti-spam pronto.** Intervalo global de 2 minutos e por pessoa de 5 minutos, ajustáveis em Avançado (0 a 1440 minutos); a live fica fora do sorteio por padrão, com interruptor para incluí-la.
+- **!match nome1 nome2** (ou o comando que você configurar) compara dois nomes quaisquer com a mesma conta, mesmo quem não está no chat — os dois nomes na ordem em que foram escritos, mas o mesmo resultado trocando a ordem.
+
+Para quem mantém o código: o recurso é o módulo `affinity` no motor de Comunidade (`modules.rs`), com o par vindo do registro de presença de chat (janela de 600 segundos) e os intervalos usando o mesmo mecanismo de cooldown das automações. A configuração passa pela validação do op `module.config`, e o primeiro salvamento materializa as faixas padrão para a edição mostrar o que existe. A prévia no navegador ganhou os casos `module.config`, `module.config.get` e `community.action` no fallback web — é o que sustenta o teste da tela.
+
+## Como usar
+
+1. Abra **Comunidade**, ative **Match do chat** e clique no cartão.
+2. Confira ou edite as palavras-gatilho, o comando e as cinco faixas em **Avançado** e salve a configuração.
+3. Teste no chat real com uma palavra (por exemplo "que casal") ou com `!match ana bruno`.
+4. A resposta segue a faixa da porcentagem; comando com erro aparece no Histórico do app, sem resposta no chat.
+
+## Validação
+
+- `cargo test --locked` em `src-tauri`: **245 testes, 0 falhas, 1 ignorado** — incluem os testes novos do Match (palavra inteira, hash determinístico e simétrico travado por valores de regressão, faixas, textos padrão, validação) e dois testes de integração do engine (sorteio com presença, intervalo global e por pessoa, exclusão da live, menção e !match).
+- `npm run check` (tsc) sem erros; `npm test` (vitest): **115 testes, 0 falhas**; `npm run test:updates`: 9 testes, 0 falhas.
+- `npx playwright test`: suíte completa verdes, incluindo o teste novo da tela Comunidade (ativação do módulo, configuração, salvar, recarregar mantendo os valores, `auditPage` em 1100px e 1680px).
+- Regras de tela: capturas `comunidade-1100.png` e `comunidade-largo.png` geradas e revisadas.
+- `npm run docs` regerado (capítulo da Comunidade com a seção do Match e a linha na referência de comandos); `npm run update:check` executado antes do push.
+
+## Limitações
+
+- Bots de terceiros (alertas de doação e afins) não são identificados como bots: se a mensagem de um deles contiver a palavra inteira e houver gente no chat, o match pode disparar. Combine com a Moderação se isso incomodar.
+- Comando com erro (sem nomes, ou os dois nomes iguais) é registrado no Histórico, sem resposta no chat — o mesmo comportamento dos demais comandos da Comunidade.
+- A janela de "quem está no chat" conta a partir das mensagens recebidas com o BotLive aberto; quem só assiste sem falar não entra no sorteio, e o mesmo casal pode sair repetido — não há memória de casais já anunciados.
+
+---
+
 # BotLive 0.7.3
 
 ## O que mudou

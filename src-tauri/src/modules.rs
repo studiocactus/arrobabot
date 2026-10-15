@@ -2,6 +2,7 @@ use crate::{engine::Runtime,model::*};
 use serde::{Serialize,Deserialize};
 use serde_json::{json,Value};
 use std::collections::BTreeMap;
+use std::time::{Duration,Instant};
 use rand::Rng;
 #[derive(Default,Clone,Serialize,Deserialize)]
 #[serde(rename_all="camelCase")]
@@ -10,6 +11,7 @@ pub struct Community {
  #[serde(default)] pub last_trivia:i64,
  #[serde(default)] pub balances:BTreeMap<String,i64>,
  #[serde(default)] pub names:BTreeMap<String,String>,
+ #[serde(default)] pub logins:BTreeMap<String,String>,
  #[serde(default)] pub queue:Vec<String>,
  #[serde(default)] pub songs:Vec<Song>,
  #[serde(default)] pub raffle:Raffle,
@@ -36,6 +38,108 @@ pub fn chatter_names(db:&crate::db::Db,p:&str)->Vec<String>{
 pub fn random_chatter(db:&crate::db::Db,p:&str)->Option<String>{
  let names=chatter_names(db,p);
  if names.is_empty(){None}else{Some(names[rand::thread_rng().gen_range(0..names.len())].clone())}
+}
+/// Match do chat: quem cita uma palavra romântica leva o nome de um par
+/// sorteado entre quem falou no chat nos últimos dez minutos, e a % de
+/// compatibilidade sai de um hash dos dois nomes — determinística.
+pub const AFFINITY_TERMS:&str="amor, paixão, crush, casal, beijo, namorar";
+pub const AFFINITY_MESSAGES:&str="💔 MATCH NEGADO: {{user1}} x {{user2}} = {{pct}}%. Nem o algoritmo do Tinder salva. Sigam como amigos.\n😬 {{user1}} x {{user2}} = {{pct}}%. Dá pra tentar, mas leva um café e muita paciência.\n🤔 {{user1}} x {{user2}} = {{pct}}%. Tem potencial. Falta só um de vocês tomar coragem.\n😍 DEU MATCH: {{user1}} x {{user2}} = {{pct}}%. O chat já pode ir escolhendo o nome do casal.\n🔥 ALMA GÊMEA: {{user1}} x {{user2}} = {{pct}}%. Marquem o casamento e me chamem de padrinho.";
+const AFFINITY_WINDOW:u64=600;
+fn nick_of(e:&Event)->String{
+ e.data["chatter_user_login"].as_str().map(|s|s.to_lowercase()).unwrap_or_else(||{
+  let u=e.user.to_lowercase();
+  if !u.contains(char::is_whitespace)&&crate::twitch_ops::login_chars(&u){u}else{String::new()}
+ })
+}
+/// Palavra inteira: "amor" casa em "seu amor!", nunca em "amortecedor".
+fn affinity_hit(terms:&str,message:&str)->bool{
+ let terms:Vec<String>=terms.split(',').map(|t|t.trim().to_lowercase()).filter(|t|!t.is_empty()).collect();
+ !terms.is_empty()&&message.split_whitespace().any(|w|{
+  let w=w.trim_matches(|c:char|!c.is_alphanumeric());
+  !w.is_empty()&&terms.iter().any(|t|t==w)
+ })
+}
+/// Hash FNV-1a do par em ordem canônica: o mesmo casal dá sempre o mesmo número.
+fn pair_pct(a:&str,b:&str)->u8{
+ let x=a.to_lowercase();let y=b.to_lowercase();let (first,second)=if x<=y{(&x,&y)}else{(&y,&x)};
+ let mut key=first.to_owned();key.push('\n');key.push_str(second);
+ let mut h:u64=0xcbf29ce484222325;
+ for byte in key.bytes(){h^=byte as u64;h=h.wrapping_mul(0x100000001b3);}
+ (h%101) as u8
+}
+fn band(pct:u8)->usize{if pct<=20{0}else if pct<=40{1}else if pct<=60{2}else if pct<=80{3}else{4}}
+/// Mensagem da faixa: a linha do painel, ou o texto padrão quando a linha está vazia.
+fn affinity_message(cfg:&Value,u1:&str,u2:&str,pct:u8)->String{
+ let band=band(pct);
+ let template=cfg["messages"].as_str().unwrap_or("").lines().nth(band).map(str::trim).filter(|l|!l.is_empty())
+  .or_else(||AFFINITY_MESSAGES.lines().nth(band)).unwrap_or("");
+ template.replace("{{user1}}",u1).replace("{{user2}}",u2).replace("{{pct}}",&pct.to_string())
+}
+pub fn valid_config(v:&Value)->bool{
+ let terms=v["terms"].as_str().unwrap_or(AFFINITY_TERMS).trim();
+ let command=v["command"].as_str().unwrap_or("!match").trim();
+ let messages=v["messages"].as_str().unwrap_or("");
+ !terms.is_empty()&&terms.len()<=300
+  &&!command.is_empty()&&command.len()<=30&&command.starts_with('!')&&!command.contains(char::is_whitespace)
+  &&messages.len()<=3200&&messages.lines().all(|l|l.len()<=500)
+}
+/// Primeiro salvamento materializa as faixas padrão, para a edição mostrar o que existe.
+pub fn with_defaults(v:&Value)->Value{
+ let mut v=v.clone();
+ if v["messages"].as_str().map(|s|s.trim().is_empty()).unwrap_or(true){v["messages"]=json!(AFFINITY_MESSAGES);}
+ v
+}
+/// Quem falou no chat na janela do Match: (login, nome na tela). O autor da
+/// mensagem e a live ficam de fora — a live só entra quando a config mandar.
+fn affinity_pool(rt:&Runtime,s:&Community,author:&str,include_streamer:bool,channel:&str)->Vec<(String,String)>{
+ let window=Duration::from_secs(AFFINITY_WINDOW);let now=Instant::now();
+ let map=rt.seen_chatters.lock().unwrap();
+ let mut pool:Vec<(String,String)>=map.iter()
+  .filter(|(key,(login,at))|*key==login&&now.saturating_duration_since(*at)<window)
+  .filter(|(_,(login,_))|!login.eq_ignore_ascii_case(author))
+  .filter(|(_,(login,_))|include_streamer||!login.eq_ignore_ascii_case(channel))
+  .map(|(_, (login,_))|(login.clone(),s.logins.get(login).cloned().unwrap_or_else(||login.clone())))
+  .collect();
+ pool.sort();pool.dedup_by(|a,b|a.0==b.0);pool
+}
+fn affinity_ready(rt:&Runtime,p:&str,uid:&str,global:u64,user:u64)->bool{
+ if global==0&&user==0{return true}
+ let mut cd=rt.cooldowns.lock().unwrap();cd.retain(|_,t|t.elapsed()<Duration::from_secs(86400));
+ let g=format!("{p}:affinity");let u=format!("{g}:{uid}");
+ let blocked=cd.get(&g).is_some_and(|t|t.elapsed().as_secs()<global)||cd.get(&u).is_some_and(|t|t.elapsed().as_secs()<user);
+ if !blocked{let now=Instant::now();cd.insert(g,now);cd.insert(u,now);}
+ !blocked
+}
+fn affinity_reply(rt:&Runtime,p:&Profile,e:&Event,s:&mut Community)->Result<Option<String>,String>{
+ let cfg=rt.db.module(&p.id,"affinity");
+ let command=cfg["command"].as_str().unwrap_or("!match").trim().to_lowercase();
+ let args:Vec<&str>=e.message.split_whitespace().collect();
+ let global=cfg["cooldown"].as_u64().unwrap_or(120).clamp(0,86400);
+ let user=cfg["userCooldown"].as_u64().unwrap_or(300).clamp(0,86400);
+ let display=|login:&str|s.logins.values().find(|n|n.eq_ignore_ascii_case(login)).cloned().unwrap_or_else(||login.to_string());
+ // !match nome1 nome2: a mesma conta do hash para um par que o chat escolher.
+ if args.first().is_some_and(|c|c.to_lowercase()==command){
+  let clean=|w:&str|w.trim_start_matches('@').to_lowercase();
+  let (Some(a),Some(b))=(args.get(1).map(|w|clean(w)),args.get(2).map(|w|clean(w)))else{return Err(format!("Use {command} nome1 nome2"))};
+  if a.is_empty()||b.is_empty(){return Err(format!("Use {command} nome1 nome2"))}
+  if a==b{return Err("Escolha duas pessoas diferentes".into())}
+  if !affinity_ready(rt,&p.id,&e.user_id,global,user){return Ok(None)}
+  let pct=pair_pct(&a,&b);
+  return Ok(Some(affinity_message(&cfg,&display(&a),&display(&b),pct)));
+ }
+ // Palavra-gatilho: mensagem que começa com ! é comando, não dispara.
+ if e.message.trim().starts_with('!'){return Ok(None)}
+ if !affinity_hit(cfg["terms"].as_str().unwrap_or(AFFINITY_TERMS),&e.message){return Ok(None)}
+ let pool=affinity_pool(rt,s,&nick_of(e),cfg["includeStreamer"].as_bool().unwrap_or(false),&p.channel);
+ // Sem um segundo par no chat, não há match a anunciar.
+ if pool.is_empty(){return Ok(None)}
+ let mentioned:Vec<String>=e.message.split_whitespace().filter(|w|w.starts_with('@')).map(|w|w.trim_start_matches('@').to_lowercase()).collect();
+ let partner=mentioned.iter().find_map(|m|pool.iter().find(|(l,_)|l==m)).cloned()
+  .or_else(||{use rand::seq::SliceRandom;pool.choose(&mut rand::thread_rng()).cloned()});
+ let Some(partner)=partner else{return Ok(None)};
+ if !affinity_ready(rt,&p.id,&e.user_id,global,user){return Ok(None)}
+ let pct=pair_pct(&nick_of(e),&partner.0);
+ Ok(Some(affinity_message(&cfg,&e.user,&partner.1,pct)))
 }
 fn balance(s:&mut Community,u:&str,delta:i64)->Result<i64,String>{
  let v=s.balances.entry(u.into()).or_default();let next=v.checked_add(delta).filter(|n|*n>=0).ok_or("Saldo insuficiente ou valor inválido")?;*v=next;Ok(next)
@@ -84,7 +188,7 @@ pub fn chat(rt:&Runtime,p:&Profile,e:&Event)->Result<Option<String>,String>{
  if e.simulated{return Ok(None)}
  let _lock=rt.module_lock.lock().unwrap();let mut s=load(rt,&p.id);
  let enabled=|key:&str|p.modules[key].as_bool().unwrap_or(false);
- let uid=&e.user_id;s.names.insert(uid.clone(),e.user.clone());
+ let uid=&e.user_id;s.names.insert(uid.clone(),e.user.clone());let nick=nick_of(e);if !nick.is_empty(){s.logins.insert(nick,e.user.clone());}
  let now=chrono::Utc::now().timestamp();s.last_chat=now;
  let points=rt.db.module(&p.id,"points");let songs=rt.db.module(&p.id,"songs");
  let currency=points["currency"].as_str().filter(|s|!s.trim().is_empty()).unwrap_or("pontos");
@@ -161,9 +265,44 @@ pub fn chat(rt:&Runtime,p:&Profile,e:&Event)->Result<Option<String>,String>{
  reply=Some(format!("Bingo! {} completou a cartela e ganhou 50 pontos.",s.names.get(&user).unwrap_or(&user)));break;
  }}
  }
+ if enabled("affinity")&&reply.is_none(){reply=affinity_reply(rt,&p,&e,&mut s)?;}
  rt.db.set_module(&p.id,"community",&serde_json::to_value(&s).unwrap())?;rt.emit("community",json!({"profileId":p.id}));if cmd=="!musica"||cmd=="!removermusica"{rt.emit("songs",json!({"profileId":p.id,"queue":s.songs}));}Ok(reply)
 }
 #[cfg(test)]mod tests{
  use super::*;
  #[test]fn no_negative_or_overflow(){let mut s=Community::default();assert_eq!(balance(&mut s,"a",20).unwrap(),20);assert!(balance(&mut s,"a",-21).is_err());assert_eq!(s.balances["a"],20);assert!(balance(&mut s,"a",i64::MAX).is_err());}
+ #[test]fn match_palavra_inteira_nao_pega_o_meio_da_palavra(){
+  assert!(affinity_hit(AFFINITY_TERMS,"você é meu amor!"));
+  assert!(affinity_hit(AFFINITY_TERMS,"AMOR e paixão"));
+  assert!(affinity_hit("paixão","que paixão, gente"));
+  assert!(!affinity_hit("amor","vamos de amortecedor"));
+  assert!(!affinity_hit(" , ","qualquer frase"));
+ }
+ #[test]fn match_do_casal_e_deterministico_e_simetrico(){
+  assert_eq!(pair_pct("ana","bruno"),pair_pct("Bruno","ANA"),"o resultado não depende da ordem");
+  assert_eq!(pair_pct("ana","bruno"),pair_pct("ana","bruno"));
+  // Trava o valor conhecido: trocar o hash mudaria o resultado de cada casal.
+  assert_eq!(pair_pct("ana","bruno"),24,"valor de regressa do par ana/bruno");
+  assert_eq!(pair_pct("a","b"),42,"valor de regressa do par a/b");
+ }
+ #[test]fn match_faixas_cobrem_todo_o_intervalo(){
+  for (pct,expected)in [(0,0),(20,0),(21,1),(40,1),(41,2),(60,2),(61,3),(80,3),(81,4),(100,4)]{assert_eq!(band(pct),expected,"pct {pct}");}
+ }
+ #[test]fn match_mensagem_usa_padrao_quando_a_linha_esta_vazia(){
+  let padrao=|n:usize,pct:u8|AFFINITY_MESSAGES.lines().nth(n).unwrap().replace("{{user1}}","Ana").replace("{{user2}}","Bruno").replace("{{pct}}",&pct.to_string());
+  assert_eq!(affinity_message(&json!({}),"Ana","Bruno",50),padrao(2,50));
+  let cfg=json!({"messages":"Primeira {{pct}}\n\nTerceira {{user1}} e {{user2}}"});
+  assert_eq!(affinity_message(&cfg,"Ana","Bruno",10),"Primeira 10");
+  assert_eq!(affinity_message(&cfg,"Ana","Bruno",30),padrao(1,30),"linha vazia cai no padrão");
+  assert_eq!(affinity_message(&cfg,"Ana","Bruno",50),"Terceira Ana e Bruno");
+ }
+ #[test]fn match_config_valida_confere_termos_comando_e_faixas(){
+  assert!(valid_config(&json!({})),"sem nada, valem os padrões");
+  assert!(valid_config(&json!({"terms":"amor, casal","command":"!casal"})));
+  assert!(!valid_config(&json!({"terms":" "})));
+  assert!(!valid_config(&json!({"terms":"amor","command":"casal"})),"comando precisa do !");
+  assert!(!valid_config(&json!({"terms":"amor","command":"!dois nomes"})),"comando não tem espaço");
+  assert!(!valid_config(&json!({"terms":"amor","messages":"x".repeat(501)})),"faixa de 500 caracteres");
+  assert_eq!(with_defaults(&json!({}))["messages"].as_str().unwrap(),AFFINITY_MESSAGES);
+ }
 }

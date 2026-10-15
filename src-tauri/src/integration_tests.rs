@@ -957,3 +957,44 @@ async fn chat_no_overlay_segue_o_motor_e_a_delecao_sincroniza(){
  engine::process(rt.clone(),clear).await;
  assert!(std::iter::from_fn(||rx.try_recv().ok()).any(|v|v["type"]=="chat.clear"));
 }
+
+#[tokio::test] async fn match_do_chat_sorteia_o_par_e_guarda_os_intervalos(){
+ let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();
+ let mut p=profile("Match");p.modules=json!({"affinity":true});rt.db.save_profile(&p).unwrap();
+ // sem configuração salva valem os padrões: 2 minutos globais e 5 por pessoa.
+ let mut b=event(&p,"oi tudo bem",false);b.user="Bruno".into();b.user_id="bruno".into();b.data=json!({"chatter_user_login":"bruno"});
+ crate::twitch_ops::note_chatter(&rt,&b);modules::chat(&rt,&p,&b.clone()).unwrap();
+ let a=event(&p,"você é meu amor!",false);
+ let reply=modules::chat(&rt,&p,&a).unwrap().expect("palavra no chat com gente ativa deve casar");
+ assert!(reply.contains("Ana")&&reply.contains("Bruno"),"{reply}");
+ assert!(reply.contains('%'),"{reply}");
+ // a mesma pessoa de novo cai no intervalo por pessoa
+ assert!(modules::chat(&rt,&p,&event(&p,"amor é bom",false)).unwrap().is_none());
+ // outra pessoa também não responde: o intervalo global cobre o chat inteiro
+ let mut c=event(&p,"que casal",false);c.user="Cauã".into();c.user_id="caua".into();c.data=json!({"chatter_user_login":"caua"});
+ crate::twitch_ops::note_chatter(&rt,&c);
+ assert!(modules::chat(&rt,&p,&c).unwrap().is_none());
+}
+
+#[tokio::test] async fn match_do_chat_exige_duas_pessoas_e_comando_com_dois_nomes(){
+ let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();
+ let mut p=profile("Match");p.modules=json!({"affinity":true});rt.db.save_profile(&p).unwrap();
+ rt.db.set_module(&p.id,"affinity",&json!({"cooldown":0,"userCooldown":0})).unwrap();
+ // sozinho no chat não há match a anunciar
+ assert!(modules::chat(&rt,&p,&event(&p,"você é meu amor!",false)).unwrap().is_none());
+ // o login da live entra no perfil como "Match" e não é sorteado por padrão
+ let mut live=event(&p,"oi",false);live.user="Match".into();live.user_id="live".into();live.data=json!({"chatter_user_login":"match"});
+ crate::twitch_ops::note_chatter(&rt,&live);
+ assert!(modules::chat(&rt,&p,&event(&p,"que casal",false)).unwrap().is_none());
+ // a menção vale quando a pessoa está no chat
+ let mut b=event(&p,"oi",false);b.user="Bruno".into();b.user_id="bruno".into();b.data=json!({"chatter_user_login":"bruno"});
+ crate::twitch_ops::note_chatter(&rt,&b);modules::chat(&rt,&p,&b.clone()).unwrap();
+ let reply=modules::chat(&rt,&p,&event(&p,"amor @Bruno",false)).unwrap().unwrap();
+ assert!(reply.contains("Ana x Bruno"),"{reply}");
+ // !match com dois nomes usa a mesma conta, sem depender de quem está no chat
+ let reply=modules::chat(&rt,&p,&event(&p,"!match carlos diana",false)).unwrap().unwrap();
+ assert!(reply.contains("carlos x diana"),"{reply}");
+ // uso errado vira registro no log, como nos outros comandos
+ assert!(modules::chat(&rt,&p,&event(&p,"!match carlos",false)).is_err());
+ assert!(modules::chat(&rt,&p,&event(&p,"!match carlos carlos",false)).is_err());
+}
