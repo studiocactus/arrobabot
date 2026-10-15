@@ -55,7 +55,7 @@ Por padrão os eventos estão **desligados**, para não duplicar a camada de ale
 
 ## Ajustes da coluna
 
-O grupo **Coluna** controla fluxo, máximo de mensagens em tela (10 a 300), some depois de (0 a 120 s; 0 = nunca), animação de entrada (fade, deslize, pisca ou datilografia), largura (240 a 960 px), lado na tela e listras alternadas. **Mensagem** escolhe a fonte, o tamanho do texto e do nome, a cor do texto, o nome em caixa alta, a origem da cor do nome e o prefixo. As alterações salvam sozinhas e chegam ao OBS na hora, sem recarregar a fonte.
+O grupo **Coluna** controla fluxo, máximo de mensagens em tela (10 a 300), some depois de (0 a 120 s; 0 = nunca), animação de entrada (fade, deslize, pisca ou datilografia), largura (240 a 960 px), lado na tela e listras alternadas. O grupo **Explosão de emotes** tem um único interruptor, **Também nesta camada**: ligado, a explosão de sub, presente ou meta completada configurada na tela [Alertas](11-ALERTAS.md) cai também sobre a coluna de chat; desligado, a explosão toca só nas camadas de alertas e meta. **Mensagem** escolhe a fonte, o tamanho do texto e do nome, a cor do texto, o nome em caixa alta, a origem da cor do nome e o prefixo. As alterações salvam sozinhas e chegam ao OBS na hora, sem recarregar a fonte.
 
 ## Modo código
 

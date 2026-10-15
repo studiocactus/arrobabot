@@ -362,6 +362,8 @@ pub async fn tick(rt: &Arc<Runtime>) {
         }));
         // Sons da Meta: o broadcast acima é só visual (overlay/estúdio).
         goal_sound(rt, &profile, goal_sound_key(celebrate, new > old));
+        // Explosão de emotes da Meta: o mesmo efeito dos subs, no mesmo overlay.
+        if celebrate { crate::emote_burst::maybe(rt, &profile, "meta"); }
     }
 }
 

@@ -14,6 +14,10 @@ const RETRY: i64 = 300;
 /// precisa continuar curta para não empurrar a conversa para fora do contexto.
 const LIMIT: usize = 60;
 
+/// Nomes e imagens juntos: o nome vai no prompt da IA, o id monta a imagem da CDN.
+#[derive(Clone)]
+pub struct Emote { pub id: String, pub name: String }
+
 /// Nomes guardados e a hora da última busca (unix em segundos).
 pub fn cached(db: &crate::db::Db, p: &str) -> (Vec<String>, i64) {
     let v: Value = db.module(p, "ai_emotes");
@@ -22,28 +26,40 @@ pub fn cached(db: &crate::db::Db, p: &str) -> (Vec<String>, i64) {
 }
 /// Os nomes prontos para o prompt, sem chamada de rede.
 pub fn list(db: &crate::db::Db, p: &str) -> String { cached(db, p).0.join(", ") }
-fn store(db: &crate::db::Db, p: &str, names: &[String], at: i64) {
-    let _ = db.set_module(p, "ai_emotes", &json!({"at": at, "names": names}));
+/// Os ids prontos para a imagem da CDN (explosão de emotes), sem chamada de rede.
+pub fn ids(db: &crate::db::Db, p: &str) -> Vec<String> {
+    let v: Value = db.module(p, "ai_emotes");
+    v["list"].as_array().map(|a| a.iter().filter_map(|e| e["id"].as_str()).filter(|id| !id.is_empty()).map(str::to_owned).collect()).unwrap_or_default()
+}
+fn store(db: &crate::db::Db, p: &str, list: &[Emote], at: i64) {
+    let names: Vec<&str> = list.iter().map(|e| e.name.as_str()).collect();
+    let list: Vec<Value> = list.iter().map(|e| json!({"id": e.id, "name": e.name})).collect();
+    let _ = db.set_module(p, "ai_emotes", &json!({"at": at, "names": names, "list": list}));
 }
 /// Busca os emotes do canal e os globais e atualiza a lista guardada. Roda na conexão
 /// do canal: falha nenhuma interrompe a live, as respostas apenas seguem sem emote.
 pub async fn refresh(rt: &crate::engine::Runtime, p: &Profile) {
     if p.platform != "twitch" { return; }
-    let (names, at) = cached(&rt.db, &p.id);
-    if chrono::Utc::now().timestamp() - at < TTL { return; }
+    let (_, at) = cached(&rt.db, &p.id);
+    // Cache antigo (só nomes, sem lista) busca de novo: a explosão precisa dos ids.
+    let has_ids = !ids(&rt.db, &p.id).is_empty();
+    if chrono::Utc::now().timestamp() - at < TTL && has_ids { return; }
     match tokio::time::timeout(std::time::Duration::from_secs(10), fetch(rt, p)).await {
         Ok(Ok(fresh)) => {
             let total = fresh.len();
             store(&rt.db, &p.id, &fresh, chrono::Utc::now().timestamp());
-            notice(rt, &p.id, "emotes", &format!("Emotes da Twitch carregados para a IA: {total}."));
+            notice(rt, &p.id, "emotes", &format!("Emotes da Twitch carregados: {total}."));
         }
-        Ok(Err(err)) => retry(rt, p, &names, &err),
-        Err(_) => retry(rt, p, &names, "a Twitch não respondeu a tempo"),
+        Ok(Err(err)) => retry(rt, p, &err),
+        Err(_) => retry(rt, p, "a Twitch não respondeu a tempo"),
     }
 }
 /// Marca para tentar de novo daqui a 5 minutos e avisa uma vez por sessão.
-fn retry(rt: &crate::engine::Runtime, p: &Profile, names: &[String], err: &str) {
-    store(&rt.db, &p.id, names, chrono::Utc::now().timestamp() - TTL + RETRY);
+/// A lista antiga fica no lugar: uma falha não apaga o que já funcionava.
+fn retry(rt: &crate::engine::Runtime, p: &Profile, err: &str) {
+    let mut v: Value = rt.db.module(&p.id, "ai_emotes");
+    v["at"] = json!(chrono::Utc::now().timestamp() - TTL + RETRY);
+    let _ = rt.db.set_module(&p.id, "ai_emotes", &v);
     notice(rt, &p.id, "emotes.error", &format!("Sem emotes da Twitch agora: {err}. As respostas seguem sem emote."));
 }
 /// Aviso uma vez por sessão: a conexão reconecta várias vezes e o histórico não enche.
@@ -56,13 +72,13 @@ fn notice(rt: &crate::engine::Runtime, p: &str, kind: &str, msg: &str) {
     seen.push(key);
     rt.log(p, "ai", msg, "info");
 }
-async fn fetch(rt: &crate::engine::Runtime, p: &Profile) -> Result<Vec<String>, String> {
+async fn fetch(rt: &crate::engine::Runtime, p: &Profile) -> Result<Vec<Emote>, String> {
     let token = crate::oauth::token(&rt.http, p, "bot").await?;
     let channel = helix(rt, p, &token, Some(&p.channel_id)).await?;
     let global = helix(rt, p, &token, None).await?;
     Ok(pick(channel, global))
 }
-async fn helix(rt: &crate::engine::Runtime, p: &Profile, token: &str, broadcaster: Option<&str>) -> Result<Vec<String>, String> {
+async fn helix(rt: &crate::engine::Runtime, p: &Profile, token: &str, broadcaster: Option<&str>) -> Result<Vec<Emote>, String> {
     let mut req = crate::helix::get(&rt.http, p, token, "chat/emotes", &[]);
     if let Some(id) = broadcaster { req = req.query(&[("broadcaster_id", id)]); }
     let res = req.send().await.map_err(|_| "sem resposta da Twitch".to_owned())?;
@@ -75,36 +91,43 @@ async fn helix(rt: &crate::engine::Runtime, p: &Profile, token: &str, broadcaste
     }
     let v: Value = res.json().await.map_err(|_| "resposta inválida da Twitch".to_owned())?;
     let data = v["data"].as_array().ok_or("a Twitch não devolveu a lista de emotes")?;
-    Ok(data.iter().filter_map(|e| e["name"].as_str().map(str::to_owned)).collect())
+    Ok(data.iter().filter_map(|e| {
+        let id = e["id"].as_str().unwrap_or("");
+        let name = e["name"].as_str().unwrap_or("");
+        if id.is_empty() || name.is_empty() { None } else { Some(Emote { id: id.to_owned(), name: name.to_owned() }) }
+    }).collect())
 }
 /// Junta os emotes do canal com os globais, sem repetir e sem passar do limite que
 /// cabe no prompt. Os do canal vêm primeiro: são os que identificam este chat.
-pub fn pick(channel: Vec<String>, global: Vec<String>) -> Vec<String> {
-    let mut out: Vec<String> = Vec::new();
-    for name in channel.into_iter().chain(global) {
+pub fn pick(channel: Vec<Emote>, global: Vec<Emote>) -> Vec<Emote> {
+    let mut out: Vec<Emote> = Vec::new();
+    for e in channel.into_iter().chain(global) {
         if out.len() >= LIMIT { break; }
-        let n = name.trim();
-        if n.is_empty() || out.iter().any(|x| x == n) { continue; }
-        out.push(n.to_owned());
+        let n = e.name.trim();
+        if n.is_empty() || out.iter().any(|x| x.name == n) { continue; }
+        out.push(Emote { id: e.id, name: n.to_owned() });
     }
     out
 }
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn e(id: &str, name: &str) -> Emote { Emote { id: id.into(), name: name.into() } }
     #[test]
     fn keeps_channel_emotes_first_and_never_repeats() {
-        let got = pick(vec!["arrobaGG".into(), "COEE".into()], vec!["COEE".into(), "Kappa".into()]);
-        assert_eq!(got, vec!["arrobaGG", "COEE", "Kappa"]);
-        assert!(pick(vec![" ".into()], vec![]).is_empty(), "nome vazio não vira emote");
+        let got = pick(vec![e("1", "arrobaGG"), e("2", "COEE")], vec![e("88", "COEE"), e("3", "Kappa")]);
+        let names: Vec<&str> = got.iter().map(|x| x.name.as_str()).collect();
+        assert_eq!(names, vec!["arrobaGG", "COEE", "Kappa"]);
+        assert_eq!(got[1].id, "2", "emote repetido mantém o id do canal");
+        assert!(pick(vec![e("1", " ")], vec![]).is_empty(), "nome vazio não vira emote");
     }
     #[test]
     fn stops_at_the_prompt_limit() {
-        let channel: Vec<String> = (0..100).map(|i| format!("c{i}")).collect();
-        let got = pick(channel, vec!["Kappa".into()]);
+        let channel: Vec<Emote> = (0..100).map(|i| e(&format!("id{i}"), &format!("c{i}"))).collect();
+        let got = pick(channel, vec![e("9", "Kappa")]);
         assert_eq!(got.len(), LIMIT, "o prompt não recebe lista infinita");
-        assert_eq!(got.last().unwrap(), "c59", "os emotes do canal vêm antes dos globais");
-        assert!(pick(vec![], vec!["Kappa".into()]).contains(&"Kappa".to_owned()));
+        assert_eq!(got.last().unwrap().name, "c59", "os emotes do canal vêm antes dos globais");
+        assert!(pick(vec![], vec![e("9", "Kappa")]).iter().any(|x| x.name == "Kappa"));
     }
     #[test]
     fn cache_roundtrip_reads_back_what_was_stored() {
@@ -112,10 +135,12 @@ mod tests {
         let p = crate::model::Profile{id:uuid::Uuid::new_v4().to_string(),name:"P".into(),platform:"twitch".into(),channel:"canal".into(),channel_id:"123".into(),bot_id:"456".into(),client_id:"client".into(),blocklist:vec![],topics:vec![],editors:vec![],ai:crate::model::AiConfig::default(),modules:serde_json::json!({})};
         db.save_profile(&p).unwrap();
         assert_eq!(list(&db, &p.id), "", "sem busca, sem emote no prompt");
+        assert!(ids(&db, &p.id).is_empty(), "sem busca, sem id para a explosão");
         assert_eq!(cached(&db, &p.id).1, 0);
-        store(&db, &p.id, &["Kappa".to_owned(), "LUL".to_owned()], 1_700_000_000);
+        store(&db, &p.id, &[e("25", "Kappa"), e("88", "LUL")], 1_700_000_000);
         assert_eq!(list(&db, &p.id), "Kappa, LUL");
+        assert_eq!(ids(&db, &p.id), vec!["25", "88"], "o id acompanha o nome para a CDN");
         assert_eq!(cached(&db, &p.id).1, 1_700_000_000);
-        assert_eq!(list(&db, "outro"), "", "cada perfil guarda a sua lista");
+        assert!(ids(&db, "outro").is_empty(), "cada perfil guarda a sua lista");
     }
 }

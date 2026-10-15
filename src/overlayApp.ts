@@ -16,6 +16,7 @@ import {
 } from './overlayDesign';
 import {isAlertKind,normalizeAlerts,queueAlert,type AlertVars,type AlertsConfig} from './alerts';
 import {chatVisible,clearChat,deleteChat,deleteUserChat,isChatEventKind,normalizeChat,pushChat,pushChatEvent,type ChatConfig,type ChatMsg} from './chatOverlay';
+import {explode} from './emoteBurst';
 import {applyCode} from './codeMode';
 
 const params=new URLSearchParams(location.hash.slice(1));
@@ -130,6 +131,17 @@ function handle(msg:Message){
    // A fonte do overlay é só visual: o som sai na linha de áudio do app.
    audio:null,
   });
+  return;
+ }
+ if(msg.type==='emote.burst'){
+  if(profile&&String(payload?.profileId||'')!==profile)return;
+  const via=String(payload?.via||'');
+  // Cada camada mostra só o que pertence a ela; a de chat entra se ligada na tela.
+  const want=mode==='chat'?payload?.alsoChat===true:mode==='goal'?via==='meta':mode==='alerts'?via!=='meta':true;
+  if(!want)return;
+  const raw=payload?.ids;
+  const ids=Array.isArray(raw)?raw.filter((x):x is string=>typeof x==='string').slice(0,120):[];
+  explode(document.body,ids,Number(payload?.size)||56);
   return;
  }
  if(msg.type==='chat.config'){

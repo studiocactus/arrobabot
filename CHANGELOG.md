@@ -1,5 +1,44 @@
 # Histórico de atualizações
 
+# BotLive 0.7.5
+
+## O que mudou
+
+**Explosão de emotes (novo efeito no overlay).** Quando entra sub, chega renovação, cai presente de sub — e quando a meta completa — os emotes da Twitch do canal explodem na tela como um confete: imagens da CDN voando do centro para fora, girando e caindo, sem tocar no desenho das camadas.
+
+O desenho, item por item:
+
+- **Quatro eventos com interruptor próprio**, escolhidos um a um: novo sub, renovação de sub e presente de sub ficam na tela Alertas; meta completada tem o seu interruptor na tela Meta (grupo Efeitos). A ligação geral na tela Alertas desliga a explosão inteira de uma vez.
+- **Três origens de emotes**: aleatório entre os seus, os mais usados no chat ou a lista do canal na ordem da Twitch. A lista é dos emotes do seu canal com os globais da Twitch, buscada quando o canal conecta e atualizada a cada 12 horas.
+- **Quantidade e tamanho ajustáveis** (10 a 80 emotes, de 24 a 120 px cada) e **Testar explosão** na própria tela: dispara pelo mesmo caminho do evento real e avisa em vez de falhar em silêncio quando ainda não há emotes carregados.
+- **Cada camada do OBS recebe a sua parte**: a camada de alertas mostra as explosões de sub, renovação e presente; a camada de meta mostra a da meta completada; e a tela Chat no OBS ganhou o interruptor **Também nesta camada** para a explosão cair também sobre a coluna de chat. Uma fonte única (endereço sem `mode`) recebe as quatro.
+- **A contagem de mais usados fica guardada por perfil**: começa quando a explosão é ligada, sobrevive ao reinício do aplicativo e continua de onde parou.
+
+Para quem mantém o código: o recurso é o módulo `emote_burst.rs`, com a contagem de emotes por perfil vinda das frases das mensagens e os totais persistidos pelo tique do agendador (chave `emoteBurstStats`); `emotes.rs` passou a guardar `{id, nome}` no cache para os ids chegarem ao overlay. O broadcast novo `emote.burst` entra na lista permitida do WebSocket do overlay, e o efeito (`src/emoteBurst.ts`) monta as imagens da CDN com voos espalhados e limpa sozinho — emote que não carrega some do efeito. A configuração passa pela validação do op `module.config` (chave `emoteBurst`), e a prévia no navegador continua sem executar o núcleo.
+
+## Como usar
+
+1. Abra **Alertas**, ligue **Explosão de emotes** no cartão próprio e escolha os eventos de alerta, a origem, a quantidade e o tamanho — as alterações salvam sozinhas.
+2. Para a meta: abra **Meta** e ligue **Explosão de emotes ao completar** no grupo Efeitos (ligar aqui também liga a explosão geral; desligar só a meta não apaga as dos alertas).
+3. Para a explosão cair sobre o chat: abra **Chat no OBS** e ligue **Também nesta camada** no grupo Explosão de emotes.
+4. **Testar explosão** confere o efeito na hora, pela camada de alertas — se a lista de emotes ainda não chegou, o aviso pede conectar o canal ao Twitch.
+
+## Validação
+
+- `cargo test --lib` em `src-tauri`: **247 testes, 0 falhas, 1 ignorado** — incluem os testes novos do módulo (faixas da configuração e as três origens com RNG travado) e o teste de integração que conta emotes de mensagens, dispara no evento de sub, não dispara em raid e persiste os totais.
+- `npm run check` (tsc) sem erros; `npm test` (vitest) e `npm run test:updates` sem falhas.
+- `npx playwright test`: suíte completa verdes, com os testes novos: explosão no overlay (imagem por id na CDN da Twitch, cada camada só mostra a sua, chat entra com liberado, perfil alheio é ignorado) e o cartão na tela Alertas (mestrea, interruptores por evento, origem, quantidade, aviso do teste sem emotes e persistência ao reabrir).
+- Regras de tela: capturas `alertas-explosao-1100.png`, `alertas-explosao-largo.png` e `overlay-explosao-emotes.png` geradas e revisadas.
+- `npm run docs` regerado (seção da explosão no capítulo de Alertas, interruptor no capítulo da Meta e no do Chat no OBS); `npm run update:check` executado antes do push.
+
+## Limitações
+
+- A explosão usa os emotes da Twitch (canal + globais); emotes de terceiros (7TV, BTTV, FFZ) ficam para uma próxima versão, e a origem "mais usados" não tem histórico retroativo — a contagem começa no primeiro dia ligada.
+- O botão **Testar explosão** sai pela camada de alertas (via de sub), mesmo quando os interruptores de evento estão desligados: é para conferir o efeito antes da live.
+- Emote removido do canal depois de guardado pode não carregar na explosão seguinte; a imagem some do efeito sem deixar buraco, e a lista se atualiza quando o canal conecta de novo.
+
+---
+
 # BotLive 0.7.4
 
 ## O que mudou

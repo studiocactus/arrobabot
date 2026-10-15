@@ -12,6 +12,7 @@ pub async fn run(rt:Arc<Runtime>){
  _=tick.tick()=>{
  crate::backup::tick(&rt);
  crate::labels::tick(&rt).await;
+ crate::emote_burst::flush(&rt);
  for p in rt.db.profiles().unwrap_or_default(){
  if crate::discord::online(&rt,&p.id){crate::discord_engage::tick(&rt,&p).await}
  if p.modules["games"]!=true||rt.statuses.lock().unwrap().get(&p.id).map(String::as_str)!=Some("online"){continue}

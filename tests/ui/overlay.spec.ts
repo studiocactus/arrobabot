@@ -217,3 +217,76 @@ test('camada de chat no OBS: cor da Twitch, evento inline e modo código com esc
  await emit({type:'chat.event',payload:{profileId:'p1',kind:'tip',text:'não pode aparecer',color:'#ffffff'}});
  await expect(col.locator('.bl-chat-ev')).toHaveCount(1);
 });
+
+test('explosão de emotes: cada camada mostra só a sua e o chat entra quando liberado',async({page})=>{
+ // A CDN da Twitch responde com um pixel: o teste não depende da rede.
+ const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==','base64');
+ await page.route('**/emoticons/**',route=>route.fulfill({status:200,contentType:'image/png',body:png}));
+ await page.addInitScript(()=>{
+  const w=window as unknown as {__made:FakeWS[];__sent:string[]};
+  w.__made=[];w.__sent=[];
+  const made=w.__made,sent=w.__sent;
+  class Fake implements FakeWS{
+   url:string;
+   onopen:((e:unknown)=>void)|null=null;
+   onmessage:((e:unknown)=>void)|null=null;
+   onclose:((e:unknown)=>void)|null=null;
+   onerror:((e:unknown)=>void)|null=null;
+   constructor(u:string){this.url=u;made.push(this);setTimeout(()=>this.onopen&&this.onopen({}),0)}
+   send(d:string){sent.push(d)}
+   close(){this.onclose&&this.onclose({})}
+  }
+  (window as unknown as {WebSocket:unknown}).WebSocket=Fake;
+ });
+ const emit=async(msg:{type:string;payload:Record<string,unknown>})=>{
+  await page.evaluate(m=>{
+   const f=(window as unknown as {__made:FakeWS[]}).__made[0];
+   f.onmessage&&f.onmessage({data:JSON.stringify(m)});
+  },msg);
+ };
+ const handshake=()=>page.waitForFunction(()=>(window as unknown as {__sent:string[]}).__sent.length>0);
+ const fx=()=>page.locator('.bl-eb');
+ // Trocar só o fragmento não recarrega o documento (e o modo antigo ficaria);
+ // o reload força a página nova com o mode pedido.
+ const goto=async(url:string)=>{await page.goto(url);await page.reload()};
+
+ // Camada de alertas: explosão de sub vira uma imagem por id, na CDN da Twitch.
+ await goto(overlayUrl+'&mode=alerts');
+ await handshake();
+ await emit({type:'emote.burst',payload:{profileId:'p1',ids:['25','88','25'],size:48,via:'sub',alsoChat:false}});
+ await expect(fx().locator('img')).toHaveCount(3);
+ await expect(fx().locator('img').first()).toHaveAttribute('src',/static-cdn\.jtvnw\.net\/emoticons\/v2\/25\//);
+ await expect(fx().locator('img').first()).toHaveAttribute('width','48');
+ // A explosão de outro perfil não entra nesta fonte.
+ await emit({type:'emote.burst',payload:{profileId:'OUTRO',ids:['9','9','9','9'],size:48,via:'sub',alsoChat:true}});
+ await expect(fx().locator('img')).toHaveCount(3);
+
+ // Camada de meta: só a meta completada explode aqui.
+ await goto(overlayUrl+'&mode=goal');
+ await handshake();
+ await emit({type:'emote.burst',payload:{profileId:'p1',ids:['25'],size:48,via:'sub',alsoChat:false}});
+ await expect(fx()).toHaveCount(0);
+ await emit({type:'emote.burst',payload:{profileId:'p1',ids:['25','88'],size:48,via:'meta',alsoChat:false}});
+ await expect(fx().locator('img')).toHaveCount(2);
+
+ // Camada de chat: explode só quando a tela de chat libera (alsoChat).
+ await goto(overlayUrl+'&mode=chat');
+ await handshake();
+ await emit({type:'emote.burst',payload:{profileId:'p1',ids:['25'],size:48,via:'sub',alsoChat:false}});
+ await expect(fx()).toHaveCount(0);
+ await emit({type:'emote.burst',payload:{profileId:'p1',ids:['25'],size:48,via:'meta',alsoChat:true}});
+ await expect(fx().locator('img')).toHaveCount(1);
+
+ // Registro final: a explosão caindo sobre o painel da meta, com o design da tela.
+ await goto(overlayUrl);
+ await handshake();
+ await emit({type:'design',payload:{profileId:'p1',design:{
+  template:'neon',layout:'bar',align:'left',valign:'bottom',width:55,
+  fillStart:'#ff2fd6',fillEnd:'#00e5ff',panel:'#0a0a12e6',uppercase:true,font:'Arial',fontSize:17
+ }}});
+ await emit({type:'goal',payload:{profileId:'p1',title:'Meta de teste',current:31000,target:50000,celebrate:false,hidden:false}});
+ await emit({type:'emote.burst',payload:{profileId:'p1',ids:['25','88','11483664','25','88','25','11483664','88','25','88','25','88'],size:56,via:'meta',alsoChat:false}});
+ await expect(fx().locator('img')).toHaveCount(12);
+ await page.waitForTimeout(700);
+ await page.screenshot({path:'artifacts/overlay-explosao-emotes.png'});
+});

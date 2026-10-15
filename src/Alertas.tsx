@@ -20,6 +20,10 @@ type PosH=AlertsConfig['posH'];
 const POSV:[PosV,string][]=[['top','Topo'],['center','Meio'],['bottom','Base']];
 const POSH:[PosH,string][]=[['left','Esquerda'],['center','Centro'],['right','Direita']];
 
+/** Explosão de emotes: a mesma configuração serve as telas Alertas, Meta e Chat. */
+type BurstCfg={enabled:boolean;count:number;size:number;source:'all'|'top'|'random';topN:number;alsoChat:boolean;events:{sub:boolean;resub:boolean;gift:boolean;meta:boolean}};
+const DEFAULT_BURST:BurstCfg={enabled:false,count:40,size:56,source:'random',topN:10,alsoChat:false,events:{sub:true,resub:true,gift:true,meta:true}};
+
 /**
  * Estúdio de Alertas: configura a camada de alertas do overlay do OBS com
  * prévia animada e botões de teste por evento. O teste entra pelo mesmo
@@ -43,6 +47,10 @@ export default function Alertas({profileId,notify}:{profileId:string;notify:(s:s
  const frame=useRef<HTMLDivElement>(null);
  const stage=useRef<HTMLDivElement>(null);
  const [scale,setScale]=useState(0.3);
+ const [burst,setBurst]=useState<BurstCfg>(DEFAULT_BURST);
+ const [burstSave,setBurstSave]=useState<'idle'|'saving'|'saved'|'error'>('idle');
+ const [burstTesting,setBurstTesting]=useState(false);
+ const lastBurst=useRef('');
 
  const load=useCallback(async()=>{
   if(!desktop)return;
@@ -53,6 +61,8 @@ export default function Alertas({profileId,notify}:{profileId:string;notify:(s:s
    lastSaved.current=JSON.stringify(normalized);
    setSounds(g.sounds||[]);
    setInfo(g.overlay&&g.overlay.token?g.overlay:null);
+   const b=normalizeBurst(await api<Partial<BurstCfg>>('module.config.get',{profileId,key:'emoteBurst'}));
+   setBurst(b);lastBurst.current=JSON.stringify(b);
   }catch{}
   hydrated.current=true;
  },[profileId,desktop]);
@@ -91,6 +101,23 @@ export default function Alertas({profileId,notify}:{profileId:string;notify:(s:s
   return()=>{cancelled=true;clearTimeout(timer)};
  },[cfg,profileId,desktop]);
 
+ // A explosão de emotes salva sozinha pelo mesmo ritmo dos alertas.
+ useEffect(()=>{
+  if(!desktop||!hydrated.current)return;
+  const key=JSON.stringify(burst);
+  if(key===lastBurst.current)return;
+  setBurstSave('saving');
+  let cancelled=false;
+  const timer=setTimeout(async()=>{
+   try{
+    await api('module.config',{profileId,key:'emoteBurst',value:burst});
+    lastBurst.current=key;
+    if(!cancelled)setBurstSave('saved');
+   }catch(e){if(!cancelled)setBurstSave('error')}
+  },700);
+  return()=>{cancelled=true;clearTimeout(timer)};
+ },[burst,profileId,desktop]);
+
  const set=(patch:Partial<AlertsConfig>)=>setCfg(c=>({...c,...patch}));
  const ev=cfg.events[sel];
  const setEv=(patch:Partial<AlertsConfig['events'][AlertKind]>)=>
@@ -118,6 +145,17 @@ export default function Alertas({profileId,notify}:{profileId:string;notify:(s:s
    }
   }catch(e){notify(errorText(e))}
   setTesting(false);setAnimating(false);
+ };
+
+ const testBurst=async()=>{
+  if(burstTesting)return;
+  setBurstTesting(true);
+  try{
+   // Mesmo caminho do evento real: o endereço da camada de alertas toca junto.
+   await api('emoteBurst.test',{profileId});
+   notify('Explosão disparada — ela aparece na camada de alertas do OBS.');
+  }catch(e){notify(errorText(e))}
+  setBurstTesting(false);
  };
 
  const copyUrl=async()=>{
@@ -247,6 +285,31 @@ export default function Alertas({profileId,notify}:{profileId:string;notify:(s:s
    </div>
   </Card>
 
+  <Card title="Explosão de emotes" action={<span className={'lp-save lp-save--'+burstSave}>{burstSave==='saving'?'Salvando…':burstSave==='saved'?'Salvo':burstSave==='error'?'Não salvou':'Alterações salvam sozinhas'}</span>}>
+   <p className="help">Quando entra sub, renovação ou presente — e quando a meta completa — os seus emotes da Twitch explodem no overlay, como um confete. Cada evento tem interruptor próprio: os de alerta aqui, o da meta na tela Meta e a camada de chat no Chat no OBS.</p>
+   <div className="list-row">
+    <div><strong>Explosão de emotes</strong><small>{burst.enabled?'Subs, presentes e meta soltam emotes no overlay':'Nada explode até você ligar; o teste sempre funciona'}</small></div>
+    <Toggle label="Ligar explosão de emotes" checked={burst.enabled} onChange={v=>setBurst(b=>({...b,enabled:v}))}/>
+   </div>
+   <div className="lp-toggles">
+    <ToggleCheck label="Novo sub" hint="A entrada que abre o alerta de sub." checked={burst.events.sub} onChange={v=>setBurst(b=>({...b,events:{...b.events,sub:v}}))}/>
+    <ToggleCheck label="Renovação de sub" hint="Quem prolongou o sub." checked={burst.events.resub} onChange={v=>setBurst(b=>({...b,events:{...b.events,resub:v}}))}/>
+    <ToggleCheck label="Presente de sub" hint="Gift sub, avulso ou em leva." checked={burst.events.gift} onChange={v=>setBurst(b=>({...b,events:{...b.events,gift:v}}))}/>
+   </div>
+   <div className="lp-ctrl">
+    <span className="lp-ctrl-label">Emotes usados</span>
+    <select value={burst.source} aria-label="Emotes usados" onChange={e=>setBurst(b=>({...b,source:e.target.value as BurstCfg['source']}))}>
+     <option value="random">Aleatório entre os seus</option>
+     <option value="top">Os mais usados no chat</option>
+     <option value="all">Todos, na ordem da Twitch</option>
+    </select>
+    <small className="lp-note">{burst.source==='top'?'A contagem começa quando você liga a explosão e fica guardada entre sessões.':'A lista é dos seus emotes do canal com os globais da Twitch.'}</small>
+   </div>
+   <RangeRow label="Quantidade" hint="Quantos emotes estouram por vez." min={10} max={80} step={2} value={burst.count} fmt={v=>String(v)} onChange={v=>setBurst(b=>({...b,count:v}))}/>
+   <RangeRow label="Tamanho" hint="Lado de cada emote, em pixels." min={24} max={120} step={4} value={burst.size} fmt={v=>v+'px'} onChange={v=>setBurst(b=>({...b,size:v}))}/>
+   <div className="row"><button type="button" disabled={burstTesting} onClick={()=>void testBurst()}><Play size={13}/> Testar explosão</button></div>
+  </Card>
+
   <Card title="No OBS" action={info?<span className="status-pill on"><span className="status-dot" aria-hidden="true"></span>Pronto</span>:undefined}>
    {info?<>
     <p className="help">Este é o <strong>endereço da camada de alertas</strong> (o parâmetro <code>mode=alerts</code> deixa só os alertas nesta fonte). Cada camada — meta, alertas e chat — fica na sua própria Fonte de navegador, com posição e tamanho independentes.</p>
@@ -264,6 +327,15 @@ export default function Alertas({profileId,notify}:{profileId:string;notify:(s:s
    </>:<p className="help">{desktop?'Gerando o endereço do overlay…':'O endereço do overlay é gerado pelo aplicativo desktop. Abra o BotLive no computador da live para copiar o endereço.'}</p>}
   </Card>
  </div>;
+}
+
+/** Volta ao formato que o núcleo aceita: números dentro das faixas e evento booleano. */
+function normalizeBurst(v:Partial<BurstCfg>|null):BurstCfg{
+ const b=(v&&typeof v==='object'?v:{}) as Partial<BurstCfg>;
+ const n=(x:unknown,lo:number,hi:number,d:number)=>{const r=Math.round(Number(x));return r>=lo&&r<=hi?r:d};
+ return{enabled:b.enabled===true,count:n(b.count,10,80,40),size:n(b.size,24,120,56),
+  source:b.source==='all'||b.source==='top'?b.source:'random',topN:n(b.topN,5,30,10),alsoChat:b.alsoChat===true,
+  events:{sub:b.events?.sub!==false,resub:b.events?.resub!==false,gift:b.events?.gift!==false,meta:b.events?.meta!==false}};
 }
 
 /** Grupo de botões lado a lado (posição na tela). */

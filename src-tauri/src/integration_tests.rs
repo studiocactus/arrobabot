@@ -998,3 +998,39 @@ async fn chat_no_overlay_segue_o_motor_e_a_delecao_sincroniza(){
  assert!(modules::chat(&rt,&p,&event(&p,"!match carlos",false)).is_err());
  assert!(modules::chat(&rt,&p,&event(&p,"!match carlos carlos",false)).is_err());
 }
+
+#[tokio::test] async fn explosao_de_emotes_conta_uso_e_dispara_no_evento(){
+ let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();
+ let p=profile("Explosão");rt.db.save_profile(&p).unwrap();
+ // sem lista de emotes, o teste avisa em vez de prometer efeito
+ assert!(crate::emote_burst::test(&rt,&p).is_err());
+ // a lista do canal chega pelo cache da IA, com os ids prontos para a CDN
+ rt.db.set_module(&p.id,"ai_emotes",&json!({"at":chrono::Utc::now().timestamp(),"names":["Kappa","LUL"],"list":[{"id":"25","name":"Kappa"},{"id":"88","name":"LUL"}]})).unwrap();
+ rt.db.set_module(&p.id,"emoteBurst",&json!({"enabled":true,"count":24,"size":48,"source":"top","topN":10,"alsoChat":true,"events":{"sub":true,"resub":true,"gift":true,"meta":true}})).unwrap();
+ // a mensagem usa os mesmos fragmentos da Twitch que o chat do OBS
+ let mut e=event(&p,"Kappa LUL Kappa",false);
+ e.data=json!({"message":{"fragments":[{"type":"emote","text":"Kappa","emote":{"emote_id":"25"}},{"type":"emote","text":"LUL","emote":{"emote_id":"88"}},{"type":"text","text":" "},{"type":"emote","text":"Kappa","emote":{"emote_id":"25"}}]}});
+ crate::emote_burst::count(&rt,&p.id,&e);
+ assert_eq!(crate::emote_burst::totals(&rt,&p.id).get("25"),Some(&2),"Kappa apareceu duas vezes");
+ assert_eq!(crate::emote_burst::totals(&rt,&p.id).get("88"),Some(&1));
+ // o sub dispara a explosão com os mais usados na frente
+ let mut sub=event(&p,"",false);sub.kind="subscription".into();
+ let mut rx=rt.broadcast.subscribe();
+ crate::emote_burst::from_event(&rt,&p,&sub);
+ let msg=std::iter::from_fn(||rx.try_recv().ok()).find(|v|v["type"]=="emote.burst").expect("sub deve explodir");
+ assert_eq!(msg["payload"]["via"],"sub");
+ assert_eq!(msg["payload"]["size"],48);
+ assert_eq!(msg["payload"]["alsoChat"],true);
+ let ids:Vec<&str>=msg["payload"]["ids"].as_array().unwrap().iter().filter_map(|v|v.as_str()).collect();
+ assert_eq!(ids.len(),24,"a quantidade pedida chega inteira");
+ assert_eq!(ids[0],"25","o mais usado abre a explosão");
+ assert_eq!(ids[1],"88");
+ // evento fora dos quatro escolhidos não dispara
+ let mut raid=event(&p,"",false);raid.kind="raid".into();
+ let mut rx=rt.broadcast.subscribe();
+ crate::emote_burst::from_event(&rt,&p,&raid);
+ assert!(std::iter::from_fn(||rx.try_recv().ok()).all(|v|v["type"]!="emote.burst"),"raid não é evento de explosão");
+ // o tique do agendador guarda os totais para a próxima sessão
+ crate::emote_burst::flush(&rt);
+ assert_eq!(rt.db.module(&p.id,"emoteBurstStats")["25"],json!(2));
+}

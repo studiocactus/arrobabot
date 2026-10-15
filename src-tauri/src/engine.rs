@@ -24,6 +24,7 @@ pub struct Runtime {
  pub seen:Mutex<HashMap<String,Instant>>,
  pub seen_chatters:Mutex<HashMap<String,(String,Instant)>>,
  pub chat_seen:Mutex<HashMap<String,HashSet<String>>>,
+ pub emote_counts:Mutex<HashMap<String,HashMap<String,u64>>>,
  pub module_lock:Mutex<()>,pub vault_lock:Mutex<()>,pub send_locks:Mutex<HashMap<String,Arc<tokio::sync::Mutex<Instant>>>>,
  pub api_token:String,pub api_port:Mutex<u16>,pub actor:Mutex<String>,
 }
@@ -34,7 +35,7 @@ impl Runtime {
  let (tx,rx)=mpsc::channel(512);let (broadcast,_)=broadcast::channel(512);
  let http=reqwest::Client::builder().timeout(Duration::from_secs(30)).redirect(reqwest::redirect::Policy::none()).build().map_err(|e|e.to_string())?;
  let actor=if db.get("accessEnabled")==true{"locked"}else{"owner"}.to_owned();
- let rt=Arc::new(Self{actor:Mutex::new(actor),db,base,http,tx,broadcast,app:Mutex::new(None),connections:Mutex::new(HashMap::new()),statuses:Mutex::new(HashMap::new()),discord_tasks:Mutex::new(HashMap::new()),discord_status:Mutex::new(HashMap::new()),discord_cache:Mutex::new(HashMap::new()),timer_pending:Mutex::new(std::collections::HashSet::new()),cooldowns:Mutex::new(HashMap::new()),conversation:Mutex::new(crate::conversation::History::default()),live:crate::live_state::LiveStates::default(),listen:crate::listen::Sessions::default(),chat_extras:Mutex::new(crate::chat_extras::State::default()),runs:crate::runs::Runs::default(),obs:crate::obs::Locks::default(),voice_fx:crate::voice_fx::Fx::default(),seen:Mutex::new(HashMap::new()),seen_chatters:Mutex::new(HashMap::new()),chat_seen:Mutex::new(HashMap::new()),module_lock:Mutex::new(()),vault_lock:Mutex::new(()),send_locks:Mutex::new(HashMap::new()),api_token:format!("{}{}",uuid::Uuid::new_v4().simple(),uuid::Uuid::new_v4().simple()),api_port:Mutex::new(0)});
+ let rt=Arc::new(Self{actor:Mutex::new(actor),db,base,http,tx,broadcast,app:Mutex::new(None),connections:Mutex::new(HashMap::new()),statuses:Mutex::new(HashMap::new()),discord_tasks:Mutex::new(HashMap::new()),discord_status:Mutex::new(HashMap::new()),discord_cache:Mutex::new(HashMap::new()),timer_pending:Mutex::new(std::collections::HashSet::new()),cooldowns:Mutex::new(HashMap::new()),conversation:Mutex::new(crate::conversation::History::default()),live:crate::live_state::LiveStates::default(),listen:crate::listen::Sessions::default(),chat_extras:Mutex::new(crate::chat_extras::State::default()),runs:crate::runs::Runs::default(),obs:crate::obs::Locks::default(),voice_fx:crate::voice_fx::Fx::default(),seen:Mutex::new(HashMap::new()),seen_chatters:Mutex::new(HashMap::new()),chat_seen:Mutex::new(HashMap::new()),emote_counts:Mutex::new(HashMap::new()),module_lock:Mutex::new(()),vault_lock:Mutex::new(()),send_locks:Mutex::new(HashMap::new()),api_token:format!("{}{}",uuid::Uuid::new_v4().simple(),uuid::Uuid::new_v4().simple()),api_port:Mutex::new(0)});
  tokio::spawn(worker(rt.clone(),rx));Ok(rt)
  }
  pub fn emit(&self,kind:&str,payload:Value){
@@ -137,7 +138,7 @@ pub async fn process(rt:Arc<Runtime>,e:Event){
  // chat: removem o que já estava renderizado e seguem o fluxo do bot.
  if matches!(e.kind.as_str(),"chat.delete"|"chat.deleteUser"|"chat.clear"){if !e.simulated{crate::chat_overlay::removed(&rt,&p,&e);}return}
  if e.kind=="chat"&&!e.simulated&&!p.bot_id.is_empty()&&e.user_id==p.bot_id{return}
- if e.kind=="chat"{crate::twitch_ops::note_chatter(&rt,&e);}
+ if e.kind=="chat"{crate::twitch_ops::note_chatter(&rt,&e);crate::emote_burst::count(&rt,&p.id,&e);}
  // A mensagem entra no chat do overlay antes dos comandos: o que o espectador
  // digitou aparece na fonte do OBS mesmo quando o bot responde ou modera.
  if e.kind=="chat"&&!e.simulated{crate::chat_overlay::fire(&rt,&p,&e);}
@@ -224,7 +225,7 @@ pub async fn process(rt:Arc<Runtime>,e:Event){
  if let Some(reply)=crate::discord_engage::link_command(&rt,&p,&e){if let Err(err)=rt.send(&p,&e,&reply).await{rt.log(&p.id,"discord",&err,"error");}return}
  crate::discord::mirror_chat(&rt,&p,&e);
  }
- if matches!(e.kind.as_str(),"follow"|"subscription"|"resub"|"gift"|"cheer"|"raid"){crate::discord::notify(&rt,&p,&e.kind,&e);crate::alerts::fire(&rt,&p,&e);crate::chat_overlay::event(&rt,&p,&e);}
+ if matches!(e.kind.as_str(),"follow"|"subscription"|"resub"|"gift"|"cheer"|"raid"){crate::discord::notify(&rt,&p,&e.kind,&e);crate::alerts::fire(&rt,&p,&e);crate::chat_overlay::event(&rt,&p,&e);crate::emote_burst::from_event(&rt,&p,&e);}
  if (e.kind=="live"||e.kind=="unlive")&&!e.simulated{
   let (rt2,p2,on)=(rt.clone(),p.clone(),e.kind=="live");
   tokio::spawn(async move{crate::discord::live_alert(&rt2,&p2,on);});

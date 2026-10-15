@@ -45,6 +45,7 @@ export default function ChatObs({profileId,notify}:{profileId:string;notify:(s:s
  const [live,setLive]=useState(false);
  const [sounds,setSounds]=useState<{id:string;name:string}[]>([]);
  const [audioDevice,setAudioDevice]=useState('');
+ const [burstChat,setBurstChat]=useState(false);
  const [evSel,setEvSel]=useState<ChatEventKind>('follow');
  const hydrated=useRef(false);
  const lastSaved=useRef('');
@@ -61,10 +62,20 @@ export default function ChatObs({profileId,notify}:{profileId:string;notify:(s:s
    setCfg(normalized);
    lastSaved.current=JSON.stringify(normalized);
    setInfo(g.overlay&&g.overlay.token?g.overlay:null);
+   try{const b=await api<{alsoChat?:boolean}|null>('module.config.get',{profileId,key:'emoteBurst'});setBurstChat(b?.alsoChat===true)}catch{}
   }catch{}
   hydrated.current=true;
  },[profileId,desktop]);
  useEffect(()=>{if(desktop)void load()},[load]);
+
+ /** Salva o interruptor do chat na mesma configuração da explosão (tela Alertas). */
+ const saveBurstChat=async(v:boolean)=>{
+  setBurstChat(v);
+  try{
+   const cur=await api<{alsoChat?:boolean}|null>('module.config.get',{profileId,key:'emoteBurst'});
+   await api('module.config',{profileId,key:'emoteBurst',value:{...(cur||{}),alsoChat:v}});
+  }catch(e){setBurstChat(!v);notify(errorText(e))}
+ };
 
  // Sons da biblioteca para os eventos (e a saída usada na prévia).
  useEffect(()=>{
@@ -204,6 +215,14 @@ export default function ChatObs({profileId,notify}:{profileId:string;notify:(s:s
       <div className="lp-ctrl">
        <ToggleCheck label="Listras alternadas no fundo" hint="Zebra sutil atrás de cada mensagem." checked={cfg.stripes} onChange={v=>set({stripes:v})}/>
       </div>
+     </div>
+
+     <div className="lp-group">
+      <h4>Explosão de emotes</h4>
+      <div className="lp-ctrl">
+       <ToggleCheck label="Também nesta camada" hint="A explosão de sub, presente ou meta completada cai também sobre a coluna de chat." checked={burstChat} onChange={v=>void saveBurstChat(v)}/>
+      </div>
+      <p className="lp-note">Quem dispara, quantos emotes e o tamanho ficam na tela Alertas. Desligado aqui, a explosão toca só nas camadas de alertas e meta.</p>
      </div>
 
      <div className="lp-group">

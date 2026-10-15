@@ -21,8 +21,15 @@ async function setup(page:Page){
       sessionStorage.setItem('alertsTest',String(args.kind));
       return {kind:String(args.kind),vars:{name:'NovoSeguidor',amount:500,months:1,tier:'TIER 1',message:''}};
      }
+     if(op==='emoteBurst.test')throw new Error('Sem emotes carregados: conecte o canal ao Twitch e tente de novo.');
+     if(op==='module.config.get'){
+      const raw=sessionStorage.getItem('cfg:'+String(args.key));
+      return raw?JSON.parse(raw):null;
+     }
      if(op==='module.config'){
-      sessionStorage.setItem('alertsSave',JSON.stringify({key:args.key,value:args.value}));
+      const k=String(args.key);
+      sessionStorage.setItem('cfg:'+k,JSON.stringify(args.value));
+      sessionStorage.setItem('alertsSave',JSON.stringify({key:k,value:args.value}));
       return null;
      }
      return null;
@@ -185,3 +192,45 @@ test('modo código dos alertas aplica CSS no palco e a aba Data recusa o que nã
 async function pills_select_bits(page:Page){
  await page.locator('.al-pills').getByRole('button',{name:'Bits',exact:true}).click();
 }
+
+test('explosão de emotes: interruptores por evento, origem, teste e persistência',async({page})=>{
+ await setup(page);
+ const value=async()=>(await saved(page))?.value;
+
+ // A mestre nasce desligada; ligar salva a configuração com os padrões da tela.
+ const master=page.getByRole('switch',{name:'Ligar explosão de emotes'});
+ await expect(master).toHaveAttribute('aria-checked','false');
+ await master.click();
+ await expect.poll(async()=>(await saved(page))?.key,{timeout:3000}).toBe('emoteBurst');
+ await expect.poll(value,{timeout:3000}).toMatchObject({count:40,size:56,source:'random',alsoChat:false,events:{sub:true,resub:true,gift:true,meta:true}});
+
+ // Renovação sai; a origem vira os mais usados e a quantidade muda.
+ await page.getByRole('switch',{name:'Renovação de sub'}).click();
+ await page.getByRole('combobox',{name:'Emotes usados',exact:true}).selectOption('top');
+ await page.getByLabel('Quantidade',{exact:true}).fill('60');
+ await expect.poll(async()=>(await value())?.events?.resub,{timeout:3000}).toBe(false);
+ await expect.poll(async()=>(await value())?.source).toBe('top');
+ await expect.poll(async()=>(await value())?.count).toBe(60);
+
+ // O teste avisa em vez de falhar em silêncio (sem emotes no mock, o núcleo recusa).
+ await page.getByRole('button',{name:/Testar explosão/}).click();
+ await expect(page.locator('.toast')).toContainText('Sem emotes carregados');
+
+ // Registro do card nas duas larguras.
+ const card=page.getByRole('heading',{name:'Explosão de emotes'}).locator('..');
+ await card.scrollIntoViewIfNeeded();
+ await page.waitForTimeout(250);
+ await page.screenshot({path:'artifacts/alertas-explosao-1100.png'});
+ await page.setViewportSize({width:1680,height:1000});
+ await card.scrollIntoViewIfNeeded();
+ await page.waitForTimeout(250);
+ await page.screenshot({path:'artifacts/alertas-explosao-largo.png'});
+
+ // Reabre: o que ficou guardado volta integral.
+ await page.reload();
+ await page.locator('.sidebar').getByRole('button',{name:'Alertas',exact:true}).click();
+ await expect(page.getByRole('switch',{name:'Ligar explosão de emotes'})).toHaveAttribute('aria-checked','true');
+ await expect(page.getByRole('switch',{name:'Renovação de sub'})).toHaveAttribute('aria-checked','false');
+ await expect(page.getByRole('combobox',{name:'Emotes usados',exact:true})).toHaveValue('top');
+ await expect(page.getByLabel('Quantidade',{exact:true})).toHaveValue('60');
+});

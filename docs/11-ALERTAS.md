@@ -54,10 +54,28 @@ Acima do acordeão, as abas **Fields · HTML · CSS · JS · Data** abrem o cód
 
 O seletor **Som** de cada evento lista os arquivos enviados na tela [Sons de Live](RESPOSTAS-E-SONS.md) (WAV, MP3 ou OGG, até 5 MiB). O áudio toca na **saída dos sons do bot** — o aparelho escolhido na tela [Áudio](13-AUDIO.md) — junto com o painel, usando o volume ajustado no grupo Painel. Sem som selecionado, o alerta é silencioso. Capture essa saída no OBS (por exemplo, a fonte de áudio apontando para o CABLE Output) para ouvir os alertas na live.
 
+## Explosão de emotes
+
+O cartão **Explosão de emotes** solta os seus emotes da Twitch no overlay, como um confete, quando acontece um dos quatro eventos escolhidos: **novo sub**, **renovação de sub**, **presente de sub** e **meta completada** (o interruptor da meta fica na tela Meta). Cada evento tem o seu, e a ligação geral desliga tudo de uma vez.
+
+| Campo | O que faz |
+|---|---|
+| Ligar explosão de emotes | Interruptor mestre: sem ele, nada explode |
+| Novo sub / Renovação de sub / Presente de sub | Escolha, evento a evento, se a explosão acontece |
+| Emotes usados | Aleatório entre os seus · Os mais usados no chat · Todos, na ordem da Twitch |
+| Quantidade | De 10 a 80 emotes por explosão |
+| Tamanho | De 24 a 120 px o lado de cada emote |
+| Testar explosão | Dispara na hora, pelo mesmo caminho do evento real |
+
+A lista vem dos **emotes do seu canal com os globais da Twitch**, buscada quando o canal conecta e atualizada a cada 12 horas. A origem **Os mais usados no chat** conta cada emote que aparece nas mensagens desde a primeira vez que a explosão é ligada; os totais ficam guardados e continuam de onde pararam no dia seguinte. **Testar explosão** avisa em vez de falhar em silêncio quando ainda não há emotes carregados — conecte o canal ao Twitch e tente de novo.
+
+A explosão respeita a **camada** da fonte do OBS: a camada de alertas recebe as de sub, renovação e presente; a camada de meta recebe a da meta completada; e a tela [Chat no OBS](12-CHAT-OBS.md) tem a opção **Também nesta camada** para a explosão cair também sobre a coluna de chat. Os ajustes de quantidade e tamanho valem para as três camadas.
+
 ## Limitações desta primeira versão
 
 - No modo código, `scripts` dentro do HTML não executam (o que é código entra na aba JS), e imagens ou fontes externas do seu CSS podem ser bloqueadas na prévia do aplicativo pela política de segurança — na fonte do OBS elas carregam. O JS roda sem sandbox além do escopo: escreva só código seu.
 - Não há botão de pular alerta: cada alerta roda a duração configurada antes do próximo entrar na fila.
 - A Twitch não informa quem recebeu um sub de presente; em **Sub de presente** e **Presentes em lote**, `{{user}}` é quem deu o presente.
 - Doações (LivePix) e resgates de pontos não geram alerta nesta versão.
+- A explosão de emotes usa os emotes da Twitch (canal + globais); emotes de terceiros (7TV, BTTV, FFZ) ficam para uma próxima versão, e a contagem de mais usados começa quando a explosão é ligada, sem histórico retroativo.
 - As fontes do Google exigem internet no computador que roda o OBS; fontes do sistema funcionam offline.

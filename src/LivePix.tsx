@@ -51,6 +51,7 @@ export default function LivePix({profileId,notify}:{profileId:string;notify:(s:s
  const [editing,setEditing]=useState('');
  const [sounds,setSounds]=useState<Sound[]>([]);
  const [audioDevice,setAudioDevice]=useState('');
+ const [burstMeta,setBurstMeta]=useState(false);
  const hydrated=useRef(false);
  const lastSaved=useRef('');
 
@@ -65,9 +66,20 @@ export default function LivePix({profileId,notify}:{profileId:string;notify:(s:s
   // Sons da Meta e a saída da tela Áudio (a prévia deve ouvir na mesma saída do OBS).
   try{const g=await api<{assets:{id:string;kind:string;name:string}[]}>('chatExtras.get',{profileId});setSounds((g.assets||[]).filter(a=>a.kind==='sound'))}catch{}
   try{const a=await api<{device?:string}|null>('module.config.get',{profileId,key:'audio'});setAudioDevice(a?.device||'')}catch{}
+  try{const b=await api<{events?:{meta?:boolean}}|null>('module.config.get',{profileId,key:'emoteBurst'});setBurstMeta(b?.events?.meta!==false)}catch{}
   hydrated.current=true;
  },[profileId,desktop]);
  useEffect(()=>{if(desktop)void load()},[load]);
+
+ /** Salva o interruptor da meta na mesma configuração da explosão (tela Alertas). */
+ const saveBurstMeta=async(v:boolean)=>{
+  setBurstMeta(v);
+  try{
+   const cur=await api<{enabled?:boolean;events?:Record<string,boolean>}|null>('module.config.get',{profileId,key:'emoteBurst'});
+   // Ligar a meta também liga a explosão; desligar a meta não apaga as dos alertas.
+   await api('module.config',{profileId,key:'emoteBurst',value:{...(cur||{}),enabled:v?true:cur?.enabled===true,events:{...cur?.events,meta:v}}});
+  }catch(e){setBurstMeta(!v);notify(errorText(e))}
+ };
 
  // Autosave: o Estúdio grava com atraso curto e o backend publica a mudança por
  // WebSocket, então o que aparece na prévia é exatamente o que o OBS desenha.
@@ -267,7 +279,9 @@ export default function LivePix({profileId,notify}:{profileId:string;notify:(s:s
        <Toggle label="Gradiente animado" checked={design.animate} onChange={v=>set({animate:v})}/>
        <Toggle label="Pulso ao receber doação" checked={design.pulse} onChange={v=>set({pulse:v})}/>
        <Toggle label="Celebração ao completar 100%" checked={design.celebrate} onChange={v=>set({celebrate:v})}/>
+       <Toggle label="Explosão de emotes ao completar" checked={burstMeta} onChange={v=>void saveBurstMeta(v)}/>
       </div>
+      <small className="lp-note">A explosão solta os seus emotes da Twitch na camada de meta quando a barra chega a 100%. A ligação geral, a quantidade e o tamanho ficam na tela Alertas.</small>
       <div className="lp-ctrl">
        <span className="lp-ctrl-label">Som de doação</span>
        <select value={design.soundDonate} aria-label="Som de doação" onChange={e=>set({soundDonate:e.target.value})}>
