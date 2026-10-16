@@ -19,7 +19,25 @@ async function setup(page:Page){
      if(op==='alerts.get')return {config:null,sounds:[{id:'s1',name:'jingle.wav'}],overlay:{token:'tok',port:9876,url:'http://127.0.0.1:9876/overlay#token=tok&profile=p1'}};
      if(op==='alerts.test'){
       sessionStorage.setItem('alertsTest',String(args.kind));
-      return {kind:String(args.kind),vars:{name:'NovoSeguidor',amount:500,months:1,tier:'TIER 1',message:''}};
+      const kind=String(args.kind);
+      // Mesmos interruptores do backend: com algum desligado, volta o motivo.
+      const cfg=JSON.parse(sessionStorage.getItem('cfg:alerts')||'null');
+      if(cfg?.enabled!==true)return {fired:false,reason:'Ligue os alertas no overlay: em live o alerta não tocaria.'};
+      if(cfg?.events?.[kind]?.on!==true){
+       const labels:Record<string,string>={follow:'seguidor',subscription:'novo sub',resub:'renovação',gift:'sub de presente',giftbulk:'presentes em lote',cheer:'bits',raid:'raid'};
+       return {fired:false,reason:`Ligue o alerta de ${labels[kind]||kind} no overlay: em live ele não tocaria.`};
+      }
+      // Vars fiéis à tabela do backend (rehearsal_event + vars()).
+      const samples:Record<string,Record<string,unknown>>={
+       follow:{name:'NovoSeguidor',amount:1,months:1,tier:'TIER 1',message:''},
+       subscription:{name:'UsuarioSub',amount:1,months:1,tier:'TIER 1',message:''},
+       resub:{name:'UsuarioFiel',amount:1,months:8,tier:'TIER 1',message:'Melhor stream!'},
+       gift:{name:'Presenteado123',amount:1,months:1,tier:'TIER 1',message:''},
+       giftbulk:{name:'Generoso123',amount:10,months:1,tier:'TIER 1',message:''},
+       cheer:{name:'AnaBits',amount:500,months:1,tier:'TIER 1',message:'GG, que jogo!'},
+       raid:{name:'RaidMan',amount:37,months:1,tier:'TIER 1',message:''},
+      };
+      return {fired:true,kind,vars:samples[kind]||samples.follow};
      }
      if(op==='emoteBurst.test')throw new Error('Sem emotes carregados: conecte o canal ao Twitch e tente de novo.');
      if(op==='module.config.get'){
@@ -83,15 +101,46 @@ test('botão de teste anima a prévia pelo caminho do evento real e termina limp
  await setup(page);
  await pills_select_bits(page);
 
+ // A chave mestre liga (e salva) antes do disparo — é o que a live exige.
+ const master=page.getByRole('switch',{name:'Ligar alertas no overlay'});
+ await master.click();
+ await expect.poll(async()=>(await saved(page))?.value?.enabled,{timeout:3000}).toBe(true);
+
  await page.getByRole('button',{name:/Testar bits/}).click();
  await expect.poll(async()=>await page.evaluate(()=>sessionStorage.getItem('alertsTest')||''),{timeout:3000}).toBe('cheer');
 
- // O painel animado (não o estático) mostra os dados de exemplo e some sozinho.
- await expect(page.locator('.bl-alert:not(.is-static)')).toContainText('NovoSeguidor',{timeout:5000});
+ // Selo ENSAIO na prévia durante o disparo…
+ await expect(page.locator('.lp-ensaio')).toBeVisible();
+ // …e o painel animado (não o estático) mostra os dados de exemplo e some sozinho.
+ await expect(page.locator('.bl-alert:not(.is-static)')).toContainText('AnaBits',{timeout:5000});
  await expect(page.locator('.bl-alert:not(.is-static)')).toContainText('500 BITS',{timeout:5000});
  await expect(page.locator('.bl-alert:not(.is-static)')).toHaveCount(0,{timeout:25000});
- // A prévia parada volta pronta para a próxima edição.
+ // O selo some sozinho e a prévia volta pronta para a próxima edição.
+ await expect(page.locator('.lp-ensaio')).toHaveCount(0,{timeout:8000});
  await expect(page.locator('.bl-alert.is-static')).toContainText('500 BITS');
+});
+
+test('avisa qual interruptor está desligado em vez de disparar pela metade',async({page})=>{
+ await setup(page);
+ await pills_select_bits(page);
+
+ // Sem nada ligado: o motivo aponta a chave mestre e nada anima.
+ await page.getByRole('button',{name:/Testar bits/}).click();
+ await expect(page.locator('.toast')).toContainText('Ligue os alertas no overlay');
+ await expect(page.locator('.bl-alert:not(.is-static)')).toHaveCount(0);
+ await expect(page.locator('.lp-ensaio')).toHaveCount(0);
+
+ // Mestre ligada, mas o evento de bits desligado: o motivo muda para o evento.
+ const master=page.getByRole('switch',{name:'Ligar alertas no overlay'});
+ await master.click();
+ await expect.poll(async()=>(await saved(page))?.value?.enabled,{timeout:3000}).toBe(true);
+ await page.getByRole('switch',{name:'Exibir bits'}).click();
+ await expect.poll(async()=>(await saved(page))?.value?.events?.cheer?.on,{timeout:3000}).toBe(false);
+
+ await page.getByRole('button',{name:/Testar bits/}).click();
+ await expect(page.locator('.toast')).toContainText('Ligue o alerta de bits no overlay');
+ await expect(page.locator('.bl-alert:not(.is-static)')).toHaveCount(0);
+ await expect(page.locator('.lp-ensaio')).toHaveCount(0);
 });
 
 test('estúdio de alertas cabe em janela de 1100px e ampla sem espremer texto',async({page})=>{
@@ -100,14 +149,31 @@ test('estúdio de alertas cabe em janela de 1100px e ampla sem espremer texto',a
  await expect(page.locator('.bl-alert.is-static')).toBeVisible();
  // Padrão Estúdio: a prévia fica fixa enquanto os ajustes rolam ao lado.
  await expect(page.locator('.lp-preview')).toHaveCSS('position','sticky');
+
+ // Dispara um teste ligado (a mestre é o que a live exige) para o selo ENSAIO
+ // constar da captura estreita — espera o quadro assentar (entrada, glitch e
+ // tremor saem nos ~2,2s da coreografia) dentro da janela dos 5s do selo.
+ const master=page.getByRole('switch',{name:'Ligar alertas no overlay'});
+ await master.click();
+ await expect.poll(async()=>(await saved(page))?.value?.enabled,{timeout:3000}).toBe(true);
+ await page.getByRole('button',{name:/Testar seguidor/}).click();
+ await expect(page.locator('.lp-ensaio')).toBeVisible();
+ await page.waitForTimeout(2400);
+
  const narrow=await page.evaluate(auditPage);
  expect(fmt(narrow),`${narrow.length} achado(s) em 1100px`).toEqual([]);
  await page.screenshot({path:'artifacts/estudio-alertas-1100.png'});
 
+ // A larga captura o layout já ajustado e outro disparo para o selo constar.
  await page.setViewportSize({width:1680,height:1000});
  await page.waitForTimeout(250);
  const wide=await page.evaluate(auditPage);
  expect(fmt(wide),`${wide.length} achado(s) em 1680px`).toEqual([]);
+ await expect(page.getByRole('button',{name:/Testar seguidor/})).toBeEnabled({timeout:20000});
+ await page.getByRole('button',{name:/Testar seguidor/}).click();
+ await expect(page.locator('.lp-ensaio')).toBeVisible();
+ await page.waitForTimeout(2400);
+ await expect(page.locator('.lp-ensaio')).toBeVisible();
  await page.screenshot({path:'artifacts/estudio-alertas-largo.png'});
 
  // Nenhuma largura produz rolagem horizontal.

@@ -248,9 +248,14 @@ pub async fn refresh(rt: &Arc<Runtime>, p: &Profile) {
  if let Err(err) = write_all(&c, &d) { rt.log(&p.id, "labels", &err, "error"); }
 }
 /// Eventos de follow/sub/cheer/raid atualizam recentes + sessão na hora, sem rede.
-pub async fn on_event(rt: &Arc<Runtime>, p: &Profile, kind: &str, user: &str, amount: i64, months: i64) {
+/// Em ensaio (`rehearsal`) só os campos de exibição mudam: o rótulo mostra quem
+/// "chegou" como na live, mas contadores de sessão e o refresh de rede são da
+/// live — dado de teste não entra em estatística.
+pub async fn on_event(rt: &Arc<Runtime>, p: &Profile, kind: &str, user: &str, amount: i64, months: i64, rehearsal: bool) {
  let c = config(rt, &p.id);
  if !c.enabled || p.platform != "twitch" { return; }
+ // Presente não tem campo de exibição: em ensaio não há o que o rótulo mostrar.
+ if rehearsal && kind == "gift" { return; }
  let mut d = data(rt, &p.id);
  match kind {
   "follow" => { d["recent_follower"] = json!(user); }
@@ -260,13 +265,14 @@ pub async fn on_event(rt: &Arc<Runtime>, p: &Profile, kind: &str, user: &str, am
   "cheer" => {
    d["recent_cheer"] = json!(user);
    d["recent_cheer_bits"] = json!(amount);
-   d["session_bits"] = json!(d["session_bits"].as_i64().unwrap_or(0) + amount);
+   if !rehearsal { d["session_bits"] = json!(d["session_bits"].as_i64().unwrap_or(0) + amount); }
   }
   "raid" => { d["recent_raid"] = json!(user); d["recent_raid_viewers"] = json!(amount); }
   _ => return,
  }
  save_data(rt, &p.id, &d);
  if let Err(err) = write_all(&c, &d) { rt.log(&p.id, "labels", &err, "error"); }
+ if rehearsal { return; }
  let now = chrono::Utc::now().timestamp();
  if matches!(kind, "follow" | "subscription" | "gift") && stale(&d, now) {
   let rt2 = rt.clone();
@@ -452,5 +458,29 @@ mod tests {
   assert!(!folder_taken(&db, &b.id, "C:/Live/outra"));
   db.set_module(&a.id, MODULE, &json!({"enabled": false, "folder": "C:/Live/rotulos/", "labels": {}})).unwrap();
   assert!(!folder_taken(&db, &b.id, "C:/Live/rotulos"), "desativado libera a pasta");
+ }
+ #[tokio::test]
+ async fn ensaio_atualiza_so_a_exibicao_do_rotulo() {
+  let dir = tempfile::tempdir().unwrap();
+  let rt = Runtime::new(dir.path().join("app")).unwrap();
+  let p: Profile = serde_json::from_value(json!({"id": "00000000-0000-4000-8000-000000000021", "name": "P", "platform": "twitch", "channel": "canal"})).unwrap();
+  rt.db.save_profile(&p).unwrap();
+  rt.db.set_module(&p.id, MODULE, &json!({"enabled": true, "folder": dir.path().join("rotulos").to_string_lossy(), "labels": {}})).unwrap();
+
+  // Ensaio: o rótulo mostra o "recente" como na live…
+  on_event(&rt, &p, "cheer", "AnaBits", 500, 0, true).await;
+  on_event(&rt, &p, "gift", "Generoso123", 10, 0, true).await;
+  let d = data(&rt, &p.id);
+  assert_eq!(d["recent_cheer"], json!("AnaBits"));
+  assert_eq!(d["recent_cheer_bits"], json!(500));
+  // …mas os contadores da sessão não mudam com dado de teste.
+  assert_eq!(d["session_bits"].as_i64().unwrap_or(0), 0, "bits de ensaio não entram na sessão");
+  assert_eq!(d["session_gifts"].as_i64().unwrap_or(0), 0, "presentes de ensaio não entram na sessão");
+
+  // Live de verdade: exibição e contadores acumulam.
+  on_event(&rt, &p, "cheer", "Ana", 100, 0, false).await;
+  let d = data(&rt, &p.id);
+  assert_eq!(d["recent_cheer"], json!("Ana"));
+  assert_eq!(d["session_bits"].as_i64().unwrap_or(0), 100);
  }
 }

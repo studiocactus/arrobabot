@@ -27,8 +27,10 @@ const DEFAULT_BURST:BurstCfg={enabled:false,count:40,size:56,source:'random',top
 /**
  * Estúdio de Alertas: configura a camada de alertas do overlay do OBS com
  * prévia animada e botões de teste por evento. O teste entra pelo mesmo
- * caminho do evento real — o OBS toca junto com a prévia do app, e o som
- * sai na saída de áudio do bot (tela Áudio), nunca na fonte de navegador.
+ * caminho do evento real: com a chave e o interruptor do evento ligados, o
+ * OBS toca junto com a prévia do app; com algum desligado, o Estúdio avisa
+ * qual falta ligar — é assim que a live se comportaria. O som sai na saída
+ * de áudio do bot (tela Áudio), nunca na fonte de navegador.
  */
 export default function Alertas({profileId,notify}:{profileId:string;notify:(s:string)=>void}){
  const [cfg,setCfg]=useState<AlertsConfig>(()=>normalizeAlerts(null));
@@ -40,12 +42,16 @@ export default function Alertas({profileId,notify}:{profileId:string;notify:(s:s
  const [copied,setCopied]=useState(false);
  const [animating,setAnimating]=useState(false);
  const [testing,setTesting]=useState(false);
+ // Selo ENSAIO na prévia: acende quando o teste dispara e sai sozinho.
+ const [ensaio,setEnsaio]=useState(false);
  // Acordeão das configurações: só "Este evento" abre por padrão (é o que se edita).
  const [openGroups,setOpenGroups]=useState({event:true,panel:false,colors:false,fonts:false,fx:false});
  const hydrated=useRef(false);
  const lastSaved=useRef('');
  const frame=useRef<HTMLDivElement>(null);
  const stage=useRef<HTMLDivElement>(null);
+ const ensaioTimer=useRef<number|undefined>(undefined);
+ useEffect(()=>()=>window.clearTimeout(ensaioTimer.current),[]);
  const [scale,setScale]=useState(0.3);
  const [burst,setBurst]=useState<BurstCfg>(DEFAULT_BURST);
  const [burstSave,setBurstSave]=useState<'idle'|'saving'|'saved'|'error'>('idle');
@@ -133,15 +139,29 @@ export default function Alertas({profileId,notify}:{profileId:string;notify:(s:s
   return null;
  };
 
+ /** Acende o selo ENSAIO na prévia por alguns segundos. */
+ const flagEnsaio=()=>{
+  setEnsaio(true);
+  window.clearTimeout(ensaioTimer.current);
+  ensaioTimer.current=window.setTimeout(()=>setEnsaio(false),5000);
+ };
+
  const test=async()=>{
   if(testing)return;
-  setTesting(true);setAnimating(true);
+  setTesting(true);
   try{
-   // Mesmo caminho do evento real: o OBS toca este alerta junto com a prévia.
-   const r=await api<{kind:AlertKind;vars:Record<string,unknown>}>('alerts.test',{profileId,kind:sel});
-   if(stage.current){
-    // O som sai pela linha de áudio do app (evento alert-sound); a prévia é visual.
-    await queueAlert(stage.current,{cfg,kind:r.kind,vars:r.vars,audio:null});
+   // Mesmo caminho do evento real: o evento entra pelo motor e o OBS toca
+   // junto com a prévia — a chave mestre e o interruptor do evento valem
+   // igual à live; com algum desligado, o backend devolve o motivo.
+   const r=await api<{fired?:boolean;reason?:string;kind?:AlertKind;vars?:Record<string,unknown>}>('alerts.test',{profileId,kind:sel});
+   if(r?.fired===false){
+    notify(r.reason||'Não foi possível testar o alerta.');
+   }else{
+    setAnimating(true);flagEnsaio();
+    if(stage.current&&r?.kind&&r.vars){
+     // O som sai pela linha de áudio do app (evento alert-sound); a prévia é visual.
+     await queueAlert(stage.current,{cfg,kind:r.kind,vars:r.vars,audio:null});
+    }
    }
   }catch(e){notify(errorText(e))}
   setTesting(false);setAnimating(false);
@@ -173,14 +193,14 @@ export default function Alertas({profileId,notify}:{profileId:string;notify:(s:s
   <Card title="Alertas da live" action={<span className={'status-pill '+(cfg.enabled?'on':'off')}><span className="status-dot" aria-hidden="true"></span>{cfg.enabled?'Ligados':'Desligados'}</span>}>
    <p className="help">Follows, subs, presentes, bits e raids viram painéis animados na sua fonte de navegador. A camada de alertas tem um <strong>endereço próprio</strong> (com <code>mode=alerts</code>): crie uma Fonte de navegador só para ela e ajuste posição e tamanho sem mexer na meta nem no chat.</p>
    <div className="list-row">
-    <div><strong>Alertas no overlay</strong><small>{cfg.enabled?'Eventos reais tocam no OBS':'Nada toca até você ligar; os botões de teste sempre funcionam'}</small></div>
+    <div><strong>Alertas no overlay</strong><small>{cfg.enabled?'Eventos reais tocam no OBS':'Nada toca até você ligar; o teste avisa o que está desligado'}</small></div>
     <Toggle label="Ligar alertas no overlay" checked={cfg.enabled} onChange={v=>set({enabled:v})}/>
    </div>
    {saveError&&<p role="alert" className="inline-error">{saveError}</p>}
   </Card>
 
   <Card title="Estúdio de alertas" action={<span className={'lp-save lp-save--'+saveState}>{saveState==='saving'?'Salvando…':saveState==='saved'?'Salvo':saveState==='error'?'Não salvou':'Alterações salvam sozinhas'}</span>}>
-   <p className="help">Escolha o evento, edite os textos e toque em <strong>Testar</strong>: a prévia roda a mesma animação que o OBS desenha, e o teste também vai para a live (mesmo com os alertas desligados).</p>
+   <p className="help">Escolha o evento, edite os textos e toque em <strong>Testar</strong>: a prévia roda a mesma animação que o OBS desenha e o teste segue o caminho do evento real. Se a chave ou o interruptor do evento estiverem desligados, ele avisa qual falta ligar — é assim que a live se comportaria.</p>
 
    <div className="lp-studio">
     <div className="lp-preview">
@@ -194,12 +214,13 @@ export default function Alertas({profileId,notify}:{profileId:string;notify:(s:s
      </div>
 
      <div className="lp-frame" data-bg="dark" ref={frame}>
+      {ensaio&&<span className="lp-ensaio">Ensaio</span>}
       <div className="lp-canvas" style={{transform:`scale(${scale})`}}>
        <div className="al-stage" ref={stage}></div>
       </div>
      </div>
 
-     <p className="help">Prévia do quadro de 1920×1080 em escala de {Math.round(scale*100)}%.{!cfg.enabled&&' Os alertas estão desligados: o OBS só toca quando você ativar acima (o teste é a exceção).'}</p>
+     <p className="help">Prévia do quadro de 1920×1080 em escala de {Math.round(scale*100)}%.{!cfg.enabled&&' Os alertas estão desligados: o OBS só toca quando você ativar acima (o teste avisa o que falta ligar).'}</p>
     </div>
 
     <div className="lp-controls">

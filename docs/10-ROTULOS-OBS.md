@@ -9,7 +9,7 @@ A tela **Rótulos OBS** gera arquivos `.txt` com totais do canal, eventos recent
 3. Ligue **Rótulos ativos** e clique em **Salvar rótulos**. Os arquivos são gravados na hora.
 4. No OBS, adicione Fonte → Texto → **Ler de arquivo** e aponte para o `.txt` desejado.
 
-Funciona só na Twitch e com o perfil conectado. Os rótulos atualizam nos eventos (follow, sub, cheer, raid) e a cada 30 segundos (espectadores e horas). Totais do canal renovam a cada 5 minutos. **Atualizar agora** força totais, espectadores e horas sem esperar.
+Funciona só na Twitch e com o perfil conectado. Os rótulos atualizam nos eventos (follow, sub, cheer, raid) e a cada 30 segundos (espectadores e horas). Totais do canal renovam a cada 5 minutos. **Atualizar agora** força totais, espectadores e horas sem esperar. Em ensaio (os testes do Estúdio), só os campos de recentes acompanham o evento de teste: os contadores de sessão e a renovação de totais seguem apenas eventos reais.
 
 ## Rótulos disponíveis
 

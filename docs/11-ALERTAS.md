@@ -12,7 +12,7 @@ Os alertas ficam numa **camada de overlay própria**, com um endereço próprio 
 4. Clique em **Testar** para ver a animação na prévia — e no OBS, se a fonte estiver aberta.
 5. Se ainda não tem a fonte no OBS, copie o endereço no cartão **No OBS** e siga os passos (Fontes → + → Navegador, 1920×1080).
 
-Enquanto os alertas estão desligados, nada toca na live; os botões de teste continuam funcionando, e o teste é a única exceção que o OBS recebe mesmo com tudo desligado.
+Enquanto os alertas estão desligados, nada toca na live — nem nos testes: clicar em **Testar** mostra o aviso do que a live faria com o interruptor desligado. Com a chave e o interruptor do evento ligados, o teste corre pelo mesmo caminho da live: o OBS toca o alerta junto com a prévia, a caixa de evento no chat, a explosão de emotes e os rótulos de exibição acompanham (cada um com o seu interruptor) e o quadro acende o selo **Ensaio**. O teste não vira estatística, mensagem da Twitch nem aviso no Discord.
 
 ## Cada evento tem quatro textos e um som
 
@@ -78,4 +78,5 @@ A explosão respeita a **camada** da fonte do OBS: a camada de alertas recebe as
 - A Twitch não informa quem recebeu um sub de presente; em **Sub de presente** e **Presentes em lote**, `{{user}}` é quem deu o presente.
 - Doações (LivePix) e resgates de pontos não geram alerta nesta versão.
 - A explosão de emotes usa os emotes da Twitch (canal + globais); emotes de terceiros (7TV, BTTV, FFZ) ficam para uma próxima versão, e a contagem de mais usados começa quando a explosão é ligada, sem histórico retroativo.
+- **Testar explosão** dispara mesmo com a explosão desligada — é para conferir o efeito antes da live; o interruptor mestre e os por evento valem para os eventos de verdade.
 - As fontes do Google exigem internet no computador que roda o OBS; fontes do sistema funcionam offline.

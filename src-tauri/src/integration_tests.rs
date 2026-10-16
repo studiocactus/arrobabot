@@ -1008,6 +1008,38 @@ async fn ensaio_nunca_vaza_para_o_discord(){
 }
 
 #[tokio::test]
+async fn ensaio_mexe_no_rotulo_e_simulacao_simples_nao(){
+ let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();
+ let p=profile("Rótulos");rt.db.save_profile(&p).unwrap();
+ rt.db.set_module(&p.id,"labels",&json!({"enabled":true,"folder":dir.path().join("rotulos").to_string_lossy(),"labels":{}})).unwrap();
+ let mut sim=event(&p,"",false);sim.kind="cheer".into();sim.simulated=true;sim.user="Falso".into();sim.data=json!({"bits":500});
+
+ // simulação simples da API (sem ensaio): o rótulo não muda
+ engine::process(rt.clone(),sim.clone()).await;
+ let deadline=tokio::time::Instant::now()+std::time::Duration::from_secs(1);
+ loop{
+  let d=rt.db.module(&p.id,"labels_data");
+  assert_ne!(d["recent_cheer"].as_str(),Some("Falso"),"simulação simples da API não mexe no rótulo");
+  if tokio::time::Instant::now()>=deadline{break}
+  tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+ }
+
+ // ensaio: o rótulo mostra quem "chegou", sem tocar os contadores da sessão
+ sim.user="AnaBits".into();sim.rehearsal=true;
+ engine::process(rt.clone(),sim.clone()).await;
+ let deadline=tokio::time::Instant::now()+std::time::Duration::from_secs(5);
+ loop{
+  let d=rt.db.module(&p.id,"labels_data");
+  if d["recent_cheer"].as_str()==Some("AnaBits"){break}
+  assert!(tokio::time::Instant::now()<deadline,"o rótulo do ensaio não chegou");
+  tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+ }
+ let d=rt.db.module(&p.id,"labels_data");
+ assert_eq!(d["recent_cheer_bits"],json!(500));
+ assert_eq!(d["session_bits"].as_i64().unwrap_or(0),0,"bits de ensaio não entram na sessão");
+}
+
+#[tokio::test]
 async fn execucao_de_fluxo_em_teste_nao_conta_comando(){
  let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();
  let p=profile("Comandos");rt.db.save_profile(&p).unwrap();
@@ -1134,11 +1166,19 @@ async fn payloads_de_ensaio_carregam_a_marcacao_e_o_real_nao(){
  let chat:Vec<_>=std::iter::from_fn(||rx.try_recv().ok()).filter(|v|v["type"]=="chat").collect();
  assert_eq!(chat[0]["payload"]["rehearsal"],true,"mensagem de ensaio carrega a marca");
 
- // botão de teste do Estúdio: alerta marcado
+ // botão de teste do Estúdio: o evento entra na fila do motor e o alerta
+ // chega marcado (a entrega é assíncrona, como em qualquer evento real)
  dispatch(rt.clone(),"alerts.test",json!({"profileId":p.id,"kind":"follow"})).await.unwrap();
- let hits:Vec<_>=std::iter::from_fn(||rx.try_recv().ok()).filter(|v|v["type"]=="alert").collect();
- assert_eq!(hits.len(),1);
- assert_eq!(hits[0]["payload"]["rehearsal"],true,"teste de alerta carrega a marca");
+ let deadline=tokio::time::Instant::now()+std::time::Duration::from_secs(5);
+ let hit;
+ loop{
+  let hits:Vec<_>=std::iter::from_fn(||rx.try_recv().ok()).filter(|v|v["type"]=="alert").collect();
+  if let Some(v)=hits.into_iter().next(){hit=v;break}
+  assert!(tokio::time::Instant::now()<deadline,"o alerta do teste não chegou");
+  tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+ }
+ assert_eq!(hit["payload"]["rehearsal"],true,"teste de alerta carrega a marca");
+ assert_eq!(hit["payload"]["vars"]["name"],"NovoSeguidor");
 
  // evento real de follow: sem marca
  let mut follow=event(&p,"",false);follow.kind="follow".into();

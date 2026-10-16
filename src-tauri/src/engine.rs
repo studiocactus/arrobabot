@@ -232,11 +232,13 @@ pub async fn process(rt:Arc<Runtime>,e:Event){
   let (rt2,p2,on)=(rt.clone(),p.clone(),e.kind=="live");
   tokio::spawn(async move{crate::discord::live_alert(&rt2,&p2,on);});
  }
- if matches!(e.kind.as_str(),"follow"|"subscription"|"resub"|"gift"|"cheer"|"raid")&&!e.simulated{
+ // Ensaio (rehearsal) também mexe nos rótulos — só nos campos de exibição,
+ // como dentro de on_event. Simulação simples da API continua bloqueada.
+ if matches!(e.kind.as_str(),"follow"|"subscription"|"resub"|"gift"|"cheer"|"raid")&&(!e.simulated||e.rehearsal){
   let (rt2,p2,e2)=(rt.clone(),p.clone(),e.clone());
   tokio::spawn(async move{
    let amount=e2.data["viewers"].as_i64().or(e2.data["bits"].as_i64()).or(e2.data["total"].as_i64()).unwrap_or(e2.data["cumulative_months"].as_i64().unwrap_or(1));
-   crate::labels::on_event(&rt2,&p2,&e2.kind,&e2.user,amount,e2.data["cumulative_months"].as_i64().unwrap_or(0)).await;
+   crate::labels::on_event(&rt2,&p2,&e2.kind,&e2.user,amount,e2.data["cumulative_months"].as_i64().unwrap_or(0),e2.rehearsal).await;
   });
  }
  let history=rt.conversation.lock().unwrap().receive(&e);

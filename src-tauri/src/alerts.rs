@@ -206,28 +206,70 @@ pub fn fire(rt: &Runtime, p: &Profile, e: &Event) {
     dispatch(rt, p, &kind, vars, e.rehearsal || e.simulated);
 }
 
-fn fake_vars(kind: &str) -> Value {
+/// Evento de teste do Estúdio montado como um evento de verdade — simulado e
+/// de ensaio — para entrar pelo funil da live (`submit → engine::process`).
+/// `giftbulk` sai como `gift` com total > 1: o motor deriva o tipo, como a
+/// Twitch entrega. Os dados espelham os exemplos de sempre, calculados depois
+/// pelo mesmo `vars()` que o overlay recebe.
+fn rehearsal_event(p: &Profile, kind: &str) -> Option<Event> {
+    let (event_kind, user, message, data) = match kind {
+        "follow" => ("follow", "NovoSeguidor", "", json!({"total": 1})),
+        "subscription" => ("subscription", "UsuarioSub", "", json!({"total": 1, "cumulative_months": 1, "tier": "1000"})),
+        "resub" => ("resub", "UsuarioFiel", "Melhor stream!", json!({"total": 1, "cumulative_months": 8, "tier": "1000"})),
+        "gift" => ("gift", "Presenteado123", "", json!({"total": 1})),
+        "giftbulk" => ("gift", "Generoso123", "", json!({"total": 10})),
+        "cheer" => ("cheer", "AnaBits", "GG, que jogo!", json!({"bits": 500})),
+        "raid" => ("raid", "RaidMan", "", json!({"viewers": 37})),
+        _ => return None,
+    };
+    Some(Event {
+        id: uuid::Uuid::new_v4().to_string(),
+        profile_id: p.id.clone(),
+        kind: event_kind.into(),
+        user: user.into(),
+        user_id: format!("ensaio-{kind}"),
+        role: "everyone".into(),
+        message: message.into(),
+        data,
+        simulated: true,
+        rehearsal: true,
+    })
+}
+
+/// Nome do evento como a pílula do Estúdio mostra (em minúsculas no aviso).
+fn label(kind: &str) -> &'static str {
     match kind {
-        "follow" => json!({"name": "NovoSeguidor", "amount": 1, "months": 1, "tier": "TIER 1", "message": ""}),
-        "subscription" => json!({"name": "UsuarioSub", "amount": 1, "months": 1, "tier": "TIER 1", "message": ""}),
-        "resub" => json!({"name": "UsuarioFiel", "amount": 1, "months": 8, "tier": "TIER 1", "message": "Melhor stream!"}),
-        "gift" => json!({"name": "Presenteado123", "amount": 1, "months": 1, "tier": "TIER 1", "message": ""}),
-        "giftbulk" => json!({"name": "Generoso123", "amount": 10, "months": 1, "tier": "TIER 1", "message": ""}),
-        "cheer" => json!({"name": "AnaBits", "amount": 500, "months": 1, "tier": "TIER 1", "message": "GG, que jogo!"}),
-        _ => json!({"name": "RaidMan", "amount": 37, "months": 1, "tier": "TIER 1", "message": ""}),
+        "follow" => "seguidor",
+        "subscription" => "novo sub",
+        "resub" => "renovação",
+        "gift" => "sub de presente",
+        "giftbulk" => "presentes em lote",
+        "cheer" => "bits",
+        _ => "raid",
     }
 }
 
-/// Botão de teste do Estúdio: dispara o mesmo caminho do evento real (mesmo
-/// com tudo desligado, como faz o EMULATE do StreamElements) e devolve o
-/// payload para a prévia local animar em paralelo.
-pub fn test(rt: &Runtime, p: &Profile, kind: &str) -> Result<Value, String> {
+/// Botão de teste do Estúdio: o evento de teste entra pelo funil da live
+/// (`submit → engine::process → alerts::fire`) — a chave mestre e o
+/// interruptor do evento valem igual à live, inclusive para a caixa de chat,
+/// a explosão de emotes e os rótulos. Com algum deles desligado nada dispara
+/// e o motivo volta para o Estúdio avisar; ligado, devolve as mesmas
+/// variáveis que o overlay vai receber, para a prévia animar em paralelo.
+pub async fn test(rt: &Runtime, p: &Profile, kind: &str) -> Result<Value, String> {
     if !KINDS.contains(&kind) {
         return Err("Evento de alerta inválido".into());
     }
-    let vars = fake_vars(kind);
-    dispatch(rt, p, kind, vars.clone(), true);
-    Ok(json!({"kind": kind, "vars": vars}))
+    let cfg = config(rt, &p.id);
+    if cfg["enabled"] != Value::Bool(true) {
+        return Ok(json!({"fired": false, "reason": "Ligue os alertas no overlay: em live o alerta não tocaria."}));
+    }
+    if cfg["events"][kind]["on"] != Value::Bool(true) {
+        return Ok(json!({"fired": false, "reason": format!("Ligue o alerta de {} no overlay: em live ele não tocaria.", label(kind))}));
+    }
+    let e = rehearsal_event(p, kind).ok_or("Evento de alerta inválido")?;
+    let Some((_, vars)) = vars(&e) else { return Err("Evento de alerta inválido".into()) };
+    rt.submit(e).await?;
+    Ok(json!({"fired": true, "kind": kind, "vars": vars}))
 }
 
 /// Sons do perfil (kind "sound") para o seletor do Estúdio.
@@ -374,18 +416,51 @@ mod tests {
         assert!(!std::iter::from_fn(|| rx.try_recv().ok()).any(|v| v["type"] == "alert"), "evento desligado não toca");
     }
 
+    /// Espera o worker entregar um alerta pelo broadcast (o teste entra na fila
+    /// do engine como qualquer evento real).
+    async fn wait_alert(rx: &mut tokio::sync::broadcast::Receiver<Value>) -> Value {
+        let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(5);
+        loop {
+            let got: Vec<Value> = std::iter::from_fn(|| rx.try_recv().ok())
+                .filter(|v| v["type"] == "alert")
+                .collect();
+            if let Some(v) = got.into_iter().next() { return v }
+            assert!(tokio::time::Instant::now() < deadline, "o worker não entregou o alerta do ensaio");
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        }
+    }
+
     #[tokio::test]
-    async fn test_button_dispatches_even_when_disabled() {
+    async fn test_button_follows_the_same_switches_as_live() {
         let (_dir, rt) = rt();
         let p = p();
         rt.db.save_profile(&p).unwrap();
         let mut rx = rt.broadcast.subscribe();
-        let out = test(&rt, &p, "cheer").unwrap();
-        assert_eq!(out["kind"], "cheer");
-        assert_eq!(out["vars"]["amount"].as_i64().unwrap(), 500);
-        let alert: Vec<_> = std::iter::from_fn(|| rx.try_recv().ok()).filter(|v| v["type"] == "alert").collect();
-        assert_eq!(alert.len(), 1, "o teste toca mesmo com os alertas desligados");
-        assert!(test(&rt, &p, "nope").is_err());
+
+        // Padrão (tudo desligado): nada dispara e o motivo aponta a chave mestre.
+        let out = test(&rt, &p, "cheer").await.unwrap();
+        assert_eq!(out["fired"], false);
+        assert!(out["reason"].as_str().unwrap().contains("Ligue os alertas"));
+        assert!(!std::iter::from_fn(|| rx.try_recv().ok()).any(|v| v["type"] == "alert"), "com a chave desligada o funil não chega ao alerta");
+
+        // Mestre ligada: o teste vira evento de verdade e o alerta sai marcado de ensaio.
+        save(&rt, &p, json!({"enabled": true}));
+        let out = test(&rt, &p, "cheer").await.unwrap();
+        assert_eq!(out["fired"], true);
+        let alert = wait_alert(&mut rx).await;
+        assert_eq!(alert["payload"]["kind"], "cheer");
+        assert_eq!(alert["payload"]["rehearsal"], true, "o overlay recebe a marca de ensaio");
+        assert_eq!(alert["payload"]["vars"]["name"], "AnaBits");
+        assert_eq!(out["vars"], alert["payload"]["vars"], "a prévia anima com as mesmas variáveis do OBS");
+
+        // Evento específico desligado: volta o motivo do evento e nada toca.
+        save(&rt, &p, json!({"enabled": true, "events": {"cheer": {"on": false}}}));
+        let out = test(&rt, &p, "cheer").await.unwrap();
+        assert_eq!(out["fired"], false);
+        assert!(out["reason"].as_str().unwrap().contains("Ligue o alerta de bits"));
+
+        // Kind inválido continua barrado.
+        assert!(test(&rt, &p, "nope").await.is_err());
     }
 
     #[tokio::test]

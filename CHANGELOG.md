@@ -1,5 +1,45 @@
 # Histórico de atualizações
 
+# BotLive 0.7.7
+
+## O que mudou
+
+**Modo Ensaio, segunda etapa: o botão de teste dos Alertas agora respeita os interruptores e percorre o funil da live.** O teste deixa de ser um desenho local: o evento de teste vira evento de verdade na fila do motor e percorre alerta, caixa de evento no chat, explosão de emotes e rótulos pelo mesmo caminho da live — com selo **ENSAIO**. Com a chave mestra ou o interruptor do evento desligados, nada dispara: o Estúdio avisa qual falta ligar, do jeito que a live se comportaria.
+
+O que a mudança traz, item por item:
+
+- **Teste pelo funil do motor.** `Testar <evento>` monta um evento de ensaio (simulado e marcado de ensaio) e o envia pela fila do engine: o alerta toca no OBS pelo caminho real, com o som na linha de áudio do aplicativo; a caixa de evento aparece no chat (com os interruptores do chat ligados); a explosão de emotes acompanha quando ligada. O histórico registra a linha com status `ensaio`, fora das estatísticas.
+- **Aviso em vez de disparo pela metade.** Com **Ligar alertas no overlay** desligado, o teste devolve `Ligue os alertas no overlay: em live o alerta não tocaria.`; com a chave ligada mas o interruptor do evento (por exemplo **Exibir bits**) desligado, o motivo aponta o interruptor do evento. A prévia não anima quando o motivo volta — o Estúdio mostra o aviso, sem mentir sobre o que a live faria.
+- **Selo ENSAIO na prévia de Alertas.** O Estúdio de Alertas acende a mesma badge âmbar no canto do quadro durante o disparo (cerca de 5 segundos), como já fazem Meta e Chat — as três telas com botão de teste falam a mesma língua.
+- **Rótulos de exibição no ensaio.** Com a tela Rótulos ligada, um teste de follow/sub/cheer/raid atualiza os campos de recentes (`recent_follower`, `recent_cheer`…) como na live — mas `session_bits`, `session_gifts` e a renovação de totais não mudam: dado de teste nunca vira estatística. A simulação simples da API local continua sem tocar rótulo nenhum.
+- **Apoio atualizado.** Os textos da tela Alertas deixam de prometer que "os botões de teste sempre funcionam" e passam a explicar o contrato novo — igual à live, com aviso quando algo estaria desligado. Os capítulos 11 (Alertas) e 10 (Rótulos) do manual acompanham.
+
+Para quem mantém o código: `alerts::test` virou `async` e devolve `{fired, reason}` quando um interruptor real impediria o disparo e `{fired:true, kind, vars}` quando não — as `vars` da prévia saem do mesmo `vars()` do funil, então prévia e overlay veem o mesmo payload; o evento de teste vem de `rehearsal_event(p, kind)` (única fonte dos dados de exemplo; `giftbulk` vira `kind:"gift"` com `total:10`, como a Twitch entrega); `labels::on_event` ganhou a flag `rehearsal` e o gate do engine virou `!simulated || rehearsal`.
+
+## Como usar
+
+1. Abra **Alertas**, ligue **Alertas no overlay** e deixe o interruptor do evento ligado (grupo **Este evento**).
+2. Clique em **Testar <evento>**: a prévia anima com o selo **Ensaio** no quadro e o OBS toca junto, com o som escolhido na linha de áudio do app — a caixa de evento no chat e os rótulos acompanham, cada um com o seu interruptor.
+3. Se a chave ou o interruptor do evento estiver desligados, o teste não dispara: o aviso diz exatamente qual falta ligar. É a consequência de o teste valer o que a live valeria.
+4. **Rótulos**: num teste, o rótulo recente mostra o nome de exemplo até o próximo evento real; os contadores de sessão (bits, presentes) e os totais não mudam.
+
+## Validação
+
+- `cargo test` em `src-tauri`: **255 testes, 0 falhas, 1 ignorado** — incluem os novos desta versão: o botão de alerta seguindo os mesmos interruptores da live (desligado não dispara e explica; ligado entrega o alerta marcado de ensaio com as mesmas variáveis da prévia; evento específico desligado devolve o motivo do evento), rótulos de ensaio atualizando só a exibição (`recent_cheer` muda, `session_bits` e `session_gifts` não) e o gate do engine (a simulação simples da API continua bloqueada dos rótulos).
+- `npm run check` (tsc) sem erros; `npm test` (vitest) **115/115**; `npm run test:updates` **9/9**.
+- `npx playwright test` (suíte completa): **74 testes, 0 falhas** — com o teste novo da tela Alertas: aviso com a chave desligada (toast, sem animação e sem selo), aviso apontando o interruptor do evento (`Exibir bits`), disparo com o selo ENSAIO na prévia terminando limpo, e o teste de largura capturando com o selo e o alerta em animação nas duas larguras.
+- Regras de tela: capturas `estudio-alertas-1100/-largo` regeneradas e revisadas (selo ENSAIO e alerta em animação visíveis, sem espremer texto).
+- `npm run docs` regerado (26 capítulos); `npm run update:check` executado antes do push.
+
+## Limitações
+
+- **Testar explosão** (emotes) ainda dispara mesmo com a explosão desligada — é o comportamento da 0.7.5, mantido de propósito para conferir o efeito antes da live; agora está registrado como limitação no capítulo de Alertas.
+- O rótulo recente mostra o nome do evento de teste até o próximo evento real (não há arquivo de rótulo "falso" separado) — contadores e totais ficam intactos.
+- A prévia local do Estúdio anima a partir da resposta do botão, enquanto o alerta chega ao OBS pela fila do motor: os dois podem começar em instantes diferentes — como na etapa anterior.
+- Teste de comando com cooldown de ensaio próprio, unificação dos testes e auditoria final ficam para a 0.7.8 (terceira etapa).
+
+---
+
 # BotLive 0.7.6
 
 ## O que mudou
