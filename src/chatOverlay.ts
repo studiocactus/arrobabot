@@ -15,6 +15,8 @@ export type ChatMsg={
  badges:string[];frags:ChatFrag[];first:boolean;bot:boolean;
  /** Cor real escolhida na Twitch (hex); vazia quando o espectador nunca escolheu. */
  color?:string;
+ /** Ensaio: mensagem de teste — a prévia e o overlay mostram o selo ENSAIO. */
+ rehearsal?:boolean;
 };
 
 export type BadgeKey='broadcaster'|'moderator'|'vip'|'subscriber'|'founder'|'prime'|'bits'|'gift'|'other';

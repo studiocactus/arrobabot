@@ -186,7 +186,7 @@ async fn ai_answer_uses_live_state_base_and_per_action_controls(){
  assert!(!a.knowledge(&p2.ai));
 }
 fn profile(name:&str)->Profile{Profile{id:uuid::Uuid::new_v4().to_string(),name:name.into(),platform:"twitch".into(),channel:name.into(),channel_id:"123".into(),bot_id:"456".into(),client_id:"client".into(),blocklist:vec!["proibido".into()],topics:vec![],editors:vec![],ai:AiConfig::default(),modules:json!({"points":true,"raffles":true,"predictions":true,"queue":true})}}
-fn event(p:&Profile,text:&str,simulated:bool)->Event{Event{id:uuid::Uuid::new_v4().to_string(),profile_id:p.id.clone(),kind:"chat".into(),user:"Ana".into(),user_id:"ana".into(),role:"everyone".into(),message:text.into(),data:Value::Null,simulated}}
+fn event(p:&Profile,text:&str,simulated:bool)->Event{Event{id:uuid::Uuid::new_v4().to_string(),profile_id:p.id.clone(),kind:"chat".into(),user:"Ana".into(),user_id:"ana".into(),role:"everyone".into(),message:text.into(),data:Value::Null,simulated,rehearsal:false}}
 fn flow(p:&Profile)->Flow{Flow{id:uuid::Uuid::new_v4().to_string(),profile_id:p.id.clone(),name:"Teste".into(),trigger:Trigger{kind:"command".into(),pattern:"!oi".into(),cooldown:5,user_cooldown:5,..Default::default()},actions:vec!["Um $user","Dois","Três"].into_iter().map(|s|Action{kind:"chat".into(),text:s.into(),target:"".into(),value:0,condition:"".into(),..Default::default()}).collect(),..Default::default()}}
 #[tokio::test]
 async fn ordered_execution_cooldown_filter_and_isolation(){
@@ -958,6 +958,75 @@ async fn chat_no_overlay_segue_o_motor_e_a_delecao_sincroniza(){
  assert!(std::iter::from_fn(||rx.try_recv().ok()).any(|v|v["type"]=="chat.clear"));
 }
 
+#[tokio::test]
+async fn evento_simulado_fica_visivel_no_historico_mas_nao_entra_nas_estatisticas(){
+ let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();
+ let p=profile("Estatísticas");rt.db.save_profile(&p).unwrap();
+
+ // ensaio de follow e de chat: registra no histórico com status `ensaio`…
+ let mut sim_follow=event(&p,"",false);sim_follow.kind="follow".into();sim_follow.simulated=true;
+ engine::process(rt.clone(),sim_follow).await;
+ engine::process(rt.clone(),event(&p,"mensagem de teste",true)).await;
+ let logs=rt.db.logs(&p.id).unwrap();
+ assert!(logs.iter().any(|l|l.kind=="follow"&&l.status=="ensaio"),"o ensaio fica visível no histórico");
+ assert!(logs.iter().any(|l|l.kind=="chat"&&l.status=="ensaio"));
+ // …mas nada conta no painel.
+ let s=stats::read(&rt,&p.id).unwrap();
+ assert_eq!(s["followers"],0,"seguidor de teste não conta");
+ assert_eq!(s["messages"],0,"mensagem de teste não conta");
+
+ // o evento real continua contando normalmente.
+ let mut real_follow=event(&p,"",false);real_follow.kind="follow".into();
+ engine::process(rt.clone(),real_follow).await;
+ engine::process(rt.clone(),event(&p,"ola a todos",false)).await;
+ let s=stats::read(&rt,&p.id).unwrap();
+ assert_eq!(s["followers"],1);
+ assert_eq!(s["messages"],1);
+}
+
+#[tokio::test]
+async fn ensaio_nunca_vaza_para_o_discord(){
+ let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();
+ let p=profile("Discord");rt.db.save_profile(&p).unwrap();
+ rt.db.set_module(&p.id,"discordBot",&json!({
+   "enabled":true,
+   "notify":{"enabled":true,"channelId":"111","kinds":{"follow":{"enabled":true}}},
+   "mirror":{"enabled":true,"toDiscord":true,"channelId":"222"}
+ })).unwrap();
+
+ // mensagem simulada com espelho ligado: suprimida e registrada, sem post agendado
+ engine::process(rt.clone(),event(&p,"mensagem de teste",true)).await;
+ let logs=rt.db.logs(&p.id).unwrap();
+ assert!(logs.iter().any(|l|l.kind=="discord"&&l.status=="ensaio"&&l.message.contains("[Ensaio] Espelho do chat")));
+
+ // follow simulado com aviso ligado: idem
+ let mut sim_follow=event(&p,"",false);sim_follow.kind="follow".into();sim_follow.simulated=true;
+ engine::process(rt.clone(),sim_follow).await;
+ let logs=rt.db.logs(&p.id).unwrap();
+ assert!(logs.iter().any(|l|l.kind=="discord"&&l.status=="ensaio"&&l.message.contains("[Ensaio] Aviso ao Discord")));
+ assert!(!logs.iter().any(|l|l.kind=="discord"&&l.status=="error"),"nenhum post real tentado durante o ensaio");
+}
+
+#[tokio::test]
+async fn execucao_de_fluxo_em_teste_nao_conta_comando(){
+ let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();
+ let p=profile("Comandos");rt.db.save_profile(&p).unwrap();
+ let f=flow(&p);rt.db.save_flow(&f).unwrap();
+
+ // mesmo caminho do botão de teste do Estúdio (test=true)
+ let done=engine::execute_flow(&rt,&p,&event(&p,"!oi",false),&f,true,&[],None,true,None).await;
+ assert!(done);
+ let s=stats::read(&rt,&p.id).unwrap();
+ assert_eq!(s["commands"],json!([]),"execução de teste não vira estatística de comandos");
+
+ // a execução real conta normalmente
+ engine::process(rt.clone(),event(&p,"!oi",false)).await;
+ let s=stats::read(&rt,&p.id).unwrap();
+ let commands=s["commands"].as_array().unwrap();
+ assert_eq!(commands.len(),1);
+ assert_eq!(commands[0]["count"],1);
+}
+
 #[tokio::test] async fn match_do_chat_sorteia_o_par_e_guarda_os_intervalos(){
  let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();
  let mut p=profile("Match");p.modules=json!({"affinity":true});rt.db.save_profile(&p).unwrap();
@@ -1025,6 +1094,12 @@ async fn chat_no_overlay_segue_o_motor_e_a_delecao_sincroniza(){
  assert_eq!(ids.len(),24,"a quantidade pedida chega inteira");
  assert_eq!(ids[0],"25","o mais usado abre a explosão");
  assert_eq!(ids[1],"88");
+ assert!(msg["payload"]["rehearsal"].is_null(),"evento real não leva a marca de ensaio");
+ // o botão de teste da tela explode marcado como ensaio (selo ENSAIO no OBS)
+ let mut rx=rt.broadcast.subscribe();
+ crate::emote_burst::test(&rt,&p).expect("com emotes carregados o teste explode");
+ let t=std::iter::from_fn(||rx.try_recv().ok()).find(|v|v["type"]=="emote.burst").expect("teste deve explodir");
+ assert_eq!(t["payload"]["rehearsal"],true,"explosão de teste carrega a marca de ensaio");
  // evento fora dos quatro escolhidos não dispara
  let mut raid=event(&p,"",false);raid.kind="raid".into();
  let mut rx=rt.broadcast.subscribe();
@@ -1033,4 +1108,148 @@ async fn chat_no_overlay_segue_o_motor_e_a_delecao_sincroniza(){
  // o tique do agendador guarda os totais para a próxima sessão
  crate::emote_burst::flush(&rt);
  assert_eq!(rt.db.module(&p.id,"emoteBurstStats")["25"],json!(2));
+}
+
+#[tokio::test]
+async fn payloads_de_ensaio_carregam_a_marcacao_e_o_real_nao(){
+ let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();
+ let p=profile("Selo");rt.db.save_profile(&p).unwrap();
+ let mut rx=rt.broadcast.subscribe();
+
+ // chat e alertas ligados pelo mesmo caminho do Estúdio
+ let mut ccfg=crate::chat_overlay::defaults();ccfg["enabled"]=json!(true);
+ dispatch(rt.clone(),"module.config",json!({"profileId":p.id,"key":"chatOverlay","value":ccfg})).await.unwrap();
+ let mut acfg=crate::alerts::defaults();acfg["enabled"]=json!(true);
+ dispatch(rt.clone(),"module.config",json!({"profileId":p.id,"key":"alerts","value":acfg})).await.unwrap();
+
+ // mensagem real: payload sem a marca
+ engine::process(rt.clone(),event(&p,"ola a todos",false)).await;
+ let chat:Vec<_>=std::iter::from_fn(||rx.try_recv().ok()).filter(|v|v["type"]=="chat").collect();
+ assert_eq!(chat.len(),1);
+ assert!(chat[0]["payload"]["rehearsal"].is_null(),"mensagem real não carrega a marca");
+
+ // a mesma passada como ensaio: marcada
+ let mut ensaio=event(&p,"ola de ensaio",false);ensaio.rehearsal=true;
+ engine::process(rt.clone(),ensaio).await;
+ let chat:Vec<_>=std::iter::from_fn(||rx.try_recv().ok()).filter(|v|v["type"]=="chat").collect();
+ assert_eq!(chat[0]["payload"]["rehearsal"],true,"mensagem de ensaio carrega a marca");
+
+ // botão de teste do Estúdio: alerta marcado
+ dispatch(rt.clone(),"alerts.test",json!({"profileId":p.id,"kind":"follow"})).await.unwrap();
+ let hits:Vec<_>=std::iter::from_fn(||rx.try_recv().ok()).filter(|v|v["type"]=="alert").collect();
+ assert_eq!(hits.len(),1);
+ assert_eq!(hits[0]["payload"]["rehearsal"],true,"teste de alerta carrega a marca");
+
+ // evento real de follow: sem marca
+ let mut follow=event(&p,"",false);follow.kind="follow".into();
+ engine::process(rt.clone(),follow).await;
+ let hits:Vec<_>=std::iter::from_fn(||rx.try_recv().ok()).filter(|v|v["type"]=="alert").collect();
+ assert_eq!(hits.len(),1);
+ assert!(hits[0]["payload"]["rehearsal"].is_null(),"alerta real não carrega a marca");
+}
+
+#[tokio::test]
+async fn ensaio_da_meta_sai_pelo_caminho_real_sem_persistir(){
+ let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();
+ let p=profile("Meta ensaio");rt.db.save_profile(&p).unwrap();
+ let mut rx=rt.broadcast.subscribe();
+
+ // integração desligada: nada dispara e a resposta diz o que falta (igual ao
+ // vivo, onde a meta não apareceria)
+ let out=dispatch(rt.clone(),"livepix.simulate",json!({"profileId":p.id,"mode":"donate"})).await.unwrap();
+ assert_eq!(out["fired"],false);
+ assert!(out["reason"].as_str().unwrap().contains("Ative a integração"));
+ assert!(!std::iter::from_fn(||rx.try_recv().ok()).any(|v|v["type"]=="goal"),"sem integração não há payload");
+
+ // ligar pelo mesmo caminho do Estúdio, com uma meta
+ dispatch(rt.clone(),"livepix.enable",json!({"profileId":p.id,"goals":[{"title":"Meta do mês","target":50000,"font_family":"Arial"}]})).await.unwrap();
+
+ // doação de ensaio: publica o goal com o selo, sem tocar no contador guardado
+ let out=dispatch(rt.clone(),"livepix.simulate",json!({"profileId":p.id,"mode":"donate"})).await.unwrap();
+ assert_eq!(out["fired"],true);
+ let msgs:Vec<_>=std::iter::from_fn(||rx.try_recv().ok()).collect();
+ let hit=msgs.iter().find(|v|v["type"]=="goal"&&v["payload"]["rehearsal"]==true).expect("doação de ensaio publica o goal");
+ assert_eq!(hit["payload"]["current"],8500,"sobe ~17% do alvo a partir do zero");
+ assert_eq!(hit["payload"]["target"],50000);
+ assert_eq!(hit["payload"]["percent"],17);
+ assert_eq!(hit["payload"]["celebrate"],false);
+ assert_eq!(hit["payload"]["hidden"],false);
+ assert_eq!(crate::livepix::data(&rt,&p.id)["current"],0,"o contador real não muda no ensaio");
+
+ // celebração: 100% e, com a explosão ligada na Meta, o estouro carrega o selo
+ rt.db.set_module(&p.id,"ai_emotes",&json!({"at":0,"names":["Kappa"],"list":[{"id":"25","name":"Kappa"}]})).unwrap();
+ rt.db.set_module(&p.id,"emoteBurst",&json!({"enabled":true,"count":10,"size":40,"source":"top","topN":5,"alsoChat":true,"events":{"meta":true}})).unwrap();
+ let out=dispatch(rt.clone(),"livepix.simulate",json!({"profileId":p.id,"mode":"celebrate"})).await.unwrap();
+ assert_eq!(out["fired"],true);
+ assert_eq!(out["celebrate"],true);
+ let msgs:Vec<_>=std::iter::from_fn(||rx.try_recv().ok()).collect();
+ let hit=msgs.iter().find(|v|v["type"]=="goal"&&v["payload"]["rehearsal"]==true).expect("celebração publica o goal");
+ assert_eq!(hit["payload"]["current"],50000);
+ assert_eq!(hit["payload"]["percent"],100);
+ assert_eq!(hit["payload"]["celebrate"],true);
+ let burst=msgs.iter().find(|v|v["type"]=="emote.burst").expect("celebração dispara a explosão da Meta");
+ assert_eq!(burst["payload"]["rehearsal"],true);
+ assert_eq!(burst["payload"]["via"],"meta");
+ assert_eq!(crate::livepix::data(&rt,&p.id)["current"],0,"nenhuma simulação grava o contador");
+ let logs=rt.db.logs(&p.id).unwrap();
+ assert!(logs.iter().any(|l|l.status=="ensaio"&&l.message.contains("Ensaio: celebração da meta")),"o ensaio fica visível no histórico");
+}
+
+#[tokio::test]
+async fn chat_de_ensaio_sai_pelo_caminho_real_do_chat(){
+ let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();
+ let p=profile("Chat ensaio");rt.db.save_profile(&p).unwrap();
+ let mut rx=rt.broadcast.subscribe();
+ let sample=||json!({"id":"ensaio-1","user":"Emoteiro","userId":"u-ensaio","role":"moderator","text":"olha o Kappa","badges":["moderator"],"frags":[{"t":"t","v":"olha o "},{"t":"e","v":"Kappa","id":"25"}]});
+
+ // chat desligado: nada dispara e a resposta diz o motivo (em live, nada apareceria)
+ let out=dispatch(rt.clone(),"chat.test",json!({"profileId":p.id,"mode":"message","sample":sample()})).await.unwrap();
+ assert_eq!(out["fired"],false);
+ assert!(out["reason"].as_str().unwrap().contains("Ligue o chat"));
+ assert!(!std::iter::from_fn(||rx.try_recv().ok()).any(|v|v["type"]=="chat"));
+
+ // ligado pelo mesmo caminho do Estúdio
+ let mut cfg=crate::chat_overlay::defaults();cfg["enabled"]=json!(true);
+ dispatch(rt.clone(),"module.config",json!({"profileId":p.id,"key":"chatOverlay","value":cfg})).await.unwrap();
+
+ // a amostra vira payload de chat com o selo, papel, badges e emotes
+ let out=dispatch(rt.clone(),"chat.test",json!({"profileId":p.id,"mode":"message","sample":sample()})).await.unwrap();
+ assert_eq!(out["fired"],true);
+ let hits:Vec<_>=std::iter::from_fn(||rx.try_recv().ok()).filter(|v|v["type"]=="chat").collect();
+ assert_eq!(hits.len(),1);
+ let payload=&hits[0]["payload"];
+ assert_eq!(payload["rehearsal"],true,"mensagem de ensaio carrega o selo");
+ assert_eq!(payload["id"],"ensaio-1","o overlay remove depois pelo id da amostra");
+ assert_eq!(payload["user"],"Emoteiro");
+ assert_eq!(payload["role"],"moderator");
+ assert_eq!(payload["badges"][0],"moderator");
+ assert_eq!(payload["frags"][1]["t"],"e","o emote volta a ser fragmento pelo caminho real");
+ assert_eq!(payload["frags"][1]["id"],"25");
+ assert_eq!(payload["first"],true,"a pessoa de teste nunca passou por aqui");
+ assert_eq!(payload["bot"],false);
+
+ // eventos de canal desligados: o teste aponta o interruptor que falta
+ let out=dispatch(rt.clone(),"chat.test",json!({"profileId":p.id,"mode":"event","kind":"follow"})).await.unwrap();
+ assert_eq!(out["fired"],false);
+ assert!(out["reason"].as_str().unwrap().contains("eventos de canal"));
+
+ // ligando os eventos, o follow de teste vira caixa na coluna, com o selo
+ let mut cfg=crate::chat_overlay::defaults();cfg["enabled"]=json!(true);cfg["eventsOn"]=json!(true);cfg["ev"]["follow"]["on"]=json!(true);
+ dispatch(rt.clone(),"module.config",json!({"profileId":p.id,"key":"chatOverlay","value":cfg})).await.unwrap();
+ let out=dispatch(rt.clone(),"chat.test",json!({"profileId":p.id,"mode":"event","kind":"follow"})).await.unwrap();
+ assert_eq!(out["fired"],true);
+ let hits:Vec<_>=std::iter::from_fn(||rx.try_recv().ok()).filter(|v|v["type"]=="chat.event").collect();
+ assert_eq!(hits.len(),1);
+ assert_eq!(hits[0]["payload"]["rehearsal"],true,"evento de ensaio carrega o selo");
+ assert_eq!(hits[0]["payload"]["kind"],"follow");
+ assert!(hits[0]["payload"]["text"].as_str().unwrap().contains("Sortuda"),"o texto sai preenchido pelo motor");
+
+ // presente em lote: o Event sai como `gift` e o motor deriva `giftbulk`,
+ // exatamente como a Twitch entrega (mesma caixa do Estúdio)
+ let out=dispatch(rt.clone(),"chat.test",json!({"profileId":p.id,"mode":"event","kind":"giftbulk"})).await.unwrap();
+ assert_eq!(out["fired"],true);
+ let hits:Vec<_>=std::iter::from_fn(||rx.try_recv().ok()).filter(|v|v["type"]=="chat.event").collect();
+ assert_eq!(hits.len(),1);
+ assert_eq!(hits[0]["payload"]["kind"],"giftbulk");
+ assert!(hits[0]["payload"]["text"].as_str().unwrap().contains("10 SUBS"),"amount do total, como o Estúdio mostra");
 }

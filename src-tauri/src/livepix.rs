@@ -370,7 +370,7 @@ pub async fn tick(rt: &Arc<Runtime>) {
 // ---- RPC -----
 
 pub async fn operation(rt: &Arc<Runtime>, p: &str, op: &str, args: &Value) -> Result<Value, String> {
-    rt.db.profile(p)?;
+    let profile = rt.db.profile(p)?;
     match op {
         "livepix.save_credentials" => {
             let cid = args["clientId"].as_str().unwrap_or("").trim().to_owned();
@@ -492,6 +492,44 @@ pub async fn operation(rt: &Arc<Runtime>, p: &str, op: &str, args: &Value) -> Re
             rt.db.set_module(p, MODULE, &serde_json::to_value(&cfg).map_err(|e| e.to_string())?)?;
             rt.log(p, "livepix", "Meta adicionada ao estúdio.", "info");
             Ok(serde_json::to_value(&cfg).map_err(|e| e.to_string())?)
+        }
+        // Ensaio da Meta: mesmo caminho do pagamento ao vivo (payload do goal,
+        // som pela linha do app e, na celebração, a explosão de emotes), mas
+        // sem persistir o contador e com `rehearsal` no payload (selo ENSAIO).
+        "livepix.simulate" => {
+            let mode = args["mode"].as_str().unwrap_or("donate");
+            if !["donate", "celebrate"].contains(&mode) { return Err("Simulação inválida".into()); }
+            let cfg = config(rt, p);
+            if !cfg.enabled {
+                return Ok(json!({"fired": false, "reason": "Ative a integração LivePix: com ela desligada a meta não aparece no OBS."}));
+            }
+            let Some(goal) = cfg.goals.get(&cfg.active_goal).filter(|g| g.target > 0).cloned() else {
+                return Ok(json!({"fired": false, "reason": "Defina uma meta com valor-alvo maior que zero antes de simular."}));
+            };
+            let old = data(rt, p)["current"].as_i64().unwrap_or(0).max(0);
+            let target = goal.target;
+            // Mesmos saltos da prévia: doação sobe ~17% (mínimo de R$ 10) até
+            // 97% do alvo — ou volta ao início quando a meta já estava cheia.
+            let new = if mode == "celebrate" { target }
+                else if old >= target { target * 30 / 100 }
+                else { (old + (target * 17 / 100).max(1000)).min(target * 97 / 100) };
+            let celebrate = mode == "celebrate";
+            // rt.emit: o payload chega à fonte do OBS (WS) e à prévia do Estúdio.
+            rt.emit("goal", json!({
+                "profileId": p,
+                "title": goal.title,
+                "current": new,
+                "target": target,
+                "font_family": goal.font_family,
+                "percent": (new * 100 / target).clamp(0, 100),
+                "celebrate": celebrate,
+                "hidden": false,
+                "rehearsal": true,
+            }));
+            goal_sound(rt, &profile, goal_sound_key(celebrate, new > old));
+            if celebrate { crate::emote_burst::maybe_rehearsed(rt, &profile, "meta", true); }
+            rt.log(p, "livepix", if celebrate { "Ensaio: celebração da meta" } else { "Ensaio: doação na meta" }, "ensaio");
+            Ok(json!({"fired": true, "current": new, "target": target, "celebrate": celebrate}))
         }
         "livepix.design_get" => Ok(design(rt, p)),
         "livepix.design_save" => {

@@ -165,6 +165,8 @@ pub struct Event {
  #[serde(default)] pub message:String,
  #[serde(default)] pub data:Value,
  #[serde(default)] pub simulated:bool,
+ // Ensaio: evento de teste (Modo Ensaio) — o overlay exibe o selo ENSAIO.
+ #[serde(default)] pub rehearsal:bool,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all="camelCase")]
@@ -337,7 +339,7 @@ pub fn validate_flow(f:&Flow)->Result<(),String> {
 }
 #[cfg(test)] mod tests {
  use super::*;
- fn e()->Event {Event{id:"x".into(),profile_id:"p".into(),kind:"chat".into(),user:"ana".into(),user_id:"1".into(),role:"everyone".into(),message:"!oi tudo bem".into(),data:Value::Null,simulated:true}}
+ fn e()->Event {Event{id:"x".into(),profile_id:"p".into(),kind:"chat".into(),user:"ana".into(),user_id:"1".into(),role:"everyone".into(),message:"!oi tudo bem".into(),data:Value::Null,simulated:true,rehearsal:false}}
  #[test] fn command_boundary_and_roles() {
  let mut t=Trigger{kind:"command".into(),pattern:"!oi".into(),..Default::default()};
  assert!(matches(&t,&e()));t.pattern="!o".into();assert!(!matches(&t,&e()));
@@ -531,7 +533,7 @@ pub fn validate_flow(f:&Flow)->Result<(),String> {
  }
  #[test] fn redemption_matches_by_reward_id() {
   let t=Trigger{kind:"redemption".into(),pattern:"".into(),..Default::default()};
-  let e=Event{id:"1".into(),profile_id:"p".into(),kind:"redemption".into(),user:"Ana".into(),user_id:"77".into(),role:"everyone".into(),message:String::new(),data:serde_json::json!({"reward":{"id":"abc","title":"Mute","cost":5000}}),simulated:false};
+  let e=Event{id:"1".into(),profile_id:"p".into(),kind:"redemption".into(),user:"Ana".into(),user_id:"77".into(),role:"everyone".into(),message:String::new(),data:serde_json::json!({"reward":{"id":"abc","title":"Mute","cost":5000}}),simulated:false,rehearsal:false};
   assert!(matches(&t,&e),"padrão vazio vale qualquer resgate");
   let one=Trigger{pattern:"abc".into(),..t.clone()};
   assert!(matches(&one,&e));

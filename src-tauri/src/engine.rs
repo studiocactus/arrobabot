@@ -218,7 +218,9 @@ pub async fn process(rt:Arc<Runtime>,e:Event){
   }
  }
  if e.kind=="voice"&&p.modules["voice"]!=true{rt.log(&p.id,"voice","Controle por voz desativado","info");return}
- rt.log(&p.id,&e.kind,&format!("{}: {}",e.user,e.message),"info");
+ // Evento de teste fica visível no histórico com status `ensaio`: o painel de
+ // estatísticas conta só `info`, então simulação não infla seguidores/mensagens.
+ rt.log(&p.id,&e.kind,&format!("{}: {}",e.user,e.message),if e.simulated{"ensaio"}else{"info"});
  rt.emit("platform-event",serde_json::to_value(&e).unwrap());
  if e.kind=="chat" {
  if let Some(reason)=crate::moderation::detect(&rt,&p,&e){rt.log(&p.id,"moderation",reason,"info");if let Err(err)=crate::moderation::act(&rt,&p,&e,reason).await{rt.log(&p.id,"moderation",&err,"error");}return}
@@ -290,12 +292,13 @@ pub async fn process(rt:Arc<Runtime>,e:Event){
  /// sem isto a tela acompanharia um registro parado e o cancelamento miraria outro.
  pub async fn execute_flow_with_run(rt:&Arc<Runtime>,p:&Profile,e:&Event,f:&Flow,answers:bool,history:&[Value],counts:Option<&(Option<i64>,Option<i64>)>,test:bool,test_vars:Option<Value>,exec:String)->bool{
   let short=rt.runs.short_of(&exec);
-  rt.log(&p.id,"run",&format!("Execução {short} iniciada ({} · {})",f.name,e.kind),"info");
   let testing=test||e.data["botliveTest"]==true;
+  rt.log(&p.id,"run",&format!("Execução {short} iniciada ({} · {})",f.name,e.kind),"info");
   let mut ev=e.clone();ev.data["botliveTest"]=json!(testing);ev.data["execId"]=json!(exec.clone());
   let e=&ev;
   let mut completed=true;
-  rt.log(&p.id,"flow",&format!("Iniciando {}",f.name),"info");
+  // Execução de teste conta como ensaio: o painel de comandos lê só `info`.
+  rt.log(&p.id,"flow",&format!("Iniciando {}",f.name),if testing{"ensaio"}else{"info"});
   if !answers&&replies(&f){rt.log(&p.id,"action",&format!("{} · Outra automação já respondeu esta mensagem; os demais efeitos continuam",f.name),"info")}
   let count=if f.counter{match if e.simulated||testing{crate::command_counter::get(&rt.db,&p.id,&f.id).and_then(|n|n.checked_add(1).ok_or("Contador excedeu o limite".into()))}else{crate::command_counter::change(&rt.db,&p.id,&f.id,None)}{Ok(n)=>Some(n),Err(err)=>{rt.log(&p.id,"counter",&err,"error");rt.runs.fail(&exec,None,&err);rt.runs.finish(&exec,"FAILED");return false}}}else{None};
   if let Some(n)=count{if !e.simulated&&!testing{rt.emit("command-counter",json!({"profileId":p.id,"id":f.id,"value":n}));}}

@@ -47,12 +47,22 @@ export default function ChatObs({profileId,notify}:{profileId:string;notify:(s:s
  const [audioDevice,setAudioDevice]=useState('');
  const [burstChat,setBurstChat]=useState(false);
  const [evSel,setEvSel]=useState<ChatEventKind>('follow');
+ const [ensaio,setEnsaio]=useState(false);
  const hydrated=useRef(false);
  const lastSaved=useRef('');
  const preview=useRef<HTMLDivElement>(null);
  const stage=useRef<HTMLDivElement>(null);
+ const ensaioTimer=useRef<number|undefined>(undefined);
  const cfgRef=useRef(cfg);
  cfgRef.current=cfg;
+ useEffect(()=>()=>window.clearTimeout(ensaioTimer.current),[]);
+
+ /** Selo ENSAIO: acende quando um teste volta pelo caminho da live e some sozinho. */
+ const flagEnsaio=()=>{
+  setEnsaio(true);
+  window.clearTimeout(ensaioTimer.current);
+  ensaioTimer.current=window.setTimeout(()=>setEnsaio(false),5000);
+ };
 
  const load=useCallback(async()=>{
   if(!desktop)return;
@@ -111,10 +121,12 @@ export default function ChatObs({profileId,notify}:{profileId:string;notify:(s:s
   let disposed=false;
   const unsubs:Promise<(()=>void)|undefined>[]=[
    listen<ChatMsg>('chat',ev=>{
+    if(ev.payload.rehearsal)flagEnsaio();
     const box=preview.current;if(!box)return;
-    if(chatVisible(ev.payload,cfgRef.current)){pushChat(box,ev.payload,cfgRef.current,20);setLive(true)}
+    if(chatVisible(ev.payload,cfgRef.current)){pushChat(box,ev.payload,cfgRef.current,20);if(!ev.payload.rehearsal)setLive(true)}
    }),
-   listen<{kind:string;text:string;color:string}>('chat.event',ev=>{
+   listen<{kind:string;text:string;color:string;rehearsal?:boolean}>('chat.event',ev=>{
+    if(ev.payload.rehearsal)flagEnsaio();
     const box=preview.current;
     if(box&&isChatEventKind(ev.payload.kind))pushChatEvent(box,cfgRef.current,ev.payload.kind,ev.payload.text||'',ev.payload.color||'',20);
    }),
@@ -135,10 +147,19 @@ export default function ChatObs({profileId,notify}:{profileId:string;notify:(s:s
  const setEv=(k:ChatEventKind,patch:Partial<ChatConfig['ev'][ChatEventKind]>)=>
   setCfg(c=>({...c,ev:{...c.ev,[k]:{...c.ev[k],...patch}}}));
 
- /** Teste da caixa de evento: mesmo desenho do OBS, com som na linha do app. */
- const testEvent=(k:ChatEventKind)=>{
+ /** Teste do evento: no aplicativo o backend preenche e transmite pelo mesmo
+  *  caminho do evento da live (com o selo ENSAIO); na prévia web, desenha local. */
+ const testEvent=async(k:ChatEventKind)=>{
+  if(desktop){
+   try{
+    const out=await api<{fired?:boolean;reason?:string}>('chat.test',{profileId,mode:'event',kind:k});
+    if(out?.fired===false){notify(out.reason||'Não foi possível testar o evento.');return}
+   }catch(e){notify(errorText(e))}
+   return;
+  }
   const box=preview.current;if(!box)return;
   pushChatEvent(box,cfg,k,eventBoxHtml(cfg,k),cfg.ev[k].color,20);
+  flagEnsaio();
   const asset=cfg.ev[k].sound;
   if(asset)void playViewerSound({profileId,asset,volume:1,deviceId:audioDevice}).catch(()=>{});
  };
@@ -152,13 +173,28 @@ export default function ChatObs({profileId,notify}:{profileId:string;notify:(s:s
   return null;
  };
 
- const test=(kind:ChatSample)=>{
-  const box=preview.current;if(!box)return;
+ /** Mensagem de teste: no aplicativo sai pelo `chat.test` — a amostra vira
+  *  evento e o motor do chat a transmite como falaria na live (selo ENSAIO);
+  *  na prévia web sem aplicativo, empilha local com o mesmo visual.
+  *  Devolve `false` quando o interruptor impediu o teste (um aviso já basta). */
+ const test=async(kind:ChatSample):Promise<boolean>=>{
+  if(desktop){
+   try{
+    const out=await api<{fired?:boolean;reason?:string}>('chat.test',{profileId,mode:'message',sample:chatSample(kind)});
+    if(out?.fired===false){notify(out.reason||'Não foi possível testar a mensagem.');return false}
+   }catch(e){notify(errorText(e));return false}
+   return true;
+  }
+  const box=preview.current;if(!box)return false;
   const m=chatSample(kind);
-  if(chatVisible(m,cfg))pushChat(box,m,cfg,20);
+  if(chatVisible(m,cfg)){pushChat(box,m,cfg,20);flagEnsaio()}
+  return true;
  };
  const sequence=async()=>{
-  for(const k of CHAT_SAMPLES){test(k);await new Promise(r=>setTimeout(r,700))}
+  for(const k of CHAT_SAMPLES){
+   if(!await test(k))break;
+   await new Promise(r=>setTimeout(r,700));
+  }
  };
  const copyUrl=async()=>{
   if(!info)return;
@@ -175,25 +211,26 @@ export default function ChatObs({profileId,notify}:{profileId:string;notify:(s:s
   <Card title="Chat no overlay" action={<span className={'status-pill '+(cfg.enabled?'on':'off')}><span className="status-dot" aria-hidden="true"></span>{cfg.enabled?'Ligado':'Desligado'}</span>}>
    <p className="help">As mensagens do chat viram uma coluna na sua fonte de navegador: prefixo &gt; antes do nome, badges de moderador/VIP/sub, cores dos espectadores (a cor real da Twitch ou a sua escolha), emotes do canal, eventos de follow/sub/bits/raid na própria coluna e sincronização com a moderação (mensagem apagada some do overlay). A camada de chat tem um <strong>endereço próprio</strong> (com <code>mode=chat</code>): crie uma Fonte de navegador só para ela e coloque a coluna onde quiser, sem mexer na meta nem nos alertas.</p>
    <div className="list-row">
-    <div><strong>Chat no overlay</strong><small>{cfg.enabled?(live?'Mensagens reais já estão correndo na prévia':'Mensagens reais aparecem no OBS'):'Nada aparece até você ligar; os botões de teste sempre funcionam'}</small></div>
+    <div><strong>Chat no overlay</strong><small>{cfg.enabled?(live?'Mensagens reais já estão correndo na prévia':'Mensagens reais aparecem no OBS'):'Nada aparece até você ligar — e os testes avisam que, em live, também não apareceria'}</small></div>
     <Toggle label="Ligar chat no overlay" checked={cfg.enabled} onChange={v=>set({enabled:v})}/>
    </div>
    {saveError&&<p role="alert" className="inline-error">{saveError}</p>}
   </Card>
 
   <Card title="Estúdio de chat" action={<span className={'lp-save lp-save--'+saveState}>{saveState==='saving'?'Salvando…':saveState==='saved'?'Salvo':saveState==='error'?'Não salvou':'Alterações salvam sozinhas'}</span>}>
-   <p className="help">Toque nos botões para empilhar mensagens de exemplo com o visual atual. Os testes seguem os mesmos filtros de cima: escondendo bots ou comandos, os exemplos correspondentes também somem — igual ao OBS.</p>
+   <p className="help">Toque nos botões para empilhar mensagens de exemplo com o visual atual. Com o chat ligado, os testes entram pelo mesmo caminho da live (e o palco mostra o selo Ensaio); com ele desligado, um aviso explica que em live nada apareceria. Os testes seguem os mesmos filtros de cima: escondendo bots ou comandos, os exemplos correspondentes também somem — igual ao OBS.</p>
 
    <div className="lp-studio">
     <div className="lp-preview">
      <div className="lp-stagebar ch-tests" role="group" aria-label="Mensagens de teste">
-      {CHAT_SAMPLES.map(k=><button key={k} type="button" className="lp-seg" onClick={()=>test(k)}><Play size={12}/> {SAMPLE_LABELS[k]}</button>)}
+      {CHAT_SAMPLES.map(k=><button key={k} type="button" className="lp-seg" onClick={()=>void test(k)}><Play size={12}/> {SAMPLE_LABELS[k]}</button>)}
       <button type="button" className="lp-seg" onClick={()=>void sequence()}><Zap size={13}/> Sequência</button>
       <button type="button" className="lp-seg" onClick={()=>preview.current&&clearChat(preview.current)}><Trash2 size={13}/> Limpar</button>
      </div>
 
      <div className="ch-stage" ref={stage}>
       <span className="ch-stage-hint">COLUNA EM TAMANHO REAL</span>
+      {ensaio&&<span className="lp-ensaio">Ensaio</span>}
       <div ref={preview} className="bl-chat-col" aria-hidden="true"></div>
      </div>
 
@@ -278,7 +315,7 @@ export default function ChatObs({profileId,notify}:{profileId:string;notify:(s:s
       <h4>Eventos na coluna</h4>
       <p className="lp-note">Follow, sub, renovação, presente, bits e raid viram uma caixa própria dentro da coluna — com cor e som por evento. Funciona junto ou separado da camada de alertas.</p>
       <div className="lp-ctrl">
-       <ToggleCheck label="Eventos no chat" hint="Desligado, nada muda na coluna (os testes de baixo sempre funcionam)." checked={cfg.eventsOn} onChange={v=>set({eventsOn:v})}/>
+       <ToggleCheck label="Eventos no chat" hint="Desligado, nada muda na coluna — os testes avisam que, em live, também não apareceria." checked={cfg.eventsOn} onChange={v=>set({eventsOn:v})}/>
       </div>
       {cfg.eventsOn&&<>
        <div className="lp-ctrl">
@@ -301,7 +338,7 @@ export default function ChatObs({profileId,notify}:{profileId:string;notify:(s:s
           <option value="">Sem som</option>
           {sounds.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
          </select>
-         <button type="button" className="lp-seg" onClick={()=>testEvent(evSel)}><Play size={12}/> Testar {CHAT_EVENT_LABELS[evSel].toLowerCase()}</button>
+         <button type="button" className="lp-seg" onClick={()=>void testEvent(evSel)}><Play size={12}/> Testar {CHAT_EVENT_LABELS[evSel].toLowerCase()}</button>
         </div>
         <small className="lp-note">{sounds.length?'O som toca na linha de áudio do app (tela Áudio), nunca dentro do OBS. Envie áudios na tela Sons de Live.':'Nenhum som neste perfil ainda — envie um WAV, MP3 ou OGG na tela Sons de Live.'}</small>
        </div>

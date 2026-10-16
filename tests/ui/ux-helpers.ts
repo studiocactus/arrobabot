@@ -97,6 +97,12 @@ export async function mock(page:Page){
         ?{template:'clean',layout:'bar',align:'center',valign:'bottom',width:80,font:'Segoe UI',fontSize:18,fontWeight:700,animate:false,celebrate:true,soundDonate:'',soundCelebrate:''}
         :{token:'goal-token',port:9876,url:'http://127.0.0.1:9876/overlay#token=goal-token&profile=p1'};
       }
+      case 'livepix.simulate':{
+       const a=(payload.args as Record<string,unknown>)||{};
+       if(!a.profileId)throw new Error('Perfil não encontrado');
+       const celebrate=a.mode==='celebrate';
+       return {fired:true,current:celebrate?50000:8500,target:50000,celebrate};
+      }
       case 'alerts.test':return {kind:String((payload.args as Record<string,unknown>)?.kind||'follow'),vars:{name:'NovoSeguidor',amount:1,months:1,tier:'TIER 1',message:''}};
       case 'chat.get':return {config:null,overlay:{token:'preview-token',port:9876,url:'http://127.0.0.1:9876/overlay#token=preview-token&profile=p1'}};
       case 'audio.get':return {config:null,voiceFx:{selection:{input:'Microfone (Realtek)',output:'CABLE Input (VB-Audio Virtual Cable)'},devices:{inputs:[{name:'Microfone (Realtek)',default:true}],outputs:[{name:'CABLE Input (VB-Audio Virtual Cable)',default:true}]}},status:{phase:'off',message:'Prévia no navegador: a voz ao vivo só existe no aplicativo desktop.',input:'',output:''}};

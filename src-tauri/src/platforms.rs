@@ -215,7 +215,7 @@ pub fn normalize_twitch(p:&Profile,v:&Value)->Option<Event>{
  for b in badges{if b["set_id"]=="moderator"{role="moderator"}}
  }
  if user_id==p.channel_id{role="broadcaster"}
- Some(Event{id:v["metadata"]["message_id"].as_str()?.into(),profile_id:p.id.clone(),kind:kind.into(),user:payload["chatter_user_name"].as_str().or(payload["user_name"].as_str()).or(payload["target_user_name"].as_str()).or(payload["from_broadcaster_user_name"].as_str()).or(payload["broadcaster_user_name"].as_str()).unwrap_or("espectador").into(),user_id:user_id.into(),role:role.into(),message:payload["message"]["text"].as_str().or(payload["message"].as_str()).or(payload["message_id"].as_str()).or(payload["user_input"].as_str()).or(payload["category_name"].as_str()).unwrap_or("").into(),data:payload.clone(),simulated:false})
+ Some(Event{id:v["metadata"]["message_id"].as_str()?.into(),profile_id:p.id.clone(),kind:kind.into(),user:payload["chatter_user_name"].as_str().or(payload["user_name"].as_str()).or(payload["target_user_name"].as_str()).or(payload["from_broadcaster_user_name"].as_str()).or(payload["broadcaster_user_name"].as_str()).unwrap_or("espectador").into(),user_id:user_id.into(),role:role.into(),message:payload["message"]["text"].as_str().or(payload["message"].as_str()).or(payload["message_id"].as_str()).or(payload["user_input"].as_str()).or(payload["category_name"].as_str()).unwrap_or("").into(),data:payload.clone(),simulated:false,rehearsal:false})
 }
 pub async fn youtube(rt:Arc<Runtime>,p:Profile)->Result<(),String>{
  let token=oauth::token(&rt.http,&p,"bot").await?;
@@ -234,7 +234,7 @@ pub async fn youtube(rt:Arc<Runtime>,p:Profile)->Result<(),String>{
  let author=&item["authorDetails"];let snippet=&item["snippet"];
  let uid=author["channelId"].as_str().unwrap_or("");if uid==p.bot_id{continue}
  let kind=match snippet["type"].as_str().unwrap_or(""){"textMessageEvent"=>"chat","superChatEvent"|"superStickerEvent"=>"cheer","newSponsorEvent"|"memberMilestoneChatEvent"=>"subscription",_=>continue};
- rt.submit(Event{id:item["id"].as_str().unwrap_or("").into(),profile_id:p.id.clone(),kind:kind.into(),user:author["displayName"].as_str().unwrap_or("espectador").into(),user_id:uid.into(),role:if author["isChatOwner"]==true{"broadcaster"}else if author["isChatModerator"]==true{"moderator"}else if author["isChatSponsor"]==true{"subscriber"}else{"everyone"}.into(),message:snippet["displayMessage"].as_str().unwrap_or("").into(),data:snippet.clone(),simulated:false}).await?;
+ rt.submit(Event{id:item["id"].as_str().unwrap_or("").into(),profile_id:p.id.clone(),kind:kind.into(),user:author["displayName"].as_str().unwrap_or("espectador").into(),user_id:uid.into(),role:if author["isChatOwner"]==true{"broadcaster"}else if author["isChatModerator"]==true{"moderator"}else if author["isChatSponsor"]==true{"subscriber"}else{"everyone"}.into(),message:snippet["displayMessage"].as_str().unwrap_or("").into(),data:snippet.clone(),simulated:false,rehearsal:false}).await?;
  }}}
  first=false;page=v["nextPageToken"].as_str().unwrap_or("").into();
  tokio::time::sleep(Duration::from_millis(v["pollingIntervalMillis"].as_u64().unwrap_or(5000).max(1000))).await;

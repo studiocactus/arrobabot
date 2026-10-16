@@ -35,7 +35,7 @@ pub async fn run(rt:Arc<Runtime>){
  }
  };
  if let Some(question)=question{
- let event=Event{id:uuid::Uuid::new_v4().to_string(),profile_id:p.id.clone(),kind:"timer".into(),user:String::new(),user_id:String::new(),role:"broadcaster".into(),message:String::new(),data:Value::Null,simulated:false};
+ let event=Event{id:uuid::Uuid::new_v4().to_string(),profile_id:p.id.clone(),kind:"timer".into(),user:String::new(),user_id:String::new(),role:"broadcaster".into(),message:String::new(),data:Value::Null,simulated:false,rehearsal:false};
  if let Err(err)=rt.send(&p,&event,&format!("Trivia: {question} — a primeira resposta correta vale 50 pontos!")).await{
  rt.log(&p.id,"trivia",&err,"error");
  let _lock=rt.module_lock.lock().unwrap();let mut state=modules::load(&rt,&p.id);state.trivia["open"]=json!(false);let _=rt.db.set_module(&p.id,"community",&serde_json::to_value(state).unwrap());

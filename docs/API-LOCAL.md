@@ -107,7 +107,7 @@ Token inválido encerra a conexão. O servidor admite até dezesseis clientes si
 | role | Forçado a everyone pelo servidor |
 | message | Texto usado por gatilhos, condições e {{message}} |
 | data | Dados JSON adicionais |
-| simulated | true evita efeitos externos e alterações de economia/memória |
+| simulated | true evita efeitos externos e alterações de economia, memória e estatísticas — o evento entra no histórico marcado como ensaio |
 
 Para integrações reais, simulated pode ser false. Confirme o fluxo antes: isso pode publicar mensagens, debitar pontos ou chamar webhooks.
 

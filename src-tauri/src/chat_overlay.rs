@@ -162,11 +162,13 @@ pub fn fire(rt: &Runtime, p: &Profile, e: &Event) {
         .map(|bs| bs.iter().filter_map(|b| b["set_id"].as_str().map(Value::from)).collect())
         .unwrap_or_default();
     let first = first_time(rt, p, &e.user_id);
-    rt.emit("chat", json!({
+    let mut payload = json!({
         "profileId": p.id, "id": id, "user": e.user, "userId": e.user_id, "role": e.role,
         "text": e.message, "badges": badges, "frags": frags(&e.data, &e.message),
-        "first": first, "bot": false, "color": twitch_color(&e.data["color"]),
-    }));
+        "first": first, "bot": e.data["bot"] == Value::Bool(true), "color": twitch_color(&e.data["color"]),
+    });
+    if e.rehearsal { payload["rehearsal"] = json!(true); }
+    rt.emit("chat", payload);
 }
 
 /// Cor que o espectador escolheu na Twitch (`#rrggbb`); vazia quando nunca
@@ -208,8 +210,117 @@ pub fn event(rt: &Runtime, p: &Profile, e: &Event) {
         vars["sender"] = vars["name"].clone();
     }
     let text = fill_box(&cfg, ev["text"].as_str().unwrap_or(""), &vars);
-    rt.emit("chat.event", json!({"profileId": p.id, "kind": kind, "color": ev["color"], "text": text}));
+    let mut payload = json!({"profileId": p.id, "kind": kind, "color": ev["color"], "text": text});
+    if e.rehearsal { payload["rehearsal"] = json!(true); }
+    rt.emit("chat.event", payload);
     line_event_sound(rt, p, ev["sound"].as_str().unwrap_or(""));
+}
+
+/// Amostra de evento do Estúdio no mesmo formato que a Twitch entrega: o
+/// `Event` sintetizado segue o caminho inteiro do evento real até o overlay.
+fn event_sample(p: &Profile, kind: &str) -> Option<Event> {
+    // `gift` com total > 1 vira `giftbulk` dentro do motor, como na Twitch.
+    let (kind, user, message, data) = match kind {
+        "follow" => ("follow", "Sortuda", "", json!({"total": 1})),
+        "subscription" => ("subscription", "Sortuda", "", json!({"total": 1, "cumulative_months": 1, "tier": "1000"})),
+        "resub" => ("resub", "Sortuda", "já são 14 meses de live!", json!({"total": 14, "cumulative_months": 14, "tier": "3000"})),
+        "gift" => ("gift", "Generoso", "", json!({"total": 1, "target_user_name": "Sortudo"})),
+        "giftbulk" => ("gift", "Generoso123", "", json!({"total": 10})),
+        "cheer" => ("cheer", "Sortuda", "manda ver!", json!({"bits": 500})),
+        "raid" => ("raid", "NoiteNaTwitch", "", json!({"viewers": 12})),
+        _ => return None,
+    };
+    Some(Event {
+        id: uuid::Uuid::new_v4().to_string(),
+        profile_id: p.id.clone(),
+        kind: kind.into(),
+        user: user.into(),
+        user_id: String::new(),
+        role: "everyone".into(),
+        message: message.into(),
+        data,
+        simulated: false,
+        rehearsal: true,
+    })
+}
+
+/// Botão de teste do Estúdio: a amostra entra pelo mesmo caminho do evento
+/// real — config, filtros e som pela linha do app — e o payload sai marcado
+/// com `rehearsal` (selo ENSAIO no OBS). A resposta diz o que estava
+/// desligado: em live nada apareceria, e o teste não mente sobre isso.
+pub fn test(rt: &Runtime, p: &Profile, args: &Value) -> Result<Value, String> {
+    let cfg = config(rt, &p.id);
+    match args["mode"].as_str().unwrap_or("message") {
+        "message" => {
+            if cfg["enabled"] != true {
+                return Ok(json!({"fired": false, "reason": "Ligue o chat no overlay: em live a mensagem não apareceria."}));
+            }
+            let s = &args["sample"];
+            let text = s["text"].as_str().unwrap_or("").to_owned();
+            if text.trim().is_empty() {
+                return Err("Escreva a mensagem de teste".into());
+            }
+            // Fragmentos compactos do Estúdio (`{t,v,id}`) viram os fragmentos
+            // da Twitch; o motor os reduz de volta pelo mesmo caminho do real.
+            let fragments: Vec<Value> = s["frags"].as_array().map(|fs| fs.iter().map(|f| {
+                let v = f["v"].as_str().unwrap_or("");
+                if f["t"].as_str() == Some("e") {
+                    json!({"type": "emote", "text": v, "emote": {"emote_id": f["id"].as_str().unwrap_or("")}})
+                } else {
+                    json!({"type": "text", "text": v})
+                }
+            }).collect::<Vec<Value>>()).unwrap_or_default();
+            let mut message = json!({"text": text});
+            if !fragments.is_empty() { message["fragments"] = Value::Array(fragments); }
+            let message_id = s["id"].as_str().filter(|v| !v.is_empty()).map(str::to_owned)
+                .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+            let data = json!({
+                "message_id": message_id,
+                "badges": s["badges"].as_array().map(|bs| bs.iter().filter_map(|b| b.as_str().map(|id| json!({"set_id": id}))).collect::<Vec<Value>>()).unwrap_or_default(),
+                "color": s["color"].as_str().unwrap_or(""),
+                "bot": s["bot"] == Value::Bool(true),
+                "message": message,
+            });
+            let e = Event {
+                id: uuid::Uuid::new_v4().to_string(),
+                profile_id: p.id.clone(),
+                kind: "chat".into(),
+                user: s["user"].as_str().filter(|v| !v.is_empty()).unwrap_or("Espectador").into(),
+                user_id: s["userId"].as_str().unwrap_or("").into(),
+                role: s["role"].as_str().filter(|v| !v.is_empty()).unwrap_or("everyone").into(),
+                message: text,
+                data,
+                simulated: false,
+                rehearsal: true,
+            };
+            fire(rt, p, &e);
+            Ok(json!({"fired": true}))
+        }
+        "event" => {
+            let kind = args["kind"].as_str().unwrap_or("");
+            let Some(e) = event_sample(p, kind) else { return Err("Evento de chat inválido".into()) };
+            if cfg["enabled"] != true {
+                return Ok(json!({"fired": false, "reason": "Ligue o chat no overlay: em live o evento não apareceria."}));
+            }
+            if cfg["eventsOn"] != true {
+                return Ok(json!({"fired": false, "reason": "Ligue os eventos de canal no chat: em live nada apareceria."}));
+            }
+            if cfg["ev"][kind]["on"] != true {
+                let label = match kind {
+                    "subscription" => "sub",
+                    "resub" => "renovação",
+                    "gift" => "sub de presente",
+                    "giftbulk" => "presentes em lote",
+                    "cheer" => "bits",
+                    other => other,
+                };
+                return Ok(json!({"fired": false, "reason": format!("Ligue o evento de {label} no chat: em live ele não apareceria.")}));
+            }
+            event(rt, p, &e);
+            Ok(json!({"fired": true}))
+        }
+        _ => Err("Tipo de teste inválido".into()),
+    }
 }
 
 /// Texto final da caixa: template preenchido e, quando ligado em `evShowMsg`,

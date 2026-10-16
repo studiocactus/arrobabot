@@ -1,5 +1,45 @@
 # Histórico de atualizações
 
+# BotLive 0.7.6
+
+## O que mudou
+
+**Modo Ensaio, primeira etapa: os botões de teste da Meta e do Chat agora agem como a live.** O teste deixa de ser um desenho local: ele percorre o mesmo caminho do evento real — até o OBS, com som, visual e efeitos — vestindo um selo **ENSAIO** que some sozinho. Enquanto isso, o evento de teste não vaza para fora: não publica no Discord e não conta nas estatísticas. Nenhum dado real muda com o ensaio.
+
+O que a mudança traz, item por item:
+
+- **Selo ENSAIO em toda camada.** O motor marca o evento de teste (`rehearsal`) e a marca viaja no payload até o OBS: a camada de meta, de alertas ou de chat acende uma badge discreta âmbar **ENSAIO** no canto por cerca de 5 segundos, rearmada a cada novo teste, e some sozinha. O mesmo selo aparece no palco da prévia das telas Meta e Chat.
+- **Meta: Simular doação e Celebração pelo caminho real.** No aplicativo, os dois botões passam a motor de verdade: o pulso da barra e o som escolhido chegam ao OBS como numa doação real (pela mesma saída da tela Áudio), e **Celebração** completa a meta e solta a explosão de emotes quando o interruptor dela está ligado — tudo sem alterar o total acumulado. Com a integração da LivePix desligada ou sem meta configurada, o botão não inventa nada: avisa que, em live, também não dispararia.
+- **Chat: teste de mensagem e de evento pelo motor do chat.** Os botões de amostra (Comum, Moderador, VIP, Sub, Primeira vez, Em emote, Só emotes, Do bot) viram evento e o motor transmite pela mesma via da live: badges, emotes da Twitch, destaque por papel, prefixo e — importantíssimo — os mesmos filtros do Estúdio (escondendo bots ou comandos, os exemplos correspondentes somem, igual ao OBS). O **Testar …** das caixas de evento preenche o texto pela configuração salva, pelo mesmo preenchimento que o OBS recebe, e toca o som na linha do aplicativo. Com o chat desligado — ou com **Eventos no chat** ou a caixa individual desligados — o teste não empilha nada: avisa qual interruptor impediria a live de mostrar, em vez de mentir.
+- **O ensaio não vaza.** Evento de teste/ensaio não publica no Discord (o aviso e o espelho do chat ficam suprimidos, com linha `[Ensaio]` no histórico) e não entra nas estatísticas: o histórico registra status `ensaio`, `stats.read` não o conta e a contagem de comandos o ignora. Um evento `simulated:true` enviado pela API local ganha exatamente o mesmo tratamento.
+- **Ajuste em apoio ao teste**: os textos de ajuda das telas Meta e Chat explicam o novo contrato — teste igual à live, com aviso quando um interruptor estaria desligado.
+
+Para quem mantém o código: `Event.rehearsal: bool` (default no serde) propaga por `alerts::dispatch`, `chat_overlay::fire/event`, `emote_burst` e o tique da meta; os ops novos são `livepix.simulate` e `chat.test` (ambos devolvem `{fired, reason}` quando um interruptor real impediria o disparo); a marca também anda nos payloads WS do overlay e nos eventos Tauri da prévia.
+
+## Como usar
+
+1. **Meta**: abra **Meta** com a LivePix conectada e clique em **Simular doação** — a barra sobe e o som toca no OBS com o selo **Ensaio** na prévia; o total acumulado não muda. **Celebração** completa a meta no caminho real (com a explosão de emotes, se ligada). Sem integração ou sem meta, o aviso diz que, em live, nada dispararia.
+2. **Chat**: ligue **Chat no overlay** e use os botões de teste — as mensagens empilham na prévia e na coluna do OBS pelo motor real, com o selo no palco. Desligado, o teste mostra o aviso em vez de empilhar.
+3. **Eventos do chat**: ligue **Eventos no chat**, escolha o evento na pílula e clique **Testar …**: a caixa sai preenchida pelo motor com o texto e a cor salvos, e o som toca na linha do aplicativo. Com o mestre ou a caixa do evento desligados, o aviso explica a parada.
+4. **Discord e estatística**: nenhum teste publica no Discord nem conta em estatísticas ou comandos — para conferir o que foi testado, o histórico mostra a linha com status `ensaio`.
+
+## Validação
+
+- `cargo test` em `src-tauri`: **253 testes, 0 falhas, 1 ignorado** — incluem os novos desta versão: evento simulado visível no histórico mas fora de `stats.read` e suprimido do Discord com log de ensaio, payloads de ensaio carregando a marca (literais de `Event` em todos os módulos), `livepix.simulate` publicando o goal sem persistir o total (e a celebração disparando a explosão marcada), `chat.test` saindo pelo motor real (mensagem com badges/frags, evento com texto preenchido e derivação `gift` → `giftbulk`) e contagem de comandos ignorando execução em teste.
+- `npm run check` (tsc) sem erros; `npm test` (vitest) **115/115**; `npm run test:updates` **9/9**.
+- `npx playwright test` (suíte completa): **73 testes, 0 falhas** — com os testes novos da tela Chat: aviso com o mestre desligado (sem empilhar e sem selo), empilhamento pelo motor real com o selo ENSAIO no palco, filtros valendo nos testes (bot escondido some), caixa de evento preenchida pelo motor com a cor salva, e o aviso quando a caixa individual do evento está desligada; o selo no overlay e na tela Meta já estavam cobertos.
+- Regras de tela: capturas `estudio-chat-1100/-largo` e `estudio-livepix-1100/-largo` regeneradas e revisadas (selo ENSAIO visível, sem espremer texto).
+- `npm run docs` regerado (capítulos de Chat no OBS, Integrações e API local); `npm run update:check` executado antes do push.
+
+## Limitações
+
+- A primeira etapa cobre **Meta** e **Chat**. Os botões de teste da tela Alertas (e da explosão de emotes) ainda disparam pela via antiga: já publicam o evento com o selo ENSAIO no overlay, mas ainda funcionam com o alerta desligado — o aviso de "qual interruptor está desligado" para alertas é a próxima etapa (0.7.7).
+- Na prévia de navegador (sem o aplicativo desktop), Meta e Chat mantêm a simulação local: sem OBS anexado não existe caminho real a percorrer.
+- O selo ENSAIO some após cerca de 5 segundos contados pelo relógio da janela; com a janela muito tempo em segundo plano, o navegador pode atrasar esse relógio e o selo durar um pouco mais.
+- Quem usava os testes de chat como "prévia sempre disponível" agora precisa ligar o **Chat no overlay** antes de testar — é a consequência direta de o teste valer o que a live valeria.
+
+---
+
 # BotLive 0.7.5
 
 ## O que mudou

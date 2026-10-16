@@ -60,7 +60,7 @@ async fn session(rt:&Runtime,p:&Profile)->Result<(),String>{
        id=user["data"][0]["id"].as_str().unwrap_or("").into();
       }
       // Membership alone must not award points or trigger unrelated automations.
-      chat_extras::sound(rt,p,&Event{id:uuid::Uuid::new_v4().to_string(),profile_id:p.id.clone(),kind:"join".into(),user:name,user_id:id,role:"everyone".into(),message:String::new(),data:json!({"source":"twitch-irc"}),simulated:false});
+      chat_extras::sound(rt,p,&Event{id:uuid::Uuid::new_v4().to_string(),profile_id:p.id.clone(),kind:"join".into(),user:name,user_id:id,role:"everyone".into(),message:String::new(),data:json!({"source":"twitch-irc"}),simulated:false,rehearsal:false});
      },_=>{}
     }
    }

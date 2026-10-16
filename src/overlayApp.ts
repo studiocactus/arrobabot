@@ -109,11 +109,36 @@ function celebrate(){
 
 type Message={type?:string;payload?:Record<string,unknown>};
 
+let ensTimer=0;
+/** Selo ENSAIO: acende quando um payload de teste chega na camada certa e
+ *  some sozinho; é o aviso ao vivo de que o que está na tela é ensaio. */
+function flagEnsaio(){
+ if(!document.getElementById('bl-ens-style')){
+  const s=document.createElement('style');
+  s.id='bl-ens-style';
+  s.textContent='.bl-ens{position:fixed;top:12px;right:12px;z-index:2147483647;padding:6px 12px;border-radius:4px;background:#f5b901;color:#161616;font:700 12px/1 "Segoe UI",Arial,sans-serif;letter-spacing:2px;text-transform:uppercase;opacity:0;transition:opacity .2s;pointer-events:none}.bl-ens.on{opacity:.92}';
+  document.head.appendChild(s);
+ }
+ let el=document.getElementById('bl-ens');
+ if(!el){
+  el=document.createElement('div');
+  el.id='bl-ens';el.className='bl-ens';el.textContent='Ensaio';
+  el.setAttribute('aria-hidden','true');
+  document.body.appendChild(el);
+ }
+ el.classList.add('on');
+ clearTimeout(ensTimer);
+ ensTimer=window.setTimeout(()=>document.getElementById('bl-ens')?.classList.remove('on'),5000);
+}
+
 function handle(msg:Message){
  const payload=msg.payload;
  // Fonte de camada única só atende a própria camada.
  const layer=layerOf(msg.type||'');
  if(mode&&layer&&layer!==mode)return;
+ // Todo payload de ensaio que esta camada vai atender acende o selo
+ // (a explosão de emotes decide lá embaixo, depois do filtro de camada).
+ if(msg.type!=='emote.burst'&&payload?.rehearsal===true&&(!profile||String(payload.profileId||'')===profile))flagEnsaio();
  if(msg.type==='alerts'){
   if(profile&&String(payload?.profileId||'')!==profile)return;
   alertsCfg=normalizeAlerts(payload?.config);
@@ -139,6 +164,7 @@ function handle(msg:Message){
   // Cada camada mostra só o que pertence a ela; a de chat entra se ligada na tela.
   const want=mode==='chat'?payload?.alsoChat===true:mode==='goal'?via==='meta':mode==='alerts'?via!=='meta':true;
   if(!want)return;
+  if(payload?.rehearsal===true)flagEnsaio();
   const raw=payload?.ids;
   const ids=Array.isArray(raw)?raw.filter((x):x is string=>typeof x==='string').slice(0,120):[];
   explode(document.body,ids,Number(payload?.size)||56);

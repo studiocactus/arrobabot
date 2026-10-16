@@ -163,11 +163,11 @@ pub fn vars(e: &Event) -> Option<(String, Value)> {
 /// Transmite o alerta para as fontes do OBS (e para a prévia que escutar).
 /// O som sai sempre na linha de áudio do aplicativo — o aparelho escolhido na
 /// aba Áudio, que o OBS captura como fonte única do bot.
-fn dispatch(rt: &Runtime, p: &Profile, kind: &str, vars: Value) {
-    let _ = rt.emit(
-        "alert",
-        json!({"profileId": p.id, "kind": kind, "vars": vars, "platform": p.platform}),
-    );
+/// `rehearsal` marca o alerta de teste: o overlay exibe o selo ENSAIO.
+fn dispatch(rt: &Runtime, p: &Profile, kind: &str, vars: Value, rehearsal: bool) {
+    let mut payload = json!({"profileId": p.id, "kind": kind, "vars": vars, "platform": p.platform});
+    if rehearsal { payload["rehearsal"] = json!(true); }
+    let _ = rt.emit("alert", payload);
     line_sound(rt, p, kind);
 }
 
@@ -202,7 +202,8 @@ pub fn fire(rt: &Runtime, p: &Profile, e: &Event) {
     if cfg["events"][&kind]["on"] != Value::Bool(true) {
         return;
     }
-    dispatch(rt, p, &kind, vars);
+    // Simulação de evento e evento de ensaio chegam marcados ao overlay.
+    dispatch(rt, p, &kind, vars, e.rehearsal || e.simulated);
 }
 
 fn fake_vars(kind: &str) -> Value {
@@ -225,7 +226,7 @@ pub fn test(rt: &Runtime, p: &Profile, kind: &str) -> Result<Value, String> {
         return Err("Evento de alerta inválido".into());
     }
     let vars = fake_vars(kind);
-    dispatch(rt, p, kind, vars.clone());
+    dispatch(rt, p, kind, vars.clone(), true);
     Ok(json!({"kind": kind, "vars": vars}))
 }
 

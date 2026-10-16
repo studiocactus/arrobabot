@@ -8,11 +8,11 @@ A coluna de chat fica numa **camada de overlay própria**, com um endereço pró
 
 1. Abra **Chat no OBS** com o perfil do canal.
 2. Ative **Chat no overlay** no cartão do topo.
-3. Use os botões de teste (Comum, Moderador, VIP, Sub, Primeira vez, Em emote, Só emotes, Do bot) para ver o visual atual empilhando na prévia.
+3. Use os botões de teste (Comum, Moderador, VIP, Sub, Primeira vez, Em emote, Só emotes, Do bot) para ver o visual atual empilhando na prévia. Com o chat ligado, cada teste percorre o mesmo caminho da live e o palco acende o selo **Ensaio**; com ele desligado, o teste avisa que nada apareceria.
 4. Com o Estúdio aberto, as mensagens reais da live também entram na prévia — é a forma de ajustar sem ir ao ar.
 5. Se ainda não tem a fonte no OBS, copie o endereço no cartão **No OBS** e siga os passos (Fontes → + → Navegador, 1920×1080).
 
-Enquanto o chat está desligado, nada aparece na fonte; os botões de teste continuam funcionando — e eles seguem os mesmos filtros de cima, então esconder bots ou comandos também esconde os exemplos correspondentes.
+Enquanto o chat está desligado, nada aparece na fonte — nem nos testes: clicar num botão de teste mostra o aviso do que a live faria com o interruptor desligado. Ligue o chat para os testes correrem pelo mesmo caminho da live, com o selo **Ensaio** no palco. Os testes seguem os mesmos filtros de cima: esconder bots ou comandos também esconde os exemplos correspondentes.
 
 ## O que cada mensagem mostra
 
@@ -39,10 +39,10 @@ Com o mestre **Eventos no chat** ligado, follow, sub, renovação, presente, bit
 - Escolha o evento nas pílulas (Follow, Sub, Renovação, Sub presente, Presentes em lote, Bits, Raid) e edite **Texto da caixa** e **Cor do evento**; a cor pinta a borda e tinge o fundo da caixa, que tem base escura para o texto branco ler em qualquer cena.
 - O texto aceita `{name}`, `{amount}`, `{months}`, `{tier}`, `{sender}` e `{message}`; em presente, `{name}` é quem ganhou e `{sender}` quem deu.
 - **Mostrar a mensagem do espectador** entra como segunda linha nas caixas de renovação e bits com texto escrito.
-- **Som do evento** escolhe um arquivo da tela [Sons de Live](RESPOSTAS-E-SONS.md) e toca na **linha de áudio do aplicativo** (tela [Áudio](13-AUDIO.md)), nunca dentro do OBS; o botão **Testar …** desenha a caixa na prévia e toca o som escolhido.
+- **Som do evento** escolhe um arquivo da tela [Sons de Live](RESPOSTAS-E-SONS.md) e toca na **linha de áudio do aplicativo** (tela [Áudio](13-AUDIO.md)), nunca dentro do OBS; o botão **Testar …** preenche o texto pelo motor e desenha a caixa na prévia pelo mesmo caminho da live (com o selo **Ensaio**), tocando o som escolhido.
 - Cada evento tem interruptor próprio (**Exibir caixa de …**) além do mestre.
 
-Por padrão os eventos estão **desligados**, para não duplicar a camada de alertas. Com o mestre desligado, nada muda na coluna — e os botões de teste continuam funcionando.
+Por padrão os eventos estão **desligados**, para não duplicar a camada de alertas. Com o mestre desligado, nada muda na coluna — e o botão **Testar …** avisa que, em live, a caixa também não apareceria; o mesmo vale quando a caixa individual do evento está desligada.
 
 ## Filtros
 

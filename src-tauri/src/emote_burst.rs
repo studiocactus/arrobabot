@@ -62,30 +62,37 @@ fn burst_ids(rt:&Runtime,p:&str,cfg:&Value)->Vec<String>{
  (0..count).map(|i|base[i%base.len()].clone()).collect()
 }
 
-fn emit(rt:&Runtime,p:&Profile,cfg:&Value,ids:Vec<String>,via:&str){
- let _=rt.broadcast.send(json!({"type":"emote.burst","payload":{"profileId":p.id,"ids":ids,"size":cfg["size"].as_u64().unwrap_or(56).clamp(24,120),"via":via,"alsoChat":cfg["alsoChat"]==Value::Bool(true)}}));
+fn emit(rt:&Runtime,p:&Profile,cfg:&Value,ids:Vec<String>,via:&str,rehearsal:bool){
+ let mut payload=json!({"profileId":p.id,"ids":ids,"size":cfg["size"].as_u64().unwrap_or(56).clamp(24,120),"via":via,"alsoChat":cfg["alsoChat"]==Value::Bool(true)});
+ if rehearsal{payload["rehearsal"]=json!(true);}
+ let _=rt.broadcast.send(json!({"type":"emote.burst","payload":payload}));
 }
 
-fn fire(rt:&Runtime,p:&Profile,cfg:&Value,via:&str){
+fn fire(rt:&Runtime,p:&Profile,cfg:&Value,via:&str,rehearsal:bool){
  let ids=burst_ids(rt,&p.id,cfg);
  if ids.is_empty(){
   rt.log(&p.id,"emotes","Explosão de emotes sem emotes carregados: conecte o canal ao Twitch para a lista chegar.","info");
   return;
  }
- emit(rt,p,cfg,ids,via);
+ emit(rt,p,cfg,ids,via,rehearsal);
 }
 
 /// Explosão de um evento ligado na configuração.
 pub fn maybe(rt:&Runtime,p:&Profile,via:&str){
+ maybe_rehearsed(rt,p,via,false)
+}
+
+/// Mesma explosão, marcada como ensaio (chegou por teste, não por evento real).
+pub fn maybe_rehearsed(rt:&Runtime,p:&Profile,via:&str,rehearsal:bool){
  let cfg=config(rt,&p.id);
  if cfg["enabled"]!=Value::Bool(true)||!EVENTS.contains(&via)||cfg["events"][via]!=Value::Bool(true){return}
- fire(rt,p,&cfg,via);
+ fire(rt,p,&cfg,via,rehearsal);
 }
 
 /// O evento da Twitch que virou explosão: sub, renovação e presente.
 pub fn from_event(rt:&Runtime,p:&Profile,e:&Event){
  let via=match e.kind.as_str(){"subscription"=>"sub","resub"=>"resub","gift"=>"gift",_=>return};
- maybe(rt,p,via);
+ maybe_rehearsed(rt,p,via,e.rehearsal||e.simulated);
 }
 
 /// Botão de teste da tela: dispara mesmo com os interruptores de evento
@@ -94,7 +101,7 @@ pub fn test(rt:&Runtime,p:&Profile)->Result<(),String>{
  let cfg=config(rt,&p.id);
  let ids=burst_ids(rt,&p.id,&cfg);
  if ids.is_empty(){return Err("Sem emotes carregados: conecte o canal ao Twitch e tente de novo.".into())}
- emit(rt,p,&cfg,ids,"sub");Ok(())
+ emit(rt,p,&cfg,ids,"sub",true);Ok(())
 }
 
 /// Guarda os totais da sessão no banco a cada tique do agendador.

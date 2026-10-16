@@ -132,7 +132,7 @@ async fn finish(rt:Arc<Runtime>,profile:String,cfg:Config,pcm:Vec<u8>){
    if cfg.captions{rt.emit("captions",json!({"profileId":profile,"text":text}));}
    // Sem palavra de ativação toda fala dispara os fluxos; com ela, só a chamada.
    if cfg.activation.is_empty()||crate::model::mention_any(&cfg.activation,&text){
-    let event=Event{id:uuid::Uuid::new_v4().to_string(),profile_id:profile.clone(),kind:"voice".into(),user:"streamer".into(),user_id:"local-streamer".into(),role:"broadcaster".into(),message:text.clone(),data:Value::Null,simulated:false};
+    let event=Event{id:uuid::Uuid::new_v4().to_string(),profile_id:profile.clone(),kind:"voice".into(),user:"streamer".into(),user_id:"local-streamer".into(),role:"broadcaster".into(),message:text.clone(),data:Value::Null,simulated:false,rehearsal:false};
     if let Err(err)=rt.submit(event).await{rt.log(&profile,"voice",&format!("Escuta contínua: {err}"),"error");}
    }else{rt.log(&profile,"voice",&format!("Transcrição: {text}"),"info");}
   }

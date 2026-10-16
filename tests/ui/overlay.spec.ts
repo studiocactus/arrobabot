@@ -34,10 +34,12 @@ test('estúdio do overlay: prévia e controles em janela estreita e ampla',async
  await expect(address).toHaveText(/mode=goal$/);
  await expect(page.getByText('Gerando o endereço do overlay…')).toHaveCount(0);
 
- // trocar modelo e simular doação mexem na prévia na hora
+ // trocar modelo e simular doação mexem na prévia na hora (no desktop a
+ // simulação sai pelo backend e a prévia recebe o resultado do ensaio)
  await page.getByRole('button',{name:/^Neon/}).click();
  await page.getByRole('button',{name:'Simular doação'}).click();
  await expect(page.locator('.bl-ov-pct')).not.toHaveText('62%');
+ await expect(page.locator('.lp-ensaio')).toBeVisible();
 
  // Sons da Meta: escolher da biblioteca no grupo Efeitos e trocar de modelo
  // não pode perder a escolha (0.7.1).
@@ -289,4 +291,53 @@ test('explosão de emotes: cada camada mostra só a sua e o chat entra quando li
  await expect(fx().locator('img')).toHaveCount(12);
  await page.waitForTimeout(700);
  await page.screenshot({path:'artifacts/overlay-explosao-emotes.png'});
+});
+
+test('selo ENSAIO acende em payload de ensaio, ignora o real e sai sozinho',async({page})=>{
+ await page.addInitScript(()=>{
+  const w=window as unknown as {__made:FakeWS[];__sent:string[]};
+  w.__made=[];w.__sent=[];
+  const made=w.__made,sent=w.__sent;
+  class Fake implements FakeWS{
+   url:string;
+   onopen:((e:unknown)=>void)|null=null;
+   onmessage:((e:unknown)=>void)|null=null;
+   onclose:((e:unknown)=>void)|null=null;
+   onerror:((e:unknown)=>void)|null=null;
+   constructor(u:string){this.url=u;made.push(this);setTimeout(()=>this.onopen&&this.onopen({}),0)}
+   send(d:string){sent.push(d)}
+   close(){this.onclose&&this.onclose({})}
+  }
+  (window as unknown as {WebSocket:unknown}).WebSocket=Fake;
+ });
+ await page.goto(overlayUrl);
+ await page.waitForFunction(()=>(window as unknown as {__sent:string[]}).__sent.length>0);
+ const emit=async(msg:{type:string;payload:Record<string,unknown>})=>{
+  await page.evaluate(m=>{
+   const f=(window as unknown as {__made:FakeWS[]}).__made[0];
+   f.onmessage&&f.onmessage({data:JSON.stringify(m)});
+  },msg);
+ };
+ const ens=page.locator('#bl-ens');
+
+ // payload real de meta: nenhum selo
+ await emit({type:'goal',payload:{profileId:'p1',title:'Meta',current:100,target:200,hidden:false}});
+ await expect(ens).toHaveCount(0);
+
+ // ensaio de outro perfil não acende nesta fonte
+ await emit({type:'goal',payload:{profileId:'OUTRO',rehearsal:true,title:'Meta',current:100,target:200,hidden:false}});
+ await expect(ens).toHaveCount(0);
+
+ // ensaio do perfil certo: selo de aviso
+ await emit({type:'goal',payload:{profileId:'p1',rehearsal:true,title:'Meta de teste',current:170,target:200,hidden:false}});
+ await expect(ens).toBeVisible();
+ await expect(ens).toHaveText('Ensaio');
+
+ // a janela fecha sozinha…
+ await page.waitForTimeout(5300);
+ await expect(ens).toHaveCSS('opacity','0');
+
+ // …e um novo ensaio rearma o selo (alerta de teste no mesmo caminho)
+ await emit({type:'alert',payload:{profileId:'p1',rehearsal:true,kind:'follow',vars:{name:'Ana',amount:1,months:1,tier:'TIER 1',message:''}}});
+ await expect(ens).toHaveCSS('opacity','0.92');
 });

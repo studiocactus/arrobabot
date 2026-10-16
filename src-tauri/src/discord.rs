@@ -333,7 +333,7 @@ async fn on_message(rt:&Arc<Runtime>,p:&Profile,st:&State,d:&Value){
  let event=Event{
   id:d["id"].as_str().unwrap_or("").into(),profile_id:p.id.clone(),kind:"chat".into(),
   user,user_id:uid.into(),role,message:content,
-  data:json!({"source":"discord","channelId":channel,"guildId":guild,"discord":d}),simulated:false
+  data:json!({"source":"discord","channelId":channel,"guildId":guild,"discord":d}),simulated:false,rehearsal:false
  };
  if let Err(err)=rt.submit(event).await{rt.log(&p.id,"discord",&err,"error")}
 }
@@ -443,6 +443,9 @@ pub fn notify(rt:&Arc<Runtime>,p:&Profile,kind:&str,e:&Event){
  let channel=cfg["notify"]["channelId"].as_str().unwrap_or("");
  if channel.is_empty()||cfg["notify"]["enabled"]!=true{return}
  if cfg["notify"]["kinds"][kind]["enabled"].as_bool().unwrap_or(true)!=true{return}
+ // Ensaio: o evento de teste nunca vira aviso real no Discord (o registro
+ // deixa visível no histórico que a supressão aconteceu).
+ if e.simulated{rt.log(&p.id,"discord","[Ensaio] Aviso ao Discord não enviado (evento de teste)","ensaio");return}
  let rt2=rt.clone();let p2=p.clone();let ch=channel.to_owned();let k=kind.to_owned();let ev=e.clone();
  tokio::spawn(async move{
   match rich_for(&rt2,&p2,&k,&ev,false).await{
@@ -525,7 +528,7 @@ async fn live_rich(rt:&Arc<Runtime>,p:&Profile,online:bool,sample:bool)->Option<
  let url=format!("https://twitch.tv/{}",p.channel);
  if !online{
   let description=kind_text(&cfg,"offline","Obrigado pela companhia! Até a próxima.");
-  let tokens=event_tokens(p,&Event{id:String::new(),profile_id:p.id.clone(),kind:"unlive".into(),user:p.channel.clone(),user_id:String::new(),role:"broadcaster".into(),message:String::new(),data:Value::Null,simulated:true});
+  let tokens=event_tokens(p,&Event{id:String::new(),profile_id:p.id.clone(),kind:"unlive".into(),user:p.channel.clone(),user_id:String::new(),role:"broadcaster".into(),message:String::new(),data:Value::Null,simulated:true,rehearsal:false});
   return Some(Rich{title:"Live encerrada".into(),url: url.clone(),description:crate::labels::render(&description,&tokens),color:0x555555,author_name:"Twitch".into(),author_url:url,author_icon:String::new(),thumbnail:String::new(),image:String::new(),footer:"BotLive".into(),content:String::new()});
  }
  if sample{
@@ -565,6 +568,8 @@ pub fn mirror_chat(rt:&Arc<Runtime>,p:&Profile,e:&Event){
  if from_discord(e).is_some(){return}
  let channel=cfg["mirror"]["channelId"].as_str().unwrap_or("");
  if channel.is_empty(){return}
+ // Ensaio: mensagem de teste não vai para o canal espelhado do Discord.
+ if e.simulated{rt.log(&p.id,"discord","[Ensaio] Espelho do chat não enviado ao Discord (evento de teste)","ensaio");return}
  let text=format!("**{}** · {}",e.user,e.message);
  let rt2=rt.clone();let p2=p.clone();let ch=channel.to_owned();
  tokio::spawn(async move{if let Err(err)=post(&rt2,&p2,&ch,&text).await{rt2.log(&p2.id,"discord",&err,"error")}});
@@ -642,7 +647,7 @@ mod tests {
  }
  #[test]
  fn discord_source_is_recognized_only_on_discord_events() {
- let mut e=Event{id:"1".into(),profile_id:"p".into(),kind:"chat".into(),user:"u".into(),user_id:"1".into(),role:"everyone".into(),message:"hi".into(),data:json!({"source":"discord","channelId":"77"}),simulated:false};
+ let mut e=Event{id:"1".into(),profile_id:"p".into(),kind:"chat".into(),user:"u".into(),user_id:"1".into(),role:"everyone".into(),message:"hi".into(),data:json!({"source":"discord","channelId":"77"}),simulated:false,rehearsal:false};
  assert_eq!(from_discord(&e).as_deref(),Some("77"));
  e.data=json!({"source":"twitch"});assert!(from_discord(&e).is_none());
  e.data=Value::Null;assert!(from_discord(&e).is_none());

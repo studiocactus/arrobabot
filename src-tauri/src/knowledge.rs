@@ -239,7 +239,7 @@ fn score(text:&str,words:&[String])->usize {let t=text.to_lowercase();words.iter
   write(&src,"eventos-de-live/reacao-a-clip-highlight.md","# Clip\nclip comentado");
   let id=uuid::Uuid::new_v4().to_string();import(d.path(),&id,src.to_str().unwrap()).unwrap();
   let p=profile(&id,"canal");
-  let sub=Event{id:"1".into(),profile_id:id.clone(),kind:"subscription".into(),user:"Ana".into(),user_id:"ana".into(),role:"subscriber".into(),message:String::new(),data:json!({}),simulated:false};
+  let sub=Event{id:"1".into(),profile_id:id.clone(),kind:"subscription".into(),user:"Ana".into(),user_id:"ana".into(),role:"subscriber".into(),message:String::new(),data:json!({}),simulated:false,rehearsal:false};
   assert!(context(d.path(),&p,Some(&sub),"").contains("doacao celebrada"));
   let clip=Event{kind:"clip".into(),..sub.clone()};
   assert!(context(d.path(),&p,Some(&clip),"").contains("clip comentado"));

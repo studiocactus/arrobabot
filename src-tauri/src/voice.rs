@@ -18,6 +18,6 @@ pub async fn transcribe(rt:&Runtime,p:&str,audio:&str)->Result<Value,String>{
  let v:Value=res.json().await.map_err(|_|"Resposta de reconhecimento inválida")?;
  let text=v["text"].as_str().ok_or("Nenhuma fala reconhecida")?.trim();
  if text.is_empty(){return Err("Nenhuma fala reconhecida".into())}
- rt.submit(Event{id:uuid::Uuid::new_v4().to_string(),profile_id:p.into(),kind:"voice".into(),user:"streamer".into(),user_id:"local-streamer".into(),role:"broadcaster".into(),message:text.into(),data:Value::Null,simulated:false}).await?;
+ rt.submit(Event{id:uuid::Uuid::new_v4().to_string(),profile_id:p.into(),kind:"voice".into(),user:"streamer".into(),user_id:"local-streamer".into(),role:"broadcaster".into(),message:text.into(),data:Value::Null,simulated:false,rehearsal:false}).await?;
  Ok(json!({"text":text}))
 }

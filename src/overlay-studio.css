@@ -9,6 +9,11 @@
 .lp-segrow{display:flex;gap:6px;flex-wrap:wrap;align-items:center;min-width:0}
 button.lp-seg{height:var(--h-sm);padding:0 11px;font-size:11px;white-space:nowrap}
 
+/* Palco da prévia com o selo ENSAIO por cima: o que se desenhou aqui veio de
+   um teste, igual ao selo que a fonte do OBS mostra durante o ensaio. */
+.lp-stage\boxed{position:relative;min-width:0}
+.lp-ensaio{position:absolute;top:10px;right:10px;z-index:5;background:#f5b901;color:#161616;font:700 11px/1 'Segoe UI',Arial,sans-serif;letter-spacing:2px;text-transform:uppercase;padding:5px 10px;border-radius:4px;pointer-events:none}
+
 .lp-controls{display:flex;flex-direction:column;gap:14px;min-width:0}
 .lp-group{border:1px solid var(--border);border-radius:var(--r-md);padding:13px 14px;background:var(--surface2);min-width:0}
 .lp-group h4{margin:0 0 11px;font-size:9px;letter-spacing:1.4px;text-transform:uppercase;color:var(--muted);font-weight:700}

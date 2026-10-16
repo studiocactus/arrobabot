@@ -48,12 +48,15 @@ export default function LivePix({profileId,notify}:{profileId:string;notify:(s:s
  const [gainKey,setGainKey]=useState(0);
  const [celebrateKey,setCelebrateKey]=useState(0);
  const [copied,setCopied]=useState(false);
+ const [ensaio,setEnsaio]=useState(false);
  const [editing,setEditing]=useState('');
  const [sounds,setSounds]=useState<Sound[]>([]);
  const [audioDevice,setAudioDevice]=useState('');
  const [burstMeta,setBurstMeta]=useState(false);
  const hydrated=useRef(false);
  const lastSaved=useRef('');
+ const ensaioTimer=useRef<number|undefined>(undefined);
+ useEffect(()=>()=>window.clearTimeout(ensaioTimer.current),[]);
 
  const load=useCallback(async()=>{
   if(!desktop)return;
@@ -143,15 +146,39 @@ export default function LivePix({profileId,notify}:{profileId:string;notify:(s:s
  const current=sim??baseCurrent;
  const pct=target>0?Math.round(current*100/target):0;
 
- // Prévia: doação simulada sobe a barra; a celebração leva a 100% e dispara o efeito.
- // Os dois botões também ouvem o som escolhido na mesma saída do OBS.
- const simulate=()=>{
+ // Ensaio da Meta: no aplicativo os botões saem pelo backend (mesmo payload,
+ // som e explosão do pagamento real, com o selo ENSAIO no overlay). Na prévia
+ // web sem aplicativo a simulação fica local, só para conferir o visual.
+ const flagEnsaio=()=>{
+  setEnsaio(true);
+  window.clearTimeout(ensaioTimer.current);
+  ensaioTimer.current=window.setTimeout(()=>setEnsaio(false),5000);
+ };
+ const simulate=async()=>{
+  if(desktop){
+   try{
+    const out=await api<{fired?:boolean;reason?:string;current?:number}>('livepix.simulate',{profileId,mode:'donate'});
+    if(out?.fired===false){notify(out.reason||'Não foi possível simular a doação.');return}
+    if(typeof out?.current==='number'){setSim(out.current);setGainKey(k=>k+1);flagEnsaio()}
+   }catch(e){notify(errorText(e))}
+   return;
+  }
   if(current>=target)setSim(Math.round(target*0.3));
   else setSim(Math.min(Math.round(target*0.97),current+Math.max(Math.round(target*0.17),1000)));
   setGainKey(k=>k+1);
   previewSound(design.soundDonate);
  };
- const celebrate=()=>{setSim(target);setCelebrateKey(k=>k+1);previewSound(design.soundCelebrate)};
+ const celebrate=async()=>{
+  if(desktop){
+   try{
+    const out=await api<{fired?:boolean;reason?:string;current?:number}>('livepix.simulate',{profileId,mode:'celebrate'});
+    if(out?.fired===false){notify(out.reason||'Não foi possível simular a celebração.');return}
+    if(typeof out?.current==='number'){setSim(out.current);setCelebrateKey(k=>k+1);flagEnsaio()}
+   }catch(e){notify(errorText(e))}
+   return;
+  }
+  setSim(target);setCelebrateKey(k=>k+1);previewSound(design.soundCelebrate);
+ };
  const previewSound=(asset:string)=>{
   if(!desktop||!asset)return;
   void playViewerSound({profileId,asset,volume:1,deviceId:audioDevice||undefined}).catch(e=>notify(errorText(e)));
@@ -201,7 +228,10 @@ export default function LivePix({profileId,notify}:{profileId:string;notify:(s:s
       </div>
      </div>
 
-     <OverlayPreview design={design} model={{title,current,target}} bg={bg} gainKey={gainKey} celebrateKey={celebrateKey}/>
+     <div className="lp-stagebox">
+      <OverlayPreview design={design} model={{title,current,target}} bg={bg} gainKey={gainKey} celebrateKey={celebrateKey}/>
+      {ensaio&&<span className="lp-ensaio">Ensaio</span>}
+     </div>
 
      <p className="help">Prévia em escala de {pct}% sobre {fmt(target)} BRL{!showReal&&' — dados de exemplo enquanto a integração está desligada'}.</p>
     </div>
