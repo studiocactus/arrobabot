@@ -44,6 +44,7 @@ mod livepix;
 mod alerts;
 mod chat_overlay;
 mod audio;
+mod preflight;
 use engine::Runtime;
 use model::*;
 use serde_json::{json,Value};
@@ -110,7 +111,15 @@ pub async fn dispatch(rt:Arc<Runtime>,op:&str,args:Value)->R<Value>{
  "flow.save"=>{let mut f:Flow=serde_json::from_value(args["flow"].clone()).map_err(|_|"Fluxo inválido")?;if !f.audio.is_empty(){chat_extras::asset(&rt,&f.profile_id,&f.audio,"sound")?;}if command_counter::auto_enable(&mut f){rt.log(&f.profile_id,"counter",&format!("Contagem ligada em \"{}\": a resposta usa {{{{commandCount}}}}",f.name),"info");}rt.db.save_flow(&f)?;variables::migrate_flow(&mut f);Ok(json!(f))},
  "flow.delete"=>{rt.db.delete_flow(&p,args["id"].as_str().ok_or("Fluxo inválido")?)?;Ok(Value::Null)},
   "flow.test"=>{let f:Flow=serde_json::from_value(args["flow"].clone()).map_err(|_|"Fluxo inválido")?;let profile=rt.db.profile(&f.profile_id)?;validate_flow(&f)?;let e=Event{id:uuid::Uuid::new_v4().to_string(),profile_id:f.profile_id.clone(),kind:"manual".into(),user:"Teste".into(),user_id:String::new(),role:"broadcaster".into(),message:String::new(),data:json!({"botliveTest":true}),simulated:false,rehearsal:true};let kinds=f.actions.iter().map(|a|a.kind.clone()).collect::<Vec<_>>();let exec=rt.runs.start(&profile.id,&f.id,&f.name,&kinds,true);let (rt2,p2)=(rt.clone(),profile.clone());let exec2=exec.clone();tokio::spawn(async move{engine::execute_flow_with_run(&rt2,&p2,&e,&f,true,&[],None,true,Some(args["testVars"].clone()),exec2).await;});Ok(json!({"executionId":exec}))},
+  // Comando ao vivo em ensaio: a mensagem de verdade entra pelo funil da live —
+  // matches (com a permissão de quem usa), disputa entre automações e intervalo do
+  // bucket de ensaio, nunca o da live. O que não responderia na live também não
+  // responde aqui, e o motivo volta para o Estúdio avisar (decisões 2 e 3).
+  "flow.rehearse"=>{let message=args["message"].as_str().unwrap_or("").trim();if message.is_empty(){return Err("Escreva o comando de teste".into())}let role=args["role"].as_str().filter(|r|["everyone","subscriber","moderator","broadcaster"].contains(r)).unwrap_or("everyone");let e=Event{id:uuid::Uuid::new_v4().to_string(),profile_id:p.clone(),kind:"chat".into(),user:"Teste".into(),user_id:"ensaio".into(),role:role.into(),message:message.into(),data:json!({"botliveTest":true}),simulated:true,rehearsal:true};let matched:Vec<Flow>=rt.db.flows(&p)?.into_iter().filter(|f|f.enabled&&model::matches(&f.trigger,&e)).collect();let winner=match engine::responder(&matched){Some(id)=>matched.iter().find(|f|f.id==id).cloned(),None=>matched.first().cloned()};let Some(winner)=winner else{return Ok(json!({"fired":false,"reason":"Nenhuma automação ativa responderia esta mensagem: confira se está salva, ativa e se a permissão de quem usa confere."}))};if !engine::cooldown_ready(&rt,&p,&winner,&e){return Ok(json!({"fired":false,"reason":format!("Em live o comando não responderia agora: {} está no intervalo.",winner.name)}))}rt.submit(e).await?;Ok(json!({"fired":true,"flow":winner.name,"flowId":winner.id}))},
   "flow.runs"=>{rt.db.profile(&p)?;Ok(json!(rt.runs.list(&p).into_iter().map(|r|json!({"id":r.id,"flow":r.flow_name,"status":r.status,"test":r.test,"steps":r.steps.iter().map(|s|json!({"index":s.index,"kind":s.kind,"status":s.status})).collect::<Vec<_>>(),"error":r.error})).collect::<Vec<_>>()))},
+  // Pré-voo: varredura estática das configs que só quebrariam ao vivo. Só lê —
+  // nada aqui liga, grava ou chama serviço externo.
+  "preflight.check"=>{let profile=rt.db.profile(&p)?;Ok(preflight::check(&rt,&profile))},
   "flow.cancel"=>{if rt.runs.cancel(args["executionId"].as_str().unwrap_or("")){rt.log(&p,"run","Execução cancelada a pedido","info");Ok(Value::Null)}else{Err("Execução não encontrada ou já terminada".into())}},
  "logs"=>Ok(json!(rt.db.logs(&p)?)),
  "stats"=>stats::read(&rt,&p),

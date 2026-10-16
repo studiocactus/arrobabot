@@ -204,3 +204,11 @@ button.swatch-theme.selected,button.swatch-dot.selected{border-color:var(--accen
 .presence-panel li{padding:5px 8px;border-radius:var(--r-sm);background:var(--bg);overflow-wrap:anywhere}
 .presence-panel footer button{width:100%}
 [data-theme=light] .presence-panel{box-shadow:0 18px 44px #1c243426}
+
+/* Pré-voo da live: relatório do painel de Visão geral */
+.preflight-list{list-style:none;margin:0;padding:0}
+.preflight-list li{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 0;border-bottom:1px solid var(--border);font-size:12px;line-height:1.5}
+.preflight-list li:last-child{border-bottom:0}
+.preflight-list li span{min-width:0}
+.preflight-list li button{flex-shrink:0}
+.preflight-ok{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:600;color:var(--accent);margin:0}

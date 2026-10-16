@@ -237,7 +237,7 @@ pub fn mention_any(pattern:&str,message:&str)->bool {
  })
 }
 /// Primeira opção da lista: é ela que a prévia usa para simular o gatilho.
-fn first_option(pattern:&str)->&str {
+pub(crate) fn first_option(pattern:&str)->&str {
  pattern.split(',').map(str::trim).find(|alt|!alt.is_empty()).unwrap_or(pattern.trim())
 }
 pub fn preview_event(f:&Flow,e:Event)->Event {

@@ -1,5 +1,46 @@
 # Histórico de atualizações
 
+# BotLive 0.7.8
+
+## O que mudou
+
+**Modo Ensaio, terceira etapa: o comando agora é ensaiado pelo funil real da live, os testes falam um contrato só e a Visão geral ganha o pré-voo antes de ir ao ar.** Quem ensaia um comando passa a ver o que a live veria — procura das automações, permissão, disputa e intervalo — sem publicar nada, sem queimar intervalo real e sem mexer em estatística; e qualquer pessoa pode conferir, em um clique, o que estaria quebrado na configuração antes de começar a transmissão.
+
+O que a mudança traz, item por item:
+
+- **Testar comando ao vivo.** O painel de teste do editor de automações ganha o segundo modo **Testar comando ao vivo**: a mensagem como um espectador digitaria (comando + argumentos) e o papel de quem digita (todos, assinante, moderador, streamer) entram na fila do motor como um evento de ensaio. O motor procura as automações salvas e ativas, confere a permissão de quem fala, decide a disputa entre respondentes e passa pelo intervalo — o de ensaio tem balde próprio, então testar nunca queima o intervalo real. Quando a live também não responderia (nenhuma automação para a mensagem, permissão que não confere, intervalo ativo, gatilho desligado), o painel devolve o motivo e nada executa, igualzinho ao que a live faria. Acertando, o acompanhamento etapa a etapa acompanha a execução nascida do funil e **Executar novamente** reenvia o comando com um novo intervalo de ensaio.
+- **Um contrato só para todos os testes.** O motor ganhou a regra de ensaio (evento de ensaio = simulado e marcado de ensaio): ela roda a lógica do fluxo de verdade — condições, esperas, ordem das etapas — e pula só as etapas que tocariam o mundo externo (mensagem na Twitch, Discord, Helix, webhooks, pontos, memórias, variáveis fora do escopo local), cada uma com o aviso **Pulada**. O teste rápido de fluxo continua como estava, direto e sem fila. Sons e vozes tocam pela linha real do aplicativo (a mesma que o OBS captura), a resposta do bot aparece no Histórico como `[Simulação]`, o chat do ensaio não infla a explosão de emotes nem os contadores de conversa, e nada disso entra nas estatísticas — o Histórico registra a linha com status `ensaio`.
+- **Pré-voo da live.** A tela Visão geral ganha o card **Pré-voo da live**, antes das colunas do painel: um clique varre a configuração do perfil selecionado e lista o que só quebraria ao vivo — bot não autorizado na Twitch, alertas (chave mestra e interruptor por evento) desligados, chat no OBS desligado, sons e frases apagados de Sons de Live, e ações cujo requisito falta (Texto para voz, Pontos & loja ou Discord com o módulo desligado, OBS desligado, IA sem modelo escolhido, endereço de webhook inválido). Cada aviso traz um botão **Ir para X** que abre a tela de conserto; com tudo em ordem, o card diz que está tudo pronto. A varredura é estática: não chama rede, não altera nada e não depende da conexão — o endereço do overlay não entra, porque ele é gerado na hora.
+- **Apoio atualizado.** Os capítulos 03 (Comandos e automações) e o Guia de uso passam a explicar o modo comando ao vivo e a rotina com o pré-voo; o manual foi regerado.
+
+Para quem mantém o código: a op `flow.rehearse` (`{profileId, message, role}`) devolve `{fired:false, reason}` ou `{fired:true, flow, flowId}` com o evento `simulated+rehearsal` e `data.botliveTest`; `preflight.check` (`{profileId}`) devolve `{items:[{message, page}]}`, só leitura. No motor, `ensaio(e)` é a predicação única, `testing` inclui ensaio, `test_skipped` tem exceção para chat de ensaio, TEST_SKIP ganhou `voiceFx`, os cooldowns usam `cooldown_keys`/`cooldown_ready` com balde `ensaio`/`live`, e contagem de emotes/chatter só acontece fora de evento simulado.
+
+## Como usar
+
+1. Abra **Automações**, edite um fluxo com gatilho de comando e clique em **Testar fluxo**. Escolha **Testar comando ao vivo**: a primeira variação do comando já vem preenchida.
+2. Escreva a mensagem como um espectador digitaria (argumentos inclusive) e escolha **Permissão de quem digita**. Clique em **Enviar comando**.
+3. Se a live também não responderia, o painel avisa qual é o motivo e não executa nada — corrija a automação, a permissão ou o intervalo e tente de novo. Respondendo, o acompanhamento mostra cada etapa até o fim; **Executar novamente** reenvia o comando quando você pedir.
+4. Antes de começar a transmissão, abra a **Visão geral** e clique em **Rodar pré-voo** no card **Pré-voo da live**: cada aviso tem um botão **Ir para** a tela onde consertar; **Verificar de novo** refaz a varredura.
+5. O intervalo do ensaio é separado do da live: você pode testar à vontade sem afetar quem está no chat. Nada do que o ensaio roda vira estatística, saldo ou mensagem publicada.
+
+## Validação
+
+- `cargo test` em `src-tauri`: **262 testes, 0 falhas, 1 ignorado** — incluem os novos desta versão: a regra de ensaio do motor (ensaio exige simulado e marcação juntos; teste rápido pula o externo), o balde de intervalo do ensaio separado do da live, o comando de ensaio atravessando o funil (lógica roda, externos pulados, `[Simulação]` no histórico, contadores e estatísticas intactos, intervalo de ensaio não queima o da live), o aviso do `flow.rehearse` quando a live não responderia (sem automação, permissão, desligado) e o pré-voo acusando autorização, alertas, chat, áudio apagado, módulo e webhook — com o aviso recolhido quando a peça é ligada.
+- `npm run check` (tsc) sem erros; `npm test` (vitest) **115/115**; `npm run test:updates` **9/9**.
+- `npx playwright test` (suíte completa): **78 testes, 0 falhas** — com os quatro novos: comando ao vivo avisando sem executar nada (clique duplo envia um só) e acompanhando a execução do funil com repetição, e o pré-voo com lista, deep-link marcando a tela no menu, verificação só de leitura (nenhuma operação de escrita), estado vazio e falha que orienta sem perder o relatório anterior.
+- Regras de tela: capturas `comando-ao-vivo-1100/-aviso-1100/-largo` e `preflight-1100/-wide` geradas pela suíte e revisadas; a 1100px o relatório e o painel de comando não espremem texto nem causam rolagem horizontal.
+- `npm run docs` regerado (26 capítulos); `npm run update:check` executado antes do push.
+
+## Limitações
+
+- **A IA continua fora do ensaio**: etapa de IA no comando ao vivo aparece como **Pulada** (rede e custo), como já acontece no teste rápido; o restante da lógica roda.
+- **A mensagem do espectador no ensaio não aparece no chat do OBS** — o ensaio entra pela fila do motor como comando, e a prévia da caixa de chat continua com o botão de teste da tela Chat no OBS (contrato da 0.7.6, mantido).
+- **O pré-voo é uma varredura estática de configuração**: ele não fala com a Twitch nem testa webhooks de verdade — acusa o que falta ou está errado na configuração, e a autorização em si continua sendo conferida nas Configurações.
+- **Testar explosão** (emotes) ainda dispara mesmo com a explosão desligada — comportamento da 0.7.5, mantido de propósito e já registrado no capítulo de Alertas.
+- A prévia local do Estúdio e o que chega pelo motor (alerta no OBS, execução na fila) podem começar em instantes diferentes — mesma observação da 0.7.7.
+
+---
+
 # BotLive 0.7.7
 
 ## O que mudou

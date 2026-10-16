@@ -237,7 +237,7 @@ fn rehearsal_event(p: &Profile, kind: &str) -> Option<Event> {
 }
 
 /// Nome do evento como a pílula do Estúdio mostra (em minúsculas no aviso).
-fn label(kind: &str) -> &'static str {
+pub(crate) fn label(kind: &str) -> &'static str {
     match kind {
         "follow" => "seguidor",
         "subscription" => "novo sub",

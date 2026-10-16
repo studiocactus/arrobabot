@@ -138,7 +138,9 @@ pub async fn process(rt:Arc<Runtime>,e:Event){
  // chat: removem o que já estava renderizado e seguem o fluxo do bot.
  if matches!(e.kind.as_str(),"chat.delete"|"chat.deleteUser"|"chat.clear"){if !e.simulated{crate::chat_overlay::removed(&rt,&p,&e);}return}
  if e.kind=="chat"&&!e.simulated&&!p.bot_id.is_empty()&&e.user_id==p.bot_id{return}
- if e.kind=="chat"{crate::twitch_ops::note_chatter(&rt,&e);crate::emote_burst::count(&rt,&p.id,&e);}
+ // Mensagem de teste não registra frequência nem infla a explosão de emotes: o
+ // ensaio não pode mexer em estado que a live usa para decidir.
+ if e.kind=="chat"&&!e.simulated{crate::twitch_ops::note_chatter(&rt,&e);crate::emote_burst::count(&rt,&p.id,&e);}
  // A mensagem entra no chat do overlay antes dos comandos: o que o espectador
  // digitou aparece na fonte do OBS mesmo quando o bot responde ou modera.
  if e.kind=="chat"&&!e.simulated{crate::chat_overlay::fire(&rt,&p,&e);}
@@ -258,7 +260,7 @@ pub async fn process(rt:Arc<Runtime>,e:Event){
  let allowed={
  let mut cd=rt.cooldowns.lock().unwrap();
  cd.retain(|_,t|t.elapsed()<Duration::from_secs(86400));
- let global=format!("{}:{}:{}",p.id,f.id,e.simulated);let user=format!("{global}:{}",e.user_id);
+ let (global,user)=cooldown_keys(&p.id,&f,&e);
  let blocked=cd.get(&global).is_some_and(|t|t.elapsed().as_secs()<f.trigger.cooldown)||cd.get(&user).is_some_and(|t|t.elapsed().as_secs()<f.trigger.user_cooldown);
  if !blocked{cd.insert(global,Instant::now());cd.insert(user,Instant::now());} !blocked
  };
@@ -294,7 +296,7 @@ pub async fn process(rt:Arc<Runtime>,e:Event){
  /// sem isto a tela acompanharia um registro parado e o cancelamento miraria outro.
  pub async fn execute_flow_with_run(rt:&Arc<Runtime>,p:&Profile,e:&Event,f:&Flow,answers:bool,history:&[Value],counts:Option<&(Option<i64>,Option<i64>)>,test:bool,test_vars:Option<Value>,exec:String)->bool{
   let short=rt.runs.short_of(&exec);
-  let testing=test||e.data["botliveTest"]==true;
+  let testing=test||e.rehearsal||e.data["botliveTest"]==true;
   rt.log(&p.id,"run",&format!("Execução {short} iniciada ({} · {})",f.name,e.kind),"info");
   let mut ev=e.clone();ev.data["botliveTest"]=json!(testing);ev.data["execId"]=json!(exec.clone());
   let e=&ev;
@@ -307,7 +309,9 @@ pub async fn process(rt:Arc<Runtime>,e:Event){
   let mut variables=match crate::variables::Context::new(&rt.db,&p,&e,Some(&f)){Ok(v)=>v,Err(err)=>{rt.log(&p.id,"variables",&err,"error");rt.runs.fail(&exec,None,&err);rt.runs.finish(&exec,"FAILED");return false}};
   if let Some(n)=count{variables.set_command_count(n);}
   if let Some((followers,subs))=counts{variables.set("followerCount",followers.map_or(serde_json::Value::String(String::new()),|n|serde_json::json!(n)));variables.set("subCount",subs.map_or(serde_json::Value::String(String::new()),|n|serde_json::json!(n)));}
-  if !testing{crate::chat_extras::play_flow(&rt,&p,&f,&e);}
+  // No ensaio o áudio do fluxo toca de verdade (linha real do app): é efeito local
+  // e é justamente o que o streamer quer conferir antes da live.
+  if !testing||ensaio(&e){crate::chat_extras::play_flow(&rt,&p,&f,&e);}
   variables.set("execution.id",json!(exec.clone()));
   if testing{if let Some(vars)=test_vars.and_then(|v|v.as_object().cloned()){for (k,v) in vars{variables.set(&k,v.clone());}}}
   let mut ctl=Ctl{skip_next:false,stop:false};
@@ -315,7 +319,7 @@ pub async fn process(rt:Arc<Runtime>,e:Event){
    if rt.runs.cancelled(&exec){rt.log(&p.id,"run",&format!("Execução {short} cancelada"),"info");rt.runs.finish(&exec,"CANCELLED");return false;}
    if ctl.skip_next{ctl.skip_next=false;rt.log(&p.id,"action",&format!("{} · etapa {} pulada pela condição",f.name,i+1),"info");rt.runs.step(&exec,i,"SKIPPED");continue}
    if !a.enabled{rt.log(&p.id,"action",&format!("{} · etapa {} pulada",f.name,i+1),"info");rt.runs.step(&exec,i,"SKIPPED");continue}
-   if testing&&test_skipped(a.kind.as_str(),a.target.as_str()){rt.log(&p.id,"action",&format!("{} · teste pulou {}",f.name,a.kind),"info");rt.runs.step(&exec,i,"SKIPPED");continue}
+   if testing&&test_skipped(a.kind.as_str(),a.target.as_str(),ensaio(&e)){rt.log(&p.id,"action",&format!("{} · teste pulou {}",f.name,a.kind),"info");rt.runs.step(&exec,i,"SKIPPED");continue}
    if !answers&&matches!(a.kind.as_str(),"chat"|"ai"|"ai.generate"){continue}
    if e.kind=="timer"&&!e.simulated&&!crate::timers::event_active(&rt,&e){break}
    if !a.condition.is_empty()&&!e.message.to_lowercase().contains(&a.condition.to_lowercase()){continue}
@@ -337,20 +341,43 @@ pub async fn process(rt:Arc<Runtime>,e:Event){
 const REPLY:&[&str]=&["chat","ai","ai.generate"];
 /// True quando a automação tem alguma ação de resposta no chat.
 fn replies(f:&Flow)->bool{f.actions.iter().any(|a|REPLY.contains(&a.kind.as_str()))}
-/// Etapas que o teste nunca executa: publicam no chat, alteram a live ou chamam
-/// serviços de fora. O teste só prova a lógica — sequência, espera e condição.
-const TEST_SKIP:&[&str]=&["chat","ai","ai.generate","discord","webhook","memory","points","punish","twitch","tts","obs","overlay","script"];
+/// Etapas que o teste nunca executa: publicam no chat, alteram a live (inclusive a
+/// voz) ou chamam serviços de fora. O teste só prova a lógica — sequência, espera e
+/// condição. No ensaio de comando a resposta de chat é a exceção: ela roda e vira
+/// `[Simulação]` no Histórico, para o streamer ver o que o bot diria sem publicar.
+const TEST_SKIP:&[&str]=&["chat","ai","ai.generate","discord","webhook","memory","points","punish","twitch","tts","obs","overlay","script","voiceFx"];
 /// True quando a etapa fica de fora do teste: ou é externa, ou escreve variável
 /// fora do escopo local (que é o único que o teste pode gravar sem efeito real).
-fn test_skipped(kind:&str,target:&str)->bool{
+fn test_skipped(kind:&str,target:&str,rehearsal:bool)->bool{
+ if rehearsal&&kind=="chat"{return false}
  if TEST_SKIP.contains(&kind){return true}
  kind.starts_with("variable.")&&matches!(crate::variables::target(target),Ok((scope,_)) if scope!="local")
+}
+/// Ensaio no funil: evento de teste simulado E marcado como rehearsal — o único que
+/// executa a lógica com o externo barrado. Rehearsal sem simulated é o "teste rápido"
+/// do `flow.test`, que nunca entra no funil e não pode disparar nada de verdade.
+pub fn ensaio(e:&Event)->bool{e.simulated&&e.rehearsal}
+/// Fase do intervalo: ensaio (simulado ou rehearsal) tem bucket próprio — testar um
+/// comando nunca queima o intervalo da live (decisão 3 do Modo Ensaio).
+fn cooldown_phase(e:&Event)->&'static str{if e.simulated||e.rehearsal{"ensaio"}else{"live"}}
+/// Chaves do intervalo (global e por pessoa) de um fluxo para um evento. O funil e o
+/// pré-check do `flow.rehearse` usam estas mesmas, para o ensaio ver a regra da live.
+pub fn cooldown_keys(p:&str,f:&Flow,e:&Event)->(String,String){
+ let global=format!("{}:{}:{}",p,f.id,cooldown_phase(e));
+ (global.clone(),format!("{global}:{}",e.user_id))
+}
+/// True quando o fluxo está fora do intervalo. Só consulta: o bucket é consumido pelo
+/// funil no disparo, e o pré-check do ensaio não pode adiantar o bloqueio da live.
+pub fn cooldown_ready(rt:&Runtime,p:&str,f:&Flow,e:&Event)->bool{
+ let cd=rt.cooldowns.lock().unwrap();let (global,user)=cooldown_keys(p,f,e);
+ !cd.get(&global).is_some_and(|t|t.elapsed().as_secs()<f.trigger.cooldown)
+  &&!cd.get(&user).is_some_and(|t|t.elapsed().as_secs()<f.trigger.user_cooldown)
 }
 /// Escolhe qual automação publica a resposta quando várias casam na mesma mensagem.
 /// A ordem é a do tipo do gatilho (comando, chamada pelo nome, contém, mensagem e os
 /// demais), depois o gatilho mais específico (menos opções e texto mais longo) e, no
 /// empate, a posição na lista do perfil. Sem concorrência devolve None e todos respondem.
-fn responder(flows:&[Flow])->Option<String>{
+pub(crate) fn responder(flows:&[Flow])->Option<String>{
  if flows.len()<2{return None}
  let rank=|kind:&str|match kind{"command"=>0,"mention"=>1,"contains"=>2,"voice"=>3,"chat"=>4,_=>5};
  let mut best:Option<((usize,usize,usize),usize)>=None;
@@ -367,8 +394,9 @@ async fn action(rt:&Arc<Runtime>,p:&Profile,e:&Event,a:&Action,variables:&mut cr
  let text=if a.kind=="variable.delete"{String::new()}else if a.kind=="script"{a.text.clone()}else{variables.render(&a.text)?};
  if a.kind.starts_with("variable."){variables.change(&rt.db,p,e,&a.target,a.kind.trim_start_matches("variable."),crate::variables::typed(&text))?;return Ok(())}
  if blocked(&text,p)&&matches!(a.kind.as_str(),"chat"|"tts"|"overlay"|"discord"){return Err("Conteúdo bloqueado".into())}
- // Simulations never perform external effects or change persistent module/vault state.
- if e.simulated && a.kind!="chat" {if matches!(a.kind.as_str(),"ai"|"ai.generate"){crate::ai::save_response(variables,rt,p,e,a,"[Prévia: resposta contextual da IA]",false)?;}rt.log(&p.id,"simulation",&format!("Executaria {}: {}",a.kind,text.chars().take(200).collect::<String>()),"success");return Ok(())}
+ // Simulação da API nunca executa efeito nem muda estado persistido; o ensaio
+ // (rehearsal) roda a lógica do fluxo e deixa o TEST_SKIP barrar o externo.
+ if e.simulated&&!e.rehearsal && a.kind!="chat" {if matches!(a.kind.as_str(),"ai"|"ai.generate"){crate::ai::save_response(variables,rt,p,e,a,"[Prévia: resposta contextual da IA]",false)?;}rt.log(&p.id,"simulation",&format!("Executaria {}: {}",a.kind,text.chars().take(200).collect::<String>()),"success");return Ok(())}
  match a.kind.as_str(){
  "punish"=>crate::moderation::punish(rt,p,e,a,&text,Some(&mut *variables)).await,
  "twitch"=>crate::twitch_ops::run(rt,p,e,a,&text,&f.trigger.pattern,Some(variables)).await.map(|_|()),
@@ -458,5 +486,31 @@ async fn action(rt:&Arc<Runtime>,p:&Profile,e:&Event,a:&Action,variables:&mut cr
   assert!(replies(&f("B","command","!b",&["overlay","ai"])));
   assert!(replies(&f("C","command","!c",&["ai.generate"])));
   assert!(!replies(&f("D","command","!d",&["overlay","points","punish"])),"efeitos paralelos não são resposta");
+ }
+ fn e(simulated:bool,rehearsal:bool)->Event {
+  Event{id:"e".into(),profile_id:"p".into(),kind:"chat".into(),user:"Teste".into(),user_id:"ensaio".into(),
+   role:"everyone".into(),message:"!oi".into(),data:json!({}),simulated,rehearsal}
+ }
+ #[test] fn cooldown_do_ensaio_tem_bucket_proprio() {
+  let fl=f("Comando","command","!oi",&["chat"]);
+  let (live,_)=cooldown_keys("p",&fl,&e(false,false));
+  let (ensaio,_)=cooldown_keys("p",&fl,&e(true,true));
+  assert!(live.ends_with(":live"),"fase da live");
+  assert!(ensaio.ends_with(":ensaio"),"fase do ensaio");
+  assert_ne!(live,ensaio,"testar o comando não pode herdar nem queimar o intervalo da live");
+ }
+ #[test] fn ensaio_exige_simulado_e_rehearsal_juntos() {
+  assert!(ensaio(&e(true,true)));
+  assert!(!ensaio(&e(false,true)),"rehearsal sem simulated é o teste rápido do flow.test: nada externo roda");
+  assert!(!ensaio(&e(true,false)));
+  assert!(!ensaio(&e(false,false)));
+ }
+ #[test] fn ensaio_roda_a_resposta_e_a_logica_e_o_teste_rapido_pula_o_externo() {
+  assert!(!test_skipped("chat","",true),"no ensaio a resposta roda e vira [Simulação] no Histórico");
+  assert!(test_skipped("chat","",false),"no teste rápido a chat continua de fora");
+  assert!(test_skipped("voiceFx","efeito",true),"a voz da live muda o áudio real: fora do teste");
+  assert!(test_skipped("points","",true),"pontos não persistem em ensaio");
+  assert!(test_skipped("variable.set","global.contador",true),"variável global não grava");
+  assert!(!test_skipped("variable.set","local.resposta",true),"variável local roda no ensaio");
  }
 }

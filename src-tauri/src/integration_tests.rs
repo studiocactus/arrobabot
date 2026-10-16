@@ -1293,3 +1293,132 @@ async fn chat_de_ensaio_sai_pelo_caminho_real_do_chat(){
  assert_eq!(hits[0]["payload"]["kind"],"giftbulk");
  assert!(hits[0]["payload"]["text"].as_str().unwrap().contains("10 SUBS"),"amount do total, como o Estúdio mostra");
 }
+/// Comando de ensaio: a mensagem de verdade entra pelo funil da live — matches,
+/// permissão, disputa e intervalo do bucket de ensaio. A lógica roda, o externo
+/// fica barrado e a resposta do bot aparece como [Simulação], nunca na Twitch.
+#[tokio::test]
+async fn comando_de_ensaio_percorre_o_funil_sem_queimar_a_live(){
+ let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();
+ let p=profile("Comando ensaio");rt.db.save_profile(&p).unwrap();
+ let act=|kind:&str,target:&str,text:&str|Action{kind:kind.into(),text:text.into(),target:target.into(),value:0,condition:String::new(),..Default::default()};
+ let mut obs=act("obs","","mute");obs.obs_op="mute".into();obs.obs_target="Mic".into();
+ let mut f=flow(&p);f.name="Cumprimento".into();f.counter=true;f.trigger.cooldown=300;f.trigger.user_cooldown=300;
+ f.actions=vec![act("variable.set","local.dentro","pode"),act("chat","","Oi {{user}}!"),act("points","","10"),obs,act("variable.set","global.fora","nao pode")];
+ rt.db.save_flow(&f).unwrap();
+ let mut rx=rt.broadcast.subscribe();
+
+ // mensagem com emote, como um espectador digitaria
+ let out=dispatch(rt.clone(),"flow.rehearse",json!({"profileId":p.id,"message":"!oi Kappa","role":"everyone"})).await.unwrap();
+ assert_eq!(out["fired"],true,"o comando casa e dispara");
+ assert_eq!(out["flow"],"Cumprimento","o vencedor é a mesma automação que a live escolheria");
+ let name=out["flow"].as_str().unwrap().to_owned();
+ let deadline=tokio::time::Instant::now()+std::time::Duration::from_secs(10);
+ let run=loop{
+  if let Some(r)=rt.runs.list(&p.id).into_iter().find(|r|r.flow_name==name&&["COMPLETED","FAILED"].contains(&r.status.as_str())){break r}
+  assert!(tokio::time::Instant::now()<deadline,"a execução do ensaio não terminou");
+  tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+ };
+ assert_eq!(run.status,"COMPLETED");
+ assert_eq!(run.steps[0].status,"SUCCESS","variável local roda de verdade");
+ assert_eq!(run.steps[1].status,"SUCCESS","a resposta roda e vira [Simulação]");
+ assert_eq!(run.steps[2].status,"SKIPPED","pontos não persistem no ensaio");
+ assert_eq!(run.steps[3].status,"SKIPPED","OBS fica de fora");
+ assert_eq!(run.steps[4].status,"SKIPPED","variável global não grava");
+ let logs=rt.db.logs(&p.id).unwrap();
+ assert!(logs.iter().any(|l|l.message=="[Simulação] Oi Teste!"),"a resposta aparece no Histórico, sem publicar");
+ assert!(logs.iter().any(|l|l.status=="ensaio"&&l.message.contains("Iniciando Cumprimento")),"o ensaio não conta nas estatísticas");
+ assert_eq!(command_counter::get(&rt.db,&p.id,&f.id).unwrap(),0,"contador de comando não persiste no ensaio");
+ assert!(rt.emote_counts.lock().unwrap().is_empty(),"emote de teste não infla a explosão de emotes");
+ assert!(!std::iter::from_fn(||rx.try_recv().ok()).any(|v|v["type"]=="chat"),"o comando de ensaio não aparece no chat do OBS");
+
+ // o intervalo vem do bucket de ensaio — o da live segue intacto
+ let probe={let mut e=event(&p,"!oi",true);e.rehearsal=true;e.user_id="ensaio".into();e};
+ let (global,user)=engine::cooldown_keys(&p.id,&f,&probe);
+ assert!(global.ends_with(":ensaio")&&user.ends_with(":ensaio"),"bucket do ensaio");
+ let (live_global,_)=engine::cooldown_keys(&p.id,&f,&event(&p,"!oi",false));
+ assert!(!rt.cooldowns.lock().unwrap().contains_key(&live_global),"a live não pode herdar o intervalo do ensaio");
+ let out=dispatch(rt.clone(),"flow.rehearse",json!({"profileId":p.id,"message":"!oi","role":"everyone"})).await.unwrap();
+ assert_eq!(out["fired"],false,"o segundo ensaio cai no intervalo, como na live");
+ assert!(out["reason"].as_str().unwrap().contains("intervalo"));
+
+ // a live responde no mesmo comando: queima o bucket dela e conta o contador
+ engine::process(rt.clone(),event(&p,"!oi",false)).await;
+ let deadline=tokio::time::Instant::now()+std::time::Duration::from_secs(10);
+ let run=loop{
+  let runs=rt.runs.list(&p.id);
+  if runs.len()>=2{break runs.into_iter().next().expect("a execução da live")}
+  assert!(tokio::time::Instant::now()<deadline,"a execução da live não terminou");
+  tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+ };
+ assert_eq!(run.flow_name,"Cumprimento");
+ assert_eq!(command_counter::get(&rt.db,&p.id,&f.id).unwrap(),1,"a live conta o comando de verdade");
+ assert!(rt.cooldowns.lock().unwrap().contains_key(&live_global),"a live queima o bucket dela");
+}
+/// O ensaio de comando avisa o que a live faria: permissão que não confere,
+/// automação desligada ou comando sem dono — nada dispara e o motivo volta.
+#[tokio::test]
+async fn flow_rehearse_avisa_o_que_nao_responderia_na_live(){
+ let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();
+ let p=profile("Rehearse avisos");rt.db.save_profile(&p).unwrap();
+
+ // comando sem nenhuma automação no perfil
+ let out=dispatch(rt.clone(),"flow.rehearse",json!({"profileId":p.id,"message":"!sumido","role":"everyone"})).await.unwrap();
+ assert_eq!(out["fired"],false);
+ assert!(out["reason"].as_str().unwrap().contains("Nenhuma automação"));
+ assert!(dispatch(rt.clone(),"flow.rehearse",json!({"profileId":p.id,"message":"   ","role":"everyone"})).await.is_err(),"comando vazio não entra no funil");
+
+ // gatilho só para moderadores: como espectador não responderia, como na live
+ let mut f=flow(&p);f.name="Segredo".into();f.trigger.pattern="!segredo".into();f.trigger.permission="moderator".into();
+ f.actions=vec![Action{kind:"chat".into(),text:"abriu".into(),target:String::new(),value:0,condition:String::new(),..Default::default()}];
+ rt.db.save_flow(&f).unwrap();
+ let out=dispatch(rt.clone(),"flow.rehearse",json!({"profileId":p.id,"message":"!segredo","role":"everyone"})).await.unwrap();
+ assert_eq!(out["fired"],false);
+ assert!(out["reason"].as_str().unwrap().contains("Nenhuma automação"),"sem a permissão, nenhuma automação responderia");
+ let out=dispatch(rt.clone(),"flow.rehearse",json!({"profileId":p.id,"message":"!segredo","role":"moderator"})).await.unwrap();
+ assert_eq!(out["fired"],true,"com a permissão certa o comando dispara");
+ assert_eq!(out["flow"],"Segredo");
+
+ // desligada, a automação some do funil — igualzinho à live
+ let mut off=f.clone();off.enabled=false;rt.db.save_flow(&off).unwrap();
+ let out=dispatch(rt.clone(),"flow.rehearse",json!({"profileId":p.id,"message":"!segredo","role":"moderator"})).await.unwrap();
+ assert_eq!(out["fired"],false);
+ assert!(out["reason"].as_str().unwrap().contains("Nenhuma automação"));
+}
+/// Pré-voo: a varredura estática acusa o que só quebraria ao vivo, cada item com a
+/// tela de conserto — e recolhe o aviso quando a peça é ligada.
+#[tokio::test]
+async fn preflight_acusa_o_que_so_quebraria_ao_vivo(){
+ let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();
+ let p=profile("Pré-voo");rt.db.save_profile(&p).unwrap();
+ let act=|kind:&str,target:&str|Action{kind:kind.into(),text:"x".into(),target:target.into(),value:0,condition:String::new(),..Default::default()};
+ let mut f=flow(&p);f.name="Tudo quebrado".into();f.audio="audio-sumido".into();
+ f.actions=vec![act("tts",""),act("webhook","htp:/quebrado")];
+ rt.db.save_flow(&f).unwrap();
+
+ let out=dispatch(rt.clone(),"preflight.check",json!({"profileId":p.id})).await.unwrap();
+ let items:Vec<(String,String)>=out["items"].as_array().unwrap().iter()
+  .map(|v|(v["message"].as_str().unwrap().into(),v["page"].as_str().unwrap().into())).collect();
+ let has=|needle:&str|items.iter().any(|(m,_)|m.contains(needle));
+ assert!(has("não está autorizado na Twitch"),"sem autorização nada funcionaria");
+ assert!(has("alertas no overlay estão desligados"));
+ assert!(has("chat no OBS está desligado"));
+ assert!(has("O áudio de “Tudo quebrado” foi apagado"),"arquivo apagado só quebraria ao vivo");
+ assert!(has("lê mensagens em voz alta"),"ação de voz sem o módulo");
+ assert!(has("webhook inválido"));
+ assert!(items.iter().all(|(_,page)|["profiles","alertas","chatobs","sounds","community","obs","ai","flows"].contains(&page.as_str())),"cada item aponta uma tela real");
+
+ // ligando as peças, o pré-voo recolhe os avisos — o arquivo continua apagado
+ let mut acfg=crate::alerts::defaults();acfg["enabled"]=json!(true);
+ dispatch(rt.clone(),"module.config",json!({"profileId":p.id,"key":"alerts","value":acfg})).await.unwrap();
+ let mut ccfg=crate::chat_overlay::defaults();ccfg["enabled"]=json!(true);
+ dispatch(rt.clone(),"module.config",json!({"profileId":p.id,"key":"chatOverlay","value":ccfg})).await.unwrap();
+ let mut p2=rt.db.profile(&p.id).unwrap();p2.modules["tts"]=json!(true);rt.db.save_profile(&p2).unwrap();
+ let out=dispatch(rt.clone(),"preflight.check",json!({"profileId":p.id})).await.unwrap();
+ let items:Vec<String>=out["items"].as_array().unwrap().iter().map(|v|v["message"].as_str().unwrap().into()).collect();
+ let has=|needle:&str|items.iter().any(|m|m.contains(needle));
+ assert!(!has("alertas no overlay estão desligados"),"alerta ligado some do relatório");
+ assert!(!has("chat no OBS está desligado"),"chat ligado some do relatório");
+ assert!(!has("lê mensagens em voz alta"),"módulo ligado some do relatório");
+ assert!(has("O áudio de “Tudo quebrado” foi apagado"),"o arquivo continua faltando até ser restaurado");
+ assert!(has("webhook inválido"));
+}

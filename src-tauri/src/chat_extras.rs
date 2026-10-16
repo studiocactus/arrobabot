@@ -237,9 +237,11 @@ pub fn sound(rt:&Runtime,p:&Profile,e:&Event){
  rt.log(&p.id,"sound",&format!("Som solicitado para {}",person.nickname),"info");
 }
 /// Toca o áudio escolhido no comando, timer ou automação assim que ele dispara.
+/// Simulação da API só avisa no Histórico; o ensaio toca na linha real (é efeito
+/// local e é o que o streamer quer conferir).
 pub fn play_flow(rt:&Runtime,p:&Profile,f:&Flow,e:&Event){
  if f.audio.is_empty(){return}
- if e.simulated{rt.log(&p.id,"sound","[Simulação] Tocaria o áudio do fluxo","info");return}
+ if e.simulated&&!e.rehearsal{rt.log(&p.id,"sound","[Simulação] Tocaria o áudio do fluxo","info");return}
  if asset(rt,&p.id,&f.audio,"sound").is_err(){rt.log(&p.id,"sound","O áudio deste fluxo não existe mais; escolha outro em Sons de Live","error");return}
  let volume=if f.audio_volume.is_finite(){f.audio_volume.clamp(0.0,1.0)}else{1.0};
  play_line(rt,p,&f.audio,None,volume);

@@ -81,7 +81,7 @@ Os adaptadores ignoram mensagens da própria conta do bot para evitar respostas 
 
 ## Uma rotina simples para cada live
 
-Antes de começar: abra o desktop, escolha o perfil, conecte o canal, confira o histórico e teste um comando. Atualize a nota de contexto da transmissão, se usar IA.
+Antes de começar: abra o desktop, escolha o perfil, conecte o canal, confira o histórico e rode o **pré-voo da live** na Visão geral — o relatório acusa, antes de ir ao ar, alertas e chat desligados, sons apagados e ações sem módulo ou autorização, e cada aviso leva à tela de conserto. Teste um comando (no editor de automações, **Testar comando ao vivo** ensaia o comando pelo funil da live, sem publicar nada). Atualize a nota de contexto da transmissão, se usar IA.
 
 Durante a live: acompanhe erros, cuide das filas e finalize sorteios e previsões pelo painel.
 

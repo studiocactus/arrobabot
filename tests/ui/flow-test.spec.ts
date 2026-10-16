@@ -1,6 +1,7 @@
 import {test,expect,type Page} from '@playwright/test';
 
-/** Testar fluxo 0.1.92: preparar, iniciar uma vez, acompanhar, cancelar e fechar. */
+/** Testar fluxo 0.1.92: preparar, iniciar uma vez, acompanhar, cancelar e fechar.
+ * Modo ensaio 0.7.8: comando ao vivo pelo funil, com aviso quando a live não responderia. */
 
 type Step={index:number;kind:string;status:string};
 type Run={id:string;flow:string;status:string;test:boolean;steps:Step[];error:string|null};
@@ -8,6 +9,7 @@ type St={
  attempts:number;success:number;runsCalls:number;ops:string[];forbidden:string[];
  scenario:'run'|'hold'|'condition'|'fail';
  testFail:boolean;runsFail:boolean;cancelError:boolean;cancelAt:number;
+ rehearseCalls:number;rehearseFired:boolean;sentMessage:string;sentRole:string;
  run:Run|null;sent:{name:string;vars:Record<string,string>;kinds:string[]}|null;
 };
 
@@ -39,7 +41,8 @@ async function mock(page:Page,flows:unknown[]){
   const profile=arg.profile;
   const st:St={
    attempts:0,success:0,runsCalls:0,ops:[],forbidden:[],scenario:'run',
-   testFail:false,runsFail:false,cancelError:false,cancelAt:0,run:null,sent:null
+   testFail:false,runsFail:false,cancelError:false,cancelAt:0,run:null,sent:null,
+   rehearseCalls:0,rehearseFired:true,sentMessage:'',sentRole:''
   };
   const advance=()=>{
    const r=st.run;if(!r)return;
@@ -88,6 +91,22 @@ async function mock(page:Page,flows:unknown[]){
       st.cancelAt=0;
       return {executionId:id};
      }
+     if(op==='flow.rehearse'){
+      // como o backend: casa o comando salvo pela primeira palavra e devolve
+      // {fired, reason?| flow, flowId}; a run nasce depois, pelo funil.
+      st.rehearseCalls++;
+      st.sentMessage=a.message||'';st.sentRole=a.role||'';
+      const first=(a.message||'').trim().split(/\s+/)[0];
+      const f=(arg.flows as Array<any>).find((x:any)=>x.trigger.pattern.split(',').map((s:string)=>s.trim()).includes(first));
+      if(!f||!st.rehearseFired)return {fired:false,reason:'Em live o comando não responderia agora: '+(f?f.name:'Comando')+' está no intervalo.'};
+      st.success++;
+      const id='exec-r'+st.success;
+      st.run={id,flow:f.name,status:'RUNNING',test:false,
+       steps:f.actions.map((x:any,i:number)=>({index:i,kind:x.kind,status:'PENDING'})),error:null};
+      if(st.run.steps[0])st.run.steps[0].status='RUNNING';
+      st.cancelAt=0;
+      return {fired:true,flow:f.name,flowId:f.id};
+     }
      if(op==='flow.runs'){
       st.runsCalls++;
       if(st.runsFail)throw Error('Sem resposta do aplicativo');
@@ -109,7 +128,7 @@ async function mock(page:Page,flows:unknown[]){
 
 const st=async(page:Page)=>page.evaluate(()=>{
  const s=(window as unknown as {__st:St}).__st;
- return {attempts:s.attempts,success:s.success,runsCalls:s.runsCalls,ops:s.ops,forbidden:s.forbidden,sent:s.sent};
+ return {attempts:s.attempts,success:s.success,runsCalls:s.runsCalls,ops:s.ops,forbidden:s.forbidden,sent:s.sent,rehearseCalls:s.rehearseCalls,sentMessage:s.sentMessage,sentRole:s.sentRole};
 });
 const setSt=async(page:Page,patch:Partial<St>)=>{
  await page.evaluate(p=>{Object.assign((window as unknown as {__st:St}).__st,p)},patch);
@@ -380,4 +399,83 @@ test('falha ao iniciar orienta sem perder os valores e falha de acompanhamento n
  s=await st(page);
  expect(s.attempts,'a falha de acompanhamento não começa outro teste').toBe(2);
  expect(s.success).toBe(1);
+});
+
+test('comando ao vivo avisa quando a live também não responderia e não executa nada',async({page})=>{
+ const errors=errorsOf(page);
+ await mock(page,[simple]);
+ await setSt(page,{rehearseFired:false});
+ await page.getByRole('button',{name:'Comandos',exact:true}).click();
+ await page.getByRole('button',{name:'Editar Boas-vindas',exact:true}).click();
+ await page.getByRole('button',{name:'Testar fluxo',exact:true}).click();
+ const dlg=D(page,'Testar Boas-vindas');
+
+ // dois modos no mesmo painel: o rápido continua como estava
+ await expect(dlg.getByRole('button',{name:'Iniciar teste',exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'Testar comando ao vivo',exact:true}).click();
+ await expect(dlg.getByText('COMANDO AO VIVO',{exact:true})).toBeVisible();
+ await expect(dlg.getByLabel('Mensagem',{exact:true})).toHaveValue('!bemvindo');
+ await expect(dlg.getByLabel('Permissão de quem digita',{exact:false})).toHaveValue('everyone');
+
+ // envio com argumentos; o motor avisa que em live não responderia, sem rodar nada
+ await dlg.getByLabel('Mensagem',{exact:true}).fill('!bemvindo por gentileza');
+ await page.getByRole('button',{name:'Enviar comando',exact:true}).dblclick();
+ const alert=dlg.getByRole('alert');
+ await expect(alert).toContainText('Não disparou.');
+ await expect(alert).toContainText('está no intervalo');
+ // o aviso em janela estreita não espreme o texto nem empurra rolagem horizontal
+ await page.setViewportSize({width:1100,height:900});
+ await page.screenshot({path:'artifacts/comando-ao-vivo-aviso-1100.png',fullPage:true});
+ await page.setViewportSize({width:1440,height:1000});
+ const s=await st(page);
+ expect(s.rehearseCalls,'clique duplo envia um comando só').toBe(1);
+ expect(s.sentMessage).toBe('!bemvindo por gentileza');
+ expect(s.sentRole).toBe('everyone');
+ expect(s.runsCalls,'sem disparo não há execução para acompanhar').toBe(1); // só a prévia antes do envio
+ expect(s.forbidden).toEqual([]);
+
+ // continua no painel: dá para mudar a mensagem, tentar de novo ou voltar ao rápido
+ await expect(dlg.getByRole('button',{name:'Enviar comando',exact:true})).toBeEnabled();
+ await page.getByRole('button',{name:'Voltar ao teste rápido',exact:true}).click();
+ await expect(dlg.getByText('O QUE O TESTE FAZ',{exact:true})).toBeVisible();
+ await expect(dlg.getByRole('button',{name:'Testar comando ao vivo',exact:true})).toBeVisible();
+ expect((await st(page)).attempts,'o teste rápido não foi chamado').toBe(0);
+ expect(errors).toEqual([]);
+});
+
+test('comando ao vivo acompanha a execução que nasceu do funil e repetir reenvia o comando',async({page})=>{
+ await mock(page,[simple,visual]);
+ await page.getByRole('button',{name:'Automações',exact:true}).click();
+ await page.getByRole('button',{name:'Editar Alerta da live',exact:true}).click();
+ await page.getByRole('button',{name:'Testar fluxo',exact:true}).click();
+ const dlg=D(page,'Testar Alerta da live');
+ await page.getByRole('button',{name:'Testar comando ao vivo',exact:true}).click();
+ await expect(dlg.getByLabel('Mensagem',{exact:true})).toHaveValue('!alerta');
+
+ // captura da tela em janela estreita, como a entrega pede
+ await page.setViewportSize({width:1100,height:900});
+ await page.screenshot({path:'artifacts/comando-ao-vivo-1100.png',fullPage:true});
+ await page.setViewportSize({width:1440,height:1000});
+
+ // papel de moderador e argumento na mensagem, como um espectador digitaria
+ await dlg.getByLabel('Permissão de quem digita',{exact:false}).selectOption('moderator');
+ await dlg.getByLabel('Mensagem',{exact:true}).fill('!alerta agora');
+ await page.getByRole('button',{name:'Enviar comando',exact:true}).click();
+
+ // o acompanhamento pega a run criada pelo funil (a prévia antiga não engana)
+ await expect(dlg.getByText('Comando ao vivo:',{exact:false})).toContainText('!alerta agora');
+ await expect(dlg.getByText('Execução exec-r1 · Executando',{exact:true})).toBeVisible({timeout:6000});
+ await expect(dlg.getByText('Execução exec-r1 · Concluída',{exact:true})).toBeVisible({timeout:6000});
+ await page.screenshot({path:'artifacts/comando-ao-vivo-largo.png',fullPage:true});
+ const s=await st(page);
+ expect(s.sentMessage).toBe('!alerta agora');
+ expect(s.sentRole).toBe('moderator');
+ expect(s.attempts,'o teste rápido não foi chamado').toBe(0);
+
+ // repetir reenvia o comando ao vivo, com outra execução
+ await dlg.getByRole('button',{name:'Executar novamente',exact:true}).click();
+ await expect(dlg.getByText('Execução exec-r2 · Concluída',{exact:true})).toBeVisible({timeout:6000});
+ const after=await st(page);
+ expect(after.rehearseCalls).toBe(2);
+ expect(after.attempts).toBe(0);
 });
