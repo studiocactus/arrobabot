@@ -19,7 +19,8 @@ test('ficha Número sorteado insere a faixa e explica as casas decimais em Opç�
 
   // Opções explica a faixa em vez de oferecer alternativa e formato
   await response.fill('O número é ');
-  // espera o estado assentar: inserir com render pendente duplica o marcador
+  // a inserção usa o texto vivo do textarea: preencher e inserir no mesmo
+  // instante não duplica o marcador nem perde o que foi digitado
   await expect(response).toHaveValue('O número é ');
   await drawn.locator('.variable-card-more').click();
   const options=page.locator('.variable-options');
