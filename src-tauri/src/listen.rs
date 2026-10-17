@@ -20,8 +20,11 @@ const DEFAULT_ENDPOINT:&str="http://127.0.0.1:8010/transcribe-pcm16";
 const LANGUAGES:&[&str]=&["pt","en","es","fr","de","it","auto"];
 type R<T>=Result<T,String>;
 
-/// Configuração do módulo de voz usada pela escuta contínua.
-pub struct Config{pub listen:bool,pub endpoint:String,pub language:String,pub activation:String,pub captions:bool,pub silence:u64,pub threshold:f64}
+/// Configuração do módulo de voz usada pela escuta contínua e pelos comandos.
+pub struct Config{pub listen:bool,pub endpoint:String,pub language:String,pub activation:String,pub captions:bool,pub silence:u64,pub threshold:f64,pub timeout_secs:u64}
+/// Duração padrão de "quicar"/timeout falado quando ninguém define um tempo.
+pub const DEFAULT_TIMEOUT_SECS:u64=600;
+const TIMEOUT_RANGE:(u64,u64)=(1,1_209_600);
 impl Config{
  pub fn read(db:&Db,profile:&str)->Self{
   let v=db.module(profile,"voice");
@@ -34,6 +37,7 @@ impl Config{
    captions:v["captions"]!=false,
    silence:v["silenceMs"].as_u64().unwrap_or(600).clamp(SILENCE_RANGE.0,SILENCE_RANGE.1),
    threshold:v["threshold"].as_f64().unwrap_or(0.02).clamp(THRESHOLD_RANGE.0,THRESHOLD_RANGE.1),
+   timeout_secs:v["quicarSec"].as_u64().unwrap_or(DEFAULT_TIMEOUT_SECS).clamp(TIMEOUT_RANGE.0,TIMEOUT_RANGE.1),
   }
  }
 }
@@ -52,6 +56,8 @@ pub fn valid_config(v:&Value)->bool{
  if v["activation"].as_str().is_some_and(|a|a.len()>200){return false}
  if let Some(ms)=v["silenceMs"].as_u64(){if !(SILENCE_RANGE.0..=SILENCE_RANGE.1).contains(&ms){return false}}
  if let Some(t)=v["threshold"].as_f64(){if !t.is_finite()||!(THRESHOLD_RANGE.0..=THRESHOLD_RANGE.1).contains(&t){return false}}
+ if let Some(secs)=v["quicarSec"].as_u64(){if !(TIMEOUT_RANGE.0..=TIMEOUT_RANGE.1).contains(&secs){return false}}
+ if !v["micDevice"].is_null()&&v["micDevice"].as_str().is_some_and(|s|s.len()>200){return false}
  true
 }
 /// Energia média do lote, de 0 a 1: é o que separa fala de silêncio.
@@ -61,8 +67,7 @@ fn level(bytes:&[u8])->f64{
  if count==0{0.0}else{(sum/count as f64).sqrt()}
 }
 #[derive(Default)]
-struct Session{speaking:bool,started:Option<Instant>,last_voice:Option<Instant>,buffer:Vec<u8>,frames:u64,heard:u64,last:String,error:String,updated:Option<Instant>,level:f64,matched:bool}
-fn milliseconds(bytes:usize)->u64{(bytes/2) as u64*1000/RATE}
+struct Session{speaking:bool,started:Option<Instant>,last_voice:Option<Instant>,buffer:Vec<u8>,frames:u64,heard:u64,last:String,error:String,updated:Option<Instant>,level:f64,matched:bool}fn milliseconds(bytes:usize)->u64{(bytes/2) as u64*1000/RATE}
 /// Junta o lote na fala em andamento e devolve a fala quando o silêncio a encerra.
 fn cut(s:&mut Session,bytes:&[u8],voice:bool,cfg:&Config,now:Instant)->Option<Vec<u8>>{
  if voice{
@@ -85,10 +90,29 @@ fn describe(s:&Session,cfg:&Config,now:Instant)->Value{
  json!({"enabled":cfg.listen,"listening":s.updated.is_some_and(|at|now.saturating_duration_since(at)<Duration::from_secs(5)),"frames":s.frames,"heard":s.heard,"last":s.last,"error":s.error,"endpoint":cfg.endpoint,"language":cfg.language,"activation":cfg.activation,"captions":cfg.captions,"level":s.level,"threshold":cfg.threshold,"matched":s.matched})
 }
 fn empty(cfg:&Config)->Value{describe(&Session::default(),cfg,Instant::now())}
-#[derive(Default)]
-pub struct Sessions(Mutex<HashMap<String,Session>>);
+/// Sessões de escuta por perfil. A geração sobe a cada parada (inclusive na
+/// troca de perfil): uma transcrição que termina tarde é descartada se a
+/// sessão que a começou já morreu. A trilha por perfil preserva a ordem das
+/// falas — a segunda fala só entrega depois da primeira.
+pub struct Sessions{
+ map:Mutex<HashMap<String,Session>>,
+ gen:Mutex<HashMap<String,u64>>,
+ order:Mutex<HashMap<String,Arc<tokio::sync::Mutex<()>>>>,
+}
+impl Default for Sessions{
+ fn default()->Self{Self{map:Mutex::new(HashMap::new()),gen:Mutex::new(HashMap::new()),order:Mutex::new(HashMap::new())}}
+}
 impl Sessions{
- pub fn reset(&self,profile:&str){self.0.lock().unwrap().remove(profile);}
+ pub fn reset(&self,profile:&str){
+  self.map.lock().unwrap().remove(profile);
+  let mut gen=self.gen.lock().unwrap();let e=gen.entry(profile.to_owned()).or_insert(0);*e=e.wrapping_add(1);
+ }
+ /// Número da sessão corrente do perfil.
+ pub fn generation(&self,profile:&str)->u64{*self.gen.lock().unwrap().get(profile).unwrap_or(&0)}
+ /// Trilha que serializa as transcrições de um perfil (ordem da fala).
+ fn trail(&self,profile:&str)->Arc<tokio::sync::Mutex<()>>{
+  self.order.lock().unwrap().entry(profile.to_owned()).or_default().clone()
+ }
  /// Recebe 100 ms de PCM16 e devolve o estado da escuta.
  pub fn frame(&self,rt:&Arc<Runtime>,profile:&str,payload:&str)->R<Value>{
   let p=rt.db.profile(profile)?;
@@ -101,43 +125,57 @@ impl Sessions{
   if bytes.len()>MAX_FRAME{return Err("Lote de áudio muito grande".into())}
   let energy=level(&bytes);let voice=energy>=cfg.threshold;let now=Instant::now();let ready;let status;
   {
-   let mut map=self.0.lock().unwrap();
+   let mut map=self.map.lock().unwrap();
    let s=map.entry(profile.to_owned()).or_default();
    s.frames+=1;s.updated=Some(now);s.level=energy;
    ready=cut(s,&bytes,voice,&cfg,now);
    status=describe(s,&cfg,now);
   }
-  if let Some(pcm)=ready{let rt=rt.clone();let profile=profile.to_owned();tokio::spawn(finish(rt,profile,cfg,pcm));}
+  if let Some(pcm)=ready{
+   let rt=rt.clone();let profile=profile.to_owned();
+   let gen=self.generation(&profile);let trail=self.trail(&profile);
+   tokio::spawn(async move{
+    // A ordem das falas vale: uma transcrição espera a anterior terminar.
+    let _serial=trail.lock().await;
+    finish(rt,profile,cfg,pcm,gen).await;
+   });
+  }
   Ok(status)
  }
 }
 /// Estado mostrado no painel de voz, mesmo antes do primeiro lote.
 pub fn status(rt:&Runtime,profile:&str)->Value{
  let cfg=Config::read(&rt.db,profile);let now=Instant::now();
- let map=rt.listen.0.lock().unwrap();
+ let map=rt.listen.map.lock().unwrap();
  match map.get(profile){Some(s)=>describe(s,&cfg,now),None=>empty(&cfg)}
 }
 /// Ponto de entrada das chamadas do webview.
 pub fn frame(rt:&Arc<Runtime>,profile:&str,payload:&str)->R<Value>{rt.listen.frame(rt,profile,payload)}
 /// Chama o servidor local e transforma o resultado em evento, contexto e legenda.
-async fn finish(rt:Arc<Runtime>,profile:String,cfg:Config,pcm:Vec<u8>){
+async fn finish(rt:Arc<Runtime>,profile:String,cfg:Config,pcm:Vec<u8>,gen:u64){
  match transcribe(&rt.http,&cfg,&pcm).await{
   Ok(text)=>{
-   let recovered={let mut map=rt.listen.0.lock().unwrap();let known=map.contains_key(&profile);let recovered=map.get(&profile).is_some_and(|s|!s.error.is_empty());
+   // Sessão antiga (parada ou perfil trocado no meio): o resultado chega
+   // tarde e não pode mais executar nada.
+   if rt.listen.generation(&profile)!=gen{return}
+   let recovered={let mut map=rt.listen.map.lock().unwrap();let known=map.contains_key(&profile);let recovered=map.get(&profile).is_some_and(|s|!s.error.is_empty());
     if let Some(s)=map.get_mut(&profile){if !text.is_empty(){s.last=text.clone();s.heard+=1;}s.matched=cfg.activation.is_empty()||crate::model::mention_any(&cfg.activation,&text);s.error.clear();}
     known&&recovered};
    if recovered{rt.log(&profile,"voice","Escuta contínua reconectada ao servidor de transcrição","success");}
    if text.is_empty(){return}
+   if rt.listen.generation(&profile)!=gen{return}
    if let Err(err)=speech::push(&rt.db,&profile,&text){rt.log(&profile,"voice",&format!("Escuta contínua: {err}"),"error");}
    if cfg.captions{rt.emit("captions",json!({"profileId":profile,"text":text}));}
    // Sem palavra de ativação toda fala dispara os fluxos; com ela, só a chamada.
    if cfg.activation.is_empty()||crate::model::mention_any(&cfg.activation,&text){
+    if rt.listen.generation(&profile)!=gen{return}
     let event=Event{id:uuid::Uuid::new_v4().to_string(),profile_id:profile.clone(),kind:"voice".into(),user:"streamer".into(),user_id:"local-streamer".into(),role:"broadcaster".into(),message:text.clone(),data:Value::Null,simulated:false,rehearsal:false};
     if let Err(err)=rt.submit(event).await{rt.log(&profile,"voice",&format!("Escuta contínua: {err}"),"error");}
    }else{rt.log(&profile,"voice",&format!("Transcrição: {text}"),"info");}
   }
   Err(err)=>{
-   let changed={let mut map=rt.listen.0.lock().unwrap();let changed=map.get(&profile).is_none_or(|s|s.error!=err);
+   if rt.listen.generation(&profile)!=gen{return}
+   let changed={let mut map=rt.listen.map.lock().unwrap();let changed=map.get(&profile).is_none_or(|s|s.error!=err);
     if let Some(s)=map.get_mut(&profile){s.error=err.clone();}
     changed};
    if changed{rt.log(&profile,"voice",&format!("Escuta contínua: {err}"),"error");}
@@ -152,7 +190,26 @@ fn url_for(cfg:&Config)->R<url::Url>{
  {let mut query=url.query_pairs_mut();query.append_pair("sample_rate","16000");query.append_pair("encoding","pcm16");query.append_pair("language",&cfg.language);}
  Ok(url)
 }
-async fn transcribe(client:&reqwest::Client,cfg:&Config,pcm:&[u8])->R<String>{
+/// Lê um WAV PCM mono de 16 kHz e devolve só as amostras: o caminho do botão
+/// de comando usa o mesmo servidor da escuta contínua, sem segundo programa.
+pub(crate) fn wav16(raw:&[u8])->Result<Vec<u8>,String>{
+ if raw.len()<44||&raw[0..4]!=b"RIFF"||&raw[8..12]!=b"WAVE"{return Err("Use áudio WAV PCM".into())}
+ let mut at=12;let mut channels=0u16;let mut rate=0u64;let mut bits=0u16;let mut data=None;
+ while at+8<=raw.len(){
+  let mut size=[0u8;4];size.copy_from_slice(&raw[at+4..at+8]);let size=u32::from_le_bytes(size) as usize;
+  let body=at+8;let end=body.saturating_add(size).min(raw.len());
+  let id=std::str::from_utf8(&raw[at..at+4]).unwrap_or("");
+  if id=="fmt "&&end-body>=16{
+   channels=u16::from_le_bytes([raw[body],raw[body+1]]);
+   rate=u32::from_le_bytes([raw[body+4],raw[body+5],raw[body+6],raw[body+7]]) as u64;
+   bits=u16::from_le_bytes([raw[body+14],raw[body+15]]);
+  }else if id=="data"{data=Some(raw[body..end].to_vec())}
+  at=body+size+size%2;
+ }
+ if channels!=1||bits!=16||rate!=RATE{return Err(format!("o áudio precisa ser mono de 16 kHz PCM16; recebi {channels} canal(is), {bits} bits e {rate} Hz"))}
+ data.ok_or_else(||"o áudio não tem amostras".to_string())
+}
+pub(crate) async fn transcribe(client:&reqwest::Client,cfg:&Config,pcm:&[u8])->R<String>{
  let url=url_for(cfg)?;
  let res=client.post(url).header(reqwest::header::CONTENT_TYPE,"application/octet-stream").body(pcm.to_vec()).send().await
   .map_err(|_|"Servidor de transcrição indisponível. Inicie o servidor local RealtimeSTT e confira o endereço no painel de voz.".to_string())?;
@@ -170,7 +227,7 @@ async fn transcribe(client:&reqwest::Client,cfg:&Config,pcm:&[u8])->R<String>{
  #[test] fn o_nivel_separa_fala_de_silencio(){
   assert!(level(&pcm(100,0.5))>0.02,"fala forte passa do limite");
   assert!(level(&vec![0u8;3200])<0.02,"silêncio não passa");
-  let cfg=Config{listen:true,endpoint:DEFAULT_ENDPOINT.into(),language:"pt".into(),activation:String::new(),captions:true,silence:600,threshold:0.02};
+  let cfg=Config{listen:true,endpoint:DEFAULT_ENDPOINT.into(),language:"pt".into(),activation:String::new(),captions:true,silence:600,threshold:0.02,timeout_secs:DEFAULT_TIMEOUT_SECS};
   let mut s=Session::default();let start=Instant::now();
   assert!(cut(&mut s,&pcm(100,0.5),true,&cfg,start).is_none(),"primeiro lote abre a fala e não fecha");
   assert!(cut(&mut s,&pcm(100,0.5),true,&cfg,start+Duration::from_millis(100)).is_none());
@@ -181,7 +238,7 @@ async fn transcribe(client:&reqwest::Client,cfg:&Config,pcm:&[u8])->R<String>{
   assert!(s.buffer.is_empty()&&!s.speaking,"a sessão fica limpa para a próxima fala");
  }
  #[test] fn o_painel_mostra_nivel_e_se_ativou(){
-  let cfg=Config{listen:true,endpoint:DEFAULT_ENDPOINT.into(),language:"pt".into(),activation:"arroba".into(),captions:true,silence:600,threshold:0.02};
+  let cfg=Config{listen:true,endpoint:DEFAULT_ENDPOINT.into(),language:"pt".into(),activation:"arroba".into(),captions:true,silence:600,threshold:0.02,timeout_secs:DEFAULT_TIMEOUT_SECS};
   let mut s=Session::default();
   s.level=0.35;
   let v=describe(&s,&cfg,Instant::now());
@@ -192,7 +249,7 @@ async fn transcribe(client:&reqwest::Client,cfg:&Config,pcm:&[u8])->R<String>{
   assert!(describe(&s,&cfg,Instant::now())["matched"].as_bool().unwrap(),"com a palavra, o painel marca que ativou");
  }
  #[test] fn fala_curta_e_fala_muito_longa_sao_tratadas(){
-  let cfg=Config{listen:true,endpoint:DEFAULT_ENDPOINT.into(),language:"pt".into(),activation:String::new(),captions:true,silence:600,threshold:0.02};
+  let cfg=Config{listen:true,endpoint:DEFAULT_ENDPOINT.into(),language:"pt".into(),activation:String::new(),captions:true,silence:600,threshold:0.02,timeout_secs:DEFAULT_TIMEOUT_SECS};
   let start=Instant::now();let mut s=Session::default();
   cut(&mut s,&pcm(100,0.5),true,&cfg,start);
   assert!(cut(&mut s,&pcm(100,0.0),false,&cfg,start+Duration::from_millis(700)).is_none(),"fala de 100 ms é descartada");
@@ -233,7 +290,7 @@ async fn transcribe(client:&reqwest::Client,cfg:&Config,pcm:&[u8])->R<String>{
   assert_eq!(cfg.silence,SILENCE_RANGE.1,"valor além do limite é segurado");
   assert_eq!(cfg.threshold,THRESHOLD_RANGE.1);
  }
- fn cfg_for(language:&str)->Config{Config{listen:true,endpoint:DEFAULT_ENDPOINT.into(),language:language.into(),activation:String::new(),captions:true,silence:600,threshold:0.02}}
+ fn cfg_for(language:&str)->Config{Config{listen:true,endpoint:DEFAULT_ENDPOINT.into(),language:language.into(),activation:String::new(),captions:true,silence:600,threshold:0.02,timeout_secs:DEFAULT_TIMEOUT_SECS}}
  #[test] fn a_chamada_usa_o_contrato_do_realtimestt(){
   let url=url_for(&cfg_for("pt")).unwrap();let query=url.query().unwrap_or_default();
   assert!(query.contains("sample_rate=16000"),"amostragem de 16 kHz: {query}");
@@ -248,28 +305,14 @@ async fn transcribe(client:&reqwest::Client,cfg:&Config,pcm:&[u8])->R<String>{
  #[ignore="exige o servidor RealtimeSTT real rodando na máquina"]
  async fn fala_real_atravesa_o_nosso_cliente(){
   let Ok(path)=std::env::var("BOTLIVE_STT_PCM")else{return};
-  let pcm=wav16(&path).expect("WAV mono de 16 kHz em PCM16");
+  let pcm=wav16_file(&path).expect("WAV mono de 16 kHz em PCM16");
   let text=transcribe(&reqwest::Client::new(),&cfg_for("pt"),&pcm).await.expect("o servidor real deve transcrever");
   println!("transcrição real: {text}");
   assert!(!text.is_empty(),"a fala falada precisa virar texto");
  }
- /// Lê o WAV gerado fora do repositório: confere canal, taxa e profundidade.
- fn wav16(path:&str)->Result<Vec<u8>,String>{
+ /// Lê o WAV gerado fora do repositório pela mesma régua do produto.
+ fn wav16_file(path:&str)->Result<Vec<u8>,String>{
   let raw=std::fs::read(path).map_err(|e|format!("{path}: {e}"))?;
-  if raw.len()<44||&raw[0..4]!=b"RIFF"||&raw[8..12]!=b"WAVE"{return Err(format!("{path} não é um WAV"))}
-  let mut at=12;let mut channels=0u16;let mut rate=0u64;let mut bits=0u16;let mut data=None;
-  while at+8<=raw.len(){
-   let mut size=[0u8;4];size.copy_from_slice(&raw[at+4..at+8]);let size=u32::from_le_bytes(size) as usize;
-   let body=at+8;let end=body.saturating_add(size).min(raw.len());
-   let id=std::str::from_utf8(&raw[at..at+4]).unwrap_or("");
-   if id=="fmt "&&end-body>=16{
-    channels=u16::from_le_bytes([raw[body],raw[body+1]]);
-    rate=u32::from_le_bytes([raw[body+4],raw[body+5],raw[body+6],raw[body+7]]) as u64;
-    bits=u16::from_le_bytes([raw[body+14],raw[body+15]]);
-   }else if id=="data"{data=Some(raw[body..end].to_vec())}
-   at=body+size+size%2;
-  }
-  if channels!=1||bits!=16||rate!=RATE{return Err(format!("o arquivo precisa ser mono de 16 kHz PCM16; recebi {channels} canal(is), {bits} bits e {rate} Hz"))}
-  data.ok_or_else(||"o WAV não tem amostras".to_string())
+  wav16(&raw).map_err(|e|format!("{path}: {e}"))
  }
 }

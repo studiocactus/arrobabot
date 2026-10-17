@@ -112,6 +112,17 @@ impl Fx {
   if input.trim().is_empty() || output.trim().is_empty() {
    return Err(NO_OUTPUT.into());
   }
+  // Um caminho por voz: enquanto o Voicemod estiver no ar (teste ou resgate),
+  // a captura interna ficaria competindo pelo mesmo microfone.
+  if rt.voicemod.in_use() || crate::voice_redemptions::busy(rt) {
+   return Err("O Voicemod está no ar (teste ou resgate de voz). Encerre lá antes de iniciar a voz interna: os dois caminhos capturariam o seu microfone.".into());
+  }
+  // Caminho escolhido é o Voicemod: a captura interna fica barrada até o dono
+  // trocar o caminho de volta. É a trava que impede os dois mundos de
+  // capturar o microfone ao mesmo tempo.
+  if self.mode(rt, p) == "voicemod" {
+   return Err("O caminho da voz está em “Voicemod”. Volte para efeitos internos na tela Voz da live antes de iniciar a voz ao vivo.".into());
+  }
   let mut slot = self.engine.lock().unwrap();
   if slot.is_none() {
    let (tx, rx) = channel::<Cmd>();
@@ -162,6 +173,38 @@ impl Fx {
  /// A voz ao vivo está com áudio de fato circulando?
  pub fn is_running(&self) -> bool {
   self.state.lock().unwrap().phase == RUNNING
+ }
+ /// Caminho escolhido para a voz da live neste perfil: efeitos internos do
+ /// BotLive (padrão, preserva tudo o que já existia) ou o Voicemod.
+ pub fn mode(&self, rt: &Runtime, p: &str) -> String {
+  let m = rt.db.module(p, "voiceFx");
+  match m.get("mode").and_then(Value::as_str) { Some("voicemod") => "voicemod".into(), _ => "internal".into() }
+ }
+ /// Escolhe o caminho. Trocar com a voz interna rodando é barrado: parar
+ /// antes é o que impede os dois mundos de capturar o microfone juntos.
+ pub fn set_mode(&self, rt: &Arc<Runtime>, p: &str, mode: &str) -> Result<Value, String> {
+  rt.db.profile(p)?;
+  if !matches!(mode, "internal" | "voicemod") {
+   return Err("Caminho de voz desconhecido: use internal ou voicemod.".into());
+  }
+  if mode == "internal" && rt.voicemod.in_use() {
+   return Err("Há um teste de voz no Voicemod. Encerre-o antes de voltar aos efeitos internos.".into());
+  }
+  if mode == "voicemod" && self.is_running() {
+   return Err("Pare a voz interna antes de trocar para o Voicemod: os dois caminhos capturariam o seu microfone.".into());
+  }
+  let mut m = rt.db.module(p, "voiceFx");
+  if !m.is_object() {
+   m = json!({});
+  }
+  m["mode"] = json!(mode);
+  rt.db.set_module(p, "voiceFx", &m)?;
+  Ok(json!({ "mode": mode }))
+ }
+ /// Para os testes: força a fase de executando sem tocar em áudio real.
+ #[cfg(test)]
+ pub fn test_force_running(&self) {
+  self.state.lock().unwrap().phase = RUNNING.into();
  }
  /// Volta para a voz normal, mas só se a troca `gen` ainda for a mais recente.
  pub fn revert_if(&self, rt: &Arc<Runtime>, p: &str, gen: u64) {
@@ -725,6 +768,30 @@ mod tests {
   let s = Status::default();
   assert_eq!(s.phase, OFF);
   assert!(!s.input.contains("controlapi"), "nunca vaza credencial");
+ }
+
+ #[tokio::test]
+ async fn caminho_voicemod_bloqueia_captura_interna() {
+  let dir = tempfile::tempdir().unwrap();
+  let rt = Runtime::new(dir.path().to_path_buf()).unwrap();
+  let p = crate::model::Profile {
+   id: uuid::Uuid::new_v4().to_string(),
+   name: "P".into(),
+   platform: "twitch".into(),
+   channel: "canal".into(),
+   channel_id: "1".into(),
+   bot_id: "9".into(),
+   client_id: "c".into(),
+   blocklist: vec![],
+   topics: vec![],
+   editors: vec![],
+   ai: crate::model::AiConfig::default(),
+   modules: json!({"voice": true}),
+  };
+  rt.db.save_profile(&p).unwrap();
+  rt.voice_fx.set_mode(&rt, &p.id, "voicemod").unwrap();
+  let err = rt.voice_fx.start(&rt, &p.id, "Microfone", "CABLE Input").unwrap_err();
+  assert!(err.contains("Voicemod"), "a trava explica o caminho escolhido: {err}");
  }
 }
 

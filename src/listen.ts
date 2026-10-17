@@ -28,8 +28,21 @@ function encode(bytes:Uint8Array){let bin='';for(const b of bytes)bin+=String.fr
 
 export function stopListen(){
  const current=handle;handle=null;failure='';queue.length=0;
- if(current)current.stop();
+ if(current){
+  current.stop();
+  // Parar também descarta transcrições em curso no backend: um resultado que
+  // chegue tarde não pode disparar automação de uma sessão que já morreu.
+  api('voice.listenStop',{profileId:current.profileId}).catch(()=>{});
+ }
  announce();
+}
+
+/** Microfones desta máquina, na ordem do sistema. */
+export async function micDevices():Promise<{id:string;label:string;default:boolean}[]>{
+ const devices=await navigator.mediaDevices.enumerateDevices();
+ // `default` é extensão do Chromium (não está nas tipos do DOM): marcamos como
+ // falso quando o navegador não declara, sem quebrar a compilação.
+ return devices.filter(d=>d.kind==='audioinput').map((d,i)=>({id:d.deviceId,label:d.label||`Microfone ${i+1}`,default:(d as MediaDeviceInfo&{default?:boolean}).default===true}));
 }
 
 /** Manda um lote quando o anterior já saiu; a fila evita reordenar a fala. */
@@ -45,10 +58,14 @@ function pump(profileId:string){
   .finally(()=>{sending=false;announce();pump(profileId)});
 }
 
-export async function startListen(profileId:string){
+export async function startListen(profileId:string,deviceId=''){
  if(!desktop)throw Error('A escuta contínua só funciona no aplicativo desktop, não na prévia do navegador.');
  if(handle&&handle.profileId===profileId)return;
- const stream=await navigator.mediaDevices.getUserMedia({audio:{channelCount:1,echoCancellation:true,noiseSuppression:true}});
+ // Microfone escolhido de propósito: a escuta captura o microfone físico,
+ // antes de qualquer efeito — e não o monitor do OBS nem o VB-Cable.
+ const audio:MediaTrackConstraints={channelCount:1,echoCancellation:true,noiseSuppression:true};
+ if(deviceId&&deviceId!=='default')audio.deviceId={exact:deviceId};
+ const stream=await navigator.mediaDevices.getUserMedia({audio});
  const context=new AudioContext();
  if(context.state==='suspended')await context.resume();
  const source=context.createMediaStreamSource(stream);
@@ -105,6 +122,6 @@ export async function restoreListen(profileId:string){
  stopListen();
  try{
   const config=await api<Record<string,unknown>>('module.config.get',{profileId,key:'voice'});
-  if(config&&config.listen===true)await startListen(profileId);
+  if(config&&config.listen===true)await startListen(profileId,String(config.micDevice||''));
  }catch{/* a escuta é opcional: falhar aqui não pode travar o app */}
 }

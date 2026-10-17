@@ -9,6 +9,7 @@ pub fn guard(rt:&Runtime,op:&str,args:&Value)->Result<(),String>{
  if actor=="owner"{return Ok(())}
  if ["snapshot","presets"].contains(&op){return Ok(())}
  if matches!(op,"knowledge.import"){return Err("Somente o proprietário importa a base de conhecimento".into())}
+ if op=="voicemod.key"{return Err("Somente o proprietário salva a chave do Voicemod".into())}
  if ["backup.get","backup.save","backup.now","backup.list","backup.restore"].contains(&op){return Err("Somente o proprietário faz ou importa backup".into())}
  if matches!(op,"chatExtras.import"|"chatExtras.save"|"chatExtras.reset"){return Err("Somente o proprietário configura arquivos e sons".into())}
  if matches!(op,"labels.save"|"labels.folder"){return Err("Somente o proprietário configura os rótulos".into())}

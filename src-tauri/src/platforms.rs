@@ -215,7 +215,13 @@ pub fn normalize_twitch(p:&Profile,v:&Value)->Option<Event>{
  for b in badges{if b["set_id"]=="moderator"{role="moderator"}}
  }
  if user_id==p.channel_id{role="broadcaster"}
- Some(Event{id:v["metadata"]["message_id"].as_str()?.into(),profile_id:p.id.clone(),kind:kind.into(),user:payload["chatter_user_name"].as_str().or(payload["user_name"].as_str()).or(payload["target_user_name"].as_str()).or(payload["from_broadcaster_user_name"].as_str()).or(payload["broadcaster_user_name"].as_str()).unwrap_or("espectador").into(),user_id:user_id.into(),role:role.into(),message:payload["message"]["text"].as_str().or(payload["message"].as_str()).or(payload["message_id"].as_str()).or(payload["user_input"].as_str()).or(payload["category_name"].as_str()).unwrap_or("").into(),data:payload.clone(),simulated:false,rehearsal:false})
+ // O payload do resgate traz o ID do resgate em data.id; a mensagem EventSub
+ // tem o seu próprio ID em metadata.message_id (que continua sendo e.id, a
+ // chave da deduplicação). Os dois viajam separados: cumprir resgate usa o do
+ // payload, e responder no fio usa o da mensagem.
+ let mut data=payload.clone();
+ if let Some(mid)=v["metadata"]["message_id"].as_str(){if data.is_object(){data["message_id"]=mid.into()}}
+ Some(Event{id:v["metadata"]["message_id"].as_str()?.into(),profile_id:p.id.clone(),kind:kind.into(),user:payload["chatter_user_name"].as_str().or(payload["user_name"].as_str()).or(payload["target_user_name"].as_str()).or(payload["from_broadcaster_user_name"].as_str()).or(payload["broadcaster_user_name"].as_str()).unwrap_or("espectador").into(),user_id:user_id.into(),role:role.into(),message:payload["message"]["text"].as_str().or(payload["message"].as_str()).or(payload["message_id"].as_str()).or(payload["user_input"].as_str()).or(payload["category_name"].as_str()).unwrap_or("").into(),data,simulated:false,rehearsal:false})
 }
 pub async fn youtube(rt:Arc<Runtime>,p:Profile)->Result<(),String>{
  let token=oauth::token(&rt.http,&p,"bot").await?;

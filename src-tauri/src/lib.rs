@@ -34,6 +34,9 @@ mod stats;
 mod labels;
 mod obs;
 mod voice_fx;
+mod voicemod;
+mod voice_redemptions;
+mod intents;
 mod runs;
 mod scheduler;
 mod obsidian;
@@ -66,6 +69,7 @@ pub async fn dispatch(rt:Arc<Runtime>,op:&str,args:Value)->R<Value>{
  if op.starts_with("obs."){return obs::operation(&rt,&p,op,&args).await}
  if op.starts_with("discord."){return discord_admin::operation(&rt,&p,op,&args).await}
  if op.starts_with("livepix."){return livepix::operation(&rt,&p,op,&args).await}
+ if op.starts_with("voicemod."){return voicemod::operation(&rt,&p,op,&args).await}
  match op{
  "snapshot"=>Ok(json!({"profiles":rt.db.profiles()?.into_iter().filter(|p|access::allowed(&rt,p)).collect::<Vec<_>>(),"logs":rt.db.logs("")?.into_iter().filter(|l|access::current(&rt)=="owner"||rt.db.profile(&l.profile_id).is_ok_and(|p|access::allowed(&rt,&p))).collect::<Vec<_>>(),"statuses":*rt.statuses.lock().unwrap(),"theme":rt.db.get("theme"),"accent":rt.db.get("accent"),"apiPort":*rt.api_port.lock().unwrap(),"dataDir":rt.base.to_string_lossy()})),
  "profile.save"=>{let mut profile:Profile=serde_json::from_value(args["profile"].clone()).map_err(|_|"Perfil inválido")?;
@@ -177,7 +181,7 @@ pub async fn dispatch(rt:Arc<Runtime>,op:&str,args:Value)->R<Value>{
  "voice.status"=>Ok(listen::status(&rt,&p)),
  "update.check"=>update::check(&rt,false).await,
  "update.install"=>update::check(&rt,true).await,
- "module.config"=>{rt.db.profile(&p)?;let key=args["key"].as_str().ok_or("Configuração ausente")?;if !["moderation","tts","voice","obsidian","points","songs","discord","discordBot","games","alerts","chatOverlay","audio","affinity","emoteBurst","spotify"].contains(&key){return Err("Configuração inválida".into())}if key=="moderation"&&!moderation::valid_config(&args["value"]){return Err("Ação inválida".into())}if key=="voice"&&!listen::valid_config(&args["value"]){return Err("Configuração de voz inválida: o servidor de transcrição precisa ser local (127.0.0.1) e os limites do painel têm faixas fixas".into())}if key=="discordBot"&&!discord_admin::valid_config(&args["value"]){return Err("Configuração do Discord inválida. Confira o servidor e os canais informados.".into())}if key=="alerts"&&!alerts::valid_config(&args["value"]){return Err("Configuração de alertas inválida: confira duração (3 a 20 s), velocidade, cores, fontes e textos de cada evento".into())}if key=="chatOverlay"&&!chat_overlay::valid_config(&args["value"]){return Err("Configuração do chat inválida: confira faixas, cores, fontes, badges e filtros".into())}if key=="spotify"&&!spotify::valid_config(&args["value"]){return Err("Configuração do Spotify inválida: confira o interruptor, o Client ID e o design do overlay".into())}if key=="audio"&&!audio::valid_config(&args["value"]){return Err("Configuração de áudio inválida: confira o aparelho de saída".into())}if key=="affinity"&&!modules::valid_config(&args["value"]){return Err("Configuração do Match inválida: confira palavras-gatilho, comando começando com ! e as cinco faixas (uma por linha, até 500 caracteres)".into())}if key=="emoteBurst"&&!emote_burst::valid_config(&args["value"]){return Err("Configuração da explosão inválida: confira quantidade (10 a 80), tamanho (24 a 120) e a origem dos emotes".into())}let value=if key=="affinity"{modules::with_defaults(&args["value"])}else{args["value"].clone()};rt.db.set_module(&p,key,&value)?;if key=="alerts"{rt.emit("alerts",json!({"profileId":p,"config":args["value"]}));}if key=="chatOverlay"{rt.emit("chat.config",json!({"profileId":p,"config":args["value"]}));}if key=="spotify"{rt.emit("spotify.config",json!({"profileId":p,"config":args["value"]}));}Ok(Value::Null)},
+ "module.config"=>{rt.db.profile(&p)?;let key=args["key"].as_str().ok_or("Configuração ausente")?;if !["moderation","tts","voice","obsidian","points","songs","discord","discordBot","games","alerts","chatOverlay","audio","affinity","emoteBurst","spotify","voiceRedeem"].contains(&key){return Err("Configuração inválida".into())}if key=="moderation"&&!moderation::valid_config(&args["value"]){return Err("Ação inválida".into())}if key=="voice"&&!listen::valid_config(&args["value"]){return Err("Configuração de voz inválida: o servidor de transcrição precisa ser local (127.0.0.1) e os limites do painel têm faixas fixas".into())}if key=="discordBot"&&!discord_admin::valid_config(&args["value"]){return Err("Configuração do Discord inválida. Confira o servidor e os canais informados.".into())}if key=="alerts"&&!alerts::valid_config(&args["value"]){return Err("Configuração de alertas inválida: confira duração (3 a 20 s), velocidade, cores, fontes e textos de cada evento".into())}if key=="chatOverlay"&&!chat_overlay::valid_config(&args["value"]){return Err("Configuração do chat inválida: confira faixas, cores, fontes, badges e filtros".into())}if key=="spotify"&&!spotify::valid_config(&args["value"]){return Err("Configuração do Spotify inválida: confira o interruptor, o Client ID e o design do overlay".into())}if key=="voiceRedeem"&&!voice_redemptions::valid_config(&args["value"]){return Err("Configuração de resgates de voz inválida: cada vínculo precisa de reward e voz escolhidos, duração e política de concorrência; \"Efeito desligado\" não é voz".into())}if key=="audio"&&!audio::valid_config(&args["value"]){return Err("Configuração de áudio inválida: confira o aparelho de saída".into())}if key=="affinity"&&!modules::valid_config(&args["value"]){return Err("Configuração do Match inválida: confira palavras-gatilho, comando começando com ! e as cinco faixas (uma por linha, até 500 caracteres)".into())}if key=="emoteBurst"&&!emote_burst::valid_config(&args["value"]){return Err("Configuração da explosão inválida: confira quantidade (10 a 80), tamanho (24 a 120) e a origem dos emotes".into())}let value=if key=="affinity"{modules::with_defaults(&args["value"])}else{args["value"].clone()};rt.db.set_module(&p,key,&value)?;if key=="alerts"{rt.emit("alerts",json!({"profileId":p,"config":args["value"]}));}if key=="chatOverlay"{rt.emit("chat.config",json!({"profileId":p,"config":args["value"]}));}if key=="spotify"{rt.emit("spotify.config",json!({"profileId":p,"config":args["value"]}));}Ok(Value::Null)},
  "module.config.get"=>{rt.db.profile(&p)?;Ok(rt.db.module(&p,args["key"].as_str().ok_or("Configuração ausente")?))},
  "alerts.get"=>{let profile=rt.db.profile(&p)?;Ok(json!({"config":alerts::config(&rt,&p),"sounds":alerts::sounds(&rt,&p),"overlay":livepix::overlay_info(&rt,&profile.id)?}))},
  "alerts.test"=>{let profile=rt.db.profile(&p)?;alerts::test(&rt,&profile,args["kind"].as_str().ok_or("Evento ausente")?).await},
@@ -206,6 +210,13 @@ pub async fn dispatch(rt:Arc<Runtime>,op:&str,args:Value)->R<Value>{
  "voiceFx.stop"=>rt.voice_fx.stop(&rt,&p),
  "voiceFx.effect"=>rt.voice_fx.set_effect(&rt,&p,args["name"].as_str().unwrap_or("")),
  "voiceFx.gate"=>rt.voice_fx.set_gate(&rt,&p,args["db"].as_f64().unwrap_or(-45.0) as f32),
+ "voiceFx.mode"=>{rt.db.profile(&p)?;rt.voice_fx.set_mode(&rt,&p,args["mode"].as_str().unwrap_or("internal"))},
+ "voice.listenStop"=>{rt.listen.reset(&p);Ok(Value::Null)},
+ "voiceResgate.get"=>{let profile=rt.db.profile(&p)?;Ok(crate::voice_redemptions::view(&rt,&profile))},
+ "voiceResgate.save"=>{let profile=rt.db.profile(&p)?;crate::voice_redemptions::save(&rt,&profile,&args["config"])},
+ "voiceResgate.cancel"=>{let profile=rt.db.profile(&p)?;crate::voice_redemptions::cancel_all(&rt,&profile).await},
+ "voiceResgate.recover"=>{let profile=rt.db.profile(&p)?;crate::voice_redemptions::recover(&rt,&profile).await},
+ "voiceResgate.testApply"=>{let profile=rt.db.profile(&p)?;crate::voice_redemptions::apply_manual(&rt,&profile,args["voiceId"].as_str().unwrap_or(""),"Teste da tela",args["seconds"].as_u64().unwrap_or(60)).await.map(|msg|json!({"message":msg}))},
  _=>Err("Operação desconhecida".into())
  }
 }

@@ -22,6 +22,9 @@ pub struct Runtime {
  pub runs:crate::runs::Runs,
  pub obs:crate::obs::Locks,
  pub voice_fx:crate::voice_fx::Fx,
+ pub voicemod:crate::voicemod::Voice,
+ pub voice_resgates:crate::voice_redemptions::Engine,
+ pub intents:crate::intents::Intents,
  pub seen:Mutex<HashMap<String,Instant>>,
  pub seen_chatters:Mutex<HashMap<String,(String,Instant)>>,
  pub chat_seen:Mutex<HashMap<String,HashSet<String>>>,
@@ -36,7 +39,7 @@ impl Runtime {
  let (tx,rx)=mpsc::channel(512);let (broadcast,_)=broadcast::channel(512);
  let http=reqwest::Client::builder().timeout(Duration::from_secs(30)).redirect(reqwest::redirect::Policy::none()).build().map_err(|e|e.to_string())?;
  let actor=if db.get("accessEnabled")==true{"locked"}else{"owner"}.to_owned();
- let rt=Arc::new(Self{actor:Mutex::new(actor),db,base,http,tx,broadcast,app:Mutex::new(None),connections:Mutex::new(HashMap::new()),statuses:Mutex::new(HashMap::new()),discord_tasks:Mutex::new(HashMap::new()),discord_status:Mutex::new(HashMap::new()),discord_cache:Mutex::new(HashMap::new()),timer_pending:Mutex::new(std::collections::HashSet::new()),cooldowns:Mutex::new(HashMap::new()),conversation:Mutex::new(crate::conversation::History::default()),live:crate::live_state::LiveStates::default(),spotify:crate::spotify::States::default(),listen:crate::listen::Sessions::default(),chat_extras:Mutex::new(crate::chat_extras::State::default()),runs:crate::runs::Runs::default(),obs:crate::obs::Locks::default(),voice_fx:crate::voice_fx::Fx::default(),seen:Mutex::new(HashMap::new()),seen_chatters:Mutex::new(HashMap::new()),chat_seen:Mutex::new(HashMap::new()),emote_counts:Mutex::new(HashMap::new()),module_lock:Mutex::new(()),vault_lock:Mutex::new(()),send_locks:Mutex::new(HashMap::new()),api_token:format!("{}{}",uuid::Uuid::new_v4().simple(),uuid::Uuid::new_v4().simple()),api_port:Mutex::new(0)});
+ let rt=Arc::new(Self{actor:Mutex::new(actor),db,base,http,tx,broadcast,app:Mutex::new(None),connections:Mutex::new(HashMap::new()),statuses:Mutex::new(HashMap::new()),discord_tasks:Mutex::new(HashMap::new()),discord_status:Mutex::new(HashMap::new()),discord_cache:Mutex::new(HashMap::new()),timer_pending:Mutex::new(std::collections::HashSet::new()),cooldowns:Mutex::new(HashMap::new()),conversation:Mutex::new(crate::conversation::History::default()),live:crate::live_state::LiveStates::default(),spotify:crate::spotify::States::default(),listen:crate::listen::Sessions::default(),chat_extras:Mutex::new(crate::chat_extras::State::default()),runs:crate::runs::Runs::default(),obs:crate::obs::Locks::default(),voice_fx:crate::voice_fx::Fx::default(),voicemod:crate::voicemod::Voice::default(),voice_resgates:crate::voice_redemptions::Engine::default(),intents:crate::intents::Intents::default(),seen:Mutex::new(HashMap::new()),seen_chatters:Mutex::new(HashMap::new()),chat_seen:Mutex::new(HashMap::new()),emote_counts:Mutex::new(HashMap::new()),module_lock:Mutex::new(()),vault_lock:Mutex::new(()),send_locks:Mutex::new(HashMap::new()),api_token:format!("{}{}",uuid::Uuid::new_v4().simple(),uuid::Uuid::new_v4().simple()),api_port:Mutex::new(0)});
  tokio::spawn(worker(rt.clone(),rx));Ok(rt)
  }
  pub fn emit(&self,kind:&str,payload:Value){
@@ -193,31 +196,26 @@ pub async fn process(rt:Arc<Runtime>,e:Event){
    }
   }
  }
- // Comandos naturais no chat: streamer e moderadores escrevem por extenso e
- // o bot faz o mesmo que !setgame/!settitle. Exige a palavra de ativação do
- // Controle por voz; sem ela a mensagem segue o chat normal. Só entra no que
- // o vocabulário cobre — o resto não vira resposta.
+ // Comandos naturais no chat: streamer e moderadores escrevem por extenso e o
+ // bot faz o mesmo que !setgame/!settitle, modera e confirma. Exige a palavra
+ // de ativação do Controle por voz; sem ela a mensagem segue o chat normal.
+ // Quem executa é a despachante única, que confere a autorização da origem.
  if e.kind=="chat"&&!e.simulated&&!p.bot_id.is_empty()&&e.user_id!=p.bot_id&&crate::model::permitted("moderator",&e.role){
   let cfg=crate::listen::Config::read(&rt.db,&p.id);
-  match crate::natural::parse(&e.message,&cfg.activation){
-   crate::natural::Talk::Ignore=>{},
-   crate::natural::Talk::Incomplete(hint)=>{let _=rt.send(&p,&e,hint).await;return},
-   crate::natural::Talk::Title(title)=>{
-    let a=crate::model::Action{kind:"twitch".into(),text:String::new(),target:String::new(),value:0,condition:String::new(),punish:String::new(),tw_op:"title".into(),..Default::default()};
-    match crate::twitch_ops::run(&rt,&p,&e,&a,&title,"",None).await{
-     Ok(msg)=>{let _=rt.send(&p,&e,&msg).await;},
-     Err(err)=>{let _=rt.send(&p,&e,&err).await;}
-    }
-    return;
-   }
-   crate::natural::Talk::Category(names)=>{
-    let a=crate::model::Action{kind:"twitch".into(),text:String::new(),target:String::new(),value:0,condition:String::new(),punish:String::new(),tw_op:"game".into(),..Default::default()};
-    match crate::twitch_ops::run(&rt,&p,&e,&a,&names.join(" ou "),"",None).await{
-     Ok(msg)=>{let _=rt.send(&p,&e,&msg).await;},
-     Err(err)=>{let _=rt.send(&p,&e,&err).await;}
-    }
-    return;
-   }
+  let talk=crate::natural::parse(&e.message,&cfg.activation);
+  match crate::intents::dispatch(&rt,&p,&e,crate::intents::Origin::Chat,talk).await{
+   Ok(handled)=>{if handled{return}}
+   Err(err)=>{let _=rt.send(&p,&e,&err).await;return}
+  }
+ }
+ // Fala do microfone vira comando na mesma despachante, com a origem de voz.
+ // Uma fala que é comando administrativo não dispara também os fluxos de voz.
+ if e.kind=="voice"&&!e.simulated&&p.modules["voice"]==true{
+  let cfg=crate::listen::Config::read(&rt.db,&p.id);
+  let talk=crate::natural::parse(&e.message,&cfg.activation);
+  match crate::intents::dispatch(&rt,&p,&e,crate::intents::Origin::Voice,talk).await{
+   Ok(handled)=>{if handled{return}}
+   Err(err)=>{rt.log(&p.id,"voice",&err,"error");return}
   }
  }
  if e.kind=="voice"&&p.modules["voice"]!=true{rt.log(&p.id,"voice","Controle por voz desativado","info");return}
@@ -254,6 +252,12 @@ pub async fn process(rt:Arc<Runtime>,e:Event){
  Err(err)=>{rt.log(&p.id,"module",&err,"error");return},_=>{}
  }
  }
+ // Resgate com vínculo de voz pertence ao motor de resgates de voz (fila,
+ // confirmação da troca e restauração). A validação é rápida e não rede: as
+ // automações do mesmo reward seguem cumprindo o resto pelo caminho normal.
+ if e.kind=="redemption"&&!e.simulated{
+  let _=crate::voice_redemptions::on_redemption(&rt,&p,&e).await;
+ }
  let matched:Vec<Flow>=rt.db.flows(&p.id).unwrap_or_default().into_iter().filter(|f|f.enabled&&(matches(&f.trigger,&e)||(e.kind=="timer"&&f.trigger.kind=="timer"&&e.data["timerId"]==f.id))).collect();
  let mut ready:Vec<Flow>=Vec::new();
  for f in matched {
@@ -278,11 +282,16 @@ pub async fn process(rt:Arc<Runtime>,e:Event){
  }
 
  // Resgate cumprido só quando ao menos uma automação terminou tudo: sem
- // permissão nova, o erro pede a reautorização em vez de falhar calado.
+ // permissão nova, o erro pede a reautorização em vez de falhar calado. O ID
+ // que a Helix espera é o do resgate no payload (data.id), não o message_id
+ // da mensagem EventSub — `e.id` é a mensagem, e cumprir com ele falha.
  if any_ok&&e.kind=="redemption"&&!e.simulated{
   let (rt2,p2)=(rt.clone(),p.clone());
-  let (reward,rid)=(e.data["reward"]["id"].as_str().unwrap_or("").to_owned(),e.id.clone());
-  tokio::spawn(async move{if let Err(err)=crate::twitch_ops::fulfill_redemption(&rt2,&p2,&reward,&rid).await{rt2.log(&p2.id,"redemption",&err,"error");}else{rt2.log(&p2.id,"redemption","Resgate marcado como cumprido","success");}});
+  let (reward,rid)=(e.data["reward"]["id"].as_str().unwrap_or("").to_owned(),e.data["id"].as_str().unwrap_or("").to_owned());
+  tokio::spawn(async move{
+   if rid.is_empty(){rt2.log(&p2.id,"redemption","Resgate sem ID no payload: não há como marcar como cumprido.","error");return}
+   if let Err(err)=crate::twitch_ops::fulfill_redemption(&rt2,&p2,&reward,&rid).await{rt2.log(&p2.id,"redemption",&err,"error");}else{rt2.log(&p2.id,"redemption","Resgate marcado como cumprido","success");}
+  });
  }
 }
  /// Executa um fluxo com identidade própria: mesmo caminho para eventos reais e testes.
@@ -442,9 +451,18 @@ async fn action(rt:&Arc<Runtime>,p:&Profile,e:&Event,a:&Action,variables:&mut cr
  rt.send_with(p,e,&reply,Some(f)).await
  },
  "voiceFx"=>{
- if !rt.voice_fx.is_running(){return Err("Inicie a Voz da live antes de usar este efeito".into())}
  let effect=if a.target.trim().is_empty(){a.text.clone()}else{a.target.clone()};
  let effect=effect.trim().to_lowercase();
+ // Caminho do Voicemod: o efeito antigo só vira voz do Voicemod se o dono
+ // escolheu na tela de Resgates — nunca por suposição de nome.
+ if rt.voice_fx.mode(rt,&p.id)=="voicemod"{
+  let mapped=crate::voice_redemptions::legacy_voice(rt,&p.id,&effect).ok_or(format!("Modo Voicemod: o efeito \"{effect}\" ainda não foi mapeado para uma voz do Voicemod. Abra Voz da live › Resgates de voz e escolha a voz na mão."))?;
+  let secs=a.value.clamp(0,3600) as u64;
+  let msg=crate::voice_redemptions::apply_manual(rt,&p,&mapped,&f.name,secs).await?;
+  rt.log(&p.id,"voiceFx",&format!("{} · {msg} (via Voicemod)",f.name),"success");
+  return Ok(());
+ }
+ if !rt.voice_fx.is_running(){return Err("Inicie a Voz da live antes de usar este efeito".into())}
  if !crate::voice_fx::EFFECTS.contains(&effect.as_str()){return Err(format!("Voz desconhecida: {effect}"))}
  let secs=a.value.clamp(0,3600) as u64;
  let gen=rt.voice_fx.set_effect(rt,&p.id,&effect)?["gen"].as_u64().unwrap_or(0);

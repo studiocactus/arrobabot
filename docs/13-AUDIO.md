@@ -14,9 +14,26 @@ Se o aparelho escolhido for desconectado, os sons são recusados com um aviso em
 
 ## Voz da live
 
-A voz com efeitos tem caminho próprio — microfone → processamento → linha —, separada dos sons e do TTS. O cartão **Voz da live** mostra o estado da voz e os dois aparelhos que a tela **Voz da live** usa (microfone de entrada e saída da linha), para você alinhar tudo num lugar só. Escolha o microfone de verdade na entrada e o **CABLE Input** na saída da linha. Efeitos, corte de ruído e o botão de iniciar continuam na tela **Voz da live**: nada muda até você clicar em Iniciar lá.
+A tela **Voz da live** é o hub da sua voz: **Minha voz na live**, **Comandos do Arroba** e **Resgates de voz** num lugar só.
 
-A voz só sai pelo aparelho escolhido na tela **Voz da live**; a saída aqui embaixo é o caminho dos sons do bot.
+### Minha voz na live
+
+A voz com efeitos tem caminho próprio — microfone → processamento → linha —, separada dos sons e do TTS. No cartão **Minha voz na live** você escolhe o **Caminho da voz**:
+
+- **Efeitos internos do BotLive** (padrão, como sempre foi): o BotLive captura o microfone e envia a voz para o VB-Cable — o que o microfone captura, o OBS recebe. Nada muda até você clicar em **Iniciar voz ao vivo**; ao parar, o microfone volta ao normal.
+- **Voicemod**: o BotLive não captura nem retransmite áudio — ele só pede ao aplicativo Voicemod (nesta máquina) para trocar a voz. O caminho do áudio vira microfone → Voicemod → microfone virtual do Voicemod → OBS. Para usar, peça a chave da **Control API** em control-api.voicemod.net, salve-a (ela fica no cofre, nunca no chat nem no Histórico) e clique em **Conectar**: a tela só mostra “Conectado” depois da autorização aceita pelo próprio Voicemod, e cada falha tem o seu motivo (aplicativo fechado, chave ausente, chave recusada, versão incompatível, conexão perdida). **Testar uma voz** troca no Voicemod por alguns segundos e devolve a voz de antes, com confirmação.
+
+Só um caminho fica de pé por vez: o BotLive barra a troca com a voz interna no ar e recusa o início da voz interna enquanto o caminho estiver em Voicemod — nunca dois capturando o microfone ao mesmo tempo. O cartão **Diagnóstico** mostra o estado real de ponta a ponta: microfone e nível, saída para o OBS, conexão com o Voicemod e se a escuta de comandos está ativa, com avisos para captura dupla, aparelho desconectado e circuito fechado.
+
+A voz só sai pelo aparelho escolhido na tela Voz da live (caminho interno); a saída aqui embaixo é o caminho dos sons do bot.
+
+### Comandos do Arroba
+
+A mesma tela concentra a escuta contínua (RealtimeSTT local, microfone físico escolhido de propósito — antes de qualquer efeito), a prévia do reconhecimento, o botão **Gravar comando** (“o que eu ouvi”, até 8 segundos) e a criação rápida de comandos por voz. O duração do “quicar” (timeout falado) também fica aqui. O áudio vai só para o RealtimeSTT na própria máquina. No chat, streamer e moderadores escrevem por extenso — “arroba, mude a categoria para Minecraft” — e o bot obedece com as mesmas palavras, sem a escuta ligada.
+
+### Resgates de voz
+
+No caminho Voicemod, cada recompensa do canal pode trocar sua voz por um tempo combinado: escolha a recompensa (lista real da Twitch), a voz (lista real do Voicemod), duração, cooldown e o que acontece se outro efeito já estiver no ar (fila, ignorar ou substituir). A fila aparece na hora — efeito atual com o tempo que resta e o que vem depois — com os botões **Cancelar efeitos e voltar à voz normal** e **Recuperar restauração pendente**. A seção **Efeitos internos antigos** liga efeitos antigos (fina, robô…) a vozes do Voicemod quando você migrar de caminho — o mapeamento é sempre escolhido por você, nada é adivinhado.
 
 ## Texto para voz (TTS)
 
