@@ -16,6 +16,7 @@ pub struct Runtime {
  pub cooldowns:Mutex<HashMap<String,Instant>>,
  pub conversation:Mutex<crate::conversation::History>,
  pub live:crate::live_state::LiveStates,
+ pub spotify:crate::spotify::States,
  pub listen:crate::listen::Sessions,
  pub chat_extras:Mutex<crate::chat_extras::State>,
  pub runs:crate::runs::Runs,
@@ -35,7 +36,7 @@ impl Runtime {
  let (tx,rx)=mpsc::channel(512);let (broadcast,_)=broadcast::channel(512);
  let http=reqwest::Client::builder().timeout(Duration::from_secs(30)).redirect(reqwest::redirect::Policy::none()).build().map_err(|e|e.to_string())?;
  let actor=if db.get("accessEnabled")==true{"locked"}else{"owner"}.to_owned();
- let rt=Arc::new(Self{actor:Mutex::new(actor),db,base,http,tx,broadcast,app:Mutex::new(None),connections:Mutex::new(HashMap::new()),statuses:Mutex::new(HashMap::new()),discord_tasks:Mutex::new(HashMap::new()),discord_status:Mutex::new(HashMap::new()),discord_cache:Mutex::new(HashMap::new()),timer_pending:Mutex::new(std::collections::HashSet::new()),cooldowns:Mutex::new(HashMap::new()),conversation:Mutex::new(crate::conversation::History::default()),live:crate::live_state::LiveStates::default(),listen:crate::listen::Sessions::default(),chat_extras:Mutex::new(crate::chat_extras::State::default()),runs:crate::runs::Runs::default(),obs:crate::obs::Locks::default(),voice_fx:crate::voice_fx::Fx::default(),seen:Mutex::new(HashMap::new()),seen_chatters:Mutex::new(HashMap::new()),chat_seen:Mutex::new(HashMap::new()),emote_counts:Mutex::new(HashMap::new()),module_lock:Mutex::new(()),vault_lock:Mutex::new(()),send_locks:Mutex::new(HashMap::new()),api_token:format!("{}{}",uuid::Uuid::new_v4().simple(),uuid::Uuid::new_v4().simple()),api_port:Mutex::new(0)});
+ let rt=Arc::new(Self{actor:Mutex::new(actor),db,base,http,tx,broadcast,app:Mutex::new(None),connections:Mutex::new(HashMap::new()),statuses:Mutex::new(HashMap::new()),discord_tasks:Mutex::new(HashMap::new()),discord_status:Mutex::new(HashMap::new()),discord_cache:Mutex::new(HashMap::new()),timer_pending:Mutex::new(std::collections::HashSet::new()),cooldowns:Mutex::new(HashMap::new()),conversation:Mutex::new(crate::conversation::History::default()),live:crate::live_state::LiveStates::default(),spotify:crate::spotify::States::default(),listen:crate::listen::Sessions::default(),chat_extras:Mutex::new(crate::chat_extras::State::default()),runs:crate::runs::Runs::default(),obs:crate::obs::Locks::default(),voice_fx:crate::voice_fx::Fx::default(),seen:Mutex::new(HashMap::new()),seen_chatters:Mutex::new(HashMap::new()),chat_seen:Mutex::new(HashMap::new()),emote_counts:Mutex::new(HashMap::new()),module_lock:Mutex::new(()),vault_lock:Mutex::new(()),send_locks:Mutex::new(HashMap::new()),api_token:format!("{}{}",uuid::Uuid::new_v4().simple(),uuid::Uuid::new_v4().simple()),api_port:Mutex::new(0)});
  tokio::spawn(worker(rt.clone(),rx));Ok(rt)
  }
  pub fn emit(&self,kind:&str,payload:Value){
@@ -306,7 +307,7 @@ pub async fn process(rt:Arc<Runtime>,e:Event){
   if !answers&&replies(&f){rt.log(&p.id,"action",&format!("{} · Outra automação já respondeu esta mensagem; os demais efeitos continuam",f.name),"info")}
   let count=if f.counter{match if e.simulated||testing{crate::command_counter::get(&rt.db,&p.id,&f.id).and_then(|n|n.checked_add(1).ok_or("Contador excedeu o limite".into()))}else{crate::command_counter::change(&rt.db,&p.id,&f.id,None)}{Ok(n)=>Some(n),Err(err)=>{rt.log(&p.id,"counter",&err,"error");rt.runs.fail(&exec,None,&err);rt.runs.finish(&exec,"FAILED");return false}}}else{None};
   if let Some(n)=count{if !e.simulated&&!testing{rt.emit("command-counter",json!({"profileId":p.id,"id":f.id,"value":n}));}}
-  let mut variables=match crate::variables::Context::new(&rt.db,&p,&e,Some(&f)){Ok(v)=>v,Err(err)=>{rt.log(&p.id,"variables",&err,"error");rt.runs.fail(&exec,None,&err);rt.runs.finish(&exec,"FAILED");return false}};
+  let mut variables=match crate::variables::Context::new(&rt.db,&p,&e,Some(&f),rt.spotify.now(&p.id)){Ok(v)=>v,Err(err)=>{rt.log(&p.id,"variables",&err,"error");rt.runs.fail(&exec,None,&err);rt.runs.finish(&exec,"FAILED");return false}};
   if let Some(n)=count{variables.set_command_count(n);}
   if let Some((followers,subs))=counts{variables.set("followerCount",followers.map_or(serde_json::Value::String(String::new()),|n|serde_json::json!(n)));variables.set("subCount",subs.map_or(serde_json::Value::String(String::new()),|n|serde_json::json!(n)));}
   // No ensaio o áudio do fluxo toca de verdade (linha real do app): é efeito local

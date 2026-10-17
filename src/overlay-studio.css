@@ -46,6 +46,20 @@ button.lp-tpl.selected{border-color:var(--accent)}
 .lp-save--saved{color:#7dd58a}
 .lp-save--error{color:#ef999d}
 
+/* Tela Spotify (conexão, música atual e variáveis). */
+.lp-actions{display:flex;gap:9px;align-items:center;flex-wrap:wrap}
+.lp-copyrow{display:flex;gap:7px;align-items:stretch;min-width:0}
+.lp-copyrow input{flex:1 1 auto;min-width:0}
+.lp-nowplaying{display:flex;flex-direction:column;gap:4px;margin-top:12px;padding:11px 13px;border:1px solid var(--border);border-radius:var(--r-md);background:var(--bg);min-width:0}
+.lp-nowplaying-label{font-size:9px;letter-spacing:1.1px;text-transform:uppercase;color:var(--muted);font-weight:700}
+.lp-nowplaying strong{font-size:13px;line-height:1.5;min-width:0;overflow-wrap:anywhere}
+.lp-nowplaying strong em{color:var(--muted);font-style:normal;font-variant-numeric:tabular-nums}
+.lp-varlist{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:5px}
+.lp-varlist li{display:grid;grid-template-columns:minmax(120px,1fr) minmax(0,auto) auto;gap:9px;align-items:center;padding:7px 10px;border:1px solid var(--border);border-radius:var(--r-md);background:var(--bg);min-width:0}
+.lp-varlist span{font-size:12px;min-width:0}
+.lp-varlist code{font-size:11px;color:var(--muted);overflow-wrap:anywhere;min-width:0}
+@media (max-width:560px){.lp-varlist li{grid-template-columns:minmax(0,1fr) auto}}
+
 /* Estúdio de Alertas: seletor de eventos com ponto para os desligados. */
 .al-pills{display:flex;gap:6px;flex-wrap:wrap;min-width:0}
 .al-pill-off{margin-left:6px;color:var(--muted);font-size:14px;line-height:1}

@@ -91,7 +91,7 @@ const EXTRA:[&str;20]=["followerCount","subCount","subTier","subMonths","subStre
 const SCOPES:[&str;5]=["local","global","user","session","sessionUser"];
 /// Nomes pontuados de leitura (apelidos do contexto da execução). Vão para o
 /// catálogo, nunca para `$` legado, e nunca aceitam escrita por variável.
-const DOTTED:[&str;17]=["execution.id","viewer.id","viewer.login","viewer.name","reward.id","reward.title","reward.cost","redemption.id","redemption.input","time.timestamp","bits.amount","subscription.tier","subscription.is_gift","subscription.message","gifter.name","raider.name","raid.viewers"];
+const DOTTED:[&str;23]=["execution.id","viewer.id","viewer.login","viewer.name","reward.id","reward.title","reward.cost","redemption.id","redemption.input","time.timestamp","bits.amount","subscription.tier","subscription.is_gift","subscription.message","gifter.name","raider.name","raid.viewers","nowplaying.musica","nowplaying.artista","nowplaying.album","nowplaying.tempo","nowplaying.duracao","nowplaying.link"];
 fn levenshtein(a:&str,b:&str)->usize{
  let (a,b)=(a.as_bytes(),b.as_bytes());let mut prev:Vec<usize>=(0..=b.len()).collect();
  for i in 1..=a.len(){let mut cur=vec![i];for j in 1..=b.len(){cur.push((prev[j]+1).min(cur[j-1]+1).min(prev[j-1]+usize::from(a[i-1]!=b[j-1])));}prev=cur;}
@@ -228,7 +228,7 @@ pub fn migrate_flow(f: &mut Flow) -> bool {
 }
 pub struct Context { values: BTreeMap<String,Value>, data: Value, pub simulated: bool, viewers: Vec<String> }
 impl Context {
-    pub fn new(db: &Db, p: &Profile, e: &Event, flow: Option<&Flow>) -> R<Self> {
+    pub fn new(db: &Db, p: &Profile, e: &Event, flow: Option<&Flow>, song: Option<crate::spotify::Track>) -> R<Self> {
         let now=chrono::Local::now(); let mut values=BTreeMap::new();
          for (key,value) in [("user",json!(e.user)),("userName",json!(e.user)),("userId",json!(e.user_id)),("role",json!(e.role)),("message",json!(e.message)),("channel",json!(p.channel)),("channelId",json!(p.channel_id)),("platform",json!(p.platform)),("profileId",json!(p.id)),("profileName",json!(p.name)),("eventId",json!(e.id)),("eventType",json!(e.kind)),("isModerator",json!(matches!(e.role.as_str(),"moderator"|"broadcaster"))),("isBroadcaster",json!(e.role=="broadcaster")),("isSubscriber",json!(e.role=="subscriber")),("simulated",json!(e.simulated)),("date",json!(now.format("%Y-%m-%d").to_string())),("time",json!(now.format("%H:%M:%S").to_string())),("unixtime",json!(now.timestamp())),("lf",json!("\n"))] { values.insert(key.into(),value); }
         // Sem pessoa no evento, como em um timer, o sorteio é o único caminho para citar um espectador.
@@ -267,6 +267,16 @@ impl Context {
      // Apelidos pontuados do contexto da execução (leitura; sem escrita por variável).
      let login=e.data["chatter_user_login"].as_str().filter(|s|!s.is_empty()).map(str::to_owned).unwrap_or_else(||e.user.to_lowercase());
      for (key,value) in [("viewer.id",json!(e.user_id)),("viewer.login",json!(login)),("viewer.name",json!(e.user)),("time.timestamp",json!(now.timestamp())),("reward.id",json!(e.data["reward"]["id"].as_str().unwrap_or(""))),("reward.title",json!(e.data["reward"]["title"].as_str().unwrap_or(""))),("reward.cost",json!(e.data["reward"]["cost"].as_u64().unwrap_or(0))),("redemption.id",json!(e.id)),("redemption.input",json!(e.data["user_input"].as_str().unwrap_or(""))),("bits.amount",json!(e.data["bits"].as_u64().unwrap_or(0))),("subscription.tier",json!(e.data["tier"].as_str().unwrap_or(""))),("subscription.is_gift",json!(e.data["is_gift"]==true||e.kind=="gift")),("subscription.message",json!(e.data["message"]["text"].as_str().unwrap_or(e.message.as_str()))),("gifter.name",json!(e.data["user_name"].as_str().filter(|s|!s.is_empty()).unwrap_or("Anônimo"))),("raider.name",json!(e.user)),("raid.viewers",json!(e.data["viewers"].as_u64().unwrap_or(0)))] { values.insert(key.into(),value); }
+     // A música tocando no Spotify: vazia quando nada toca — {{nowplaying.musica}}
+     // nunca quebra uma resposta por o streamer estar sem música.
+     let song=song.as_ref();
+     let empty=String::new();
+     values.insert("nowplaying.musica".into(),json!(song.map(|t|t.name.as_str()).unwrap_or(&empty)));
+     values.insert("nowplaying.artista".into(),json!(song.map(|t|t.artist.as_str()).unwrap_or(&empty)));
+     values.insert("nowplaying.album".into(),json!(song.map(|t|t.album.as_str()).unwrap_or(&empty)));
+     values.insert("nowplaying.tempo".into(),json!(song.map(|t|crate::spotify::fmt_time(t.progress_ms)).unwrap_or_default()));
+     values.insert("nowplaying.duracao".into(),json!(song.map(|t|crate::spotify::fmt_time(t.duration_ms)).unwrap_or_default()));
+     values.insert("nowplaying.link".into(),json!(song.map(|t|t.url.as_str()).unwrap_or(&empty)));
         if let Some(f)=flow { values.insert("commandCount".into(),json!(crate::command_counter::get(db,&p.id,&f.id)?)); values.insert("actionId".into(),json!(f.id)); values.insert("actionName".into(),json!(f.name)); }
         // O que o microfone acabou de ouvir. Sem fala ainda as duas existem vazias:
         // uma automação que usa {{lastSpeech}} não pode quebrar por o streamer estar calado.
@@ -371,7 +381,7 @@ impl Context {
         let p:Profile=serde_json::from_value(serde_json::json!({"id":"00000000-0000-4000-8000-000000000003","name":"P","platform":"twitch","channel":"canal"})).unwrap();
         db.save_profile(&p).unwrap();
         let e:Event=serde_json::from_value(serde_json::json!({"id":"e1","profileId":p.id,"kind":"resub","user":"Bia","user_id":"99","role":"subscriber","message":"amo aqui","data":{"tier":"2000","cumulative_months":5,"streak_months":3,"message":{"text":"amo aqui"}}})).unwrap();
-        let mut c=Context::new(&db,&p,&e,None).unwrap();
+        let mut c=Context::new(&db,&p,&e,None,None).unwrap();
         assert_eq!(c.render("{{subTier}}").unwrap(),"2","mil vira nível 1, dois mil vira 2");
         assert_eq!(c.render("{{subMonths}}").unwrap(),"5");
         assert_eq!(c.render("{{subStreak}}").unwrap(),"3");
@@ -380,7 +390,7 @@ impl Context {
         c.set("followerCount",serde_json::json!(1022));c.set("subCount",serde_json::json!(42));
         assert_eq!(c.render("Obrigado por seguir a gente {{user}}! Agora estamos em {{followerCount}} seguidores e {{subCount}} subs!").unwrap(),"Obrigado por seguir a gente Bia! Agora estamos em 1022 seguidores e 42 subs!");
         let r:Event=serde_json::from_value(serde_json::json!({"id":"e2","profileId":p.id,"kind":"raid","user":"Mia","user_id":"98","role":"everyone","message":"","data":{"viewers":17,"from_broadcaster_user_login":"miazinha"}})).unwrap();
-        let rc=Context::new(&db,&p,&r,None).unwrap();
+        let rc=Context::new(&db,&p,&r,None,None).unwrap();
         assert_eq!(rc.render("{{raidViewers}}").unwrap(),"17");
         assert_eq!(rc.render("{{raiderLogin}}").unwrap(),"miazinha");
     }
@@ -409,7 +419,7 @@ impl Context {
         let p:Profile=serde_json::from_value(serde_json::json!({"id":"00000000-0000-4000-8000-000000000031","name":"P","platform":"twitch","channel":"canal"})).unwrap();
         db.save_profile(&p).unwrap();
         let e:Event=serde_json::from_value(serde_json::json!({"id":"e9","profileId":p.id,"kind":"redemption","user":"Ana","user_id":"77","role":"everyone","message":"","data":{"id":"red1","user_input":"com carinho","reward":{"id":"abc","title":"Mute o Thenees","cost":5000}}})).unwrap();
-        let c=Context::new(&db,&p,&e,None).unwrap();
+        let c=Context::new(&db,&p,&e,None,None).unwrap();
         assert_eq!(c.render("{{redeemer}} resgatou {{rewardTitle}} por {{rewardCost}}: {{userInput}} ({{rewardId}})").unwrap(),"Ana resgatou Mute o Thenees por 5000: com carinho (abc)");
         assert_eq!(c.render("{{viewer.name}} ({{viewer.login}}) pagou {{reward.cost}}: {{redemption.input}}").unwrap(),"Ana (ana) pagou 5000: com carinho");
     }
@@ -419,7 +429,7 @@ impl Context {
         let p:Profile=serde_json::from_value(serde_json::json!({"id":"00000000-0000-4000-8000-000000000032","name":"P","platform":"twitch","channel":"canal"})).unwrap();
         db.save_profile(&p).unwrap();
         let e:Event=serde_json::from_value(serde_json::json!({"id":"e9","profileId":p.id,"kind":"redemption","user":"Ana","user_id":"77","role":"everyone","message":"","data":{"reward":{"cost":5000}}})).unwrap();
-        let c=Context::new(&db,&p,&e,None).unwrap();
+        let c=Context::new(&db,&p,&e,None,None).unwrap();
         assert_eq!(c.eval_rule("rewardCost","greater_or_equal","5000").unwrap(),(true,"5000".into()));
         assert_eq!(c.eval_rule("reward.cost","greater_than","5000").unwrap().0,false);
         assert_eq!(c.eval_rule("rewardCost","less_than","100").unwrap().0,false,"número compara número, sem cair na armadilha de texto");
@@ -439,16 +449,16 @@ impl Context {
         let p:Profile=serde_json::from_value(serde_json::json!({"id":"00000000-0000-4000-8000-000000000033","name":"P","platform":"twitch","channel":"canal"})).unwrap();
         db.save_profile(&p).unwrap();
         let cheer:Event=serde_json::from_value(serde_json::json!({"id":"c1","profileId":p.id,"kind":"cheer","user":"Ana","user_id":"77","role":"everyone","message":"toma","data":{"bits":500,"message":{"text":"toma"}}})).unwrap();
-        let c=Context::new(&db,&p,&cheer,None).unwrap();
+        let c=Context::new(&db,&p,&cheer,None,None).unwrap();
         assert_eq!(c.render("{{bits.amount}} bits de {{viewer.name}}").unwrap(),"500 bits de Ana");
         assert_eq!(c.eval_rule("bits.amount","greater_or_equal","500").unwrap(),(true,"500".into()));
         assert_eq!(c.eval_rule("bits.amount","greater_than","500").unwrap().0,false);
         let raid:Event=serde_json::from_value(serde_json::json!({"id":"r1","profileId":p.id,"kind":"raid","user":"RaidMan","user_id":"78","role":"everyone","message":"","data":{"viewers":42,"from_broadcaster_user_login":"raidman"}})).unwrap();
-        let c=Context::new(&db,&p,&raid,None).unwrap();
+        let c=Context::new(&db,&p,&raid,None,None).unwrap();
         assert_eq!(c.render("{{raider.name}} com {{raid.viewers}}").unwrap(),"RaidMan com 42");
         assert_eq!(c.eval_rule("raid.viewers","greater_or_equal","20").unwrap().0,true);
         let sub:Event=serde_json::from_value(serde_json::json!({"id":"s1","profileId":p.id,"kind":"subscription","user":"Subzado","user_id":"80","role":"subscriber","message":"","data":{"tier":"2000","is_gift":false}})).unwrap();
-        let c=Context::new(&db,&p,&sub,None).unwrap();
+        let c=Context::new(&db,&p,&sub,None,None).unwrap();
         assert_eq!(c.render("{{subscription.tier}} presente? {{subscription.is_gift}}").unwrap(),"2000 presente? false");
         assert!(is_known("bits.amount")&&is_known("raid.viewers")&&is_known("gifter.name"));
         assert_eq!(suggest_variable("bits.amout"),Some("bits.amount".into()));

@@ -91,7 +91,7 @@ test('falha numa tela fica contida no conteúdo',async({page})=>{
  await page.locator('.screen-failure').waitFor({state:'visible',timeout:5000});
  await expect(page.locator('.screen-failure h3')).toHaveText('Esta tela encontrou um problema');
  // a barra lateral continua de pé e o app inteiro não foi substituído
- expect(await page.locator('.nav-item').count()).toBe(23);
+ expect(await page.locator('.nav-item').count()).toBe(24);
  expect(await page.locator('main.fatal').count()).toBe(0);
 
  await page.getByRole('button',{name:'Ir para a Visão geral',exact:true}).click();

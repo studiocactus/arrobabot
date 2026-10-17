@@ -45,6 +45,7 @@ mod alerts;
 mod chat_overlay;
 mod audio;
 mod preflight;
+mod spotify;
 use engine::Runtime;
 use model::*;
 use serde_json::{json,Value};
@@ -102,7 +103,7 @@ pub async fn dispatch(rt:Arc<Runtime>,op:&str,args:Value)->R<Value>{
  let mut flow=flow;if let Some(f)=flow.as_mut(){variables::migrate_flow(f);}
  // A prévia entrega o evento que o gatilho produz na prática, não o dado de teste.
  if let Some(f)=flow.as_ref(){e=model::preview_event(f,e);}
- let mut context=variables::Context::new(&rt.db,&profile,&e,flow.as_ref())?;
+ let mut context=variables::Context::new(&rt.db,&profile,&e,flow.as_ref(),rt.spotify.now(&profile.id))?;
  let mut steps=vec![];
  if let Some(f)=flow {validate_flow(&f)?;for a in &f.actions {if !a.condition.is_empty()&&!e.message.to_lowercase().contains(&a.condition.to_lowercase()){continue}if a.kind=="script"{steps.push(json!({"kind":"script","text":"Script não executado na prévia"}));continue}let text=if a.kind=="variable.delete"{String::new()}else{context.render(&a.text)?};if a.kind.starts_with("variable."){context.change(&rt.db,&profile,&e,&a.target,a.kind.trim_start_matches("variable."),variables::typed(&text))?;}if matches!(a.kind.as_str(),"ai"|"ai.generate"){ai::save_response(&mut context,&rt,&profile,&e,a,"[Prévia: resposta contextual da IA]",false)?;}steps.push(json!({"kind":a.kind,"text":text}));}}
  let text=context.render(&variables::migrate(args["text"].as_str().unwrap_or("")))?;
@@ -145,7 +146,7 @@ pub async fn dispatch(rt:Arc<Runtime>,op:&str,args:Value)->R<Value>{
  let message=args["message"].as_str().unwrap_or("");let instruction=args["instruction"].as_str().unwrap_or("");let recent=args["recent"].as_str().unwrap_or("");
  if message.trim().is_empty()||message.len()>8000||instruction.len()>32768||recent.len()>24000{return Err("Preencha uma mensagem de teste dentro dos limites".into())}
  let e=Event{id:"ai-preview".into(),profile_id:p,kind:"chat".into(),user:"Espectador de teste".into(),user_id:"test-user".into(),role:"everyone".into(),message:message.into(),data:Value::Null,simulated:true,rehearsal:false};
- let c=variables::Context::new(&rt.db,&profile,&e,None)?;
+ let c=variables::Context::new(&rt.db,&profile,&e,None,rt.spotify.now(&profile.id))?;
  let history:Vec<Value>=recent.lines().filter(|s|!s.trim().is_empty()).rev().take(12).collect::<Vec<_>>().into_iter().rev().map(|s|json!({"message":s.chars().take(500).collect::<String>()})).collect();
  let opts=ai::Options{knowledge:crate::knowledge::context(&rt.base,&profile,Some(&e),message),live:rt.live.summary(&profile.id),speech:crate::speech::summary(&rt.db,&profile.id),emotes:crate::emotes::list(&rt.db,&profile.id),..ai::Options::defaults(&profile)};
  Ok(json!(ai::conversation(&rt.http,&rt.base,&profile,&e,&c.render(instruction)?,&history,&opts).await?))
@@ -176,13 +177,17 @@ pub async fn dispatch(rt:Arc<Runtime>,op:&str,args:Value)->R<Value>{
  "voice.status"=>Ok(listen::status(&rt,&p)),
  "update.check"=>update::check(&rt,false).await,
  "update.install"=>update::check(&rt,true).await,
- "module.config"=>{rt.db.profile(&p)?;let key=args["key"].as_str().ok_or("Configuração ausente")?;if !["moderation","tts","voice","obsidian","points","songs","discord","discordBot","games","alerts","chatOverlay","audio","affinity","emoteBurst"].contains(&key){return Err("Configuração inválida".into())}if key=="moderation"&&!moderation::valid_config(&args["value"]){return Err("Ação inválida".into())}if key=="voice"&&!listen::valid_config(&args["value"]){return Err("Configuração de voz inválida: o servidor de transcrição precisa ser local (127.0.0.1) e os limites do painel têm faixas fixas".into())}if key=="discordBot"&&!discord_admin::valid_config(&args["value"]){return Err("Configuração do Discord inválida. Confira o servidor e os canais informados.".into())}if key=="alerts"&&!alerts::valid_config(&args["value"]){return Err("Configuração de alertas inválida: confira duração (3 a 20 s), velocidade, cores, fontes e textos de cada evento".into())}if key=="chatOverlay"&&!chat_overlay::valid_config(&args["value"]){return Err("Configuração do chat inválida: confira faixas, cores, fontes, badges e filtros".into())}if key=="audio"&&!audio::valid_config(&args["value"]){return Err("Configuração de áudio inválida: confira o aparelho de saída".into())}if key=="affinity"&&!modules::valid_config(&args["value"]){return Err("Configuração do Match inválida: confira palavras-gatilho, comando começando com ! e as cinco faixas (uma por linha, até 500 caracteres)".into())}if key=="emoteBurst"&&!emote_burst::valid_config(&args["value"]){return Err("Configuração da explosão inválida: confira quantidade (10 a 80), tamanho (24 a 120) e a origem dos emotes".into())}let value=if key=="affinity"{modules::with_defaults(&args["value"])}else{args["value"].clone()};rt.db.set_module(&p,key,&value)?;if key=="alerts"{rt.emit("alerts",json!({"profileId":p,"config":args["value"]}));}if key=="chatOverlay"{rt.emit("chat.config",json!({"profileId":p,"config":args["value"]}));}Ok(Value::Null)},
+ "module.config"=>{rt.db.profile(&p)?;let key=args["key"].as_str().ok_or("Configuração ausente")?;if !["moderation","tts","voice","obsidian","points","songs","discord","discordBot","games","alerts","chatOverlay","audio","affinity","emoteBurst","spotify"].contains(&key){return Err("Configuração inválida".into())}if key=="moderation"&&!moderation::valid_config(&args["value"]){return Err("Ação inválida".into())}if key=="voice"&&!listen::valid_config(&args["value"]){return Err("Configuração de voz inválida: o servidor de transcrição precisa ser local (127.0.0.1) e os limites do painel têm faixas fixas".into())}if key=="discordBot"&&!discord_admin::valid_config(&args["value"]){return Err("Configuração do Discord inválida. Confira o servidor e os canais informados.".into())}if key=="alerts"&&!alerts::valid_config(&args["value"]){return Err("Configuração de alertas inválida: confira duração (3 a 20 s), velocidade, cores, fontes e textos de cada evento".into())}if key=="chatOverlay"&&!chat_overlay::valid_config(&args["value"]){return Err("Configuração do chat inválida: confira faixas, cores, fontes, badges e filtros".into())}if key=="spotify"&&!spotify::valid_config(&args["value"]){return Err("Configuração do Spotify inválida: confira o interruptor, o Client ID e o design do overlay".into())}if key=="audio"&&!audio::valid_config(&args["value"]){return Err("Configuração de áudio inválida: confira o aparelho de saída".into())}if key=="affinity"&&!modules::valid_config(&args["value"]){return Err("Configuração do Match inválida: confira palavras-gatilho, comando começando com ! e as cinco faixas (uma por linha, até 500 caracteres)".into())}if key=="emoteBurst"&&!emote_burst::valid_config(&args["value"]){return Err("Configuração da explosão inválida: confira quantidade (10 a 80), tamanho (24 a 120) e a origem dos emotes".into())}let value=if key=="affinity"{modules::with_defaults(&args["value"])}else{args["value"].clone()};rt.db.set_module(&p,key,&value)?;if key=="alerts"{rt.emit("alerts",json!({"profileId":p,"config":args["value"]}));}if key=="chatOverlay"{rt.emit("chat.config",json!({"profileId":p,"config":args["value"]}));}if key=="spotify"{rt.emit("spotify.config",json!({"profileId":p,"config":args["value"]}));}Ok(Value::Null)},
  "module.config.get"=>{rt.db.profile(&p)?;Ok(rt.db.module(&p,args["key"].as_str().ok_or("Configuração ausente")?))},
  "alerts.get"=>{let profile=rt.db.profile(&p)?;Ok(json!({"config":alerts::config(&rt,&p),"sounds":alerts::sounds(&rt,&p),"overlay":livepix::overlay_info(&rt,&profile.id)?}))},
  "alerts.test"=>{let profile=rt.db.profile(&p)?;alerts::test(&rt,&profile,args["kind"].as_str().ok_or("Evento ausente")?).await},
   "emoteBurst.test"=>{let profile=rt.db.profile(&p)?;emote_burst::test(&rt,&profile)?;Ok(Value::Null)},
  "chat.get"=>{let profile=rt.db.profile(&p)?;Ok(json!({"config":chat_overlay::config(&rt,&p),"overlay":livepix::overlay_info(&rt,&profile.id)?}))},
  "chat.test"=>{let profile=rt.db.profile(&p)?;chat_overlay::test(&rt,&profile,&args)},
+ "spotify.get"=>{rt.db.profile(&p)?;Ok(json!({"config":spotify::merged(&rt,&p),"connected":spotify::connected(&p),"now":rt.spotify.now(&p)}))},
+ "spotify.connect"=>{rt.db.profile(&p)?;let cfg=spotify::merged(&rt,&p);spotify::connect(&rt.http,&p,&cfg).await},
+ "spotify.disconnect"=>{rt.db.profile(&p)?;spotify::disconnect(&p)?;rt.spotify.set(&p,None);rt.emit("spotify.now",json!({"profileId":p,"playing":false}));Ok(Value::Null)},
+ "spotify.poll"=>{let profile=rt.db.profile(&p)?;let cfg=spotify::merged(&rt,&p);Ok(json!({"track":spotify::poll_once(&rt,&profile,&cfg).await?}))},
  "audio.get"=>{rt.db.profile(&p)?;Ok(json!({"config":audio::config(&rt,&p),"voiceFx":{"selection":rt.voice_fx.load_selection(&rt,&p).unwrap_or_else(|_|json!({"input":"","output":""})),"devices":crate::voice_fx::devices()},"status":rt.voice_fx.get()}))},
  "settings"=>{let key=args["key"].as_str().ok_or("Configuração inválida")?;if !["theme","accent","apiPort","updateEndpoint","updatePublicKey","autoUpdate"].contains(&key){return Err("Configuração não permitida".into())}if key=="accent"&&!args["value"].as_str().is_some_and(|v|v.is_empty()||(v.len()==7&&v.starts_with('#')&&v[1..].chars().all(|c|c.is_ascii_hexdigit()))){return Err("Cor inválida".into())}rt.db.set(key,&args["value"])?;Ok(Value::Null)},
  "settings.get"=>Ok(json!({"theme":rt.db.get("theme"),"accent":rt.db.get("accent"),"apiPort":rt.db.get("apiPort"),"apiToken":rt.api_token,"updateEndpoint":update::endpoint(&rt),"updatePublicKey":update::public_key(&rt),"autoUpdate":rt.db.get("autoUpdate")})),
@@ -212,6 +217,7 @@ pub fn run(){
  *rt.app.lock().unwrap()=Some(app.handle().clone());app.manage(rt.clone());
  let timer_rt=rt.clone();tauri::async_runtime::spawn(timers::run(timer_rt));
  let scheduler_rt=rt.clone();tauri::async_runtime::spawn(scheduler::run(scheduler_rt));
+ let spotify_rt=rt.clone();tauri::async_runtime::spawn(spotify::run(spotify_rt));
  let update_rt=rt.clone();tauri::async_runtime::spawn(async move{if update_rt.db.get("autoUpdate")==true {if let Ok(v)=update::check(&update_rt,false).await{if v["available"]==true{update_rt.log("","update","Há uma atualização disponível nas configurações.","info");}}}});
  tauri::async_runtime::spawn(async move{if let Err(e)=local_api::serve(rt.clone()).await{rt.log("","api",&e,"error");}});
  Ok(())

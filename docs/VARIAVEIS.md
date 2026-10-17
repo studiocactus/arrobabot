@@ -94,6 +94,12 @@ Para escrever marcadores literalmente, acrescente uma barra invertida: `\{{user}
 | {{raid.viewers}} | Espectadores trazidos pela raid |
 | {{lastSpeech}} | Última fala reconhecida na escuta contínua (vazia se nenhuma) |
 | {{liveSpeech}} | Todas as falas da sessão de escuta, separadas por ` \| ` |
+| {{nowplaying.musica}} | Música tocando no Spotify (vazia quando nada toca) |
+| {{nowplaying.artista}} | Artista da música atual |
+| {{nowplaying.album}} | Álbum da música atual |
+| {{nowplaying.tempo}} | Posição na música, no relógio `1:23` |
+| {{nowplaying.duracao}} | Duração da música, no relógio `3:21` |
+| {{nowplaying.link}} | Link da música no Spotify |
 
 Data e hora são capturadas no início de cada fluxo. Os argumentos são separados por espaços em branco: aspas não agrupam várias palavras. Para eventos sem texto, command/rawInput ficam vazios e argCount é zero. Nem todo evento possui usuário; um ID vazio impede gravar variáveis por pessoa.
 

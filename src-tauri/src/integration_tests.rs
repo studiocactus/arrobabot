@@ -9,7 +9,7 @@ async fn command_counts_follow_permissions_cooldowns_and_simulations(){
  assert_eq!(command_counter::get(&rt.db,&p.id,&f.id).unwrap(),1);assert!(std::iter::from_fn(||rx.try_recv().ok()).any(|v|v["type"]=="overlay"&&v["payload"]["text"]=="1"));
  e.simulated=true;engine::process(rt.clone(),e).await;assert_eq!(command_counter::get(&rt.db,&p.id,&f.id).unwrap(),1);assert!(rt.db.logs(&p.id).unwrap().iter().any(|l|l.message.contains("Executaria overlay: 2")));
  assert_eq!(command_counter::get(&rt.db,&other.id,&f.id).unwrap(),0);
- let preview=variables::Context::new(&rt.db,&other,&event(&other,"!oi",true),Some(&f)).unwrap();assert_eq!(preview.render("{{commandCount}}").unwrap(),"0");
+ let preview=variables::Context::new(&rt.db,&other,&event(&other,"!oi",true),Some(&f),None).unwrap();assert_eq!(preview.render("{{commandCount}}").unwrap(),"0");
  *rt.actor.lock().unwrap()="mod".into();assert!(dispatch(rt.clone(),"command.counter.set",json!({"profileId":other.id,"id":f.id,"value":12})).await.is_err());
  assert_eq!(dispatch(rt.clone(),"command.counter.set",json!({"profileId":p.id,"id":f.id,"value":12})).await.unwrap(),12);
 }
@@ -114,7 +114,7 @@ async fn contextual_ai_uses_chat_and_stores_single_pass_response_without_sending
  assert!(request["messages"][0]["content"].as_str().unwrap().contains("Não invente"));
  let mut found=false;while let Ok(e)=receiver.try_recv(){if e["type"]=="overlay"{assert_eq!(e["payload"]["text"],"Hoje sim! {{message}} / true");found=true}}assert!(found);
  assert!(!rt.db.logs(&p.id).unwrap().iter().any(|l|l.kind=="chat"&&l.status=="success"));
- assert!(variables::Context::new(&rt.db,&p,&event(&p,"oi",false),None).unwrap().render("{{local.aiResponse}}").is_err());
+ assert!(variables::Context::new(&rt.db,&p,&event(&p,"oi",false),None,None).unwrap().render("{{local.aiResponse}}").is_err());
 }
 #[tokio::test]
 async fn ai_simulation_preview_and_failures_stop_the_flow(){
@@ -396,7 +396,7 @@ async fn updater_defaults_and_explicit_overrides(){
 async fn variable_templates_are_single_pass_bounded_and_typed(){
  let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();let p=profile("P");rt.db.save_profile(&p).unwrap();
  let mut e=event(&p,"!oi  café  20",true);e.user="$channel {{global.secret}} %message%".into();e.data=json!({"reward":{"title":"Hidratar"},"items":[{"amount":4}],"user":"Intruso"});
- let c=variables::Context::new(&rt.db,&p,&e,Some(&flow(&p))).unwrap();
+ let c=variables::Context::new(&rt.db,&p,&e,Some(&flow(&p)),None).unwrap();
  assert_eq!(c.render("$user").unwrap(),"$user");
  assert_eq!(variables::migrate("$userId $unknown $messageSuffix"),"{{userId}} $unknown $messageSuffix");
  assert_eq!(variables::migrate(r"\$user $5 R$100 arg"),r"\$user $5 R$100 arg");
@@ -460,7 +460,7 @@ async fn variable_sequence_simulation_preview_and_permissions(){
  rt.db.save_flow(&f).unwrap();engine::process(rt.clone(),event(&p,"!oi",true)).await;
  assert!(rt.db.logs(&p.id).unwrap().iter().any(|l|l.message=="[Simulação] ANA: 12"));assert_eq!(variables::list(&rt.db,&p.id,"").unwrap()[0]["value"],10);
  let preview=dispatch(rt.clone(),"variables.preview",json!({"profileId":p.id,"flow":f,"event":event(&p,"!oi",false)})).await.unwrap();assert_eq!(preview["steps"][2]["text"],"ANA: 12");assert_eq!(variables::list(&rt.db,&p.id,"").unwrap()[0]["value"],10);
- let fresh=variables::Context::new(&rt.db,&p,&event(&p,"!oi",true),None).unwrap();assert!(fresh.render("{{local.name}}").is_err());
+ let fresh=variables::Context::new(&rt.db,&p,&event(&p,"!oi",true),None,None).unwrap();assert!(fresh.render("{{local.name}}").is_err());
  // Real execution with a local overlay exercises persistence without external chat.
  f.actions[2].kind="overlay".into();rt.db.save_flow(&f).unwrap();let mut events=rt.broadcast.subscribe();
  engine::process(rt.clone(),event(&p,"!oi",false)).await;
@@ -475,12 +475,12 @@ async fn timer_preview_delivers_the_real_event_and_sorts_a_chatter(){
  let mut f=flow(&p);f.name="Minecraft".into();f.trigger.kind="timer".into();f.trigger.pattern.clear();f.trigger.cooldown=0;f.trigger.user_cooldown=0;f.actions=vec![Action{kind:"chat".into(),text:"{{user}}|{{userId}}|{{eventType}}".into(),target:String::new(),value:0,condition:String::new(),..Default::default()}];
  let ev=event(&p,"!minecraft Ana",true);
  // Sem ninguém no cadastro o sorteio não existe: a ação interrompe e orienta o uso do padrão.
- let ctx=variables::Context::new(&rt.db,&p,&ev,Some(&f)).unwrap();
+ let ctx=variables::Context::new(&rt.db,&p,&ev,Some(&f),None).unwrap();
  assert!(ctx.render("{{randomViewer}}").is_err());
  assert_eq!(ctx.render("{{randomViewer|default:alguém}}").unwrap(),"alguém");
  // Quem fala no chat entra no cadastro e passa a ser sorteável.
  engine::process(rt.clone(),event(&p,"Olá a todos",false)).await;
- let ctx=variables::Context::new(&rt.db,&p,&ev,Some(&f)).unwrap();
+ let ctx=variables::Context::new(&rt.db,&p,&ev,Some(&f),None).unwrap();
  assert_eq!(ctx.render("{{randomViewer}}").unwrap(),"Ana");
  // A prévia entrega o disparo real do timer, e não os dados de teste do chat.
  let preview=dispatch(rt.clone(),"variables.preview",json!({"profileId":p.id,"flow":f,"event":ev})).await.unwrap();
@@ -492,7 +492,7 @@ async fn timer_preview_delivers_the_real_event_and_sorts_a_chatter(){
 async fn random_viewer_draws_fresh_on_every_occurrence(){
  let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();let p=profile("Sorteio");rt.db.save_profile(&p).unwrap();
  rt.db.set_module(&p.id,"community",&json!({"names":{"a":"Ana","b":"Bia"}})).unwrap();
- let ctx=variables::Context::new(&rt.db,&p,&event(&p,"!x",true),None).unwrap();
+ let ctx=variables::Context::new(&rt.db,&p,&event(&p,"!x",true),None,None).unwrap();
  // Um único contexto, 60 mensagens com duas ocorrências cada: o nome não pode ficar congelado.
  let mut seen=std::collections::HashSet::new();
  for _ in 0..60{let out=ctx.render("{{randomViewer}} contra {{randomViewer}}").unwrap();for part in out.split(" contra "){assert!(["Ana","Bia"].contains(&part),"sorteio fora do cadastro: {part}");seen.insert(part.to_owned());}}
@@ -800,7 +800,7 @@ async fn flow_test_keeps_local_logic_and_never_touches_the_outside(){
  assert_eq!(status(11),"SUCCESS","atraso local roda de verdade");
  assert_eq!(status(12),"TRUE","condição avaliada de verdade");
  assert!(std::iter::from_fn(||rx.try_recv().ok()).all(|v|v["type"]!="overlay"),"nada foi publicado na tela");
- let after=variables::Context::new(&rt.db,&p,&event(&p,"!x",true),None).unwrap();
+ let after=variables::Context::new(&rt.db,&p,&event(&p,"!x",true),None,None).unwrap();
  assert_ne!(after.render("{{global.fora}}").ok().as_deref(),Some("nao pode"),"o teste não grava variável global");
 }
 /// A falha fica na etapa, com o motivo, e interrompe o resto da sequência.
@@ -1421,4 +1421,106 @@ async fn preflight_acusa_o_que_so_quebraria_ao_vivo(){
  assert!(!has("lê mensagens em voz alta"),"módulo ligado some do relatório");
  assert!(has("O áudio de “Tudo quebrado” foi apagado"),"o arquivo continua faltando até ser restaurado");
  assert!(has("webhook inválido"));
+}
+/// Spotify: autorização pelo navegador, leitura da faixa, pausa, parada, limite
+/// de consultas e desconexão — tudo contra um servidor falso, sem rede e sem
+/// tocar a conta de ninguém.
+#[tokio::test]
+async fn spotify_autoriza_lê_a_faixa_e_transmite_para_o_overlay(){
+ use tokio::io::{AsyncReadExt, AsyncWriteExt};
+ let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();
+ let p=profile("Spotify");rt.db.save_profile(&p).unwrap();
+
+ // Servidor falso: troca de token, conta e "tocando agora" com quatro estados.
+ let listener=tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();let addr=listener.local_addr().unwrap();
+ std::env::set_var("BOTLIVE_SPOTIFY_API",format!("http://{addr}"));
+ std::env::set_var("BOTLIVE_SPOTIFY_ACCOUNTS",format!("http://{addr}"));
+ fn faixa(playing:bool,progress:u64)->String{format!(r#"{{"is_playing":{playing},"progress_ms":{progress},"timestamp":1760000000000,"currently_playing_type":"track","item":{{"id":"t1","name":"Tocando Agora","duration_ms":201000,"artists":[{{"name":"Cactus"}}],"album":{{"name":"Ao Vivo","images":[{{"url":"https://i.scdn.co/capa.jpg"}}]}},"external_urls":{{"spotify":"https://open.spotify.com/track/t1"}}}}}}"#)}
+ let route=std::sync::Arc::new(std::sync::atomic::AtomicU8::new(0)); // 0 faixa, 1 pausa, 2 parado, 3 limite
+ let server=route.clone();
+ tokio::spawn(async move{loop{
+  let (mut s,_) = match listener.accept().await{Ok(x)=>x,Err(_)=>continue};
+  let mut buf=[0u8;8192];let n=match s.read(&mut buf).await{Ok(n)=>n,Err(_)=>continue};
+  let req=String::from_utf8_lossy(&buf[..n]).to_string();
+  let path=req.split_whitespace().nth(1).unwrap_or("/").to_owned();
+  let (status,body)=match path.as_str(){
+   "/api/token" => ("200 OK",r#"{"access_token":"token-fake","refresh_token":"refresh-fake","expires_in":3600}"#.to_owned()),
+   "/v1/me" => ("200 OK",r#"{"display_name":"Cactus","product":"premium"}"#.to_owned()),
+   "/v1/me/player/currently-playing" => match server.load(std::sync::atomic::Ordering::SeqCst){
+    0 => ("200 OK",faixa(true,12000)),
+    1 => ("200 OK",faixa(false,45000)),
+    2 => ("204 No Content",String::new()),
+    _ => ("429 Too Many Requests",String::new()),
+   },
+   _ => ("404 Not Found","{}".to_owned()),
+  };
+  let resp=format!("HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",body.len());
+  let _=s.write_all(resp.as_bytes()).await;
+ }});
+
+ // Configuração como o Estúdio salvaria: ligado, com o Client ID do app do streamer.
+ let mut cfg=crate::spotify::defaults();cfg["enabled"]=json!(true);cfg["clientId"]=json!("app-id-123");
+ dispatch(rt.clone(),"module.config",json!({"profileId":p.id,"key":"spotify","value":cfg})).await.unwrap();
+
+ // Pré-voo antes da autorização: acusa, apontando a tela certa.
+ let out=dispatch(rt.clone(),"preflight.check",json!({"profileId":p.id})).await.unwrap();
+ let msgs:Vec<String>=out["items"].as_array().unwrap().iter().map(|v|v["message"].as_str().unwrap_or("").into()).collect();
+ assert!(msgs.iter().any(|m|m.contains("não está autorizado")),"sem autorização o pré-voo avisa");
+
+ // Autorização pelo navegador: o abridor pega a URL e o callback volta na porta.
+ let seen=std::sync::Arc::new(std::sync::Mutex::new(String::new()));
+ let seen2=seen.clone();
+ let out=crate::spotify::connect_with(&rt.http,&p.id,&cfg,move |url|{
+  *seen2.lock().unwrap()=url.to_owned();
+  let cb=url.to_owned();
+  tokio::spawn(async move{
+   tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+   let u=url::Url::parse(&cb).expect("URL de autorização");
+   let state=u.query_pairs().find(|(k,_)|k=="state").expect("state na URL").1.to_string();
+   let _=reqwest::get(format!("http://127.0.0.1:43828/callback?code=codigox&state={state}")).await;
+  });
+  Ok(())
+ }).await.unwrap();
+ assert!(seen.lock().unwrap().contains("code_challenge"),"PKCE na URL de autorização");
+ assert_eq!(out["authorized"],true);
+ assert_eq!(out["user"],"Cactus");
+ assert!(crate::spotify::connected(&p.id),"token guardado no cofre");
+
+ // Leitura da faixa: estado, transmissão e variáveis das automações.
+ let mut rx=rt.broadcast.subscribe();
+ let out=dispatch(rt.clone(),"spotify.poll",json!({"profileId":p.id})).await.unwrap();
+ assert_eq!(out["track"]["name"],"Tocando Agora");
+ assert_eq!(rt.spotify.now(&p.id).unwrap().artist,"Cactus");
+ let sent:Vec<Value>=std::iter::from_fn(||rx.try_recv().ok()).filter(|v|v["type"]=="spotify.now").collect();
+ assert_eq!(sent.last().unwrap()["payload"]["name"],"Tocando Agora");
+ assert_eq!(sent.last().unwrap()["payload"]["playing"],true);
+ let ctx=variables::Context::new(&rt.db,&p,&event(&p,"!tocando",true),None,rt.spotify.now(&p.id)).unwrap();
+ assert_eq!(ctx.render("{{nowplaying.musica}}").unwrap(),"Tocando Agora");
+ assert_eq!(ctx.render("{{nowplaying.tempo}}").unwrap(),"0:12");
+ assert_eq!(ctx.render("{{nowplaying.duracao}}").unwrap(),"3:21");
+
+ // Pausa e parada: o overlay recebe a virada na hora.
+ route.store(1,std::sync::atomic::Ordering::SeqCst);
+ dispatch(rt.clone(),"spotify.poll",json!({"profileId":p.id})).await.unwrap();
+ assert_eq!(rt.spotify.now(&p.id).unwrap().playing,false,"pausa chega ao estado");
+ route.store(2,std::sync::atomic::Ordering::SeqCst);
+ let out=dispatch(rt.clone(),"spotify.poll",json!({"profileId":p.id})).await.unwrap();
+ assert_eq!(out["track"],Value::Null,"parado não tem faixa");
+ assert!(rt.spotify.now(&p.id).is_none());
+
+ // Limite de consultas: vira espera, não insistência — e o Histórico não enche.
+ route.store(3,std::sync::atomic::Ordering::SeqCst);
+ let err=dispatch(rt.clone(),"spotify.poll",json!({"profileId":p.id})).await.unwrap_err();
+ assert!(err.contains("pausa nas consultas"),"aviso em português");
+ assert!(rt.spotify.throttled(&p.id),"429 impõe espera ao laço");
+ let msg="O Spotify pediu uma pausa nas consultas. Aguarde um instante.";
+ assert!(rt.spotify.mark_error(&p.id,msg),"erro novo pode ir para o Histórico");
+ assert!(!rt.spotify.mark_error(&p.id,msg),"o mesmo erro não repete no Histórico");
+
+ // Desconexão: some do estado, do pré-voo e do painel.
+ dispatch(rt.clone(),"spotify.disconnect",json!({"profileId":p.id})).await.unwrap();
+ assert!(!crate::spotify::connected(&p.id),"cofre limpo");
+ assert!(rt.spotify.now(&p.id).is_none());
+ let out=dispatch(rt.clone(),"spotify.get",json!({"profileId":p.id})).await.unwrap();
+ assert_eq!(out["connected"],false);
 }

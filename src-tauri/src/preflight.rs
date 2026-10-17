@@ -69,6 +69,22 @@ pub fn check(rt: &Runtime, p: &Profile) -> Value {
         ));
     }
 
+    // Spotify: só quando o módulo está ligado — quem não usa não é cobrado.
+    let spotify_cfg = crate::spotify::config(rt, &p.id);
+    if spotify_cfg["enabled"] == Value::Bool(true) {
+        if spotify_cfg["clientId"].as_str().unwrap_or("").trim().is_empty() {
+            items.push(item(
+                "A música do Spotify não seria lida: informe o Client ID do seu aplicativo do Spotify.".into(),
+                "spotify",
+            ));
+        } else if secrets::get(&p.id, "spotify_refresh").is_err() {
+            items.push(item(
+                "O Spotify não está autorizado: a música não apareceria no overlay.".into(),
+                "spotify",
+            ));
+        }
+    }
+
     // Sons referenciados por pessoas e respostas: o registro fica, o arquivo não.
     let extras = chat_extras::config(rt, &p.id);
     for person in extras.people.iter().filter(|x| x.enabled) {

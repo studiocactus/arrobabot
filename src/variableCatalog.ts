@@ -75,6 +75,12 @@ export const variableCatalog:VariableChoice[]=[
  {key:'local.twitchTarget',label:'Alvo da ação Twitch',group:'Twitch',example:'maria'},
  {key:'local.clipUrl',label:'Link do clipe criado',group:'Twitch',example:'https://clips.twitch.tv/... — vale nas ações seguintes'},
  {key:'local.punished',label:'Sorteado da punição',group:'Moderação',example:'ana — vale nas ações seguintes'},
+ {key:'nowplaying.musica',label:'Música tocando',group:'Música',example:'Tocando Agora — vazio quando nada toca'},
+ {key:'nowplaying.artista',label:'Artista da música',group:'Música',example:'Cactus'},
+ {key:'nowplaying.album',label:'Álbum da música',group:'Música',example:'Ao Vivo'},
+ {key:'nowplaying.tempo',label:'Posição na música',group:'Música',example:'1:23'},
+ {key:'nowplaying.duracao',label:'Duração da música',group:'Música',example:'3:21'},
+ {key:'nowplaying.link',label:'Link da música',group:'Música',example:'https://open.spotify.com/track/...'},
 ];
 export const scopeNames:Record<string,string>={local:'Só nesta execução',global:'Salva no perfil',user:'Salva por pessoa',session:'Perfil, até fechar o app',sessionUser:'Pessoa, até fechar o app',data:'Dados do evento'};
 // `random:min,max` traz a faixa dentro do próprio código, por isso não é um nome de variável.
