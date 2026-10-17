@@ -39,14 +39,15 @@ Use barras / na URL. Para nomes de pasta com espaços, use %20. No OBS, utilize 
 
 ## Camadas do overlay: parâmetro mode
 
-O overlay servido pelo BotLive (`http://127.0.0.1:9876/overlay#token=…&profile=…`) pode mostrar as três camadas numa fonte só ou cada camada na sua própria Fonte de navegador. O parâmetro `mode`, acrescentado ao final do endereço, escolhe qual camada aquela fonte mostra:
+O overlay servido pelo BotLive (`http://127.0.0.1:9876/overlay#token=…&profile=…`) pode mostrar as camadas numa fonte só ou cada camada na sua própria Fonte de navegador. O parâmetro `mode`, acrescentado ao final do endereço, escolhe qual camada aquela fonte mostra:
 
 | mode | Camada | Tela que gera o endereço |
 |---|---|---|
 | `mode=goal` | Meta (LivePix) | Meta |
 | `mode=alerts` | Alertas da live | Alertas |
 | `mode=chat` | Coluna de chat | Chat no OBS |
-| (sem mode) | As três camadas juntas | Qualquer uma das telas |
+| `mode=spotify` | Música tocando | Spotify |
+| (sem mode) | Todas as camadas juntas | Qualquer uma das telas |
 
 Cada tela do grupo **Overlays do OBS** copia o endereço da sua camada já com o `mode` certo — basta colar numa Fonte de navegador própria e ajustar posição e tamanho sem mexer nas demais. O endereço é estável e não muda ao reabrir o BotLive. Quem já usa uma fonte única, sem o parâmetro, continua vendo tudo como antes.
 

@@ -341,3 +341,88 @@ test('selo ENSAIO acende em payload de ensaio, ignora o real e sai sozinho',asyn
  await emit({type:'alert',payload:{profileId:'p1',rehearsal:true,kind:'follow',vars:{name:'Ana',amount:1,months:1,tier:'TIER 1',message:''}}});
  await expect(ens).toHaveCSS('opacity','0.92');
 });
+
+test('camada de música no OBS: cartão, espera da pausa, parado e amostra do Estúdio',async({page})=>{
+ await page.addInitScript(()=>{
+  const w=window as unknown as {__made:FakeWS[];__sent:string[]};
+  w.__made=[];w.__sent=[];
+  const made=w.__made,sent=w.__sent;
+  class Fake implements FakeWS{
+   url:string;
+   onopen:((e:unknown)=>void)|null=null;
+   onmessage:((e:unknown)=>void)|null=null;
+   onclose:((e:unknown)=>void)|null=null;
+   onerror:((e:unknown)=>void)|null=null;
+   constructor(u:string){this.url=u;made.push(this);setTimeout(()=>this.onopen&&this.onopen({}),0)}
+   send(d:string){sent.push(d)}
+   close(){this.onclose&&this.onclose({})}
+  }
+  (window as unknown as {WebSocket:unknown}).WebSocket=Fake;
+ });
+ const emit=async(msg:{type:string;payload:Record<string,unknown>})=>{
+  await page.evaluate(m=>{
+   const f=(window as unknown as {__made:FakeWS[]}).__made[0];
+   f.onmessage&&f.onmessage({data:JSON.stringify(m)});
+  },msg);
+ };
+ const goto=async(url:string)=>{await page.goto(url);await page.reload()};
+ const card=page.locator('.bl-spy');
+ const config=(design:Record<string,unknown>,enabled=true)=>emit({type:'spotify.config',payload:{profileId:'p1',config:{enabled,design}}});
+
+ await goto(overlayUrl+'&mode=spotify');
+ await page.waitForFunction(()=>(window as unknown as {__sent:string[]}).__sent.length>0);
+
+ // Config chega no aperto de mão: pele, capa redonda e posição no canto.
+ await config({layout:'card',cover:'circle',position:'bottom-right'});
+ await expect(card).toHaveCount(1,'o cartão existe desde a config');
+ await expect(card).toBeHidden('padrão do parado é esconder');
+ await expect(card).toHaveAttribute('data-cover','circle');
+ await expect(page.locator('.bl-spy-slot')).toHaveAttribute('data-position','bottom-right');
+
+ // Faixa tocando: textos, capa e barra na hora.
+ await emit({type:'spotify.now',payload:{profileId:'p1',playing:true,id:'t1',name:'Tocando Agora',artist:'Cactus',album:'Ao Vivo',art:'https://i.scdn.co/capa.jpg',url:'',durationMs:200000,progressMs:40000,timestamp:Date.now()}});
+ await expect(card).toBeVisible();
+ await expect(page.locator('.bl-spy-title')).toHaveText('Tocando Agora');
+ await expect(page.locator('.bl-spy-artist')).toHaveText('Cactus');
+ await expect(page.locator('.bl-spy-album')).toHaveText('Ao Vivo');
+ await expect(page.locator('.bl-spy-art')).toHaveCSS('background-image',/scdn\.co/);
+ await page.waitForTimeout(600); // assenta a animação de entrada
+ await page.screenshot({path:'artifacts/overlay-spotify-camada.png'});
+
+ // Faixa de outro perfil não passa nesta fonte.
+ await emit({type:'spotify.now',payload:{profileId:'OUTRO',playing:true,id:'x',name:'Outra faixa',artist:'Alguém'}});
+ await expect(page.locator('.bl-spy-title')).toHaveText('Tocando Agora');
+
+ // Pausa com espera de 2 s: fica e some quando a espera vence.
+ await config({pauseDelay:2});
+ await emit({type:'spotify.now',payload:{profileId:'p1',playing:false,id:'t1',name:'Tocando Agora',artist:'Cactus',album:'Ao Vivo',art:'',url:'',durationMs:200000,progressMs:40000,timestamp:Date.now()}});
+ await expect(card).toBeVisible();
+ await page.waitForTimeout(2600);
+ await expect(card).toBeHidden('a espera venceu e o cartão sumiu');
+
+ // Módulo desligado esconde por decisão, mesmo com mensagem no parado.
+ await config({empty:'message',emptyText:'Nada por aqui'},false);
+ await expect(card).toBeHidden();
+
+ // Ligado, sem faixa e com mensagem: o texto ocupa o lugar da música.
+ await emit({type:'spotify.now',payload:{profileId:'p1',playing:false}});
+ await config({empty:'message',emptyText:'Nada por aqui',emptyArtist:'Espere a próxima faixa'});
+ await expect(card).toBeVisible();
+ await expect(card).toHaveAttribute('data-state','empty');
+ await expect(page.locator('.bl-spy-title')).toHaveText('Nada por aqui');
+ await expect(page.locator('.bl-spy-artist')).toHaveText('Espere a próxima faixa');
+
+ // Amostra do Estúdio: desenha com o selo ENSAIO e volta ao estado real sozinha.
+ await emit({type:'spotify.now',payload:{profileId:'p1',rehearsal:true,playing:true,id:'sample',name:'Faixa de teste',artist:'Spotify — ensaio do overlay',album:'Estúdio do BotLive',art:'',url:'',durationMs:210000,progressMs:45000,timestamp:Date.now()}});
+ await expect(page.locator('.bl-spy-title')).toHaveText('Faixa de teste');
+ await expect(page.locator('#bl-ens')).toBeVisible();
+ await page.waitForTimeout(6600);
+ await expect(page.locator('.bl-spy-title')).toHaveText('Nada por aqui','a amostra volta ao estado real');
+
+ // Filtro de camada: na fonte do chat, a música não desenha nada.
+ await goto(overlayUrl+'&mode=chat');
+ await page.waitForFunction(()=>(window as unknown as {__sent:string[]}).__sent.length>0);
+ await config({layout:'card'});
+ await emit({type:'spotify.now',payload:{profileId:'p1',playing:true,id:'t1',name:'Não pode aparecer',artist:'Cactus'}});
+ await expect(page.locator('.bl-spy')).toHaveCount(0,'camada de chat não desenha música');
+});

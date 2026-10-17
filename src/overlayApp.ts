@@ -4,8 +4,9 @@
  * alertas do perfil e redesenha sem recarregar a fonte do OBS.
  *
  * O parâmetro `mode=` na URL deixa cada Fonte de navegador mostrar só a sua
- * camada: `goal` (meta), `alerts` (alertas) ou `chat` (chat). Sem o parâmetro,
- * a fonte continua mostrando tudo (compatibilidade com fontes já criadas).
+ * camada: `goal` (meta), `alerts` (alertas), `chat` (chat) ou `spotify`
+ * (música tocando). Sem o parâmetro, a fonte continua mostrando tudo
+ * (compatibilidade com fontes já criadas).
  * A fonte do overlay é só visual: todo som sai pela linha de áudio do app.
  *
  * Compilado por scripts/build-overlay.cjs para src-tauri/overlay.html.
@@ -17,6 +18,7 @@ import {
 import {isAlertKind,normalizeAlerts,queueAlert,type AlertVars,type AlertsConfig} from './alerts';
 import {chatVisible,clearChat,deleteChat,deleteUserChat,isChatEventKind,normalizeChat,pushChat,pushChatEvent,type ChatConfig,type ChatMsg} from './chatOverlay';
 import {explode} from './emoteBurst';
+import {normalizeNow,normalizeSpotify,spotifyPlayer,type NowTrack,type SpotifyPlayer} from './spotifyOverlay';
 import {applyCode} from './codeMode';
 
 const params=new URLSearchParams(location.hash.slice(1));
@@ -37,13 +39,38 @@ let alertsCfg:AlertsConfig=normalizeAlerts(null);
 let alertHost:HTMLElement|null=null;
 let chatCfg:ChatConfig=normalizeChat(null);
 let chatHost:HTMLElement|null=null;
+let spCfg=normalizeSpotify(null);
+let spTrack:NowTrack|null=null;
+let spPlayer:SpotifyPlayer|null=null;
 
 /** Qual camada o tipo de mensagem pertence; vazio = mensagem de controle. */
 function layerOf(type:string):string{
  if(type==='goal'||type==='design')return 'goal';
  if(type==='alerts'||type==='alert')return 'alerts';
  if(type.startsWith('chat'))return 'chat';
+ if(type==='spotify.now'||type==='spotify.config')return 'spotify';
  return '';
+}
+
+/** O cartão da música: criado sob demanda, no mesmo desenho da prévia do Estúdio. */
+function spotifyBox():SpotifyPlayer{
+ if(!spPlayer){
+  const host=document.createElement('div');
+  host.className='bl-spy-host bl-spy-host--screen';
+  host.setAttribute('aria-hidden','true');
+  document.body.appendChild(host);
+  spPlayer=spotifyPlayer(host);
+ }
+ return spPlayer;
+}
+
+/** Redesenha a música; módulo desligado esconde por decisão, não por acaso. */
+function repaintSpotify(){
+ // Fonte de camada única ('') também mostra a música, junto com o resto.
+ if(mode&&mode!=='spotify')return;
+ const p=spotifyBox();
+ if(!spCfg.enabled){p.clear();return;}
+ p.update(spCfg.design,spTrack);
 }
 
 /** Coluna do chat: criada na primeira mensagem e sempre no mesmo lugar. */
@@ -175,6 +202,20 @@ function handle(msg:Message){
   chatCfg=normalizeChat(payload?.config);
   if(!chatCfg.enabled&&chatHost)clearChat(chatHost);
   applyCode(document.body,chatCfg.code,'chat');
+  return;
+ }
+ if(msg.type==='spotify.config'){
+  if(profile&&String(payload?.profileId||'')!==profile)return;
+  spCfg=normalizeSpotify(payload?.config);
+  repaintSpotify();
+  return;
+ }
+ if(msg.type==='spotify.now'){
+  if(profile&&String(payload?.profileId||'')!==profile)return;
+  const t=normalizeNow(payload);
+  // A amostra do Estúdio desenha com o selo ENSAIO e volta ao estado real sozinha.
+  if(payload?.rehearsal===true){if(t)spotifyBox().sample(t,6000);return;}
+  spTrack=t;repaintSpotify();
   return;
  }
  if(msg.type==='chat.event'){

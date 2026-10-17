@@ -88,3 +88,16 @@ button.lp-tpl.selected{border-color:var(--accent)}
 .cd-panel{display:flex;flex-direction:column;gap:8px;min-width:0}
 .cd-code{width:100%;min-height:230px;resize:vertical;font-family:Consolas,'Courier New',monospace;font-size:12px;line-height:1.55;tab-size:2}
 .cd-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+
+/* Estúdio da música: chip de estado da prévia, peles do cartão e amostras de cor. */
+.lp-chip{font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:4px 10px;border-radius:999px;background:var(--bg);border:1px solid var(--border);color:var(--muted);white-space:nowrap}
+.lp-chip.live{color:#1ed760;border-color:#1ed76066}
+.lp-chip.ensaio{color:#f5b901;border-color:#f5b90166}
+
+.sp-skins{display:flex;gap:8px;flex-wrap:wrap}
+.sp-skin{display:flex;flex-direction:column;align-items:center;gap:5px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r-md);background:transparent;color:var(--muted);cursor:pointer;font-size:11px}
+.sp-skin.selected{border-color:var(--accent);color:var(--text)}
+
+.sp-tints{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.sp-tint{width:26px;height:26px;border-radius:50%;border:2px solid transparent;cursor:pointer;padding:0}
+.sp-tint.selected{border-color:var(--text)}

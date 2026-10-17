@@ -24,7 +24,7 @@ async function mock(page:Page){
      st.ops.push(op);
      if(op==='snapshot')return {profiles:[arg.profile],logs:[],statuses:{},theme:'dark',apiPort:0,dataDir:'teste'};
      if(op==='flows'||op==='logs'||op==='command.counters')return [];
-     if(op==='spotify.get')return {config:st.getConfig,connected:st.connected,now:null};
+     if(op==='spotify.get')return {config:st.getConfig,connected:st.connected,now:null,overlay:{token:'tk1',port:9876,url:'http://127.0.0.1:9876/overlay#token=tk1&profile=p1'}};
      if(op==='module.config'){st.writes.push({op,args});return null}
      if(op==='spotify.connect'){if(st.failConnect)throw Error(st.failConnect);st.connected=true;return {authorized:true,user:'Cactus',product:'premium'}};
      if(op==='spotify.disconnect'){st.connected=false;st.track=null;return null};
@@ -62,7 +62,7 @@ test('conexão, leitura da música e variáveis — autosave inclui o design com
  // escrever o Client ID salva sozinho, com o design completo (validação do backend)
  await id.fill('app-id-123');
  await expect.poll(()=>saves(page),{timeout:3000}).toBe(1);
- await expect(page.getByText('Salvo',{exact:true})).toBeVisible();
+ await expect(page.getByText('Salvo',{exact:true}).first()).toBeVisible();
  const saved=(await st(page)).writes.at(-1)!.args.value as {clientId:string;enabled:boolean;design:{layout:string;barColor:string}};
  expect(saved.clientId).toBe('app-id-123');
  expect(saved.design.layout,'o design completo vai junto no salvamento').toBe('card');
@@ -124,4 +124,66 @@ test('Client ID salvo volta ao abrir a tela e erro de autorização aparece sem 
  await page.getByRole('button',{name:'Autorizar conta',exact:true}).click();
  await expect(page.getByText('O Spotify recusou a autorização',{exact:false})).toBeVisible();
  await expect(page.getByRole('heading',{name:'Conexão com o Spotify',exact:true})).toBeVisible();
+});
+
+test('Estúdio da música: prévia igual ao OBS, peles, cores e endereço mode=spotify',async({page})=>{
+ const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.context().grantPermissions(['clipboard-write','clipboard-read']);
+ await mock(page);
+ await page.getByRole('button',{name:'Spotify',exact:true}).click();
+ await expect(page.getByRole('heading',{name:'Estúdio da música',exact:true})).toBeVisible();
+ await expect(page.getByRole('heading',{name:'No OBS',exact:true})).toBeVisible();
+
+ // A prévia desenha a amostra com o mesmo módulo que a fonte do OBS usa.
+ const card=page.locator('.lp-preview .bl-spy');
+ await expect(card).toBeVisible();
+ await expect(page.locator('.lp-preview .bl-spy-title')).toHaveText('Tocando Agora');
+ await expect(page.locator('.lp-chip')).toHaveText('Amostra');
+
+ // Pele troca o desenho na hora e o salvamento leva o design novo.
+ await page.getByRole('button',{name:'Empilhado',exact:true}).click();
+ await expect(card).toHaveAttribute('data-layout','stacked');
+ await expect.poll(()=>saves(page),{timeout:3000}).toBe(1);
+ const saved=(await st(page)).writes.at(-1)!.args.value as {design:{layout:string;position:string;cover:string;exitTransition:string;pauseDelay:number;hideOnPause:boolean}};
+ expect(saved.design.layout).toBe('stacked');
+ expect(saved.design.position,'as peças novas da Fase B vão junto no salvamento').toBe('bottom-left');
+ expect(saved.design.cover).toBe('square');
+ expect(saved.design.exitTransition).toBe('fade');
+ expect(saved.design.pauseDelay).toBe(0);
+ expect(saved.design.hideOnPause).toBe(true);
+
+ // Posição, formato da capa, tema e destaque — cada controle mexe no cartão.
+ await page.getByRole('button',{name:'Baixo à direita',exact:true}).click();
+ await expect(page.locator('.lp-preview .bl-spy-slot')).toHaveAttribute('data-position','bottom-right');
+ await page.getByRole('button',{name:'Redonda',exact:true}).click();
+ await expect(card).toHaveAttribute('data-cover','circle');
+ await page.getByRole('button',{name:'Claro',exact:true}).click();
+ await expect.poll(()=>card.evaluate(el=>el.style.getPropertyValue('--sp-bg'))).toBe('#f4f6fa');
+ await page.getByRole('button',{name:'Destaque #38b6ff',exact:true}).click();
+ await expect.poll(()=>card.evaluate(el=>el.style.getPropertyValue('--sp-bar'))).toBe('#38b6ff');
+
+ // Sem música: o estado parado que o OBS mostraria, na própria prévia.
+ await page.getByRole('button',{name:'Sem música',exact:true}).click();
+ await expect(card).toHaveAttribute('data-state','empty');
+ await expect(page.locator('.lp-preview .bl-spy-title')).toHaveText('Nada tocando');
+ await expect(page.locator('.lp-chip')).toHaveText('Parado');
+ await page.getByRole('button',{name:'Com música',exact:true}).click();
+ await expect(card).toHaveAttribute('data-state','music');
+
+ // No OBS: endereço da camada própria e cópia com um clique.
+ await expect(page.locator('.lp-url code')).toHaveText(/mode=spotify$/);
+ await page.getByRole('button',{name:/Copiar endereço/}).click();
+ await expect(page.getByText('Endereço da camada de música copiado.')).toBeVisible();
+
+ // Padrão Estúdio: prévia grudada a 1100px, sem rolagem horizontal.
+ await page.setViewportSize({width:1100,height:900});
+ await page.locator('.lp-studio').scrollIntoViewIfNeeded();
+ await expect(page.locator('.lp-preview')).toHaveCSS('position','sticky');
+ const overflow=await page.evaluate(()=>document.documentElement.scrollWidth>document.documentElement.clientWidth);
+ expect(overflow,'sem rolagem horizontal a 1100px').toBe(false);
+ await page.screenshot({path:'artifacts/spotify-estudio-1100.png'});
+ await page.setViewportSize({width:1680,height:1000});
+ await page.waitForTimeout(250);
+ await page.screenshot({path:'artifacts/spotify-estudio-largo.png'});
+ expect(errors).toEqual([]);
 });

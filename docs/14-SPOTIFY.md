@@ -1,6 +1,6 @@
 # Música do Spotify
 
-A tela **Spotify** lê a música que está tocando na sua conta e entrega o título, o artista, o álbum, a capa e a posição para o BotLive — hoje nas **automações** (variáveis `{{nowplaying.*}}`) e, na sequência do recurso, no **overlay do OBS**. É o caminho que ferramentas como o Snip fazem com arquivos de texto, mas dentro do BotLive: sem programa extra, sem arquivo solto e com a leitura acontecendo enquanto o app está aberto.
+A tela **Spotify** lê a música que está tocando na sua conta e entrega o título, o artista, o álbum, a capa e a posição para o BotLive: no **overlay do OBS** (um cartão com capa, barra de progresso e visual que você ajusta no Estúdio) e nas **automações** (variáveis `{{nowplaying.*}}`). É o caminho que ferramentas como o Snip fazem com arquivos de texto, mas dentro do BotLive: sem programa extra, sem arquivo solto e com a leitura acontecendo enquanto o app está aberto.
 
 O BotLive **só lê**: nada é tocado, pausado ou enviado ao Spotify. Apenas os metadados da música aparecem — o áudio continua sendo do seu player, como sempre.
 
@@ -24,6 +24,22 @@ O Spotify entrega a música apenas para aplicativos autorizados, e desde 2025 ca
 5. Clique em **Testar conexão** para ver a faixa atual aparecer na linha *Agora tocando* — sem esperar a próxima leitura.
 
 Para trocar de conta: **Desconectar** e autorize de novo. Apagar o perfil também apaga a autorização do cofre do sistema.
+
+## A música no overlay do OBS
+
+A música fica numa **camada de overlay própria**, com endereço que carrega o parâmetro `mode=spotify`. Crie uma **Fonte de navegador só para a música** (Largura 1920, Altura 1080, sem atualizar ao ativar a cena) e o cartão aparece no canto que você escolher — sem mexer na meta, nos alertas nem no chat. O endereço sai no cartão **No OBS** da tela, com um clique para copiar.
+
+O **Estúdio da música** (à direita da tela) desenha na prévia **exatamente o mesmo cartão** que o OBS recebe, dentro do quadro de 1920×1080 em miniatura — o que você vê ali é o que a live mostra, e as alterações chegam ao OBS na hora, sem recarregar a fonte:
+
+- **Aparência**: quatro peles do cartão (card com capa, empilhado, compacto e só texto), posição (quatro cantos ou centro), largura, preenchimento e cantos.
+- **Capa**: mostrar ou não, formato quadrado ou redondo, brilho na borda e a própria capa desfocada como fundo do cartão.
+- **Campos**: linhas de álbum, barra de progresso e tempos, cada uma liga e desliga.
+- **Cores**: temas Escuro e Claro de um clique, amostras rápidas de cor de destaque e os seletrores de cada cor.
+- **Tipografia e barra**: 16 fontes, tamanhos de título e artista, altura e cantos da barra.
+- **Movimento**: como o cartão entra (aparecer ou subir), como sai e a duração da animação.
+- **Quando a música para**: esconder o cartão ou mostrar a sua mensagem (título e linha extra), e a espera antes de sumir ao pausar (0 a 30 segundos; 0 some na hora).
+
+O botão **Testar no overlay** dispara uma amostra pelo mesmo caminho da música real: o OBS desenha o cartão com o selo **Ensaio** e a amostra volta ao estado real sozinha — é assim que você confere a posição e o visual antes da live. Com a música desligada ou nada tocando, o cartão some (ou mostra a mensagem, se você escolher).
 
 ## Usar a música nas automações
 

@@ -140,13 +140,16 @@ pub fn config(rt: &Runtime, p: &str) -> Value {
 /// Padrões do overlay — mesma forma que o Estúdio e a fonte do OBS desenham.
 fn design_defaults() -> Value {
     json!({
-        "layout": "card", "showArt": true, "showAlbum": true, "showProgress": true, "showTimes": true,
+        "layout": "card", "cover": "square", "coverGlow": false, "coverBlur": false,
+        "showArt": true, "showAlbum": true, "showProgress": true, "showTimes": true,
         "bg": "#0f1319", "titleColor": "#ffffff", "artistColor": "#b9c0cc", "albumColor": "#8a92a3",
         "barBg": "#2a3140", "barColor": "#1ed760", "barHeight": 6, "barRadius": 3,
         "font": "Segoe UI", "titleSize": 16, "artistSize": 13, "artSize": 88, "artRadius": 10,
         "width": 460, "padding": 14, "radius": 14,
-        "empty": "hide", "emptyText": "Nada tocando",
-        "transition": "fade", "transitionMs": 400
+        "empty": "hide", "emptyText": "Nada tocando", "emptyArtist": "",
+        "hideOnPause": true, "pauseDelay": 0,
+        "position": "bottom-left",
+        "transition": "fade", "exitTransition": "fade", "transitionMs": 400
     })
 }
 
@@ -213,20 +216,31 @@ pub fn valid_config(v: &Value) -> bool {
         return false;
     }
     let d = &v["design"];
-    const BOOLS: &[&str] = &["showArt", "showAlbum", "showProgress", "showTimes"];
+    const BOOLS: &[&str] = &["showArt", "showAlbum", "showProgress", "showTimes", "coverGlow", "coverBlur", "hideOnPause"];
     if !BOOLS.iter().all(|k| d[k].is_boolean()) {
         return false;
     }
-    if !matches!(d["layout"].as_str(), Some("card") | Some("compact") | Some("stacked")) {
+    if !matches!(d["layout"].as_str(), Some("card") | Some("compact") | Some("stacked") | Some("minimal")) {
+        return false;
+    }
+    if !matches!(d["cover"].as_str(), Some("square") | Some("circle")) {
         return false;
     }
     if !matches!(d["empty"].as_str(), Some("hide") | Some("message")) {
         return false;
     }
-    if !matches!(d["transition"].as_str(), Some("fade") | Some("slide") | Some("none")) {
+    if !matches!(d["transition"].as_str(), Some("fade") | Some("slide") | Some("none"))
+        || !matches!(d["exitTransition"].as_str(), Some("fade") | Some("slide") | Some("none"))
+    {
         return false;
     }
-    if !font_ok(&d["font"]) || !text_ok(&d["emptyText"], 64) {
+    if !matches!(
+        d["position"].as_str(),
+        Some("bottom-left") | Some("bottom-right") | Some("top-left") | Some("top-right") | Some("center")
+    ) {
+        return false;
+    }
+    if !font_ok(&d["font"]) || !text_ok(&d["emptyText"], 64) || !text_ok(&d["emptyArtist"], 64) {
         return false;
     }
     for k in ["bg", "titleColor", "artistColor", "albumColor", "barBg", "barColor"] {
@@ -244,6 +258,7 @@ pub fn valid_config(v: &Value) -> bool {
         && num_in(&d["artSize"], 48.0, 220.0)
         && num_in(&d["artRadius"], 0.0, 60.0)
         && num_in(&d["transitionMs"], 0.0, 2000.0)
+        && num_in(&d["pauseDelay"], 0.0, 30.0)
 }
 
 fn api_base() -> String {
@@ -419,12 +434,47 @@ pub fn fmt_time(ms: u64) -> String {
     format!("{}:{:02}", ms / 60000, (ms % 60000) / 1000)
 }
 
-fn payload(rt: &Runtime, p: &str, t: Option<&Track>) {
-    let body = match t {
+/// O corpo do evento spotify.now — mesma forma no broadcast, no snapshot da
+/// fonte do OBS e no teste do Estúdio.
+fn now_json(p: &str, t: Option<&Track>) -> Value {
+    match t {
         Some(t) => json!({"profileId": p, "playing": t.playing, "id": t.id, "name": t.name, "artist": t.artist, "album": t.album, "art": t.art, "url": t.url, "durationMs": t.duration_ms, "progressMs": t.progress_ms, "timestamp": t.timestamp}),
         None => json!({"profileId": p, "playing": false}),
-    };
-    rt.emit("spotify.now", body);
+    }
+}
+
+fn payload(rt: &Runtime, p: &str, t: Option<&Track>) {
+    rt.emit("spotify.now", now_json(p, t));
+}
+
+/// Mensagem inicial da fonte do OBS: a configuração do perfil (forma de chat.config).
+pub fn message(rt: &Runtime, pid: &str) -> Value {
+    json!({"type": "spotify.config", "payload": {"profileId": pid, "config": merged(rt, pid)}})
+}
+
+/// Segunda mensagem do aperto de mão: a faixa atual, para o overlay mostrar a
+/// música na hora em que a fonte do OBS recarrega — os polls só transmitem mudanças.
+pub fn now_message(rt: &Runtime, pid: &str) -> Value {
+    json!({"type": "spotify.now", "payload": now_json(pid, rt.spotify.now(pid).as_ref())})
+}
+
+/// Amostra do Estúdio: entra pelo mesmo caminho do evento real, com a marca
+/// `rehearsal` que o overlay traduz no selo ENSAIO (mesmo costume dos alertas).
+pub fn test_payload(p: &str) -> Value {
+    let mut v = now_json(p, None);
+    let now = chrono::Utc::now().timestamp_millis().max(0) as u64;
+    v["playing"] = Value::Bool(true);
+    v["id"] = json!("sample");
+    v["name"] = json!("Faixa de teste");
+    v["artist"] = json!("Spotify — ensaio do overlay");
+    v["album"] = json!("Estúdio do BotLive");
+    v["art"] = json!("");
+    v["url"] = json!("");
+    v["durationMs"] = json!(210000);
+    v["progressMs"] = json!(45000);
+    v["timestamp"] = json!(now);
+    v["rehearsal"] = Value::Bool(true);
+    v
 }
 
 /// Uma leitura da música atual: renova o token se preciso, atualiza o estado do
@@ -525,6 +575,49 @@ mod tests {
     }
 
     #[test]
+    fn validacao_conhece_as_novas_alavancas_do_design() {
+        let mut v = defaults();
+        v["design"]["cover"] = json!("vinil");
+        assert!(!valid_config(&v), "formato de capa fora do conhecido");
+        let mut v = defaults();
+        v["design"]["position"] = json!("meio-baixo");
+        assert!(!valid_config(&v), "posição fora do conhecido");
+        let mut v = defaults();
+        v["design"]["exitTransition"] = json!("girar");
+        assert!(!valid_config(&v), "saída fora do conhecido");
+        let mut v = defaults();
+        v["design"]["pauseDelay"] = json!(45);
+        assert!(!valid_config(&v), "espera da pausa passa de 30 s");
+        let mut v = defaults();
+        v["design"]["hideOnPause"] = json!("sim");
+        assert!(!valid_config(&v), "esconder na pausa não é booleano");
+        let mut v = defaults();
+        v["design"]["coverGlow"] = json!("sim");
+        assert!(!valid_config(&v), "brilho da capa não é booleano");
+        let mut v = defaults();
+        v["design"]["emptyArtist"] = json!("x".repeat(65));
+        assert!(!valid_config(&v), "linha do parado longa demais");
+        let mut v = defaults();
+        v["design"]["layout"] = json!("minimal");
+        v["design"]["position"] = json!("center");
+        v["design"]["pauseDelay"] = json!(30);
+        assert!(valid_config(&v), "minimal, centro e 30 s de espera são válidos");
+    }
+
+    #[test]
+    fn chaves_do_design_sao_as_que_o_estudio_desenha() {
+        let mut keys: Vec<_> = design_defaults().as_object().unwrap().keys().cloned().collect();
+        keys.sort();
+        assert_eq!(keys, vec![
+            "albumColor", "artRadius", "artSize", "artistColor", "artistSize", "barBg", "barColor",
+            "barHeight", "barRadius", "bg", "cover", "coverBlur", "coverGlow", "empty", "emptyArtist",
+            "emptyText", "exitTransition", "font", "hideOnPause", "layout", "padding", "pauseDelay",
+            "position", "radius", "showAlbum", "showArt", "showProgress", "showTimes", "titleColor",
+            "titleSize", "transition", "transitionMs", "width",
+        ]);
+    }
+
+    #[test]
     fn parse_extrai_a_faixa_completa() {
         let v: Value = serde_json::from_str(r#"{
             "is_playing": true, "progress_ms": 83250, "timestamp": 1760000000000,
@@ -583,5 +676,40 @@ mod tests {
         assert!(s.throttled("p"), "espera ativa bloqueia a consulta");
         s.throttle("p", 0);
         assert!(!s.throttled("p"), "espera vencida libera a consulta");
+    }
+
+    #[tokio::test]
+    async fn snapshot_do_obs_traz_config_e_faixa_atual() {
+        let dir = tempfile::tempdir().unwrap();
+        let rt = crate::engine::Runtime::new(dir.path().join("app")).unwrap();
+        let p = "perfil-1";
+        let cfg = message(&rt, p);
+        assert_eq!(cfg["type"], "spotify.config");
+        assert_eq!(cfg["payload"]["profileId"], p);
+        assert_eq!(cfg["payload"]["config"]["enabled"], false, "sem registro vem o padrão");
+        assert_eq!(cfg["payload"]["config"]["design"]["position"], "bottom-left");
+        // Com música no estado, o aperto de mão já entrega a faixa ao OBS recarregado.
+        let t = Track {
+            id: "t1".into(), name: "Tocando Agora".into(), artist: "Cactus".into(),
+            playing: true, duration_ms: 200000, progress_ms: 10000, timestamp: 1234, ..Track::default()
+        };
+        assert!(rt.spotify.set(p, Some(t)));
+        let now = now_message(&rt, p);
+        assert_eq!(now["type"], "spotify.now");
+        assert_eq!(now["payload"]["profileId"], p);
+        assert_eq!(now["payload"]["name"], "Tocando Agora");
+        assert_eq!(now["payload"]["durationMs"], 200000);
+        assert_eq!(now["payload"]["playing"], true);
+    }
+
+    #[test]
+    fn teste_do_estudio_marca_rehearsal_para_o_selo() {
+        let v = test_payload("p1");
+        assert_eq!(v["profileId"], "p1");
+        assert_eq!(v["rehearsal"], true, "a marca liga o selo ENSAIO no overlay");
+        assert_eq!(v["playing"], true, "o teste desenha tocando, não parado");
+        assert_eq!(v["name"], "Faixa de teste");
+        assert_eq!(v["durationMs"], 210000);
+        assert!(v["timestamp"].as_u64().is_some_and(|n| n > 0));
     }
 }

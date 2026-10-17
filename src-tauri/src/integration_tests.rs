@@ -315,6 +315,25 @@ async fn porta_local_atende_o_overlay_em_http_e_chave_do_overlay_e_somente_leitu
  let second=ws.next().await.unwrap().unwrap().into_text().unwrap();
  assert!(second.contains("goal"),"depois do design vem o estado da meta: {second}");
  assert!(second.contains("hidden"),"integração ainda desligada: a meta chega oculta: {second}");
+ let third=ws.next().await.unwrap().unwrap().into_text().unwrap();
+ assert!(third.contains("alerts"),"depois da meta vêm os alertas: {third}");
+ let fourth=ws.next().await.unwrap().unwrap().into_text().unwrap();
+ assert!(fourth.contains("chat.config"),"{fourth}");
+ let fifth=ws.next().await.unwrap().unwrap().into_text().unwrap();
+ assert!(fifth.contains("spotify.config"),"a config da música chega no aperto de mão: {fifth}");
+ let sixth=ws.next().await.unwrap().unwrap().into_text().unwrap();
+ assert!(sixth.contains("spotify.now"),"a faixa atual chega junto, antes do primeiro poll: {sixth}");
+ // A camada de música só recebe faixa do próprio perfil.
+ let other=profile("Outro");rt.db.save_profile(&other).unwrap();
+ rt.emit("spotify.now",json!({"profileId":other.id,"playing":true}));
+ let alien=tokio::time::timeout(std::time::Duration::from_millis(400),ws.next()).await;
+ if let Ok(Some(Ok(msg)))=alien{
+  let text=msg.to_text().unwrap_or_default();
+  assert!(!text.contains("spotify.now"),"música de outro perfil não passa: {text}");
+ }
+ rt.emit("spotify.now",crate::spotify::test_payload(&p.id));
+ let mine=tokio::time::timeout(std::time::Duration::from_millis(2000),ws.next()).await.unwrap().unwrap().unwrap().into_text().unwrap();
+ assert!(mine.contains("spotify.now")&&mine.contains("rehearsal"),"a música deste perfil passa com a marca do ensaio: {mine}");
  ws.send(Message::Text(json!({"type":"event","event":event(&p,"invasao",true)}).to_string().into())).await.unwrap();
  let answer=tokio::time::timeout(std::time::Duration::from_millis(400),ws.next()).await;
  if let Ok(Some(Ok(msg)))=answer{
