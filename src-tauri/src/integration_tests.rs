@@ -1611,3 +1611,46 @@ async fn spotify_autoriza_lê_a_faixa_e_transmite_para_o_overlay(){
  assert_eq!(out["connected"],false,"painel vê a conta desconectada");
  lento_token.store(false,std::sync::atomic::Ordering::SeqCst);
 }
+
+/// Regressão do bloqueio da auditoria 0.11.0: as URLs de mídia montavam o
+/// token pela representação JSON (com aspas) e nenhuma rota autenticada
+/// atendia — `/asset`, `/tts` e o endereço da fonte do OBS. Aqui as URLs
+/// geradas são usadas de verdade: servidor real, resposta 200 e conteúdo WAV,
+/// não apenas prefixo/sufixo conferido na string.
+#[tokio::test]
+async fn urls_de_som_e_tts_funcionam_nas_rotas_autenticadas_de_verdade(){
+ let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().join("app")).unwrap();let p=profile("Rotas");rt.db.save_profile(&p).unwrap();
+ // API local de verdade, numa porta livre desta máquina.
+ let port=tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap().local_addr().unwrap().port();
+ rt.db.set("apiPort",&json!(port)).unwrap();
+ tokio::spawn(local_api::serve(rt.clone()));
+ let mut up=false;
+ for _ in 0..100{if tokio::net::TcpStream::connect(("127.0.0.1",port)).await.is_ok(){up=true;break}tokio::time::sleep(std::time::Duration::from_millis(50)).await}
+ assert!(up,"a API local sobe na porta do teste");
+ // WAV canônico de 44 bytes, válido para importação e para as rotas.
+ let mut wav=b"RIFF".to_vec();wav.extend_from_slice(&36u32.to_le_bytes());wav.extend_from_slice(b"WAVEfmt ");wav.extend_from_slice(&16u32.to_le_bytes());
+ wav.extend_from_slice(&[1u8,0,2,0,0x44,0xac,0,0,0x10,0xb1,2,0,4,0,0x10,0]);wav.extend_from_slice(b"data");wav.extend_from_slice(&0u32.to_le_bytes());
+ let file=dir.path().join("jingle.wav");std::fs::write(&file,&wav).unwrap();
+ let id=chat_extras::operation(&rt,&p.id,"chatExtras.import",&json!({"path":file,"kind":"sound"})).unwrap()["id"].as_str().unwrap().to_string();
+ let url=audio::asset_src(&rt,&p.id,&id).unwrap();
+ assert!(!url.contains('"'),"o token nunca vai com aspas: {url}");
+ let resp=rt.http.get(&url).send().await.unwrap();
+ assert_eq!(resp.status(),200,"/asset atende a URL gerada");
+ let body=resp.bytes().await.unwrap();
+ assert!(body.starts_with(b"RIFF")&&body.get(8..12)==Some(b"WAVE"),"o corpo é o WAV de verdade, não um prefixo de URL");
+ // TTS servido do cache do perfil, com o id no formato estrito.
+ let tid=tts::id_for("voz",0,"oi");
+ std::fs::create_dir_all(tts::dir_of(&rt,&p.id)).unwrap();
+ std::fs::write(tts::dir_of(&rt,&p.id).join(&tid),&wav).unwrap();
+ let turl=tts::url(&rt,&p.id,&tid).unwrap();
+ assert!(!turl.contains('"'),"o token nunca vai com aspas: {turl}");
+ let resp=rt.http.get(&turl).send().await.unwrap();
+ assert_eq!(resp.status(),200,"/tts atende a URL gerada");
+ assert!(resp.bytes().await.unwrap().starts_with(b"RIFF"),"o corpo é o WAV falado");
+ // O endereço da fonte do OBS autentica de verdade (sem aspas no fragmento).
+ let (oport,otoken)=audio::overlay_addr(&rt,&p.id).unwrap();
+ let frag=format!("http://127.0.0.1:{oport}/audio#token={otoken}&profile={}",p.id);
+ assert!(!frag.contains('"'));
+ let tok=frag.split("#token=").nth(1).unwrap().split('&').next().unwrap();
+ assert_eq!(livepix::overlay_profile(&rt,tok).as_deref(),Some(p.id.as_str()),"o token do endereço abre a fonte no perfil certo");
+}

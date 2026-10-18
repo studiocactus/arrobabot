@@ -103,11 +103,11 @@ Fontes do Google Fonts (como Orbitron, Bebas Neue e Press Start 2P) exigem inter
 
 O módulo soma apenas pagamentos da LivePix em BRL; bits e subs da Twitch não entram nesta meta.
 
-## Voicemod — removido
+## Voicemod — a sua voz na live
 
-O Voicemod saiu do BotLive. A partir da versão 0.1.95, a tela e a conexão com a Control API local foram retiradas do programa: nada no BotLive conversa mais com o Voicemod. A chave que você tenha salva no cofre do sistema permanece guardada como dado seu, sem uso — apague-a no cofre do sistema quando quiser.
+O Voicemod é o caminho principal de troca de voz desde a 0.12.0, na tela **Voicemod**: o BotLive recebe a recompensa ou o comando e pede ao Voicemod para trocar sua voz; o OBS recebe sua voz pelo microfone virtual do Voicemod. A conexão usa a [Control API](https://control-api.voicemod.net/) local por WebSocket, com a chave guardada no cofre — sem nuvem e sem sair desta máquina. Os sons do bot **não passam pelo Voicemod** (eles têm a fonte “Áudio do BotLive”). A integração existiu na 0.1.93, saiu em 0.1.95 e voltou na 0.9.0; os detalhes de uso estão em [Áudio no OBS](13-AUDIO.md).
 
-Para trocar a sua voz na live, use a tela **Voz da live**: o BotLive captura o seu microfone, aplica o efeito escolhido (fina, grossa, robô, engraçada ou eco) e envia a voz para o [VB-Cable](https://vb-audio.com/Cable/) (driver leve, instalado uma vez), que o OBS usa como microfone. Sem outro programa aberto, e também muda a voz por resgate na Twitch.
+Quem ainda usa os efeitos internos antigos (fina, grossa, robô, engraçada, eco) continua com tudo como estava: o BotLive captura o microfone, aplica o efeito e envia a voz para o [VB-Cable](https://vb-audio.com/Cable/), que o OBS usa como microfone. A migração para vozes do Voicemod é manual — cada efeito antigo é ligado a uma voz por você, em **Voicemod › Avançado › Efeitos internos antigos**.
 
 ## Estados e reconexão
 

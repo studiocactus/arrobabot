@@ -259,6 +259,11 @@ pub async fn process(rt:Arc<Runtime>,e:Event){
  if e.kind=="redemption"&&!e.simulated{
   let _=crate::voice_redemptions::on_redemption(&rt,&p,&e).await;
  }
+ // Comando do chat que troca a voz usa o mesmo serviço (fila, duração,
+ // restauração) — nunca é tratado como resgate de pontos.
+ if e.kind=="chat"&&!e.simulated{
+  crate::voice_redemptions::on_chat(&rt,&p,&e).await;
+ }
  let matched:Vec<Flow>=rt.db.flows(&p.id).unwrap_or_default().into_iter().filter(|f|f.enabled&&(matches(&f.trigger,&e)||(e.kind=="timer"&&f.trigger.kind=="timer"&&e.data["timerId"]==f.id))).collect();
  let mut ready:Vec<Flow>=Vec::new();
  for f in matched {
@@ -452,28 +457,39 @@ async fn action(rt:&Arc<Runtime>,p:&Profile,e:&Event,a:&Action,variables:&mut cr
  rt.send_with(p,e,&reply,Some(f)).await
  },
  "voiceFx"=>{
- let effect=if a.target.trim().is_empty(){a.text.clone()}else{a.target.clone()};
- let effect=effect.trim().to_lowercase();
- // Caminho do Voicemod: o efeito antigo só vira voz do Voicemod se o dono
- // escolheu na tela de Resgates — nunca por suposição de nome.
- if rt.voice_fx.mode(rt,&p.id)=="voicemod"{
-  let mapped=crate::voice_redemptions::legacy_voice(rt,&p.id,&effect).ok_or(format!("Modo Voicemod: o efeito \"{effect}\" ainda não foi mapeado para uma voz do Voicemod. Abra Voz da live › Resgates de voz e escolha a voz na mão."))?;
-  let secs=a.value.clamp(0,3600) as u64;
-  let msg=crate::voice_redemptions::apply_manual(rt,&p,&mapped,&f.name,secs).await?;
+ let raw=if a.target.trim().is_empty(){a.text.clone()}else{a.target.clone()};
+ let raw=raw.trim().to_owned();
+ let effect=raw.to_lowercase();
+ let secs=a.value.clamp(0,3600) as u64;
+ // 1) Voz real do Voicemod escolhida direto na automação: o id da voz nunca
+ //    muda de significado por causa do nome.
+ if let Ok(known_name)=crate::voicemod::voice_known(rt,&raw){
+  let label=if a.text.trim().is_empty(){known_name}else{a.text.trim().to_owned()};
+  let msg=crate::voice_redemptions::apply_manual(rt,&p,&raw,&label,secs).await?;
   rt.log(&p.id,"voiceFx",&format!("{} · {msg} (via Voicemod)",f.name),"success");
   return Ok(());
  }
- if !rt.voice_fx.is_running(){return Err("Inicie a Voz da live antes de usar este efeito".into())}
- if !crate::voice_fx::EFFECTS.contains(&effect.as_str()){return Err(format!("Voz desconhecida: {effect}"))}
- let secs=a.value.clamp(0,3600) as u64;
- let gen=rt.voice_fx.set_effect(rt,&p.id,&effect)?["gen"].as_u64().unwrap_or(0);
- if secs>0{
-  let rt2=rt.clone();let pid=p.id.clone();
-  tokio::spawn(async move{tokio::time::sleep(Duration::from_secs(secs)).await;rt2.voice_fx.revert_if(&rt2,&pid,gen);});
+ // 2) Efeito antigo (fina, robô…) com mapeamento explícito do dono — nunca
+ //    por suposição de nome.
+ if let Some(mapped)=crate::voice_redemptions::legacy_voice(rt,&p.id,&effect){
+  let msg=crate::voice_redemptions::apply_manual(rt,&p,&mapped,&effect,secs).await?;
+  rt.log(&p.id,"voiceFx",&format!("{} · {msg} (via Voicemod, efeito antigo “{effect}”)",f.name),"success");
+  return Ok(());
  }
- let when=if secs>0{format!("{secs}s")}else{"∞".into()};
- rt.log(&p.id,"voiceFx",&format!("{} · voz {effect} por {when}",f.name),"success");
- Ok(())
+ // 3) Motor interno antigo: caminho preservado para quem ainda usa.
+ if crate::voice_fx::EFFECTS.contains(&effect.as_str()){
+  if !rt.voice_fx.is_running(){return Err("Os efeitos internos estão parados nesta máquina. Migre para uma voz do Voicemod (Voicemod › Avançado › Efeitos internos antigos) ou inicie o motor interno.".into())}
+  let gen=rt.voice_fx.set_effect(rt,&p.id,&effect)?["gen"].as_u64().unwrap_or(0);
+  if secs>0{
+   let rt2=rt.clone();let pid=p.id.clone();
+   tokio::spawn(async move{tokio::time::sleep(Duration::from_secs(secs)).await;rt2.voice_fx.revert_if(&rt2,&pid,gen);});
+  }
+  let when=if secs>0{format!("{secs}s")}else{"∞".into()};
+  rt.log(&p.id,"voiceFx",&format!("{} · voz {effect} por {when}",f.name),"success");
+  Ok(())
+ }else{
+  Err(format!("“{raw}” não é uma voz do Voicemod nem um efeito antigo mapeado. Escolha uma voz do Voicemod nesta etapa ou mapeie o efeito em Voicemod › Avançado."))
+ }
  },
  _=>Err("Ação desconhecida".into())
  }

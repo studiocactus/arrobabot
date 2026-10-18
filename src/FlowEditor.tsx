@@ -116,6 +116,10 @@ export default function FlowEditor({flow,platform='twitch',ai,onSave,onTest,intr
  const [nodes,setNodes,onNodesChange]=useNodesState(startNodes);
  const [edges,setEdges,onEdgesChange]=useEdgesState(startEdges);
  const [selected,setSelected]=useState('trigger');const [name,setName]=useState(flow.name);const [trigger,setTrigger]=useState(flow.trigger);const [error,setError]=useState<FriendlyError|null>(null);const [busy,setBusy]=useState(false);
+ // Vozes reais do Voicemod para a ação "Mudar minha voz" (o id nunca muda de
+ // significado por causa do nome; efeitos antigos aparecem marcados).
+ const [vmVoices,setVmVoices]=useState<{voiceID:string;name:string}[]>([]);
+ useEffect(()=>{if(desktop)api<{status?:{voices?:{voiceID:string;name:string;enabled?:boolean}[]}}>('voicemod.get',{profileId:flow.profileId}).then(v=>setVmVoices((v?.status?.voices||[]).filter(x=>x.enabled!==false))).catch(()=>setVmVoices([]))},[flow.profileId]);
  const node=nodes.find(n=>n.id===selected);const action=node?.data.action;
  const problem=action?actionProblem(action):null;
  const issue=problem&&node?.className==='step-invalid'?problem.message:undefined;
@@ -260,9 +264,15 @@ function switchKind(current:Action,next:string){const base:Action={...current,ki
   {OBS_TEMP.includes(action.obsOp||'mute')&&<Field label="Duração (segundos)" hint="0 = permanente. Temporário restaura o estado anterior no fim."><input type="number" min={0} max={3600} step={1} value={action.obsDuration??0} onChange={e=>update({...action,obsDuration:Math.max(0,Math.round(Number(e.target.value)||0))})}/></Field>}
   <p className="help">Executa no OBS desta máquina, sem nuvem. Temporário com o mesmo alvo soma o tempo; alvo ocupado por outro efeito é recusado no Histórico.</p>
   </>}{action.kind==='voiceFx'&&<>
-  <Field label="Voz"><select value={voiceEffects[action.target||'fina']?action.target:'fina'} onChange={e=>update({...action,target:e.target.value})}>{Object.entries(voiceEffects).map(([k,n])=><option key={k} value={k}>{n}</option>)}</select></Field>
-  <Field label="Duração (segundos)" hint="0 = manter até a próxima troca. Com tempo, volta ao normal sozinho."><input type="number" min={0} max={3600} step={1} value={action.value??0} onChange={e=>update({...action,value:Math.max(0,Math.round(Number(e.target.value)||0))})}/></Field>
-  <p className="help">Muda a sua voz no ar pelo VB-Cable. Comece a Voz da live (menu Voz da live) antes do resgate disparar. Se outro efeito entrar no meio, só o mais recente volta ao normal.</p>
+  <Field label="Voz do Voicemod" hint={vmVoices.length?'Voz real do Voicemod: a troca usa a mesma fila das recompensas e comandos.':'Conecte o Voicemod (tela Voicemod) para escolher vozes reais.'}>
+   <select value={action.target||''} onChange={e=>{const v=vmVoices.find(x=>x.voiceID===e.target.value);update({...action,target:e.target.value,text:v?.name||''})}}>
+    <option value="">Escolha a voz…</option>
+    {vmVoices.map(v=><option key={v.voiceID} value={v.voiceID}>{v.name}</option>)}
+    {action.target&&voiceEffects[action.target]&&<option value={action.target}>Efeito antigo “{voiceEffects[action.target]}”</option>}
+   </select>
+  </Field>
+  <Field label="Duração (segundos)" hint="0 = manter até a próxima troca. Com tempo, a voz de antes volta sozinha."><input type="number" min={0} max={3600} step={1} value={action.value??0} onChange={e=>update({...action,value:Math.max(0,Math.round(Number(e.target.value)||0))})}/></Field>
+  <p className="help">Troca sua voz pelo Voicemod — fila, duração e restauração iguais às das recompensas. Se outro efeito entrar no meio, o mais recente vale e a voz de antes volta no fim dele.{action.target&&voiceEffects[action.target]?<strong> Este fluxo ainda usa o efeito antigo “{voiceEffects[action.target]}”: escolha uma voz do Voicemod acima ou mapeie o efeito em Voicemod › Avançado.</strong>:''}</p>
   </>}</Section>
   {(action.kind.startsWith('ai')||action.kind==='obs')&&<Section title="Avançado">
   {action.kind.startsWith('ai')&&<details className="ai-help"><summary>Como a IA monta a resposta</summary><p className="help">A mensagem atual, até 12 falas recentes dos últimos 5 minutos e as memórias entram automaticamente. Defina o tom aqui. {action.kind==='ai.generate'?'Esta ação só guarda a resposta. Conecte Enviar mensagem e clique em + Resposta da IA.':'Esta ação já envia ao chat e guarda a resposta para os próximos blocos.'}</p></details>}

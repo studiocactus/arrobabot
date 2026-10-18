@@ -18,7 +18,7 @@ export const flows=[
   actions:[act('condition','',{condVar:'reward.cost',condOp:'greater_or_equal',condValue:'100',condFalse:'stop'}),act('chat','Oi {{viewer.name}}'),act('overlay','Aparece na OBS')]}
 ];
 
-export const NAV=['Visão geral','Perfis de bot','Discord','Rótulos OBS','Comandos','Timers','Respostas','Sons de Live','Contadores','Automações','OBS Studio','Áudio no OBS','Voz da live','Spotify','Meta','Alertas','Chat no OBS','Inteligência artificial','Memórias','Comunidade','Biblioteca de presets','Histórico','Estatísticas'];
+export const NAV=['Visão geral','Perfis de bot','Discord','Rótulos OBS','Comandos','Timers','Respostas','Sons de Live','Contadores','Automações','OBS Studio','Áudio no OBS','Voicemod','Spotify','Meta','Alertas','Chat no OBS','Inteligência artificial','Memórias','Comunidade','Biblioteca de presets','Histórico','Estatísticas'];
 
 const LOGS=[
  {id:'l1',profileId:'p1',kind:'run',message:'Execução concluída com sucesso no fluxo de boas-vindas',status:'success',at:'2026-10-07T10:00:00Z'},
@@ -82,6 +82,9 @@ export async function mock(page:Page){
       case 'voiceFx.get':return {phase:'off',message:'Prévia no navegador: a voz ao vivo só existe no aplicativo desktop.',input:'',output:'',gate_db:-45};
       case 'voiceFx.devices':return {inputs:[{name:'Microfone (Realtek)',default:true}],outputs:[{name:'CABLE Input (VB-Audio Virtual Cable)',default:true}]};
       case 'voiceFx.selection':return {input:'Microfone (Realtek)',output:'CABLE Input (VB-Audio Virtual Cable)',gateDb:-45};
+      case 'voicemod.get':return {status:{phase:'connected',message:'Conectado nesta máquina',port:59129,voices:[{voiceID:'robot',name:'Robô'},{voiceID:'alien',name:'Alien'}],currentVoice:'nofx',currentName:'Efeito desligado',voiceChanger:true,hearMyself:false,license:'Pro',attempts:1},test:{active:false,phase:'',voiceId:'',voiceName:'',seconds:10,remainingMs:0,interrupted:false,manual:false},outcome:{kind:'',detail:''},defaultSecs:10,minSecs:5,maxSecs:60,hasKey:true,keyLen:24};
+      case 'voiceResgate.get':return {queue:{active:null,upcoming:[],last:'',lastKind:'',pendingRestore:false,busy:false},config:{enabled:false,queueLimit:3,bindings:[],legacyMap:{},obsChecked:false}};
+      case 'twitch.rewards':return {channel:'cactus',rewards:[{id:'r1',title:'Voz de robô',cost:100,enabled:true}]};
       case 'voice.status':return {listening:false,error:'',port:0};
       case 'secret.status':return {ai:false,bot:false,channel:false};
       case 'discord.status':return {online:false};

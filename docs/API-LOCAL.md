@@ -97,7 +97,7 @@ A fonte confirma a reprodução enviando **apenas** `audio.ack`:
 
 com `phase` em `started`, `done`, `error` ou `stopped` e `detail` opcional (até 200 caracteres). A confirmação vira a notificação `audio.feedback` — é o que diferencia **som enviado** de **reprodução iniciada**. Outras mensagens vindas da fonte são ignoradas.
 
-Eventos `audio.play` com `issuedAt` antigo (mais de 10 segundos) são descartados: reconectar o OBS não repete sons antigos. A fila é serial, aceita até 5 pendentes e descarta som que não começa em 15 segundos.
+Eventos `audio.play` com `issuedAt` antigo (mais de 10 segundos) são descartados — na chegada **e de novo no momento de tocar** —: reconectar o OBS não repete sons antigos. A fila é serial, aceita até 5 pendentes; um som tem 15 segundos para começar e teto de 60 segundos quando já iniciado.
 
 ### Rota de TTS
 

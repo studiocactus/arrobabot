@@ -4,13 +4,13 @@ import {api,errorText,desktop} from './api';
 import {Field,Toggle} from './components';
 import {activeProfile,listenError,onListenChange,startListen,stopListen,listenFrame,micDevices} from './listen';
 import {saveFlow} from './FlowTools';
-import {newFlow,newAction,voiceEffects,type Flow,type Action} from './types';
+import {newFlow,newAction,type Flow,type Action} from './types';
 
 /**
- * Comandos do Arroba: escuta contínua, prévia do reconhecimento, gravação de
+ * Comandos por voz: escuta contínua, prévia do reconhecimento, gravação de
  * comando e criação rápida. Caminho único por padrão: RealtimeSTT local — o
  * whisper-server continua opcional (abaixo, em "Servidor legado").
- * Usado pelo módulo "Comandos de voz" e pela tela "Voz" (hub).
+ * Usado pelo módulo "Comandos de voz" e pela tela própria "Comandos por voz".
  */
 export default function VoiceCommands({profileId,notify}:{profileId:string;notify:(s:string)=>void}){
  const [config,setConfig]=useState<Record<string,unknown>>({});
@@ -25,14 +25,17 @@ export default function VoiceCommands({profileId,notify}:{profileId:string;notif
  const [phrase,setPhrase]=useState('');
  const [doWhat,setDoWhat]=useState('chat');
  const [content,setContent]=useState('');
- const [fxEffect,setFxEffect]=useState('fina');
+ const [fxVoice,setFxVoice]=useState('');
+ const [fxVoiceName,setFxVoiceName]=useState('');
  const [fxSeconds,setFxSeconds]=useState(15);
+ const [vmVoices,setVmVoices]=useState<{voiceID:string;name:string}[]>([]);
  const stop=useRef<(()=>void)|null>(null);
  const cancelled=useRef(false);
 
  useEffect(()=>{
   api<Record<string,unknown>>('module.config.get',{profileId,key:'voice'}).then(v=>setConfig(v||{})).catch(e=>notify(errorText(e)));
   micDevices().then(setMics).catch(()=>setMics([]));
+  if(desktop)api<{status?:{voices?:{voiceID:string;name:string;enabled?:boolean}[]}}>('voicemod.get',{profileId}).then(v=>setVmVoices((v?.status?.voices||[]).filter(x=>x.enabled!==false))).catch(()=>setVmVoices([]));
  },[profileId,notify]);
  // A escuta é um serviço que sobrevive à troca de página: sair da tela não
  // para o microfone. Só o flag de gravação é cancelado aqui.
@@ -104,7 +107,7 @@ export default function VoiceCommands({profileId,notify}:{profileId:string;notif
   if(!words){notify('Escreva a frase que aciona o comando.');return}
   setBusy(true);
   try{
-   const action:Action=doWhat==='voiceFx'?{...newAction('voiceFx'),target:fxEffect,value:fxSeconds}:{...newAction(doWhat),text:content};
+   const action:Action=doWhat==='voiceFx'?{...newAction('voiceFx'),target:fxVoice,text:fxVoiceName,value:fxSeconds}:{...newAction(doWhat),text:content};
    const flow:Flow={...newFlow(profileId),name:'Comando de voz: '+words,trigger:{kind:'voice',pattern:words,permission:'everyone',cooldown:0,userCooldown:0},actions:[action]};
    await saveFlow(flow);
    notify(`Comando criado: fale "${words}" e o bot ${doWhat==='voiceFx'?'muda sua voz':doWhat==='tts'?'lê em voz alta':doWhat==='overlay'?'atualiza o overlay':'responde no chat'}.`);
@@ -166,7 +169,12 @@ export default function VoiceCommands({profileId,notify}:{profileId:string;notif
     </select>
    </Field>
    {doWhat==='voiceFx'?<>
-    <Field label="Voz"><select value={fxEffect} onChange={e=>setFxEffect(e.target.value)}>{Object.entries(voiceEffects).filter(([k])=>k!=='normal').map(([k,n])=><option key={k} value={k}>{n}</option>)}</select></Field>
+    <Field label="Voz do Voicemod" hint={vmVoices.length?'Voz real do Voicemod: o comando troca pela mesma fila das recompensas.':'Conecte o Voicemod (tela Voicemod) para escolher vozes reais.'}>
+     <select value={fxVoice} onChange={e=>{const v=vmVoices.find(x=>x.voiceID===e.target.value);setFxVoice(e.target.value);setFxVoiceName(v?.name||'')}}>
+      <option value="">Escolha a voz…</option>
+      {vmVoices.map(v=><option key={v.voiceID} value={v.voiceID}>{v.name}</option>)}
+     </select>
+    </Field>
     <Field label="Duração (segundos)" hint="0 = manter até a próxima troca."><input type="number" min={0} max={3600} value={fxSeconds} onChange={e=>setFxSeconds(Math.max(0,Math.round(Number(e.target.value)||0)))}/></Field>
    </>:<Field label={doWhat==='tts'?'Texto que o bot lê':doWhat==='overlay'?'Texto no overlay':'Mensagem do bot'}>
     <input value={content} onChange={e=>setContent(e.target.value)} placeholder="Pronto, {{user}}!"/>

@@ -194,7 +194,7 @@ pub async fn dispatch(rt:Arc<Runtime>,op:&str,args:Value)->R<Value>{
  "spotify.disconnect"=>{rt.db.profile(&p)?;spotify::disconnect(&p)?;rt.spotify.bump(&p);rt.spotify.set(&p,None);rt.emit("spotify.now",json!({"profileId":p,"playing":false}));Ok(Value::Null)},
  "spotify.poll"=>{let profile=rt.db.profile(&p)?;let cfg=spotify::merged(&rt,&p);Ok(json!({"track":spotify::poll_once(&rt,&profile,&cfg).await?}))},
  "spotify.test"=>{rt.db.profile(&p)?;if spotify::merged(&rt,&p)["enabled"]!=Value::Bool(true){return Err("O Spotify está desligado: ligue o interruptor da música no overlay antes de testar".into())}rt.emit("spotify.now",spotify::test_payload(&p));Ok(json!({"fired":true}))},
- "audio.get"=>{rt.db.profile(&p)?;let info=livepix::overlay_info(&rt,&p)?;let s=audio::state(&rt,&p);Ok(json!({"url":format!("http://127.0.0.1:{}/audio#token={}&profile={}",info["port"],info["token"],p),"clients":s["clients"],"claimed":s["claimed"]}))},
+ "audio.get"=>{rt.db.profile(&p)?;let (port,token)=audio::overlay_addr(&rt,&p)?;let s=audio::state(&rt,&p);Ok(json!({"url":format!("http://127.0.0.1:{port}/audio#token={token}&profile={p}"),"clients":s["clients"],"claimed":s["claimed"]}))},
  "audio.test"=>{rt.db.profile(&p)?;let out=audio::test(&rt,&p);Ok(json!({"id":out["id"],"sink":out["sink"]}))},
  "audio.preview"=>{rt.db.profile(&p)?;let out=audio::preview(&rt,&p,args["asset"].as_str().ok_or("Som ausente")?,args["volume"].as_f64().unwrap_or(1.0))?;Ok(json!({"id":out["id"],"sink":out["sink"]}))},
  "audio.stop"=>{rt.db.profile(&p)?;Ok(json!({"stopped":audio::stop(&rt,&p)}))},

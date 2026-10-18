@@ -94,6 +94,9 @@ function connect() {
       return;
     }
     if (msg.type === 'audio.standby') {
+      // Perdeu a posse: nada pode continuar tocando aqui enquanto a outra
+      // fonte reproduz — fila e som atual param na hora (sem sobreposição).
+      player.stopAll();
       claimed = false;
       document.title = 'Áudio do BotLive — em espera';
       show('standby');
@@ -109,6 +112,9 @@ function connect() {
     }
   };
   sock.onclose = () => {
+    // Sem conexão não há como confirmar nada: cancela o que estava tocando e
+    // limpa a fila para a reconexão (ou outra fonte) não repetir som antigo.
+    player.stopAll();
     claimed = false;
     document.title = 'Áudio do BotLive — reconectando';
     show('reconnecting');

@@ -8,14 +8,15 @@ class FakeSound {
  constructor(public src:string){}
 }
 
-function setup(now=1_000_000){
+function setup(now: number | (() => number) = 1_000_000){
  const sent:Sent[]=[];
  const sounds:FakeSound[]=[];
  const onBlocked=vi.fn();
+ const nowFn=typeof now==='function'?now:()=>now;
  const player=new SourcePlayer({
   profile:'p1',
   send:m=>sent.push(m as Sent),
-  now:()=>now,
+  now:nowFn,
   create:src=>{const s=new FakeSound(src);sounds.push(s);return s},
   onBlocked,
  });
@@ -124,12 +125,43 @@ it('carregamento quebrado confirma erro e libera a fila',async()=>{
  expect(sounds).toHaveLength(2);
 });
 
-it('teto de 15 s interrompe o som e confirma erro',async()=>{
+it('idade é conferida de novo no momento de tocar — fila velha nunca reproduz',async()=>{
+ let t=1_000_000;
+ const {sent,sounds,player}=setup(()=>t);
+ player.handle(play('a1'));
+ player.handle(play('a2'));
+ await flush();
+ // a2 ficou esperando vez enquanto a1 tocava: envelheceu na fila.
+ t+=MAX_AGE_MS+5000;
+ sounds[0].onended?.();
+ await flush();
+ expect(sounds,'o som velho da fila não toca').toHaveLength(1);
+ expect(sent).toContainEqual({type:'audio.ack',id:'a2',phase:'error',detail:'Som antigo descartado'});
+});
+
+it('som que nunca começa é descartado em 15 s e a fila segue',async()=>{
+ vi.useFakeTimers();
+ const sent:Sent[]=[];
+ const player=new SourcePlayer({
+  profile:'p1',
+  send:m=>sent.push(m as Sent),
+  now:()=>1_000_000,
+  create:()=>({src:'',volume:0,pause(){},onended:null,onerror:null,play:()=>new Promise<void>(()=>{})} as never),
+ });
+ player.handle(play('l1'));
+ await vi.advanceTimersByTimeAsync(15_000);
+ expect(sent.some(m=>m.id==='l1'&&m.phase==='error'&&m.detail==='Som não começou em 15 s')).toBe(true);
+ vi.useRealTimers();
+});
+
+it('som iniciado tem teto de 60 s — fala longa de texto para voz não corta cedo',async()=>{
  vi.useFakeTimers();
  const {sent,sounds,player}=setup();
- player.handle(play('t1'));
- await vi.advanceTimersByTimeAsync(15_000);
+ player.handle(play('l2'));
+ await vi.advanceTimersByTimeAsync(30_000);
+ expect(sent.some(m=>m.id==='l2'&&m.phase==='error'),'30 s de fala não são interrompidos').toBe(false);
+ await vi.advanceTimersByTimeAsync(30_000);
  expect(sounds[0].pause).toHaveBeenCalled();
- expect(sent.some(m=>m.id==='t1'&&m.phase==='error'&&m.detail?.includes('15 s'))).toBe(true);
+ expect(sent.some(m=>m.id==='l2'&&m.phase==='error'&&m.detail==='Som interrompido após 60 s')).toBe(true);
  vi.useRealTimers();
 });

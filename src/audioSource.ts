@@ -2,9 +2,12 @@
  * Reprodutor da fonte "Áudio do BotLive" do OBS.
  *
  * Uma fila serial só: os sons chegam um depois do outro (nada toca em
- * duplicidade nem atropela), no máximo 5 na fila, 15 s de teto por som.
- * Eventos antigos (mais de 10 s) são descartados e confirmados como erro —
- * uma reconexão nunca reproduz fila velha. Só o perfil dono da chave toca.
+ * duplicidade nem atropela), no máximo 5 na fila. Eventos antigos (mais de
+ * 10 s) são descartados e confirmados como erro — na chegada **e de novo no
+ * momento de tocar**, para reconexão nunca reproduzir fila velha. O prazo é
+ * explícito: 15 s para começar a tocar e 60 s de teto para som já iniciado
+ * (cobre falas longas de texto para voz sem emperdiçar a fila). Só o perfil
+ * dono da chave toca.
  */
 
 export type PlayPayload = {
@@ -33,7 +36,10 @@ export type Sound = {
 
 export const MAX_PENDING = 5;
 export const MAX_AGE_MS = 10000;
-export const PLAY_TIMEOUT_MS = 15000;
+/** Sem "started" neste prazo, o som é descartado e a fila segue. */
+export const START_TIMEOUT_MS = 15000;
+/** Teto de um som já iniciado — falas de TTS longas cabem aqui. */
+export const MAX_PLAY_MS = 60000;
 
 type Options = {
   profile: string;
@@ -98,7 +104,7 @@ export class SourcePlayer {
     this.pending++;
     this.queue = this.queue
       .catch(() => {})
-      .then(() => this.playOne(id, src, volume, gen))
+      .then(() => this.playOne(id, src, volume, issuedAt, gen))
       .catch(() => {})
       .finally(() => {
         this.pending--;
@@ -110,8 +116,14 @@ export class SourcePlayer {
     return src.startsWith('http://127.0.0.1:') || src.startsWith('http://localhost:') || src.startsWith('data:audio/');
   }
 
-  private playOne(id: string, src: string, volume: number, gen: number): Promise<void> {
+  private playOne(id: string, src: string, volume: number, issuedAt: number, gen: number): Promise<void> {
     if (gen !== this.generation) return Promise.resolve();
+    // Idade conferida de novo aqui: um som que ficou parado na fila enquanto
+    // outro tocava (ou durante uma reconexão) não toca velho.
+    if (issuedAt > 0 && this.now() - issuedAt > MAX_AGE_MS) {
+      this.opts.send(ack(id, 'error', 'Som antigo descartado'));
+      return Promise.resolve();
+    }
     return new Promise<void>((resolve) => {
       const audio = this.create(src);
       this.current = audio;
@@ -130,10 +142,12 @@ export class SourcePlayer {
         resolve();
       };
       this.release = finish;
-      const timer = setTimeout(() => {
-        this.opts.send(ack(id, 'error', 'Som interrompido após 15 s'));
+      // Dois prazos explícitos: 15 s para iniciar, 60 s para um som que já
+      // começou (fala longa de texto para voz não é interrompida no meio).
+      let timer = setTimeout(() => {
+        this.opts.send(ack(id, 'error', 'Som não começou em 15 s'));
         finish();
-      }, PLAY_TIMEOUT_MS);
+      }, START_TIMEOUT_MS);
       audio.onended = () => {
         this.opts.send(ack(id, 'done'));
         finish();
@@ -147,6 +161,11 @@ export class SourcePlayer {
         .then(() => {
           // Confirmação de verdade: o navegador iniciou a reprodução.
           this.opts.send(ack(id, 'started'));
+          clearTimeout(timer);
+          timer = setTimeout(() => {
+            this.opts.send(ack(id, 'error', 'Som interrompido após 60 s'));
+            finish();
+          }, MAX_PLAY_MS);
         })
         .catch((e: unknown) => {
           const blocked = (e as {name?: string} | null)?.name === 'NotAllowedError';

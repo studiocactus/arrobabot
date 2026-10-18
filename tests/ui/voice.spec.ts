@@ -1,4 +1,4 @@
-import {test,expect} from '@playwright/test';
+import {test,expect,type Page} from '@playwright/test';
 import {OUT} from './ux-helpers';
 
 test.use({permissions:['microphone'],launchOptions:{args:['--use-fake-device-for-media-stream','--use-fake-ui-for-media-stream']}});
@@ -77,32 +77,98 @@ test('escuta contínua abre o microfone, manda lotes de áudio e desliga quando 
  expect(Number(await page.evaluate(()=>sessionStorage.getItem('voiceFrames')||0))).toBe(stopped,'o microfone para de enviar lotes');
 });
 
-test('hub da voz reúne os três caminhos com diagnóstico honesto',async({page})=>{
- await page.addInitScript(p=>{
-  localStorage.setItem('botlive-preview',JSON.stringify({profiles:[p],flows:[],notes:{},presets:[],theme:'dark'}));
- },profile);
- await page.setViewportSize({width:1100,height:900});
+/** Mock desktop da tela Voicemod: conexão, vozes reais e regras. */
+async function mockVoicemod(page:Page,opts:{legacy?:boolean;rules?:unknown[]}={}){
+ await page.addInitScript((p)=>{
+  Object.assign(window,{isTauri:true,__TAURI_EVENT_PLUGIN_INTERNALS__:{registerListener:()=>{},unregisterListener:()=>{}},
+   __TAURI_INTERNALS__:{transformCallback:()=>1,unregisterCallback:()=>{},invoke:async(cmd:string,payload:{op:string;args?:Record<string,unknown>})=>{
+    if(cmd!=='rpc')return 1;
+    const op=payload.op;const args=payload.args||{};
+    if(op==='snapshot')return {profiles:[p.profile],flows:[],notes:{},presets:[],theme:'dark',logs:[],statuses:{},apiPort:9876,dataDir:'teste'};
+    if(op==='flows')return [];
+    if(op==='command.counters')return {};
+    if(op==='settings.get')return {theme:'dark',apiPort:9876,apiToken:'',updateEndpoint:'',updatePublicKey:'',autoUpdate:false};
+    if(op==='voicemod.get')return {status:{phase:'connected',message:'Conectado nesta máquina',port:59129,voices:[{voiceID:'robot',name:'Robô'},{voiceID:'alien',name:'Alien'}],currentVoice:'nofx',currentName:'Efeito desligado',voiceChanger:true,hearMyself:false,license:'Pro',attempts:1},test:{active:false,phase:'',voiceId:'',voiceName:'',seconds:10,remainingMs:0,interrupted:false,manual:false},outcome:{kind:'',detail:''},defaultSecs:10,minSecs:5,maxSecs:60,hasKey:true,keyLen:24};
+    if(op==='voiceResgate.get')return {queue:{active:null,upcoming:[],last:'',lastKind:'',pendingRestore:false,busy:false},config:{enabled:true,queueLimit:3,bindings:p.rules,legacyMap:{},obsChecked:false}};
+    if(op==='twitch.rewards')return {channel:'cactus',rewards:[{id:'r1',title:'Voz de robô',cost:100,enabled:true},{id:'r2',title:'Voz alienígena',cost:200,enabled:true}]};
+    if(op==='voiceFx.get')return {phase:p.legacy?'running':'off',message:'',input:'',output:'',gate_db:-45};
+    if(op==='voiceFx.selection')return p.legacy?{input:'Microfone (Realtek)',output:'CABLE Input (VB-Audio Virtual Cable)',gateDb:-45,mode:'internal'}:{gateDb:-45};
+    if(op==='voiceResgate.save'){sessionStorage.setItem('rulesSaved',JSON.stringify(args.config));return null}
+    return null;
+   }}});
+ },{profile,rules:opts.rules??[{kind:'reward',rewardId:'r1',rewardName:'Voz de robô',command:'',permission:'moderator',enabled:true,voiceId:'robot',voiceName:'Robô',durationSec:30,cooldownSec:0,concurrency:'queue'}],legacy:!!opts.legacy});
+}
+
+test('tela Voicemod tem as três etapas, um caminho só e nada de VB-Cable no caminho principal',async({page})=>{
+ await mockVoicemod(page);
+ await page.setViewportSize({width:1100,height:950});
  await page.goto('/');
- await page.locator('.sidebar').getByRole('button',{name:'Voz da live',exact:true}).click();
- // Três seções, na ordem prometida.
- const cards=page.locator('.card-heading h3');
- await expect(cards.nth(0)).toHaveText('Minha voz na live');
- await expect(page.getByRole('heading',{name:'Comandos do Arroba',exact:true})).toBeVisible();
- await expect(page.getByRole('heading',{name:'Resgates de voz (Voicemod)',exact:true})).toBeVisible();
- // Caminho da voz: duas opções exclusivas, nunca as duas capturando juntas.
- const caminho=page.getByLabel('Caminho da voz');
- await expect(caminho).toBeVisible();
- await expect(caminho.locator('option')).toHaveCount(2);
- // Diagnóstico mostra o estado real, sem promessas.
- await expect(page.getByText('Microfone (captura interna)')).toBeVisible();
- await expect(page.getByText('não conectado — necessário só no caminho Voicemod')).toBeVisible();
- await expect(page.getByText('parada — ligue em “Comandos do Arroba”')).toBeVisible();
- // Fila de resgates: a prévia sem núcleo diz a verdade em vez de fingir.
- await expect(page.getByText('Sem estado ainda — abra o aplicativo desktop para ver a fila viva.')).toBeVisible();
- // Comandos do Arroba embarcados no hub, com os mesmos campos do módulo.
- await expect(page.getByLabel('Palavras de ativação')).toBeVisible();
- await expect(page.getByText('Nenhum áudio sai desta máquina.')).toBeVisible();
- await page.screenshot({path:`${OUT}\\voz-hub-1100.png`,fullPage:true});
+ await page.locator('.sidebar').getByRole('button',{name:'Voicemod',exact:true}).click();
+
+ // O caminho dito em linguagem simples, na ordem prometida.
+ await expect(page.getByRole('heading',{name:'Sua voz no Voicemod'})).toBeVisible();
+ await expect(page.getByText(/pede ao Voicemod para trocar sua voz/)).toBeVisible();
+ await expect(page.getByRole('heading',{name:'Durante a live'})).toBeVisible();
+ await expect(page.getByRole('heading',{name:'Etapa 1 · Conectar Voicemod'})).toBeVisible();
+ await expect(page.getByRole('heading',{name:'Etapa 2 · Ouvir minha voz no OBS'})).toBeVisible();
+ await expect(page.getByRole('heading',{name:'Etapa 3 · Escolher o que troca minha voz'})).toBeVisible();
+
+ // Um caminho só: o seletor de motor interno não existe mais na experiência.
+ await expect(page.getByLabel('Caminho da voz')).toHaveCount(0);
+ // VB-Cable não aparece no caminho principal (só na migração, que fica
+ // oculta quando o perfil não tem efeitos internos).
+ await expect(page.getByText('VB-Cable')).toHaveCount(0);
+ // Distinção honesta: conectado ≠ áudio conferido.
+ await expect(page.getByText('Voicemod conectado',{exact:true}).first()).toBeVisible();
+ await expect(page.getByText('Áudio conferido no OBS')).toBeVisible();
+ await expect(page.getByRole('switch',{name:'Ouvi minha voz no OBS'})).toBeVisible();
+ // Botão visível para encerrar e restaurar a voz.
+ await expect(page.getByRole('button',{name:/Encerrar efeitos e restaurar minha voz/})).toBeVisible();
+
+ const overflow=await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth);
+ expect(overflow,'sem rolagem horizontal a 1100px').toBe(true);
+ await page.screenshot({path:`${OUT}\\voicemod-1100.png`,fullPage:true});
  await page.setViewportSize({width:1600,height:1000});
- await page.screenshot({path:`${OUT}\\voz-hub-largo.png`,fullPage:true});
+ await page.screenshot({path:`${OUT}\\voicemod-largo.png`,fullPage:true});
+});
+
+test('regra de troca de voz pede acionamento, voz, duração e ativação — com Avançado recolhido',async({page})=>{
+ await mockVoicemod(page);
+ await page.goto('/');
+ await page.locator('.sidebar').getByRole('button',{name:'Voicemod',exact:true}).click();
+
+ // A regra existente se apresenta pelo resumo legível.
+ await expect(page.getByRole('heading',{name:'Voz de robô → Robô → 30 segundos'})).toBeVisible();
+ await expect(page.getByRole('switch',{name:'Ativada'})).toBeVisible();
+
+ // Adicionar abre a regra com os campos essenciais.
+ await page.getByRole('button',{name:'Adicionar troca de voz'}).click();
+ const newCard=page.locator('.voice-rules section.card').last();
+ const kinds=newCard.getByLabel('Acionamento');
+ await expect(kinds).toBeVisible();
+ // Comandos do chat: permissão explícita em Avançado, nunca “qualquer pessoa” por padrão.
+ await kinds.selectOption('command');
+ await expect(newCard.getByLabel('Comando do chat')).toBeVisible();
+ await newCard.locator('summary').click();
+ const perm=newCard.getByLabel('Quem pode usar o comando');
+ await expect(perm).toBeVisible();
+ await expect(perm).toHaveValue('moderator','nada vira público sem você escolher');
+ // Recompensas usam a lista real do canal, mostrada no próprio contexto.
+ await kinds.selectOption('reward');
+ await expect(newCard.getByLabel('Recompensa')).toBeVisible();
+ // O teste de regra fica à mão e explica que não gasta pontos.
+ await expect(page.getByText(/sem gastar pontos/).first()).toBeVisible();
+});
+
+test('migração dos efeitos internos aparece só para o perfil afetado, sem presumir equivalência',async({page})=>{
+ await mockVoicemod(page,{legacy:true});
+ await page.goto('/');
+ await page.locator('.sidebar').getByRole('button',{name:'Voicemod',exact:true}).click();
+ await page.locator('summary',{hasText:'Avançado'}).last().click();
+ await expect(page.getByText('Efeitos internos antigos (migração)')).toBeVisible();
+ await expect(page.getByText(/nenhum nome vira voz por suposição/)).toBeVisible();
+ // Cada efeito antigo mapeia na mão do usuário, com “Sem equivalência” como padrão.
+ const map=page.getByLabel('Efeito antigo “Voz fina” vira');
+ await expect(map).toBeVisible();
+ await expect(map).toHaveValue('');
 });

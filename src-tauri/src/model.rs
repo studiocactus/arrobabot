@@ -304,7 +304,10 @@ pub fn validate_flow(f:&Flow)->Result<(),String> {
  }
  if a.kind=="voiceFx"{
   let effect=if a.target.trim().is_empty(){a.text.trim()}else{a.target.trim()};
-  if !crate::voice_fx::EFFECTS.contains(&effect.to_lowercase().as_str()){return Err(format!("Voz: escolha uma das vozes prontas ({})",crate::voice_fx::EFFECTS.join(", ")))}
+  // Voz real do Voicemod (id) ou efeito antigo: o que existe de verdade é
+  // conferido na execução, com mensagem do que fazer — a validação aqui só
+  // barra vazio e exagero, para não recusar voz nova do Voicemod.
+  if effect.is_empty()||effect.len()>64{return Err("Voz: escolha uma voz do Voicemod ou um efeito antigo".into())}
   if a.value>3600{return Err("Voz: duração de até 1 hora (0 = manter até trocar)".into())}
  }
  if a.kind=="condition"{
@@ -488,7 +491,9 @@ pub fn validate_flow(f:&Flow)->Result<(),String> {
   let a=Action{kind:"voiceFx".into(),target:"fina".into(),value:10,..Default::default()};
   let mut f=Flow{id:uuid::Uuid::new_v4().to_string(),profile_id:uuid::Uuid::new_v4().to_string(),name:"Voz".into(),trigger:Trigger{kind:"redemption".into(),pattern:"reward-id".into(),..Default::default()},actions:vec![a.clone()],..Default::default()};
   assert!(validate_flow(&f).is_ok());
-  f.actions[0].target="robô".into();assert!(validate_flow(&f).is_err(),"só vozes da lista passam");
+  f.actions[0].target="voice-robot-1234".into();assert!(validate_flow(&f).is_ok(),"voz real do Voicemod (id) passa; a existência é conferida na execução");
+  f.actions[0].target="".into();assert!(validate_flow(&f).is_err(),"sem voz escolhida não passa");
+  f.actions[0].target="x".repeat(65);assert!(validate_flow(&f).is_err(),"id longo demais é recusado");
   f.actions[0].target="normal".into();assert!(validate_flow(&f).is_ok(),"normal é aceito (volta ao Pass)");
   f.actions[0].target="fina".into();f.actions[0].value=3601;assert!(validate_flow(&f).is_err(),"duração acima de 1 hora é recusada");
   f.actions[0].value=0;assert!(validate_flow(&f).is_ok(),"0 = manter até a próxima troca");

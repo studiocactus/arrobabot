@@ -25,6 +25,7 @@ export default function AudioHub({profileId,notify}:{profileId:string;notify:(s:
  const [feedback,setFeedback]=useState<Feedback|null>(null);
  const [testing,setTesting]=useState(false);
  const [copied,setCopied]=useState(false);
+ const [lastPlay,setLastPlay]=useState<{kind:string;sink:string}|null>(null);
  const testId=useRef('');
  const copyTimer=useRef(0);
 
@@ -45,6 +46,12 @@ export default function AudioHub({profileId,notify}:{profileId:string;notify:(s:
    const p=e.payload;
    if(p.id!==testId.current)return;
    setFeedback({phase:p.phase,detail:p.detail});
+  }));
+  // Onde o último som foi parar: deixa explícito quando a saída pública (a
+  // fonte do OBS) não estava disponível e o aplicativo tocou no lugar.
+  track(listen<{profileId:string;kind:string;sink:string}>('audio.play',e=>{
+   const p=e.payload;
+   if(p.profileId===profileId)setLastPlay({kind:p.kind||'sound',sink:p.sink||'local'});
   }));
   return()=>{active=false;off.forEach(f=>f())};
  },[profileId,desktop]);
@@ -86,7 +93,7 @@ export default function AudioHub({profileId,notify}:{profileId:string;notify:(s:
 
  return <div>
   <Card title="Áudio no OBS" action={<span className={status.cls}><span className="status-dot" aria-hidden="true"></span>{status.text}</span>}>
-   <p className="help">Esta é a <strong>única saída de sons do BotLive</strong>: espectador, comandos, timers, automações, resgates, alertas, meta e texto para voz saem todos por aqui. No OBS, o fader da fonte “Áudio do BotLive” vira o volume do bot inteiro — sem VB-Cable e sem saída por módulo.</p>
+   <p className="help">Esta é a <strong>única saída de sons do BotLive</strong>: espectador, comandos, timers, automações, resgates, alertas, meta e texto para voz saem todos por aqui. No OBS, o fader da fonte “Áudio do BotLive” vira o volume do bot inteiro — sem VB-Cable e sem saída por módulo. <strong>Sua voz é outra fonte</strong>: ela chega ao OBS pelo microfone virtual do Voicemod (tela Voicemod), nunca por aqui.</p>
    <ol className="help">
     <li>Copie o endereço abaixo.</li>
     <li>No OBS: <strong>Fontes → + → Navegador</strong>, nomeie “Áudio do BotLive” e cole o endereço. Largura 640, altura 360 (o visual é transparente).</li>
@@ -107,6 +114,7 @@ export default function AudioHub({profileId,notify}:{profileId:string;notify:(s:
    {feedback&&feedback.phase==='stopped'&&<p className="help">{FEEDBACK.stopped}</p>}
    {feedback&&feedback.phase==='error'&&<p role="alert" className="inline-error">Falha na fonte: {feedback.detail||'a reprodução não começou'}</p>}
    {feedback&&feedback.phase==='timeout'&&<p role="alert" className="inline-error">Sem confirmação da fonte em 12 s. Confira se a fonte está ativa na cena, se “Controlar áudio pelo OBS” está marcado e se ela não foi silenciada no mixer.</p>}
+   {lastPlay&&<p className="help">Última reprodução ({({sound:'som',alert:'alerta',tts:'texto para voz',preview:'prévia',test:'teste'} as Record<string,string>)[lastPlay.kind]||lastPlay.kind}): {lastPlay.sink==='obs'?'pela fonte do OBS':'pelo aplicativo — a fonte do OBS não estava conectada'}.</p>}
    {!desktop&&<p className="help">Prévia no navegador: a saída de sons funciona no aplicativo desktop.</p>}
   </Card>
 
@@ -119,8 +127,8 @@ export default function AudioHub({profileId,notify}:{profileId:string;notify:(s:
   </Card>
 
   <Card title="O que mudou na migração">
-   <p className="help">Antes, cada som saía por um aparelho de saída escolhido no Windows (muitas vezes o <strong>VB-Cable</strong>) e o OBS capturava esse aparelho. Esse caminho foi substituído: a escolha de aparelho da tela Áudio <strong>não tem mais efeito</strong> e o VB-Cable deixou de ser necessário para os sons do bot. Arquivos, comandos, resgates, alertas e volumes continuam exatamente como você configurou.</p>
-   <p className="help">Se o OBS ainda captura um cabo antigo (“Áudio da área de trabalho” apontando para CABLE Output), remova essa fonte do OBS para os sons do bot não entrarem em dois lugares. O <strong>VB-Cable em si pode continuar instalado</strong> — a Voz da live (efeitos internos e Voicemod) ainda usa o cabo como caminho próprio do microfone, separado dos sons do bot.</p>
+   <p className="help">Antes, cada som saía por um aparelho de saída escolhido no Windows (muitas vezes o <strong>VB-Cable</strong>) e o OBS capturava esse aparelho. Esse caminho foi substituído: a escolha de aparelho da tela Áudio no OBS <strong>não tem mais efeito</strong> e o VB-Cable deixou de ser necessário para os sons do bot. Arquivos, comandos, resgates, alertas e volumes continuam exatamente como você configurou.</p>
+   <p className="help">Se o OBS ainda captura um cabo antigo (“Áudio da área de trabalho” apontando para CABLE Output), remova essa fonte do OBS para os sons do bot não entrarem em dois lugares. O <strong>VB-Cable em si pode continuar instalado</strong> — ele só é usado pela voz com efeitos internos antigos (se você ainda usa); no caminho do Voicemod, sua voz sai pelo <strong>microfone virtual do Voicemod</strong>. Sons do bot não passam por nenhum dos dois.</p>
   </Card>
  </div>;
 }

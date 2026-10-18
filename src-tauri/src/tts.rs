@@ -166,7 +166,7 @@ pub fn valid_config(v: &Value) -> bool {
     voice_ok && rate_ok && limit_ok
 }
 
-fn dir_of(rt: &Runtime, p: &str) -> PathBuf {
+pub(crate) fn dir_of(rt: &Runtime, p: &str) -> PathBuf {
     rt.base.join("media").join(p).join("tts")
 }
 
@@ -193,8 +193,8 @@ pub fn url(rt: &Runtime, p: &str, id: &str) -> Result<String, String> {
     if !valid_id(id) {
         return Err("Áudio do texto para voz inválido".into());
     }
-    let info = crate::livepix::overlay_info(rt, p)?;
-    Ok(format!("http://127.0.0.1:{}/tts?token={}&id={}", info["port"], info["token"], id))
+    let (port, token) = crate::audio::overlay_addr(rt, p)?;
+    Ok(format!("http://127.0.0.1:{port}/tts?token={token}&id={id}"))
 }
 
 /// Serve o WAV gerado: id em formato estrito, dentro da pasta tts do perfil,

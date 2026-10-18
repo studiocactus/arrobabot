@@ -103,6 +103,10 @@ Erros HTTP são indícios, não diagnósticos completos. Verifique também o pai
 | Escuta contínua não liga | Abra o aplicativo desktop (a prévia do navegador não captura microfone); confira se o RealtimeSTT responde HTTP 200 em `/health`; no painel veja a linha "Escuta interrompida" e o botão **Salvar configuração** |
 | Escuta contínua para sozinha | O servidor RealtimeSTT pode ter ficado sem memória GPU (use `--compute-type int8` ou modelo menor); confira se o processo `stt-server-production` ainda roda e reinicie se necessário |
 | Transcrição errada ou vazia | Ruído de fundo alto — aumente **Sensibilidade do microfone** no painel; fala muito curta — aumente **Silêncio que encerra a frase**; idioma diferente do configurado — use `auto` ou troque o idioma; modelo `small` tem precisão limitada — troque por `medium` ou `large-v3` no servidor |
+| Voicemod não conecta | Tela Voicemod: aplicativo Voicemod aberto e logado nesta máquina; chave da Control API salva (no cofre, nunca nos logs); licença que libera a Control API; botão **Conectar** |
+| Resgate ou comando não troca a voz | Tela Voicemod: regra **Ativada** e trocas de voz ligadas; Voicemod conectado; a voz da regra ainda existe na lista do Voicemod; em comandos, confira permissão e intervalo em **Avançado** |
+| Voz não volta ao fim do efeito | Use **Encerrar efeitos e restaurar minha voz** (seção Durante a live); se a conexão caiu no meio, **Recuperar restauração** — nada é reaplicado sozinho |
+| Minha voz não chega ao OBS | Na cena, a fonte de áudio da sua voz aponta para **Voicemod Microphone**; sem captura duplicada do mesmo microfone; na Etapa 2, fale durante o teste e ouça a gravação |
 | Legenda não aparece no overlay | Confira se a opção **Legenda no overlay** está ligada no painel e se o overlay usa o `examples/overlay.html` atualizado com o parâmetro `view` omitido |
 | Palavra de ativação não dispara | A palavra deve aparecer **exata** (sem pontuação) na transcrição; confira **Histórico** para ver o texto reconhecido; sem palavra cadastrada, toda fala dispara (pode gerar muitos gatilhos) |
 | Overlay aguarda BotLive | Confira instância aberta, porta e token da sessão atual |

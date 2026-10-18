@@ -216,14 +216,25 @@ pub fn play(rt: &Runtime, p: &str, req: Req) -> Value {
     out
 }
 
+/// Porta e chave da API local, extraídas como texto. Nunca interpole o
+/// `serde_json::Value` direto: a representação JSON de uma string traz aspas e
+/// quebrava o token em todas as URLs de mídia (bloqueio da auditoria 0.11.0).
+pub fn overlay_addr(rt: &Runtime, p: &str) -> Result<(u16, String), String> {
+    let info = crate::livepix::overlay_info(rt, p)?;
+    let port = info["port"].as_u64().filter(|v| (1024..=65535).contains(v)).ok_or("Porta da API local inválida")? as u16;
+    let token = info["token"]
+        .as_str()
+        .filter(|t| !t.is_empty() && t.len() <= 64)
+        .ok_or("Chave de overlay inválida")?
+        .to_string();
+    Ok((port, token))
+}
+
 /// Endereço http de um arquivo de som do perfil (servido por /asset com a
 /// chave de overlay — nunca caminho arbitrário).
 pub fn asset_src(rt: &Runtime, p: &str, asset: &str) -> Result<String, String> {
-    let info = crate::livepix::overlay_info(rt, p)?;
-    Ok(format!(
-        "http://127.0.0.1:{}/asset?token={}&id={}",
-        info["port"], info["token"], asset
-    ))
+    let (port, token) = overlay_addr(rt, p)?;
+    Ok(format!("http://127.0.0.1:{port}/asset?token={token}&id={asset}"))
 }
 
 /// Som da biblioteca pela saída única (valida que o arquivo é do perfil).

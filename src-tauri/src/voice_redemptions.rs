@@ -28,16 +28,56 @@ const MAX_DURATION: u64 = 3600;
 const MAX_COOLDOWN: u64 = 86400;
 const MAX_QUEUE_LIMIT: u64 = 10;
 const CONCURRENCY: &[&str] = &["queue", "ignore", "replace"];
+/// Quem pode usar um comando do chat que troca a voz. O padrão é `moderator`:
+/// nada vira público às escondidas durante a migração.
+const PERMISSIONS: &[&str] = &["everyone", "moderator", "broadcaster"];
 type R<T> = Result<T, String>;
+
+/// Palavra do comando, normalizada: minúsculas e sem o "!" de chamada.
+pub fn command_key(s: &str) -> String {
+ s.trim().to_lowercase().trim_start_matches('!').to_owned()
+}
+
+/// O comando do chat casa quando a primeira palavra é a palavra da regra.
+fn command_matches(rule: &str, message: &str) -> bool {
+ let key = command_key(rule);
+ if key.is_empty() {
+  return false;
+ }
+ message.split_whitespace().next().map(command_key).as_deref() == Some(key.as_str())
+}
+
+/// Permissão explícita por regra: broadcaster só broadcaster; moderator aceita
+/// moderator e broadcaster; everyone é público (escolha consciente do dono).
+fn permission_ok(permission: &str, role: &str) -> bool {
+ match permission {
+  "broadcaster" => role == "broadcaster",
+  "moderator" => role == "broadcaster" || role == "moderator",
+  _ => true,
+ }
+}
 
 // ---------------------------------------------------------------- configuração
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Binding {
+ /// `"reward"` (recompensa da Twitch) ou `"command"` (comando do chat).
+ #[serde(default = "default_kind")]
+ pub kind: String,
  pub reward_id: String,
  #[serde(default)]
  pub reward_name: String,
+ /// Palavra que dispara no chat quando `kind == "command"`.
+ #[serde(default)]
+ pub command: String,
+ /// Quem pode usar o comando: `everyone`, `moderator` ou `broadcaster`.
+ /// Padrão `moderator`: nada vira público às escondidas.
+ #[serde(default = "default_permission")]
+ pub permission: String,
+ /// Regra ligada sem apagar o vínculo.
+ #[serde(default = "default_enabled")]
+ pub enabled: bool,
  pub voice_id: String,
  #[serde(default)]
  pub voice_name: String,
@@ -49,6 +89,9 @@ pub struct Binding {
  #[serde(default = "default_concurrency")]
  pub concurrency: String,
 }
+fn default_kind() -> String { "reward".into() }
+fn default_permission() -> String { "moderator".into() }
+fn default_enabled() -> bool { true }
 fn default_duration() -> u64 { 30 }
 fn default_concurrency() -> String { "queue".into() }
 
@@ -65,12 +108,16 @@ pub struct Config {
  /// Nomes antigos nunca viram ID por suposição: o dono escolhe na interface.
  #[serde(default)]
  pub legacy_map: HashMap<String, String>,
+ /// "Áudio conferido no OBS": só o usuário confirma (ouvir a própria voz na
+ /// gravação). Conexão com o Voicemod nunca comprova áudio na cena.
+ #[serde(default)]
+ pub obs_checked: bool,
 }
 fn default_queue_limit() -> u64 { 3 }
 
 impl Default for Config {
  fn default() -> Self {
-  Self { enabled: false, queue_limit: default_queue_limit(), bindings: Vec::new(), legacy_map: HashMap::new() }
+  Self { enabled: false, queue_limit: default_queue_limit(), bindings: Vec::new(), legacy_map: HashMap::new(), obs_checked: false }
  }
 }
 
@@ -104,6 +151,7 @@ fn parse(v: &Value) -> R<Config> {
   queue_limit: num(v, "queueLimit", 1, MAX_QUEUE_LIMIT, 3),
   bindings: Vec::new(),
   legacy_map: HashMap::new(),
+  obs_checked: v["obsChecked"].as_bool().unwrap_or(false),
  };
  let list = v["bindings"].as_array().cloned().unwrap_or_default();
  if list.len() > MAX_BINDINGS {
@@ -111,17 +159,14 @@ fn parse(v: &Value) -> R<Config> {
  }
  let mut seen_reward: Vec<String> = Vec::new();
  for item in &list {
-  let reward_id = item["rewardId"].as_str().unwrap_or("").trim().to_owned();
-  if reward_id.is_empty() || reward_id.len() > 64 {
-   return Err("Cada vínculo precisa de um reward escolhido na lista do canal.".into());
+  let kind = item["kind"].as_str().unwrap_or("reward").trim().to_owned();
+  if kind != "reward" && kind != "command" {
+   return Err(format!("Acionamento desconhecido: {kind}"));
   }
-  if seen_reward.contains(&reward_id) {
-   return Err("Cada reward pode ter uma voz só: remova o vínculo duplicado.".into());
-  }
-  seen_reward.push(reward_id.clone());
+  let enabled = item["enabled"].as_bool().unwrap_or(true);
   let voice_id = item["voiceId"].as_str().unwrap_or("").trim().to_owned();
   if voice_id.is_empty() || voice_id.len() > 64 {
-   return Err("Cada vínculo precisa de uma voz escolhida na lista do Voicemod.".into());
+   return Err("Cada troca de voz precisa de uma voz escolhida na lista do Voicemod.".into());
   }
   if voice_id == vm::NORMAL_VOICE {
    return Err("\"Efeito desligado\" não é efeito: escolha uma voz de verdade.".into());
@@ -130,15 +175,46 @@ fn parse(v: &Value) -> R<Config> {
   if !CONCURRENCY.contains(&concurrency.as_str()) {
    return Err(format!("Política de concorrência desconhecida: {concurrency}"));
   }
-  cfg.bindings.push(Binding {
-   reward_id,
+  let mut binding = Binding {
+   kind: kind.clone(),
+   reward_id: String::new(),
    reward_name: item["rewardName"].as_str().unwrap_or("").chars().take(80).collect(),
+   command: String::new(),
+   permission: default_permission(),
+   enabled,
    voice_id,
    voice_name: item["voiceName"].as_str().unwrap_or("").chars().take(80).collect(),
    duration_secs: item["durationSec"].as_u64().map(|n| n.min(MAX_DURATION)).unwrap_or(default_duration()),
    cooldown_secs: item["cooldownSec"].as_u64().map(|n| n.min(MAX_COOLDOWN)).unwrap_or(0),
    concurrency,
-  });
+  };
+  if kind == "command" {
+   let key = command_key(item["command"].as_str().unwrap_or(""));
+   if key.is_empty() || key.len() > 40 || key.split_whitespace().count() != 1 {
+    return Err("O comando do chat é uma palavra curta, tipo \"!robô\" (sem espaços).".into());
+   }
+   if seen_reward.contains(&key) {
+    return Err("Cada comando pode ter uma voz só: remova a regra duplicada.".into());
+   }
+   let permission = item["permission"].as_str().unwrap_or("moderator").trim().to_owned();
+   if !PERMISSIONS.contains(&permission.as_str()) {
+    return Err(format!("Permissão desconhecida: {permission}"));
+   }
+   seen_reward.push(key.clone());
+   binding.command = key;
+   binding.permission = permission;
+  } else {
+   let reward_id = item["rewardId"].as_str().unwrap_or("").trim().to_owned();
+   if reward_id.is_empty() || reward_id.len() > 64 {
+    return Err("Cada recompensa precisa de um reward escolhido na lista do canal.".into());
+   }
+   if seen_reward.contains(&reward_id) {
+    return Err("Cada recompensa pode ter uma voz só: remova a regra duplicada.".into());
+   }
+   seen_reward.push(reward_id.clone());
+   binding.reward_id = reward_id;
+  }
+  cfg.bindings.push(binding);
  }
  if let Some(map) = v["legacyMap"].as_object() {
   for (k, val) in map {
@@ -287,7 +363,7 @@ pub async fn on_redemption(rt: &Arc<Runtime>, p: &Profile, e: &Event) -> Option<
   return None;
  }
  let reward_id = e.data["reward"]["id"].as_str().unwrap_or("").to_owned();
- let binding = cfg.bindings.iter().find(|b| b.reward_id == reward_id)?.clone();
+ let binding = cfg.bindings.iter().find(|b| b.kind == "reward" && b.enabled && b.reward_id == reward_id)?.clone();
  let redemption_id = e.data["id"].as_str().unwrap_or("").to_owned();
  if redemption_id.is_empty() {
   rt.log(&p.id, KIND, "Resgate sem ID de resgate no payload: não vou cumprir às cegas.", "error");
@@ -341,6 +417,62 @@ pub async fn on_redemption(rt: &Arc<Runtime>, p: &Profile, e: &Event) -> Option<
  }
  tokio::spawn(async move { enqueue(&rt2, &p2, item, policy, cooldown).await });
  Some(format!("Resgate de voz recebido: {}", binding.voice_name))
+}
+
+/// Entrada do motor para um comando do chat que troca a voz. Não é resgate:
+/// não gasta pontos nem marca nada como cumprido — só usa o mesmo serviço de
+/// troca, fila, duração e restauração dos resgates. Simulação nunca troca voz.
+pub async fn on_chat(rt: &Arc<Runtime>, p: &Profile, e: &Event) {
+ if e.kind != "chat" || e.simulated {
+  return;
+ }
+ let cfg = load(&rt.db, &p.id);
+ if !cfg.enabled {
+  return;
+ }
+ let Some(binding) = cfg
+  .bindings
+  .iter()
+  .find(|b| b.kind == "command" && b.enabled && command_matches(&b.command, &e.message))
+  .cloned()
+ else {
+  return;
+ };
+ if !permission_ok(&binding.permission, &e.role) {
+  let who = match binding.permission.as_str() {
+   "broadcaster" => "só o broadcaster",
+   "moderator" => "moderadores e o broadcaster",
+   _ => "qualquer pessoa",
+  };
+  rt.log(&p.id, KIND, &format!("{} pediu o comando de voz {}, mas ele é para {who}.", e.user, binding.command), "info");
+  return;
+ }
+ let key = format!("{}:cmd:{}", p.id, binding.command);
+ let decision = {
+  let st = rt.voice_resgates.state.lock().unwrap();
+  st.last_fire
+   .get(&key)
+   .filter(|t| t.elapsed().as_secs() < binding.cooldown_secs)
+   .map(|_| format!("{} está em intervalo ({}s entre usos).", binding.command, binding.cooldown_secs))
+ };
+ if let Some(msg) = decision {
+  rt.log(&p.id, KIND, &msg, "info");
+  return;
+ }
+ let item = Queued {
+  reward_id: key,
+  reward_name: format!("Comando {}", binding.command),
+  voice_id: binding.voice_id.clone(),
+  voice_name: binding.voice_name.clone(),
+  duration_secs: binding.duration_secs,
+  redemption_id: String::new(),
+  profile_id: p.id.clone(),
+  user: e.user.clone(),
+ };
+ let policy = binding.concurrency.clone();
+ let cooldown = binding.cooldown_secs;
+ let (rt2, p2) = (rt.clone(), p.clone());
+ tokio::spawn(async move { enqueue(&rt2, &p2, item, policy, cooldown).await });
 }
 
 /// Decide fila ou aplicação com o portão em mãos (uma troca por vez).
@@ -631,38 +763,65 @@ async fn fulfill(rt: &Arc<Runtime>, p: &Profile, reward: &str, redemption: &str)
 
 // ---------------------------------------------------------------- comandos da tela
 
-/// Cancela tudo e volta à voz normal (botão "Cancelar efeitos"). Mata a
+/// Encerra tudo e devolve a voz de antes, confirmada (botão "Encerrar efeitos
+/// e restaurar minha voz"). Se a pessoa estava numa voz com efeito antes, é
+/// essa voz que volta — nunca prometemos "voz normal" por engano. Mata a
 /// geração primeiro: nenhum temporizador antigo pode religar uma voz.
 pub async fn cancel_all(rt: &Arc<Runtime>, p: &Profile) -> R<Value> {
  rt.voice_resgates.gen.fetch_add(1, Ordering::SeqCst);
  let _gate = rt.voice_resgates.gate.lock().await;
- let had = {
+ let taken = {
   let mut st = rt.voice_resgates.state.lock().unwrap();
-  let had = st.active.is_some() || !st.upcoming.is_empty() || st.interrupted.is_some();
-  st.active = None;
+  let taken = st.active.take().or_else(|| st.interrupted.take());
   st.upcoming.clear();
-  st.interrupted = None;
-  had
+  taken
  };
- if rt.voicemod.connected() {
-  match vm::load_confirmed(rt, vm::NORMAL_VOICE).await {
-   Ok(()) => {
-    rt.voicemod.forget_applied();
-    let msg = if had { "Efeitos cancelados: voz normal de volta." } else { "Voz normal confirmada (nada em andamento)." };
-    rt.log(&p.id, KIND, msg, "success");
-    note(rt, p, msg, "success");
-   },
-   Err(err) => {
-    let msg = format!("Não consegui voltar à voz normal: {err}");
+ match taken {
+  None => {
+   let msg = "Fila de vozes limpa: nenhum efeito ativo, sua voz no Voicemod não foi mexida.";
+   rt.log(&p.id, KIND, msg, "success");
+   note(rt, p, msg, "success");
+  },
+  Some(active) => {
+   if !rt.voicemod.connected() {
+    // Sem conexão não há como confirmar nada: a promessa de restauração fica.
+    {
+     let mut st = rt.voice_resgates.state.lock().unwrap();
+     st.interrupted = Some(active.clone());
+    }
+    let msg = "Efeitos encerrados, mas o Voicemod está desconectado: a restauração da voz de antes fica pendente até reconectar e pedir Recuperar.".to_owned();
     rt.log(&p.id, KIND, &msg, "error");
     note(rt, p, &msg, "error");
-    return Err(msg);
-   },
-  }
- } else {
-  let msg = "Efeitos cancelados, mas o Voicemod está desconectado: a voz normal só é confirmada ao reconectar.".to_owned();
-  rt.log(&p.id, KIND, &msg, "error");
-  note(rt, p, &msg, "error");
+   } else {
+    match vm::load_confirmed(rt, &active.origin_voice).await {
+     Ok(()) => {
+      if active.changed_changer {
+       if let Some(false) = active.origin_changer {
+        vm::set_changer(rt, false).await.ok();
+       }
+      }
+      rt.voicemod.forget_applied();
+      let msg = if active.origin_voice == vm::NORMAL_VOICE {
+       "Efeitos encerrados: voz sem efeito restaurada.".to_owned()
+      } else {
+       format!("Efeitos encerrados: voz {} de antes restaurada.", active.origin_name)
+      };
+      rt.log(&p.id, KIND, &msg, "success");
+      note(rt, p, &msg, "success");
+     },
+     Err(err) => {
+      {
+       let mut st = rt.voice_resgates.state.lock().unwrap();
+       st.interrupted = Some(active.clone());
+      }
+      let msg = format!("Não consegui devolver a voz de antes ({}): {err}", active.origin_name);
+      rt.log(&p.id, KIND, &msg, "error");
+      note(rt, p, &msg, "error");
+      return Err(msg);
+     },
+    }
+   }
+  },
  }
  Ok(serde_json::to_value(view(rt, p)).map_err(|_| "Falha ao montar o estado".to_string())?)
 }
@@ -749,6 +908,26 @@ mod tests {
  }
  fn binding(reward: &str, voice: &str, secs: u64, cooldown: u64, concurrency: &str) -> Value {
   json!({"rewardId": reward, "rewardName": "Voz engraçada", "voiceId": voice, "voiceName": voice, "durationSec": secs, "cooldownSec": cooldown, "concurrency": concurrency})
+ }
+ fn command_binding(command: &str, permission: &str, voice: &str, secs: u64, cooldown: u64, concurrency: &str) -> Value {
+  json!({"kind": "command", "command": command, "permission": permission, "voiceId": voice, "voiceName": voice, "durationSec": secs, "cooldownSec": cooldown, "concurrency": concurrency})
+ }
+ fn chat(profile: &str, text: &str, role: &str) -> Event {
+  Event {
+   id: format!("chat-{}", uuid::Uuid::new_v4()),
+   profile_id: profile.into(),
+   kind: "chat".into(),
+   user: "Ana".into(),
+   user_id: "77".into(),
+   role: role.into(),
+   message: text.into(),
+   data: Value::Null,
+   simulated: false,
+   rehearsal: false,
+  }
+ }
+ fn chat_sim(profile: &str, text: &str, role: &str) -> Event {
+  Event { simulated: true, ..chat(profile, text, role) }
  }
  fn redeem(profile: &str, reward: &str, redemption: &str, user: &str) -> Event {
   Event {
@@ -945,17 +1124,94 @@ mod tests {
  }
 
  #[tokio::test]
- async fn cancel_all_stops_everything_and_goes_to_normal_voice() {
+ async fn cancel_all_stops_everything_and_restores_the_previous_voice() {
   let (_dir, rt, p, m) = connected_runtime().await;
   setup_with(&rt, &p, cfg_json(&[binding("r1", "robot", 600, 0, "queue")], 3)).await;
   on_redemption(&rt, &p, &redeem(&p.id, "r1", "redem-1", "u1")).await.unwrap();
   assert!(fired(&rt, 1).await);
   let _ = on_redemption(&rt, &p, &redeem(&p.id, "r2x", "redem-2", "u2")).await;
   cancel_all(&rt, &p).await.unwrap();
-  assert_eq!(m.voice(), "nofx", "volta à voz normal");
+  assert_eq!(m.voice(), "nofx", "a voz de antes era a normal");
   let v = view(&rt, &p);
   assert!(!v["queue"]["busy"].as_bool().unwrap());
   assert_eq!(v["queue"]["upcoming"].as_array().unwrap().len(), 0, "fila limpa");
+  leave(&rt, &p).await;
+ }
+
+ #[tokio::test]
+ async fn cancelar_restaura_a_voz_de_antes_e_nao_promete_normal() {
+  let (_dir, rt, p, m) = connected_runtime().await;
+  // A pessoa já estava numa voz com efeito (escolha dela) antes do resgate.
+  m.user_picks("alien");
+  rt.voicemod.take_manual(); // consome o sinal: não houve troca durante efeito
+  setup_with(&rt, &p, cfg_json(&[binding("r1", "robot", 600, 0, "queue")], 3)).await;
+  on_redemption(&rt, &p, &redeem(&p.id, "r1", "redem-1", "u1")).await.unwrap();
+  assert!(fired(&rt, 1).await);
+  assert_eq!(m.voice(), "robot");
+  cancel_all(&rt, &p).await.unwrap();
+  assert_eq!(m.voice(), "alien", "cancelar devolve a voz de antes, não “a normal”");
+  let v = view(&rt, &p);
+  let last = v["queue"]["last"].as_str().unwrap().to_owned();
+  assert!(last.to_lowercase().contains("alien"), "a mensagem diz qual voz voltou: {last}");
+  assert!(!last.contains("voz normal"), "nada de prometer “voz normal” quando volta uma voz com efeito");
+  leave(&rt, &p).await;
+ }
+
+ #[tokio::test]
+ async fn comando_do_chat_troca_a_voz_pelo_mesmo_servico_sem_ser_resgate() {
+  let (_dir, rt, p, m) = connected_runtime().await;
+  setup_with(&rt, &p, cfg_json(&[command_binding("!robo", "moderator", "robot", 1, 0, "queue")], 3)).await;
+  // Moderador pede o comando: troca pelo mesmo serviço, sem cumprir resgate.
+  on_chat(&rt, &p, &chat(&p.id, "!robo agora", "moderator")).await;
+  tokio::time::sleep(Duration::from_millis(400)).await;
+  assert_eq!(m.voice(), "robot", "comando do chat usa o mesmo serviço de troca");
+  assert!(rt.voice_resgates.fulfilled.lock().unwrap().is_empty(), "chat nunca vira resgate de pontos");
+  // Simulação (teste/ensaio) nunca troca voz.
+  on_chat(&rt, &p, &chat_sim(&p.id, "!robo de novo", "moderator")).await;
+  tokio::time::sleep(Duration::from_millis(300)).await;
+  assert_eq!(m.loads().len(), 1, "simulação não toca a voz");
+  // O efeito curto termina e devolve a voz de antes antes do teste de perfis.
+  tokio::time::sleep(Duration::from_millis(1500)).await;
+  let before = m.loads().len();
+  // Outro perfil tem as regras dele: o chat deste perfil nunca pega a do
+  // vizinho, e o chat do vizinho dispara a voz do vizinho.
+  let other = Profile { id: uuid::Uuid::new_v4().to_string(), name: "Outro".into(), platform: "twitch".into(), channel: "outro".into(), channel_id: "2".into(), bot_id: "b".into(), client_id: "c".into(), blocklist: vec![], topics: vec![], editors: vec![], ai: Default::default(), modules: json!({}) };
+  rt.db.save_profile(&other).unwrap();
+  setup_with(&rt, &other, cfg_json(&[command_binding("!alien", "moderator", "alien", 60, 0, "queue")], 3)).await;
+  on_chat(&rt, &p, &chat(&p.id, "!alien", "broadcaster")).await;
+  tokio::time::sleep(Duration::from_millis(300)).await;
+  assert_eq!(m.loads().len(), before, "a regra do outro perfil não dispara com o chat deste");
+  on_chat(&rt, &other, &chat(&other.id, "!alien", "moderator")).await;
+  tokio::time::sleep(Duration::from_millis(400)).await;
+  assert_eq!(m.voice(), "alien", "cada perfil dispara as regras dele");
+  let applied: Vec<String> = m.loads().into_iter().filter(|v| v.as_str() != "nofx").collect();
+  assert_eq!(applied, vec!["robot".to_string(), "alien".to_string()], "só vozes de efeito aplicadas, sem contar a devolução da origem");
+  leave(&rt, &p).await;
+ }
+
+ #[tokio::test]
+ async fn comando_do_chat_respeita_permissao_cooldown_e_regra_desligada() {
+  let (_dir, rt, p, m) = connected_runtime().await;
+  setup_with(&rt, &p, cfg_json(&[command_binding("!robo", "moderator", "robot", 60, 3600, "queue")], 3)).await;
+  // Quem não tem permissão não dispara — e o motivo fica claro no log.
+  on_chat(&rt, &p, &chat(&p.id, "!robo", "viewer")).await;
+  tokio::time::sleep(Duration::from_millis(300)).await;
+  assert!(m.loads().is_empty(), "viewer não usa comando de moderator");
+  assert!(rt.db.logs(&p.id).unwrap().iter().any(|l| l.message.contains("pediu o comando de voz")), "o aviso diz quem pode usar o comando");
+  // Moderator dispara; o segundo uso cai no cooldown da regra.
+  on_chat(&rt, &p, &chat(&p.id, "!robo", "moderator")).await;
+  tokio::time::sleep(Duration::from_millis(400)).await;
+  assert_eq!(m.loads(), vec!["robot".to_string()]);
+  on_chat(&rt, &p, &chat(&p.id, "!robo", "broadcaster")).await;
+  tokio::time::sleep(Duration::from_millis(300)).await;
+  assert_eq!(m.loads().len(), 1, "cooldown segura o segundo uso (broadcaster inclusive)");
+  // Regra desligada não dispara, mesmo com permissão.
+  let mut off = command_binding("!alien", "everyone", "alien", 60, 0, "queue");
+  off["enabled"] = json!(false);
+  setup_with(&rt, &p, cfg_json(&[off], 3)).await;
+  on_chat(&rt, &p, &chat(&p.id, "!alien", "broadcaster")).await;
+  tokio::time::sleep(Duration::from_millis(300)).await;
+  assert_eq!(m.loads().len(), 1, "regra desligada fica quieta");
   leave(&rt, &p).await;
  }
 

@@ -18,7 +18,7 @@ export default function ModuleSettings({profileId,kind,notify}:{profileId:string
  },[profileId,kind,desktop,notify]);
  async function save(){await api('module.config',{profileId,key:kind,value:config})}
  // Comandos de voz é um painel próprio: escuta, prévia e gravação vivem juntos
- // ali, e também na tela "Voz da live" — um só componente, um só comportamento.
+ // ali, e também na tela própria "Comandos por voz" — um só componente, um só comportamento.
  if(kind==='voice')return <div className="module-settings"><VoiceCommands profileId={profileId} notify={notify}/></div>;
  const savedVoice=String(config.voice||'');
  const voiceMissing=Boolean(savedVoice)&&!voices.some(v=>v.name===savedVoice);
