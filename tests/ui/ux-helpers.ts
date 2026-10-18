@@ -18,7 +18,7 @@ export const flows=[
   actions:[act('condition','',{condVar:'reward.cost',condOp:'greater_or_equal',condValue:'100',condFalse:'stop'}),act('chat','Oi {{viewer.name}}'),act('overlay','Aparece na OBS')]}
 ];
 
-export const NAV=['Visão geral','Perfis de bot','Discord','Rótulos OBS','Comandos','Timers','Respostas','Sons de Live','Contadores','Automações','OBS Studio','Áudio','Voz da live','Meta','Alertas','Chat no OBS','Inteligência artificial','Memórias','Comunidade','Biblioteca de presets','Histórico','Estatísticas'];
+export const NAV=['Visão geral','Perfis de bot','Discord','Rótulos OBS','Comandos','Timers','Respostas','Sons de Live','Contadores','Automações','OBS Studio','Áudio','Voz da live','Spotify','Meta','Alertas','Chat no OBS','Inteligência artificial','Memórias','Comunidade','Biblioteca de presets','Histórico','Estatísticas'];
 
 const LOGS=[
  {id:'l1',profileId:'p1',kind:'run',message:'Execução concluída com sucesso no fluxo de boas-vindas',status:'success',at:'2026-10-07T10:00:00Z'},
@@ -68,6 +68,7 @@ export async function mock(page:Page){
       case 'flows':return arg.flows;
       case 'command.counters':return {c:{v:12}};
       case 'module.config.get':return {};
+      case 'spotify.get':return {config:{},connected:false,now:null,overlay:{token:'preview-token',port:9876,url:'http://127.0.0.1:9876/overlay#token=preview-token&profile=p1'}};
       case 'settings.get':return {theme:'dark',apiPort:0,apiToken:'',updateEndpoint:'',updatePublicKey:'',autoUpdate:false};
       case 'backup.get':return {enabled:false,folder:'',keep:7};
       case 'backup.list':return [];

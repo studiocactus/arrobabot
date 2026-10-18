@@ -29,17 +29,15 @@ Para trocar de conta: **Desconectar** e autorize de novo. Apagar o perfil també
 
 A música fica numa **camada de overlay própria**, com endereço que carrega o parâmetro `mode=spotify`. Crie uma **Fonte de navegador só para a música** (Largura 1920, Altura 1080, sem atualizar ao ativar a cena) e o cartão aparece no canto que você escolher — sem mexer na meta, nos alertas nem no chat. O endereço sai no cartão **No OBS** da tela, com um clique para copiar.
 
-O **Estúdio da música** (à direita da tela) desenha na prévia **exatamente o mesmo cartão** que o OBS recebe, dentro do quadro de 1920×1080 em miniatura — o que você vê ali é o que a live mostra, e as alterações chegam ao OBS na hora, sem recarregar a fonte:
+O **Estúdio da música** (à direita da tela) desenha na prévia **exatamente o mesmo cartão** que o OBS recebe, dentro do quadro de 1920×1080 em miniatura — o que você vê ali é o que a live mostra, e as alterações chegam ao OBS na hora, sem recarregar a fonte.
 
-- **Aparência**: quatro peles do cartão (card com capa, empilhado, compacto e só texto), posição (quatro cantos ou centro), largura, preenchimento e cantos.
-- **Capa**: mostrar ou não, formato quadrado ou redondo, brilho na borda e a própria capa desfocada como fundo do cartão.
-- **Campos**: linhas de álbum, barra de progresso e tempos, cada uma liga e desliga.
-- **Cores**: temas Escuro e Claro de um clique, amostras rápidas de cor de destaque e os seletrores de cada cor.
-- **Tipografia e barra**: 16 fontes, tamanhos de título e artista, altura e cantos da barra.
-- **Movimento**: como o cartão entra (aparecer ou subir), como sai e a duração da animação.
-- **Quando a música para**: esconder o cartão ou mostrar a sua mensagem (título e linha extra), e a espera antes de sumir ao pausar (0 a 30 segundos; 0 some na hora).
+**Zoom da prévia (só da prévia, de 10% a 100%):** role a **roda do mouse** sobre o cartão (o ponto sob o cursor fica parado, a composição se move em volta dele), use os botões **−** e **+**, arraste a barra do indicador de porcentagem (com a barra em foco, as **setas do teclado** também mexem), ou **Ajustar à área** para a escala acompanhar a janela e **100%** para ver no tamanho real. Com a composição ampliada, **arraste** para deslocar o quadro; as barras internas rolam normalmente sem rolar a página. O zoom é guardado na sua máquina (fora da configuração do cartão) e **nunca muda o que o OBS recebe** — a fonte continua recebendo os 1920×1080 inteiros.
 
-O botão **Testar no overlay** dispara uma amostra pelo mesmo caminho da música real: o OBS desenha o cartão com o selo **Ensaio** e a amostra volta ao estado real sozinha — é assim que você confere a posição e o visual antes da live. Com a música desligada ou nada tocando, o cartão some (ou mostra a mensagem, se você escolher).
+**Modelo do cartão** — um clique de partida, sem travar a edição: **Só a música** (título), **Uma linha** (música e artista), **Compacto** (capa pequena + as duas linhas) e **Completo** (capa, álbum, tempos e barra). Qualquer mexida depois vira **Personalizado** sem perder o que você já ajustou; cor e posição nunca contam como mudança de modelo, e os interruptores de cada campo continuam livres em qualquer modelo.
+
+Os ajustes ficam em cinco seções: **Conteúdo** (quais campos aparecem: título, artista, linha do álbum, capa, barra, tempos, duração e ícone do Spotify, mais a ordem das linhas e o título em duas linhas), **Layout** (pele do cartão, posição na tela, alinhamento do texto, largura, preenchimento, espaçamento e cantos), **Aparência** (formato e tamanho da capa, temas, amostras de destaque, corretor de cor com amostra circular e valor hexadecimal, fontes, tamanhos, borda, sombra e transparência), **Comportamento** (como entra, como sai, o que mostrar quando não há música e a espera antes de sumir ao pausar) e **Ajustes avançados** (capa desfocada ao fundo, duração da animação e força da sombra — abre e recolhe quando você quiser).
+
+O botão **Testar no overlay** dispara uma amostra pelo mesmo caminho da música real: o OBS desenha o cartão com o selo **Ensaio** e a amostra volta ao estado real sozinha — é assim que você confere a posição e o visual antes da live. Quando nada está tocando, o que aparece é uma **amostra de demonstração** (nunca a sua conta conectada). Com a música desligada ou nada tocando, o cartão some (ou mostra a mensagem, se você escolher).
 
 ## Usar a música nas automações
 

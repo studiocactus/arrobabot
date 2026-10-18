@@ -1,15 +1,17 @@
 import {describe,expect,it} from 'vitest';
 import {
- DEFAULT_SPOTIFY_DESIGN,elapsed,hexA,normalizeNow,normalizeSpotify,spotifyShouldShow,spotifyVars,
+ DEFAULT_SPOTIFY_DESIGN,SPOTIFY_PRESETS,elapsed,hexA,normalizeNow,normalizeSpotify,presetOf,
+ spotifyShouldShow,spotifyVars,
 } from './spotifyOverlay';
 
 describe('design da música',()=>{
  it('tem exatamente as chaves que o backend valida',()=>{
   expect(Object.keys(DEFAULT_SPOTIFY_DESIGN).sort()).toEqual([
-   'albumColor','artRadius','artSize','artistColor','artistSize','barBg','barColor','barHeight','barRadius',
-   'bg','cover','coverBlur','coverGlow','empty','emptyArtist','emptyText','exitTransition','font','hideOnPause',
-   'layout','padding','pauseDelay','position','radius','showAlbum','showArt','showProgress','showTimes',
-   'titleColor','titleSize','transition','transitionMs','width',
+   'albumColor','align','artRadius','artSize','artistColor','artistSize','barBg','barColor','barHeight','barRadius',
+   'bg','borderColor','cover','coverBlur','coverGlow','empty','emptyArtist','emptyText','exitTransition','font',
+   'gap','hideOnPause','layout','opacity','order','padding','pauseDelay','position','radius','shadowSize',
+   'showAlbum','showArt','showArtist','showBg','showBorder','showDuration','showIcon','showProgress','showShadow','showTimes',
+   'showTitle','titleColor','titleSize','titleWeight','titleWrap','transition','transitionMs','width',
   ]);
  });
  it('preenche o que faltar e barra o que veio fora de faixa',()=>{
@@ -29,6 +31,52 @@ describe('design da música',()=>{
   const fromOld=normalizeSpotify({design:{layout:'compact',emptyText:'Silêncio'}});
   expect(fromOld.design.cover, 'config salva na Fase A ganha os novos campos').toBe('square');
   expect(fromOld.design.emptyText).toBe('Silêncio');
+ });
+ it('quem vinha desligando os tempos também perde a duração nova (migração)',()=>{
+  const oldTimesOff=normalizeSpotify({design:{showTimes:false}});
+  expect(oldTimesOff.design.showTimes).toBe(false);
+  expect(oldTimesOff.design.showDuration, 'herda o que os tempos valiam').toBe(false);
+  const kept=normalizeSpotify({design:{showTimes:false,showDuration:true}});
+  expect(kept.design.showDuration, 'escolha explícita é preservada').toBe(true);
+ });
+ it('normaliza ordem, alinhamento, peso e limites dos controles novos',()=>{
+  const c=normalizeSpotify({design:{order:'artist,title,album',align:'center',titleWeight:'700',opacity:55,gap:20,shadowSize:24,titleWrap:true}});
+  expect(c.design.order).toBe('artist,title,album');
+  expect(c.design.align).toBe('center');
+  expect(c.design.titleWeight).toBe('700');
+  expect(c.design.opacity).toBe(55);
+  expect(c.design.gap).toBe(20);
+  expect(c.design.shadowSize).toBe(24);
+  expect(c.design.titleWrap).toBe(true);
+  const bad=normalizeSpotify({design:{order:'artist,title',align:'justificado',titleWeight:'900',opacity:2,gap:500,shadowSize:900,titleWrap:'sim'}});
+  expect(bad.design.order, 'ordem incompleta volta ao padrão').toBe('title,artist,album');
+  expect(bad.design.align).toBe('auto');
+  expect(bad.design.titleWeight).toBe('600');
+  expect(bad.design.opacity, 'transparência corta no piso de 20%').toBe(20);
+  expect(bad.design.gap, 'espaçamento corta no teto de 24 px').toBe(24);
+  expect(bad.design.shadowSize, 'sombra corta no teto de 48 px').toBe(48);
+  expect(bad.design.titleWrap).toBe(false);
+ });
+});
+
+describe('modelos prontos do Estúdio',()=>{
+ it('cada modelo aplica o seu conjunto e o padrão é “Completo”',()=>{
+  expect(presetOf(DEFAULT_SPOTIFY_DESIGN), 'o que vem de fábrica é o modelo completo').toBe('completo');
+  for(const id of ['musica','linha','compacto'] as const){
+   const d=normalizeSpotify({design:SPOTIFY_PRESETS.find(p=>p.id===id)!.patch}).design;
+   expect(presetOf(d), `o conjunto do modelo ${id} é reconhecido`).toBe(id);
+  }
+ });
+ it('“Só a música” tira capa, artista, barra e tempos — sem sobrar espaço',()=>{
+  const d=normalizeSpotify({design:SPOTIFY_PRESETS.find(p=>p.id==='musica')!.patch}).design;
+  expect(d.showTitle).toBe(true);
+  expect([d.showArt,d.showArtist,d.showAlbum,d.showProgress,d.showTimes,d.showDuration]).toEqual([false,false,false,false,false,false]);
+ });
+ it('cor e posição não viram “Personalizado”; mexer no conteúdo vira',()=>{
+  const soCores={...DEFAULT_SPOTIFY_DESIGN,titleColor:'#ff0000',position:'center' as const};
+  expect(presetOf(soCores), 'pintar e mover não muda o modelo').toBe('completo');
+  const mexido={...DEFAULT_SPOTIFY_DESIGN,showAlbum:false};
+  expect(presetOf(mexido), 'desligar o álbum sai do modelo completo').toBe(null);
  });
 });
 

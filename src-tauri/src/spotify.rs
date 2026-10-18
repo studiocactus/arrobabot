@@ -7,7 +7,7 @@
 use crate::engine::Runtime;
 use base64::Engine;
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -84,6 +84,27 @@ struct Entry {
     track: Option<Track>,
     error: Option<String>,
     backoff_until: i64,
+    /// Sessão corrente do perfil. Consulta e renovação capturam a geração antes
+    /// de tocar a rede e conferem antes de gravar ou publicar: desconectar ou
+    /// trocar de conta no meio descarta a resposta que chegou tarde.
+    gen: u64,
+    /// Uma consulta por perfil em voo — o laço de 5 s não empilha chamada que o
+    /// HTTP pode levar 30 s a responder.
+    busy: bool,
+}
+
+/// A consulta em curso de um perfil. Devolve a exclusão mesmo se a tarefa cair
+/// no meio, sem deixar o perfil travado para sempre.
+pub struct Lease<'a> {
+    s: &'a States,
+    p: &'a str,
+}
+impl Drop for Lease<'_> {
+    fn drop(&mut self) {
+        if let Some(e) = self.s.lock().get_mut(self.p) {
+            e.busy = false;
+        }
+    }
 }
 
 impl States {
@@ -130,6 +151,28 @@ impl States {
     pub fn throttled(&self, p: &str) -> bool {
         self.lock().get(p).is_some_and(|e| e.backoff_until > chrono::Utc::now().timestamp())
     }
+    /// Número da sessão corrente do perfil — sobe em desconexão e troca de conta.
+    pub fn generation(&self, p: &str) -> u64 {
+        self.lock().get(p).map(|e| e.gen).unwrap_or(0)
+    }
+    /// Encerra a sessão: o que ainda estiver em trânsito compara a geração e
+    /// descarta o resultado em vez de repovoar a faixa ou o cofre.
+    pub fn bump(&self, p: &str) {
+        let mut map = self.lock();
+        let e = map.entry(p.to_owned()).or_default();
+        e.gen = e.gen.wrapping_add(1);
+    }
+    /// Tenta começar uma leitura deste perfil. None quando já há uma em voo —
+    /// o chamador nem sai para a rede, evitando sobreposição e fim fora de ordem.
+    pub fn begin<'a>(&'a self, p: &'a str) -> Option<Lease<'a>> {
+        let mut map = self.lock();
+        let e = map.entry(p.to_owned()).or_default();
+        if e.busy {
+            return None;
+        }
+        e.busy = true;
+        Some(Lease { s: self, p })
+    }
 }
 
 /// Configuração do módulo como está no banco (por perfil).
@@ -139,18 +182,88 @@ pub fn config(rt: &Runtime, p: &str) -> Value {
 
 /// Padrões do overlay — mesma forma que o Estúdio e a fonte do OBS desenham.
 fn design_defaults() -> Value {
-    json!({
-        "layout": "card", "cover": "square", "coverGlow": false, "coverBlur": false,
-        "showArt": true, "showAlbum": true, "showProgress": true, "showTimes": true,
-        "bg": "#0f1319", "titleColor": "#ffffff", "artistColor": "#b9c0cc", "albumColor": "#8a92a3",
-        "barBg": "#2a3140", "barColor": "#1ed760", "barHeight": 6, "barRadius": 3,
-        "font": "Segoe UI", "titleSize": 16, "artistSize": 13, "artSize": 88, "artRadius": 10,
-        "width": 460, "padding": 14, "radius": 14,
-        "empty": "hide", "emptyText": "Nada tocando", "emptyArtist": "",
-        "hideOnPause": true, "pauseDelay": 0,
-        "position": "bottom-left",
-        "transition": "fade", "exitTransition": "fade", "transitionMs": 400
-    })
+    // Montado em partes: o objeto único estourava o limite de recursão do macro json!.
+    let mut d = Map::new();
+    // Pele e capa
+    for (k, v) in [
+        ("layout", json!("card")),
+        ("cover", json!("square")),
+        ("coverGlow", json!(false)),
+        ("coverBlur", json!(false)),
+    ] {
+        d.insert(k.into(), v);
+    }
+    // Alavancas de conteúdo (o que aparece e o que some junto com o espaço)
+    for (k, v) in [
+        ("showArt", json!(true)),
+        ("showTitle", json!(true)),
+        ("showArtist", json!(true)),
+        ("showAlbum", json!(true)),
+        ("showProgress", json!(true)),
+        ("showTimes", json!(true)),
+        ("showDuration", json!(true)),
+        ("showIcon", json!(true)),
+        ("showBg", json!(true)),
+        ("showBorder", json!(false)),
+        ("showShadow", json!(false)),
+    ] {
+        d.insert(k.into(), v);
+    }
+    // Controles novos do Estúdio: borda, sombra, transparência, alinhamento,
+    // espaçamento, quebra do nome, peso do título e ordem das linhas
+    for (k, v) in [
+        ("borderColor", json!("#2a3140")),
+        ("shadowSize", json!(16)),
+        ("opacity", json!(100)),
+        ("align", json!("auto")),
+        ("gap", json!(12)),
+        ("titleWrap", json!(false)),
+        ("titleWeight", json!("600")),
+        ("order", json!("title,artist,album")),
+    ] {
+        d.insert(k.into(), v);
+    }
+    // Cores
+    for (k, v) in [
+        ("bg", json!("#0f1319")),
+        ("titleColor", json!("#ffffff")),
+        ("artistColor", json!("#b9c0cc")),
+        ("albumColor", json!("#8a92a3")),
+        ("barBg", json!("#2a3140")),
+        ("barColor", json!("#1ed760")),
+        ("barHeight", json!(6)),
+        ("barRadius", json!(3)),
+    ] {
+        d.insert(k.into(), v);
+    }
+    // Tipografia e medidas
+    for (k, v) in [
+        ("font", json!("Segoe UI")),
+        ("titleSize", json!(16)),
+        ("artistSize", json!(13)),
+        ("artSize", json!(88)),
+        ("artRadius", json!(10)),
+        ("width", json!(460)),
+        ("padding", json!(14)),
+        ("radius", json!(14)),
+    ] {
+        d.insert(k.into(), v);
+    }
+    // Comportamento parado, posição e movimento
+    for (k, v) in [
+        ("empty", json!("hide")),
+        ("emptyText", json!("Nada tocando")),
+        ("emptyArtist", json!("")),
+        ("hideOnPause", json!(true)),
+        ("pauseDelay", json!(0)),
+        ("position", json!("bottom-left")),
+        ("transition", json!("fade")),
+        ("exitTransition", json!("fade")),
+        ("transitionMs", json!(400)),
+    ] {
+        d.insert(k.into(), v);
+    }
+    Value::Object(d)
 }
 
 /// Configuração padrão do módulo: desligado, sem Client ID, overlay neutro.
@@ -216,7 +329,11 @@ pub fn valid_config(v: &Value) -> bool {
         return false;
     }
     let d = &v["design"];
-    const BOOLS: &[&str] = &["showArt", "showAlbum", "showProgress", "showTimes", "coverGlow", "coverBlur", "hideOnPause"];
+    const BOOLS: &[&str] = &[
+        "showArt", "showTitle", "showArtist", "showAlbum", "showProgress", "showTimes",
+        "showDuration", "showIcon", "showBg", "showBorder", "showShadow", "titleWrap",
+        "coverGlow", "coverBlur", "hideOnPause",
+    ];
     if !BOOLS.iter().all(|k| d[k].is_boolean()) {
         return false;
     }
@@ -227,6 +344,22 @@ pub fn valid_config(v: &Value) -> bool {
         return false;
     }
     if !matches!(d["empty"].as_str(), Some("hide") | Some("message")) {
+        return false;
+    }
+    if !matches!(d["align"].as_str(), Some("auto") | Some("left") | Some("center")) {
+        return false;
+    }
+    if !matches!(d["titleWeight"].as_str(), Some("400") | Some("500") | Some("600") | Some("700")) {
+        return false;
+    }
+    // A ordem das linhas é uma permutação exata das três chaves; o que vier
+    // fora disso o Estúdio já normalizou para o padrão.
+    let order_ok = d["order"].as_str().is_some_and(|s| {
+        let mut parts: Vec<&str> = s.split(',').collect();
+        parts.sort_unstable();
+        parts == ["album", "artist", "title"]
+    });
+    if !order_ok {
         return false;
     }
     if !matches!(d["transition"].as_str(), Some("fade") | Some("slide") | Some("none"))
@@ -243,12 +376,15 @@ pub fn valid_config(v: &Value) -> bool {
     if !font_ok(&d["font"]) || !text_ok(&d["emptyText"], 64) || !text_ok(&d["emptyArtist"], 64) {
         return false;
     }
-    for k in ["bg", "titleColor", "artistColor", "albumColor", "barBg", "barColor"] {
+    for k in ["bg", "titleColor", "artistColor", "albumColor", "barBg", "barColor", "borderColor"] {
         if !color_ok(&d[k]) {
             return false;
         }
     }
-    num_in(&d["width"], 240.0, 960.0)
+    num_in(&d["opacity"], 20.0, 100.0)
+        && num_in(&d["gap"], 2.0, 24.0)
+        && num_in(&d["shadowSize"], 0.0, 48.0)
+        && num_in(&d["width"], 240.0, 960.0)
         && num_in(&d["padding"], 0.0, 48.0)
         && num_in(&d["radius"], 0.0, 40.0)
         && num_in(&d["barHeight"], 2.0, 24.0)
@@ -290,6 +426,15 @@ pub fn disconnect(p: &str) -> Result<(), String> {
         vault::set(p, k, "")?;
     }
     Ok(())
+}
+
+/// Só em teste: credenciais já vencidas no cofre, para exercitar a renovação
+/// contra um servidor lento sem esperar o relógio passar.
+#[cfg(test)]
+pub fn seed_expired(p: &str) -> Result<(), String> {
+    vault::set(p, "spotify_token", "token-antigo")?;
+    vault::set(p, "spotify_refresh", "refresh-antigo")?;
+    vault::set(p, "spotify_expires", "1")
 }
 
 /// Autoriza a conta no navegador (PKCE, sem segredo) e guarda os tokens no cofre.
@@ -363,15 +508,19 @@ pub async fn connect_with<F: Fn(&str) -> Result<(), String>>(client: &reqwest::C
     Ok(json!({"authorized": true, "user": me["display_name"].as_str().unwrap_or_default(), "product": me["product"].as_str().unwrap_or_default()}))
 }
 
-/// Token de leitura atual, renovando quando expira.
-pub async fn token(client: &reqwest::Client, p: &str, cfg: &Value) -> Result<String, String> {
+/// Token de leitura atual, renovando quando expira. A geração da sessão é
+/// capturada antes da chamada: uma renovação que termina depois de a conta
+/// desconectar não reescreve as credenciais apagadas.
+pub async fn token(rt: &Runtime, p: &str, cfg: &Value) -> Result<String, String> {
+    let gen = rt.spotify.generation(p);
     let current = vault::get(p, "spotify_token")?;
     let expires = vault::get(p, "spotify_expires").ok().and_then(|s| s.parse::<i64>().ok()).unwrap_or(0);
     if chrono::Utc::now().timestamp() + 60 < expires {
         return Ok(current);
     }
     let refresh = vault::get(p, "spotify_refresh")?;
-    let res = client
+    let res = rt
+        .http
         .post(format!("{}/api/token", accounts_base()))
         .form(&[("grant_type", "refresh_token"), ("refresh_token", refresh.as_str()), ("client_id", cfg["clientId"].as_str().unwrap_or(""))])
         .send()
@@ -381,6 +530,9 @@ pub async fn token(client: &reqwest::Client, p: &str, cfg: &Value) -> Result<Str
         return Err("A autorização do Spotify expirou. Autorize a conta novamente.".into());
     }
     let v: Value = res.json().await.map_err(|_| "Resposta do Spotify inválida".to_string())?;
+    if rt.spotify.generation(p) != gen {
+        return Err("A conta foi desconectada durante a renovação do Spotify".into());
+    }
     store(p, &v)?;
     Ok(v["access_token"].as_str().unwrap_or_default().into())
 }
@@ -480,11 +632,22 @@ pub fn test_payload(p: &str) -> Value {
 /// Uma leitura da música atual: renova o token se preciso, atualiza o estado do
 /// perfil e transmite ao overlay/à prévia quando o assunto mudou ou a posição
 /// andou. Devolve a música (ou None) para o painel mostrar na hora.
+/// Só uma leitura por perfil em voo: se já houver uma, devolve o estado atual
+/// sem sair para a rede — respostas fora de ordem não atropelam a mais nova.
 pub async fn poll_once(rt: &Runtime, p: &crate::model::Profile, cfg: &Value) -> Result<Option<Track>, String> {
-    let token = match token(&rt.http, &p.id, cfg).await {
+    let _lease = match rt.spotify.begin(&p.id) {
+        Some(l) => l,
+        None => return Ok(rt.spotify.now(&p.id)),
+    };
+    // A sessão de agora é a referência: desconectar ou trocar de conta no meio
+    // da consulta invalida o resultado que ainda vai chegar.
+    let gen = rt.spotify.generation(&p.id);
+    let token = match token(rt, &p.id, cfg).await {
         Ok(t) => t,
         Err(e) => {
-            forget(rt, &p.id);
+            if rt.spotify.generation(&p.id) == gen {
+                forget(rt, &p.id);
+            }
             return Err(e);
         }
     };
@@ -496,10 +659,17 @@ pub async fn poll_once(rt: &Runtime, p: &crate::model::Profile, cfg: &Value) -> 
                 rt.spotify.throttle(&p.id, 30);
                 return Err("O Spotify pediu uma pausa nas consultas. Aguarde um instante.".into());
             }
-            forget(rt, &p.id);
+            if rt.spotify.generation(&p.id) == gen {
+                forget(rt, &p.id);
+            }
             return Err(e);
         }
     };
+    // Resposta atrasada (desconexão ou troca de conta durante a consulta): o
+    // resultado não pode mais repovoar a faixa nem acender o overlay.
+    if rt.spotify.generation(&p.id) != gen {
+        return Ok(rt.spotify.now(&p.id));
+    }
     let fresh = rt.spotify.set(&p.id, track.clone());
     rt.spotify.ok(&p.id);
     // Tocando e pausado retransmitem sempre (a posição anda a cada leitura); a
@@ -605,15 +775,63 @@ mod tests {
     }
 
     #[test]
+    fn validacao_cobre_os_controles_novos_do_estudio() {
+        let mut v = defaults();
+        v["design"]["opacity"] = json!(5);
+        assert!(!valid_config(&v), "transparência abaixo do mínimo de 20%");
+        let mut v = defaults();
+        v["design"]["opacity"] = json!("opaca");
+        assert!(!valid_config(&v), "transparência não é número");
+        let mut v = defaults();
+        v["design"]["gap"] = json!(200);
+        assert!(!valid_config(&v), "espaçamento passa dos 24 px");
+        let mut v = defaults();
+        v["design"]["shadowSize"] = json!(120);
+        assert!(!valid_config(&v), "sombra fora dos 48 px");
+        let mut v = defaults();
+        v["design"]["align"] = json!("justificado");
+        assert!(!valid_config(&v), "alinhamento fora do conhecido");
+        let mut v = defaults();
+        v["design"]["titleWeight"] = json!("900");
+        assert!(!valid_config(&v), "peso do título fora do conhecido");
+        let mut v = defaults();
+        v["design"]["order"] = json!("artist,title");
+        assert!(!valid_config(&v), "ordem sem as três linhas");
+        let mut v = defaults();
+        v["design"]["order"] = json!("album,album,title");
+        assert!(!valid_config(&v), "ordem com linha repetida não é permutação");
+        let mut v = defaults();
+        v["design"]["showIcon"] = json!("sim");
+        assert!(!valid_config(&v), "ícone não é booleano");
+        let mut v = defaults();
+        v["design"]["titleWrap"] = json!("sim");
+        assert!(!valid_config(&v), "quebra do nome não é booleano");
+        let mut v = defaults();
+        v["design"]["borderColor"] = json!("rgb(1,2,3)");
+        assert!(valid_config(&v), "cor da borda segue a mesma regra das outras cores");
+        let mut v = defaults();
+        v["design"]["align"] = json!("center");
+        v["design"]["titleWeight"] = json!("700");
+        v["design"]["order"] = json!("artist,album,title");
+        v["design"]["opacity"] = json!(20);
+        v["design"]["gap"] = json!(2);
+        v["design"]["shadowSize"] = json!(48);
+        assert!(valid_config(&v), "limites dos controles novos são válidos");
+    }
+
+    #[test]
     fn chaves_do_design_sao_as_que_o_estudio_desenha() {
         let mut keys: Vec<_> = design_defaults().as_object().unwrap().keys().cloned().collect();
         keys.sort();
         assert_eq!(keys, vec![
-            "albumColor", "artRadius", "artSize", "artistColor", "artistSize", "barBg", "barColor",
-            "barHeight", "barRadius", "bg", "cover", "coverBlur", "coverGlow", "empty", "emptyArtist",
-            "emptyText", "exitTransition", "font", "hideOnPause", "layout", "padding", "pauseDelay",
-            "position", "radius", "showAlbum", "showArt", "showProgress", "showTimes", "titleColor",
-            "titleSize", "transition", "transitionMs", "width",
+            "albumColor", "align", "artRadius", "artSize", "artistColor", "artistSize", "barBg",
+            "barColor", "barHeight", "barRadius", "bg", "borderColor", "cover", "coverBlur",
+            "coverGlow", "empty", "emptyArtist", "emptyText", "exitTransition", "font", "gap",
+            "hideOnPause", "layout", "opacity", "order", "padding", "pauseDelay", "position",
+            "radius", "shadowSize", "showAlbum", "showArt", "showArtist", "showBg", "showBorder",
+            "showDuration", "showIcon", "showProgress", "showShadow", "showTimes", "showTitle",
+            "titleColor", "titleSize", "titleWeight", "titleWrap", "transition", "transitionMs",
+            "width",
         ]);
     }
 
@@ -676,6 +894,26 @@ mod tests {
         assert!(s.throttled("p"), "espera ativa bloqueia a consulta");
         s.throttle("p", 0);
         assert!(!s.throttled("p"), "espera vencida libera a consulta");
+    }
+
+    #[test]
+    fn so_uma_leitura_por_perfil_e_a_trava_solta_sozinha() {
+        let s = States::default();
+        let g = s.generation("p");
+        {
+            let _voo = s.begin("p").expect("primeira leitura entra");
+            assert!(s.begin("p").is_none(), "segunda leitura espera a primeira sair");
+            // Perfil alheio não disputa a mesma trava.
+            assert!(s.begin("outro").is_some(), "cada perfil tem a sua leitura");
+        }
+        assert!(s.begin("p").is_some(), "leitura terminada devolve a trava");
+        // Trava caída (pânico ou descarte da tarefa) não deixa o perfil mudo.
+        s.bump("p");
+        assert!(s.generation("p") > g, "encerrar a sessão muda o número dela");
+        let g2 = s.generation("p");
+        s.bump("p");
+        assert!(s.generation("p") > g2, "trocar de conta sobe de novo");
+        assert!(s.begin("p").is_some(), "nada disso deixa o perfil travado");
     }
 
     #[tokio::test]

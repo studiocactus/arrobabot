@@ -104,18 +104,20 @@ pub async fn serve(rt: Arc<Runtime>) -> Result<(), String> {
 /// handshake do WebSocket quando for o caso.
 async fn is_websocket(socket: &TcpStream) -> bool {
     let mut head = [0u8; 4096];
-    let mut n = 0usize;
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
     loop {
-        if n >= head.len() { return false; }
-        let peeked = match tokio::time::timeout(Duration::from_secs(5), socket.peek(&mut head[n..])).await {
+        // peek does not consume bytes: each observation must replace the buffer.
+        let n = match tokio::time::timeout_at(deadline, socket.peek(&mut head)).await {
             Ok(Ok(k)) if k > 0 => k,
             _ => return false,
         };
-        n += peeked;
         if head[..n].windows(4).any(|w| w == b"\r\n\r\n") {
             let low = head[..n].to_ascii_lowercase();
             return low.starts_with(b"get ") && low.windows(18).any(|w| w == b"upgrade: websocket");
         }
+        if n == head.len() || tokio::time::Instant::now() >= deadline { return false; }
+        // Already-buffered bytes remain readable; yield before checking for more.
+        tokio::time::sleep(Duration::from_millis(5)).await;
     }
 }
 
@@ -176,4 +178,29 @@ fn query(target: &str, key: &str) -> Option<String> {
     target.split('?').nth(1)?.split('&').find_map(|part| {
         part.strip_prefix(prefix.as_str()).filter(|v| !v.is_empty() && v.len() <= 64).map(|v| v.to_string())
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn websocket_header_can_arrive_in_fragments_without_consuming_bytes() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let mut client = TcpStream::connect(listener.local_addr().unwrap()).await.unwrap();
+        let (mut server, _) = listener.accept().await.unwrap();
+        let first = b"GET / HTTP/1.1\r\nHost: localhost\r\n";
+        let last = b"Upgrade: websocket\r\nConnection: Upgrade\r\n\r\n";
+        client.write_all(first).await.unwrap();
+        let writer = tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(50)).await;
+            client.write_all(last).await.unwrap();
+            client
+        });
+        assert!(is_websocket(&server).await, "fragmented handshake must remain a WebSocket");
+        let _client = writer.await.unwrap();
+        let mut received = vec![0; first.len() + last.len()];
+        server.read_exact(&mut received).await.unwrap();
+        assert_eq!(received, [first.as_slice(), last.as_slice()].concat());
+    }
 }

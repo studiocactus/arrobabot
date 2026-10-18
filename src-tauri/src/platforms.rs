@@ -109,8 +109,9 @@ async fn twitch_events(rt:Arc<Runtime>,p:Profile)->Result<(),String>{
  // Sessões independentes: a queda de uma não derruba a outra no mesmo instante,
  // o que abria janelas cegas onde mensagens do chat se perdiam em silêncio.
  if crate::secrets::get(&p.id,"channel_token").is_ok() {
-  let (a,b)=(tokio::spawn(session_forever(rt.clone(),p.clone(),"bot")),tokio::spawn(session_forever(rt.clone(),p.clone(),"channel")));
-  let _=tokio::join!(a,b);Ok(())
+  // Keep both futures owned by this connection: dropping it cancels both
+  // sessions instead of detaching spawned tasks after Disconnect.
+  tokio::join!(session_forever(rt.clone(),p.clone(),"bot"),session_forever(rt.clone(),p.clone(),"channel"));Ok(())
  }else{session_forever(rt,p,"bot").await;Ok(())}
 }
 /// Mantém uma sessão EventSub de pé sozinha, com espera crescente entre tentativas.

@@ -9,6 +9,10 @@ pub async fn transcribe(rt:&Runtime,p:&str,audio:&str)->Result<Value,String>{
  let profile=rt.db.profile(p)?;
  if profile.modules["voice"]!=true{return Err("Ative o controle por voz neste perfil".into())}
  if audio.len()>4_000_000{return Err("Gravação muito longa".into())}
+ // A transcrição leva segundos: a sessão de escuta pode parar ou o perfil trocar
+ // no meio. A geração de agora é a referência — se mudar, o resultado tardio não
+ // pode disparar o comando.
+ let gen=rt.listen.generation(p);
  let config=rt.db.module(p,"voice");
  let legacy=config["endpoint"].as_str().unwrap_or("").trim().to_owned();
  let bytes=base64::engine::general_purpose::STANDARD.decode(audio).map_err(|_|"Áudio inválido")?;
@@ -24,6 +28,11 @@ pub async fn transcribe(rt:&Runtime,p:&str,audio:&str)->Result<Value,String>{
   whisper(rt,p,&legacy,&bytes).await?
  };
  let text=text.trim().to_owned();
+ // A escuta parou ou o perfil trocou durante a transcrição: o resultado chegou
+ // tarde e não pode mais virar comando.
+ if rt.listen.generation(p)!=gen{
+  return Err("A captura foi interrompida: o resultado veio tarde e não foi disparado".into());
+ }
  rt.submit(Event{id:uuid::Uuid::new_v4().to_string(),profile_id:p.into(),kind:"voice".into(),user:"streamer".into(),user_id:"local-streamer".into(),role:"broadcaster".into(),message:text.clone(),data:json!({"via":"button"}),simulated:false,rehearsal:false}).await?;
  Ok(json!({"text":text}))
 }

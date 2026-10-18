@@ -7,6 +7,7 @@ const SIZES=[{w:1280,h:820,tag:'padrao'},{w:1440,h:1000,tag:'ampla'},{w:1152,h:8
 test('auditoria de layout',async({page})=>{
  test.setTimeout(900000);
  const report:string[]=[];
+ const failures:string[]=[];
  const flush=()=>writeFileSync(`${OUT}\\relatorio.txt`,report.join('\n'),'utf8');
  const errors:string[]=[];
  page.on('pageerror',e=>errors.push(e.message.slice(0,300)));
@@ -28,6 +29,8 @@ test('auditoria de layout',async({page})=>{
   if(info.fatal)issues.unshift({k:'app-quebrado',sel:'main.fatal',txt:'boundary raiz assumiu a tela',extra:''});
   report.push(`\n## ${label} — ${issues.length} achado(s) | nav=${navs} | tela="${info.h}"${info.prof}`);
   report.push(...fmt(issues));
+  failures.push(...fmt(issues).map(issue=>`${label}: ${issue}`));
+  failures.push(...errors.map(error=>`${label}: ${error}`));
   if(errors.length){report.push('  !! pageerrors: '+errors.join(' || ').slice(0,600));errors.length=0}
   if(shot)await page.screenshot({path:`${OUT}\\${shot}.png`});
   flush();
@@ -47,9 +50,9 @@ test('auditoria de layout',async({page})=>{
      if(await menu.count()){await menu.click({timeout:4000});await page.waitForTimeout(250)}
     }
     const btn2=page.getByRole('button',{name:nav,exact:true});
-    if(await btn2.count()===0){report.push(`\n## ${nav} — BOTÃO AUSENTE`);continue}
+    if(await btn2.count()===0){failures.push(`${nav}: botão ausente`);report.push(`\n## ${nav} — BOTÃO AUSENTE`);continue}
     await btn2.first().click({timeout:5000});
-   }catch(e){report.push(`\n## ${nav} — clique falhou: ${String(e).slice(0,140)}`);continue}
+   }catch(e){failures.push(`${nav}: ${String(e)}`);report.push(`\n## ${nav} — clique falhou: ${String(e).slice(0,140)}`);continue}
    const shot=(s.tag==='padrao')?nav.replace(/[^\w]/g,'_'):(s.tag==='minima'&&['Visão geral','Automações','Comunidade','Estatísticas'].includes(nav)?`${s.tag}_${nav.replace(/[^\w]/g,'_')}`:undefined);
    const r=await step(`${s.tag} · ${nav}`,shot);
    if(r.navs===0){report.push('  ⚠ shell perdido');flush();break}
@@ -67,13 +70,14 @@ test('auditoria de layout',async({page})=>{
   await step('Painel Testar fluxo','teste');
   await page.getByRole('button',{name:'Iniciar teste',exact:true}).click({timeout:5000});
   await step('Testar fluxo em execução','teste-execucao');
- }catch(e){report.push(`\n## Editor/Teste — FALHOU: ${String(e).slice(0,300)}`)}
+ }catch(e){failures.push(`Editor/Teste: ${String(e)}`);report.push(`\n## Editor/Teste — FALHOU: ${String(e).slice(0,300)}`)}
 
  try{
   const ux=await page.evaluate(()=>JSON.stringify((window as unknown as {__ux?:{unknown:string[]}}).__ux?.unknown||[]));
   report.push('\n## ops não mapeadas no mock: '+ux);
  }catch{report.push('\n## ops: página indisponível')}
  flush();
+ expect(failures,'Problemas encontrados na auditoria visual; consulte o relatório.').toEqual([]);
 });
 
 /** Uma tela que falha não pode levar o aplicativo junto: o contêiner precisa segurar. */

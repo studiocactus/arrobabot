@@ -1456,20 +1456,40 @@ async fn spotify_autoriza_lê_a_faixa_e_transmite_para_o_overlay(){
  std::env::set_var("BOTLIVE_SPOTIFY_ACCOUNTS",format!("http://{addr}"));
  fn faixa(playing:bool,progress:u64)->String{format!(r#"{{"is_playing":{playing},"progress_ms":{progress},"timestamp":1760000000000,"currently_playing_type":"track","item":{{"id":"t1","name":"Tocando Agora","duration_ms":201000,"artists":[{{"name":"Cactus"}}],"album":{{"name":"Ao Vivo","images":[{{"url":"https://i.scdn.co/capa.jpg"}}]}},"external_urls":{{"spotify":"https://open.spotify.com/track/t1"}}}}}}"#)}
  let route=std::sync::Arc::new(std::sync::atomic::AtomicU8::new(0)); // 0 faixa, 1 pausa, 2 parado, 3 limite
+ // Lentidão contornável e contadores: é o que permite arrumar uma desconexão
+ // no meio da consulta e provar que a segunda leitura nem saiu para a rede.
+ let lento_faixa=std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+ let lento_token=std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+ let consultas=std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+ let renovacoes=std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
  let server=route.clone();
+ let faixa_lenta=lento_faixa.clone();let token_lento=lento_token.clone();
+ let consultas_srv=consultas.clone();let renovacoes_srv=renovacoes.clone();
  tokio::spawn(async move{loop{
   let (mut s,_) = match listener.accept().await{Ok(x)=>x,Err(_)=>continue};
   let mut buf=[0u8;8192];let n=match s.read(&mut buf).await{Ok(n)=>n,Err(_)=>continue};
   let req=String::from_utf8_lossy(&buf[..n]).to_string();
   let path=req.split_whitespace().nth(1).unwrap_or("/").to_owned();
   let (status,body)=match path.as_str(){
-   "/api/token" => ("200 OK",r#"{"access_token":"token-fake","refresh_token":"refresh-fake","expires_in":3600}"#.to_owned()),
+   "/api/token" => {
+    renovacoes_srv.fetch_add(1,std::sync::atomic::Ordering::SeqCst);
+    if token_lento.load(std::sync::atomic::Ordering::SeqCst){
+     tokio::time::sleep(std::time::Duration::from_millis(600)).await;
+    }
+    ("200 OK",r#"{"access_token":"token-fake","refresh_token":"refresh-fake","expires_in":3600}"#.to_owned())
+   },
    "/v1/me" => ("200 OK",r#"{"display_name":"Cactus","product":"premium"}"#.to_owned()),
-   "/v1/me/player/currently-playing" => match server.load(std::sync::atomic::Ordering::SeqCst){
-    0 => ("200 OK",faixa(true,12000)),
-    1 => ("200 OK",faixa(false,45000)),
-    2 => ("204 No Content",String::new()),
-    _ => ("429 Too Many Requests",String::new()),
+   "/v1/me/player/currently-playing" => {
+    consultas_srv.fetch_add(1,std::sync::atomic::Ordering::SeqCst);
+    if faixa_lenta.load(std::sync::atomic::Ordering::SeqCst){
+     tokio::time::sleep(std::time::Duration::from_millis(600)).await;
+    }
+    match server.load(std::sync::atomic::Ordering::SeqCst){
+     0 => ("200 OK",faixa(true,12000)),
+     1 => ("200 OK",faixa(false,45000)),
+     2 => ("204 No Content",String::new()),
+     _ => ("429 Too Many Requests",String::new()),
+    }
    },
    _ => ("404 Not Found","{}".to_owned()),
   };
@@ -1536,10 +1556,56 @@ async fn spotify_autoriza_lê_a_faixa_e_transmite_para_o_overlay(){
  assert!(rt.spotify.mark_error(&p.id,msg),"erro novo pode ir para o Histórico");
  assert!(!rt.spotify.mark_error(&p.id,msg),"o mesmo erro não repete no Histórico");
 
- // Desconexão: some do estado, do pré-voo e do painel.
+ // Consulta em voo: a leitura seguinte não empilha chamada na API e a resposta
+ // que chega depois da desconexão é descartada — a música some do overlay na
+ // hora e não volta a acender sozinha.
+ route.store(0,std::sync::atomic::Ordering::SeqCst);
+ lento_faixa.store(true,std::sync::atomic::Ordering::SeqCst);
+ let mut rx=rt.broadcast.subscribe();
+ let consultas_antes=consultas.load(std::sync::atomic::Ordering::SeqCst);
+ let rt2=rt.clone();let p2=p.clone();let cfg2=cfg.clone();
+ let voando=tokio::spawn(async move{crate::spotify::poll_once(&rt2,&p2,&cfg2).await});
+ // Espera a consulta chegar à rede — a resposta está retida nos 600 ms.
+ let mut esperou=0;
+ while consultas.load(std::sync::atomic::Ordering::SeqCst)==consultas_antes{
+  assert!(esperou<300,"a consulta em voo não saiu para a rede");
+  tokio::time::sleep(std::time::Duration::from_millis(10)).await;esperou+=1;
+ }
+ // A leitura seguinte devolve o estado atual sem nova chamada.
+ let out=dispatch(rt.clone(),"spotify.poll",json!({"profileId":p.id})).await.unwrap();
+ assert_eq!(consultas.load(std::sync::atomic::Ordering::SeqCst),consultas_antes+1,"a segunda leitura não empilha chamada");
+ assert_eq!(out["track"],Value::Null,"sem consulta nova, o estado é o que vale");
+ // Desconexão no meio da consulta: o resultado atrasado não repovoa a faixa.
  dispatch(rt.clone(),"spotify.disconnect",json!({"profileId":p.id})).await.unwrap();
+ let atrasada=voando.await.unwrap().unwrap();
+ assert!(atrasada.is_none(),"resposta anterior à desconexão é descartada");
+ assert!(rt.spotify.now(&p.id).is_none(),"a faixa atrasada não volta ao estado");
  assert!(!crate::spotify::connected(&p.id),"cofre limpo");
+ let tardios:Vec<Value>=std::iter::from_fn(||rx.try_recv().ok()).filter(|v|v["type"]=="spotify.now").collect();
+ assert!(tardios.iter().all(|v|v["payload"]["playing"]!=Value::Bool(true)),"nenhum spotify.now atrasado reacende o overlay");
+ lento_faixa.store(false,std::sync::atomic::Ordering::SeqCst);
+
+ // Renovação em voo: a troca de token que termina depois da desconexão não
+ // reescreve as credenciais apagadas — a conta segue desconectada.
+ crate::spotify::seed_expired(&p.id).unwrap();
+ assert!(crate::spotify::connected(&p.id),"cofre reabastecido para a renovação");
+ lento_token.store(true,std::sync::atomic::Ordering::SeqCst);
+ let renovacoes_antes=renovacoes.load(std::sync::atomic::Ordering::SeqCst);
+ let consultas_renov=consultas.load(std::sync::atomic::Ordering::SeqCst);
+ let rt3=rt.clone();let p3=p.clone();let cfg3=cfg.clone();
+ let renova=tokio::spawn(async move{crate::spotify::poll_once(&rt3,&p3,&cfg3).await});
+ let mut esperou=0;
+ while renovacoes.load(std::sync::atomic::Ordering::SeqCst)==renovacoes_antes{
+  assert!(esperou<300,"a renovação não saiu para a rede");
+  tokio::time::sleep(std::time::Duration::from_millis(10)).await;esperou+=1;
+ }
+ dispatch(rt.clone(),"spotify.disconnect",json!({"profileId":p.id})).await.unwrap();
+ let erro=renova.await.unwrap().unwrap_err();
+ assert!(erro.contains("renovação do Spotify"),"avisa a renovação interrompida: {erro}");
+ assert!(!crate::spotify::connected(&p.id),"renovação atrasada não reescreve o cofre");
  assert!(rt.spotify.now(&p.id).is_none());
+ assert_eq!(consultas.load(std::sync::atomic::Ordering::SeqCst),consultas_renov,"nem chega a consultar a faixa");
  let out=dispatch(rt.clone(),"spotify.get",json!({"profileId":p.id})).await.unwrap();
- assert_eq!(out["connected"],false);
+ assert_eq!(out["connected"],false,"painel vê a conta desconectada");
+ lento_token.store(false,std::sync::atomic::Ordering::SeqCst);
 }

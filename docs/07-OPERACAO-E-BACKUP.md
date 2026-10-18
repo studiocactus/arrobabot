@@ -85,6 +85,20 @@ Não misture manualmente dois bancos e não copie somente tabelas entre versões
 
 ### Importar um arquivo .botlivebak
 
+Os novos backups usam formato 2 e incluem os tempos acumulados de audiência
+dos rótulos. O formato 1 continua aceito, mas não contém esses tempos e não
+permite recuperá-los. Versões antigas do BotLive podem recusar o formato 2;
+restaure com a versão que criou o arquivo ou uma mais recente compatível.
+
+A restauração é cancelada antes de alterar o banco se a cópia de segurança
+não puder ser criada. Confira espaço livre e permissões da pasta de dados
+antes de tentar novamente.
+
+A retenção automática considera apenas arquivos regulares com nome
+`botlive-AAAA-MM-DD.botlivebak` ou `botlive-AAAA-MM-DD-N.botlivebak`,
+com N inteiro positivo. Pastas, atalhos e arquivos com outros sufixos,
+como `botlive-2020-01-01-notas.txt`, ficam fora da limpeza.
+
 1. Abra **Configurações → Backup do bot**.
 2. Clique em **Importar backup…** e escolha o arquivo.
 3. Confirme o aviso: a importação substitui **todas** as áreas do bot pelas do arquivo; ela não soma nem mescla com o que está lá.

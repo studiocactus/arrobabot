@@ -90,7 +90,7 @@ pub async fn dispatch(rt:Arc<Runtime>,op:&str,args:Value)->R<Value>{
  if let (Ok(kroot),Ok(kparent))=(knowledge::root(&rt.base,&p),rt.base.join("knowledge").canonicalize()) {
   if let Ok(k)=kroot.canonicalize() {if k.starts_with(&kparent)&&k!=kparent {let _=std::fs::remove_dir_all(&k);}}
  }
- rt.db.delete_profile(&p)?;rt.conversation.lock().unwrap().clear(&p);rt.live.clear(&p);rt.listen.reset(&p);secrets::clear(&p);crate::discord_admin::stop(&rt,&p);crate::discord::clear_cache(&rt,&p);Ok(Value::Null)
+ rt.db.delete_profile(&p)?;rt.conversation.lock().unwrap().clear(&p);rt.live.clear(&p);rt.listen.reset(&p);secrets::clear(&p);rt.spotify.bump(&p);rt.spotify.set(&p,None);crate::discord_admin::stop(&rt,&p);crate::discord::clear_cache(&rt,&p);Ok(Value::Null)
  },
  "command.counters"=>command_counter::list(&rt.db,&p),
  "command.counter.set"=>{let id=args["id"].as_str().ok_or("Comando ausente")?;let value=args["value"].as_i64().ok_or("Informe um número inteiro")?;let count=command_counter::change(&rt.db,&p,id,Some(value))?;rt.emit("command-counter",json!({"profileId":p,"id":id,"value":count}));Ok(json!(count))},
@@ -189,8 +189,8 @@ pub async fn dispatch(rt:Arc<Runtime>,op:&str,args:Value)->R<Value>{
  "chat.get"=>{let profile=rt.db.profile(&p)?;Ok(json!({"config":chat_overlay::config(&rt,&p),"overlay":livepix::overlay_info(&rt,&profile.id)?}))},
  "chat.test"=>{let profile=rt.db.profile(&p)?;chat_overlay::test(&rt,&profile,&args)},
  "spotify.get"=>{rt.db.profile(&p)?;Ok(json!({"config":spotify::merged(&rt,&p),"connected":spotify::connected(&p),"now":rt.spotify.now(&p),"overlay":livepix::overlay_info(&rt,&p)?}))},
- "spotify.connect"=>{rt.db.profile(&p)?;let cfg=spotify::merged(&rt,&p);spotify::connect(&rt.http,&p,&cfg).await},
- "spotify.disconnect"=>{rt.db.profile(&p)?;spotify::disconnect(&p)?;rt.spotify.set(&p,None);rt.emit("spotify.now",json!({"profileId":p,"playing":false}));Ok(Value::Null)},
+ "spotify.connect"=>{rt.db.profile(&p)?;let cfg=spotify::merged(&rt,&p);let out=spotify::connect(&rt.http,&p,&cfg).await?;rt.spotify.bump(&p);Ok(out)},
+ "spotify.disconnect"=>{rt.db.profile(&p)?;spotify::disconnect(&p)?;rt.spotify.bump(&p);rt.spotify.set(&p,None);rt.emit("spotify.now",json!({"profileId":p,"playing":false}));Ok(Value::Null)},
  "spotify.poll"=>{let profile=rt.db.profile(&p)?;let cfg=spotify::merged(&rt,&p);Ok(json!({"track":spotify::poll_once(&rt,&profile,&cfg).await?}))},
  "spotify.test"=>{rt.db.profile(&p)?;if spotify::merged(&rt,&p)["enabled"]!=Value::Bool(true){return Err("O Spotify está desligado: ligue o interruptor da música no overlay antes de testar".into())}rt.emit("spotify.now",spotify::test_payload(&p));Ok(json!({"fired":true}))},
  "audio.get"=>{rt.db.profile(&p)?;Ok(json!({"config":audio::config(&rt,&p),"voiceFx":{"selection":rt.voice_fx.load_selection(&rt,&p).unwrap_or_else(|_|json!({"input":"","output":""})),"devices":crate::voice_fx::devices()},"status":rt.voice_fx.get()}))},

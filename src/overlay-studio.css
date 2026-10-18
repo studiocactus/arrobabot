@@ -34,9 +34,16 @@ button.lp-tpl.selected{border-color:var(--accent)}
 .lp-range-label{display:flex;justify-content:space-between;gap:10px;align-items:baseline;font-size:9px;letter-spacing:1.1px;text-transform:uppercase;color:var(--muted);font-weight:700}
 .lp-range output{color:var(--text);font-size:11px;font-variant-numeric:tabular-nums;flex:0 0 auto}
 .lp-colors{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,150px),1fr));gap:9px 12px}
-.lp-color{display:flex;flex-direction:column;gap:5px;min-width:0}
+.lp-color{display:flex;flex-direction:column;gap:5px;min-width:0;align-items:flex-start}
 .lp-color span{font-size:9px;letter-spacing:1.1px;text-transform:uppercase;color:var(--muted);font-weight:700}
-.lp-color input[type=color]{height:34px;padding:3px;cursor:pointer}
+/* Seletor de cor redondo de verdade: 1:1, fora do esticar do flex/grid e com o
+   miolo do WebView normalizado — sem a ovais que o input nativo virava. */
+.lp-color input[type=color]{width:34px;height:34px;flex:0 0 auto;padding:3px;cursor:pointer;appearance:none;-webkit-appearance:none;border:1px solid var(--border);border-radius:50%;background:var(--bg)}
+.lp-color input[type=color]::-webkit-color-swatch-wrapper{padding:0;margin:0;border:none}
+.lp-color input[type=color]::-webkit-color-swatch{border:none;border-radius:50%}
+.lp-color code{font-size:10px;color:var(--muted);font-family:Consolas,'Courier New',monospace}
+/* Seletor + hex lado a lado: a cor escolhida fica legível sem depender só do miolo. */
+.lp-color-pick{display:flex;align-items:center;gap:9px;min-width:0}
 .lp-toggles{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,150px),1fr));gap:4px 12px;margin-bottom:12px}
 .lp-toggle{display:flex;align-items:center;gap:9px;font-size:12px;cursor:pointer;min-width:0}
 .lp-toggle input{width:auto;height:auto;margin:0;accent-color:var(--accent);flex:0 0 auto}
@@ -69,8 +76,17 @@ button.lp-tpl.selected{border-color:var(--accent)}
 .lp-steps{margin:8px 0 4px;padding-left:22px;font-size:12px;line-height:1.9;color:var(--muted)}
 .lp-steps code{font-size:11px}
 
-/* Quadro1920×1080 em miniatura: o overlay é desenhado em tamanho real e escalado. */
-.lp-frame{position:relative;width:100%;aspect-ratio:16/9;border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden;background:#0d1117}
+/* Quadro1920×1080 em miniatura: o overlay é desenhado em tamanho real e escalado.
+   Com zoom manual o quadro vira área rolável interna (.zoomable): as barras
+   navegam a composição sem dar rolagem horizontal à página. */
+.lp-frame{position:relative;display:flex;width:100%;aspect-ratio:16/9;border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden;background:#0d1117}
+.lp-frame.zoomable{overflow:auto;overscroll-behavior:contain}
+.lp-frame.grab{cursor:grab}
+.lp-frame.grabbing{cursor:grabbing;user-select:none}
+/* Caixa dimensionada no tamanho escalado: as barras de rolagem acompanham o zoom
+   e a composição menor que a área fica centrada nas duas direções. */
+.lp-zoom\boxed{position:relative;min-width:100%;min-height:100%;margin:auto;flex:0 0 auto}
+.lp-zoombox>.lp-canvas{top:0;left:0}
 .lp-frame[data-bg=checker]{background-color:#12171f;background-image:linear-gradient(45deg,#1b222c 25%,transparent 25%),linear-gradient(-45deg,#1b222c 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#1b222c 75%),linear-gradient(-45deg,transparent 75%,#1b222c 75%);background-size:22px 22px;background-position:0 0,0 11px,11px -11px,-11px 0}
 .lp-frame[data-bg=dark]{background:radial-gradient(130% 130% at 25% 0%,#22344a 0%,#0a0e14 62%)}
 .lp-frame[data-bg=light]{background:linear-gradient(160deg,#93a9bd 0%,#dde7ef 48%,#b3c5d4 100%)}
@@ -89,15 +105,29 @@ button.lp-tpl.selected{border-color:var(--accent)}
 .cd-code{width:100%;min-height:230px;resize:vertical;font-family:Consolas,'Courier New',monospace;font-size:12px;line-height:1.55;tab-size:2}
 .cd-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 
+/* Barra de zoom da prévia: indicador, botões e faixa acessível por teclado.
+   O zoom é preferência de visualização do editor — nunca entra no design. */
+.lp-zoombar{display:flex;align-items:center;gap:7px;flex-wrap:wrap;min-width:0}
+.lp-zoombar .lp-zoom-pct{font-size:11px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--text);min-width:44px;text-align:center}
+.lp-zoombar input[type=range]{flex:1 1 110px;min-width:90px;max-width:220px}
+.lp-zoombar button{padding:0 11px;height:var(--h-sm);font-size:11px}
+.lp-zoombar .lp-zoom-icon{min-width:32px;padding:0}
+@media (max-width:560px){.lp-zoombar input[type=range]{flex:1 1 100%;max-width:none;order:3}}
+
 /* Estúdio da música: chip de estado da prévia, peles do cartão e amostras de cor. */
 .lp-chip{font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:4px 10px;border-radius:999px;background:var(--bg);border:1px solid var(--border);color:var(--muted);white-space:nowrap}
 .lp-chip.live{color:#1ed760;border-color:#1ed76066}
 .lp-chip.ensaio{color:#f5b901;border-color:#f5b90166}
+/* Chip que nomeia o modelo atual (presets) — classe própria para não disputar
+   com o chip de estado da prévia. */
+.lp-model-chip{color:var(--text);border-color:var(--border)}
 
 .sp-skins{display:flex;gap:8px;flex-wrap:wrap}
 .sp-skin{display:flex;flex-direction:column;align-items:center;gap:5px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r-md);background:transparent;color:var(--muted);cursor:pointer;font-size:11px}
 .sp-skin.selected{border-color:var(--accent);color:var(--text)}
 
 .sp-tints{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-.sp-tint{width:26px;height:26px;border-radius:50%;border:2px solid transparent;cursor:pointer;padding:0}
-.sp-tint.selected{border-color:var(--text)}
+/* Amostra de destaque: 1:1 travado (não estica no flex), seleção com anel duplo
+   além da cor e nome acessível no próprio botão. */
+.sp-tint{width:26px;height:26px;flex:0 0 auto;border-radius:50%;border:2px solid transparent;cursor:pointer;padding:0}
+.sp-tint.selected{border-color:var(--text);box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--accent)}

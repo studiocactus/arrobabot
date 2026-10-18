@@ -8,11 +8,11 @@ use std::collections::HashSet;
 use std::path::{Path,PathBuf};
 pub const EXT:&str="botlivebak";
 const FORMAT:&str="botlive-backup";
-const FORMAT_VERSION:u64=1;
+const FORMAT_VERSION:u64=2;
 const KEY:&str="backup";
 /// Áreas que entram no arquivo. O Histórico entra junto: sem ele, estatísticas e
 /// diagnóstico da live começariam do zero depois de uma importação.
-const TABLES:[&str;9]=["profiles","flows","command_counters","logs","presets","kv","module_state","points","variables"];
+const TABLES:[&str;10]=["profiles","flows","command_counters","logs","presets","kv","module_state","points","variables","watch_time"];
 /// Pastas de conteúdo que acompanham o arquivo, no mesmo caminho relativo de sempre.
 const DIRS:[&str;3]=["knowledge","media","vaults"];
 const MAX_BYTES:u64=256*1024*1024;
@@ -44,8 +44,14 @@ fn stamp_name(folder:&Path,date:&str,seq:usize)->PathBuf{
  if seq==0{folder.join(format!("botlive-{date}.{EXT}"))}else{folder.join(format!("botlive-{date}-{seq}.{EXT}"))}
 }
 fn date_of(name:&str)->Option<chrono::NaiveDate>{
- let rest=name.strip_prefix("botlive-")?;
- chrono::NaiveDate::parse_from_str(rest.get(0..10)?,"%Y-%m-%d").ok()
+ let rest=name.strip_prefix("botlive-")?.strip_suffix(".botlivebak")?;
+ let date=rest.get(..10)?;
+ let suffix=rest.get(10..)?;
+ if !suffix.is_empty(){
+  let sequence=suffix.strip_prefix('-')?;
+  if sequence.is_empty()||!sequence.bytes().all(|b|b.is_ascii_digit())||sequence.parse::<usize>().ok()?==0{return None}
+ }
+ chrono::NaiveDate::parse_from_str(date,"%Y-%m-%d").ok()
 }
 /// Arquivos do BotLive na pasta, do mais recente para o mais antigo.
 fn scan(folder:&str)->Result<Vec<(chrono::NaiveDate,PathBuf,u64)>,String>{
@@ -54,6 +60,7 @@ fn scan(folder:&str)->Result<Vec<(chrono::NaiveDate,PathBuf,u64)>,String>{
  let mut out=Vec::new();
  for entry in std::fs::read_dir(dir).map_err(|e|format!("Não foi possível ler a pasta: {e}"))? {
   let entry=entry.map_err(|e|e.to_string())?;
+  if !entry.file_type().map_err(|e|e.to_string())?.is_file(){continue}
   let name=entry.file_name().to_string_lossy().into_owned();
   if let Some(date)=date_of(&name){
    let size=entry.metadata().map(|m|m.len()).unwrap_or(0);
@@ -201,7 +208,11 @@ fn validate(v:&Value)->Result<(&serde_json::Map<String,Value>,usize),String>{
  let tables=v["tables"].as_object().ok_or("Backup sem as áreas do bot")?;
  let mut rows_total=0usize;
  for table in TABLES {
-  let spec=tables.get(table).ok_or(format!("Backup sem a área {table}"))?;
+  let spec=match tables.get(table){
+   Some(spec)=>spec,
+   None if table=="watch_time"&&version==1=>continue,
+   None=>return Err(format!("Backup sem a área {table}")),
+  };
   let cols=spec["columns"].as_array().ok_or("Backup sem lista de colunas")?;
   if cols.is_empty(){return Err("Backup com colunas vazias".into())}
   for c in cols {
@@ -236,7 +247,8 @@ fn write_tables(db:&Db,tables:&serde_json::Map<String,Value>)->Result<usize,Stri
  for table in TABLES.iter().rev(){tx.execute(&format!("DELETE FROM {table}"),[]).map_err(|e|e.to_string())?;}
  let mut total=0usize;
  for table in TABLES {
-  let spec=&tables[table];
+  // Legacy format 1 has no watch_time table; validation allows that omission.
+  let Some(spec)=tables.get(table) else {continue};
   let cols:Vec<String>=match spec["columns"].as_array(){Some(c)=>c.iter().filter_map(|c|c.as_str().map(str::to_owned)).collect(),None=>continue};
   if cols.is_empty(){continue}
   let sql=format!("INSERT INTO {table} ({}) VALUES ({})",cols.join(","),vec!["?";cols.len()].join(","));
@@ -282,7 +294,7 @@ pub fn restore(rt:&Runtime,path:&str)->Result<Value,String>{
  let v:Value=serde_json::from_str(&text).map_err(|_|"Este arquivo não é um backup do BotLive".to_string())?;
  let (tables,_rows)=validate(&v)?;
  let files=v["files"].as_array().cloned().unwrap_or_default();
- let safety=safety_copy(rt);
+ let safety=Some(safety_copy(rt).ok_or("Não foi possível criar a cópia de segurança. A restauração foi cancelada sem alterar os dados.")?);
  let old:Vec<String>=rt.db.profiles().unwrap_or_default().into_iter().map(|p|p.id).collect();
  let written=write_tables(&rt.db,tables)?;
  let file_count=write_files(&rt.base,&files)?;
@@ -332,11 +344,15 @@ pub fn tick(rt:&Runtime){
   assert_eq!(date_of("botlive-2026-09-27-3.botlivebak").map(|d|d.to_string()),Some("2026-09-27".to_string()));
   assert!(date_of("backup-antes-da-importacao-x.botlivebak").is_none());
   assert!(date_of("notas.txt").is_none());
+  assert!(date_of("botlive-2020-01-01-notas.txt").is_none());
+  assert!(date_of("botlive-2020-01-01.botlivebak.tmp").is_none());
+  assert!(date_of("botlive-2020-01-01-abc.botlivebak").is_none());
  }
  #[tokio::test] async fn backup_round_trip_covers_every_area_and_keeps_credentials_out() {
   let dir=tempfile::tempdir().unwrap();
   let rt=Runtime::new(dir.path().join("app")).unwrap();
   let p=profile();rt.db.save_profile(&p).unwrap();
+  rt.db.0.lock().unwrap().execute("INSERT INTO watch_time VALUES(?1,'viewer',123)",[&p.id]).unwrap();
   let flow:crate::model::Flow=serde_json::from_value(json!({"id":uuid::Uuid::new_v4(),"profileId":p.id,"name":"Ifood","enabled":true,"trigger":{"kind":"command","pattern":"!ifood"},"actions":[{"kind":"chat","text":"{{commandCount}}º"}]})).unwrap();
   rt.db.save_flow(&flow).unwrap();
   std::fs::create_dir_all(rt.base.join("knowledge")).unwrap();
@@ -364,6 +380,8 @@ pub fn tick(rt:&Runtime){
   let back=restore(&rt,&path).unwrap();
   assert_eq!(back["files"].as_u64(),Some(1));
   assert_eq!(back["profiles"].as_u64(),Some(1));
+  let watched:i64=rt.db.0.lock().unwrap().query_row("SELECT seconds FROM watch_time WHERE profile_id=?1 AND user_login='viewer'",[&p.id],|r|r.get(0)).unwrap();
+  assert_eq!(watched,123,"o tempo acumulado de audiência volta com o backup");
   assert!(rt.db.flows(&p.id).unwrap().iter().any(|f|f.id==flow.id),"o fluxo volta");
   assert_eq!(std::fs::read_to_string(rt.base.join("knowledge").join("tom.md")).unwrap(),"conteúdo original");
   let safety=back["safety"].as_str().expect("cópia de segurança antes de importar");
@@ -396,5 +414,48 @@ pub fn tick(rt:&Runtime){
   assert_eq!(restantes,vec!["botlive-2026-09-20.botlivebak","botlive-2026-09-25.botlivebak","botlive-2026-09-26.botlivebak","botlive-2026-09-27.botlivebak"]);
   assert!(Path::new(&folder).join("notas-do-streamer.txt").is_file(),"arquivo que não é nosso nunca é tocado");
   assert_eq!(prune_since(&rt,&folder,today).unwrap(),0,"a segunda passagem não muda mais nada");
+ }
+ #[tokio::test] async fn retention_ignores_files_that_only_share_the_backup_prefix() {
+  let dir=tempfile::tempdir().unwrap();
+  let rt=Runtime::new(dir.path().join("app")).unwrap();
+  let folder=dir.path().join("bk");std::fs::create_dir_all(&folder).unwrap();
+  let foreign=folder.join("botlive-2000-01-01-notas.txt");
+  std::fs::write(&foreign,"preservar").unwrap();
+  std::fs::create_dir(folder.join("botlive-2000-01-01.botlivebak")).unwrap();
+  let folder=folder.to_string_lossy().into_owned();
+  save_config(&rt.db,&json!({"folder":folder})).unwrap();
+  assert!(scan(&folder).unwrap().is_empty());
+  assert_eq!(prune_since(&rt,&folder,chrono::NaiveDate::from_ymd_opt(2026,10,17).unwrap()).unwrap(),0);
+  assert_eq!(std::fs::read_to_string(foreign).unwrap(),"preservar");
+ }
+ #[tokio::test] async fn restore_preserves_current_data_when_safety_copy_fails() {
+  let dir=tempfile::tempdir().unwrap();
+  let rt=Runtime::new(dir.path().join("app")).unwrap();
+  let mut p=profile();rt.db.save_profile(&p).unwrap();
+  let folder=dir.path().join("bk");std::fs::create_dir_all(&folder).unwrap();
+  let made=create(&rt,&folder.to_string_lossy()).unwrap();
+  p.name="Estado atual preservado".into();rt.db.save_profile(&p).unwrap();
+  // SQLite accepts a blob here, but the backup format deliberately rejects it.
+  // That makes the safety copy fail without touching real folders or credentials.
+  rt.db.0.lock().unwrap().execute("INSERT INTO kv(key,data) VALUES('unexportable',x'00')",[]).unwrap();
+  let error=restore(&rt,made["path"].as_str().unwrap()).unwrap_err();
+  assert!(error.contains("cópia de segurança"));
+  assert_eq!(rt.db.profile(&p.id).unwrap().name,"Estado atual preservado");
+  let count:i64=rt.db.0.lock().unwrap().query_row("SELECT COUNT(*) FROM kv WHERE key='unexportable'",[],|r|r.get(0)).unwrap();
+  assert_eq!(count,1);
+ }
+ #[tokio::test] async fn legacy_backup_without_watch_time_remains_readable() {
+  let dir=tempfile::tempdir().unwrap();
+  let rt=Runtime::new(dir.path().join("app")).unwrap();
+  let p=profile();rt.db.save_profile(&p).unwrap();
+  let mut legacy=bundle(&rt).unwrap();
+  legacy["formatVersion"]=json!(1);
+  legacy["tables"].as_object_mut().unwrap().remove("watch_time");
+  let path=dir.path().join("legacy.botlivebak");
+  std::fs::write(&path,serde_json::to_vec(&legacy).unwrap()).unwrap();
+  let result=restore(&rt,&path.to_string_lossy()).unwrap();
+  assert_eq!(result["profiles"],1);
+  legacy["formatVersion"]=json!(2);
+  assert!(validate(&legacy).is_err(),"novo formato exige os tempos de audiência");
  }
 }
