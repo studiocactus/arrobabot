@@ -1,5 +1,46 @@
 # Histórico de atualizações
 
+# BotLive 0.13.0
+
+## O que mudou
+
+**Auditoria visual e de usabilidade aplicada ao aplicativo inteiro: o histórico parou de mostrar “Invalid Date”, os intervalos viraram “5 s” e “15 min” em vez de “0,08 min”, as ações de linha cabem numa linha, valores salvos que desapareceram são explicados em vez de sumirem, e o console ficou sem erros.** O documento completo — telas inspecionadas, problemas por prioridade, padrões adotados e o que ficou de fora — está em `docs/AUDITORIA-VISUAL-USABILIDADE.md`, com as capturas antes/depois.
+
+- **Data quebrada no histórico (P1).** A Visão geral e o Histórico mostravam **“Invalid Date”** no lugar da hora dos registros: o mock de dados usava `at` enquanto o backend emite `timestamp`, e o formatador não se defendia de dado antigo. Agora o formatador aceita os dois campos e devolve **“—”** para o que não puder ser lido — nunca mais “Invalid Date” na tela.
+- **Intervalos legíveis (P1).** Tabelas de Comandos, Automações e Timers, e os resumos de Respostas e Sons, mostram **“5 s”, “15 min”, “1 h 30 min”** no lugar de “0,08 min” quebrado em duas linhas (o “A cada 15 min” dos timers continua idêntico).
+- **Ações de linha alinhadas (P1/P2).** Os ícones de cada linha (contador, preset, editar, apagar) ficam em **uma única linha**, com tooltip (`title`) em cada um; a ação **destrutiva** (apagar) ganhou borda e tinta vermelhas próprias, mais diferenciada do resto.
+- **Valores salvos nunca somem (P2).** Quando o arquivo escolhido não existe mais (som ou TXT apagado), o seletor **preserva o valor e explica** — “salvo indisponível — escolha outro” — em vez de abrir uma linha em branco: vale para Sons por espectador, Respostas (TXT e som), Alertas e Chat no OBS.
+- **Salvamento explícito (P2).** O formulário de Sons por espectador mostra **“Alterações não salvas” / “Tudo salvo”** ao lado do botão Salvar, no mesmo padrão da tela de Memórias.
+- **Amostras de cor legíveis (P2).** Meta, Alertas e Chat no OBS passam a mostrar o **valor hexadecimal** junto da amostra redonda (como o Spotify já fazia) — as cores escuras não são mais círculos invisíveis.
+- **Acabamento de componentes (P2).** `button.danger` e `button.ghost` com estilo próprio (o botão fantasma do Spotify deixou de herdar 40 px de altura), rótulos mínimos de 8 px subiram para 9 px, ajuda desatualizada do Estúdio de Alertas (“tela Áudio”) corrigida, e o **favicon** embutido eliminou o único erro de console (404 em toda carga).
+- **Erro junto do campo (P2, incremental).** O componente `Field` ganhou mensagem de erro por campo (com `role="alert"`), começando pela chave da Control API na tela Voicemod — as demais telas seguem reportando por aviso, como antes.
+
+Nada de funcionalidade foi removido, e nenhuma biblioteca nova foi adicionada: as mudanças são nos componentes compartilhados (`components.tsx`, `styles.css`, `types.ts`) e nos pontos específicos apontados pela auditoria.
+
+## Como usar
+
+Nenhuma ação nova para aprender — as mesmas telas, mais legíveis. Quando um seletor mostrar **“salvo indisponível”**, o arquivo escolhido não existe mais: escolha outro (ou deixe em branco) e salve. Nos formulários com botão **Salvar**, confira a pílula **“Alterações não salvas”** antes de sair da tela. Intervalos e horários agora são lidos direto (“5 s”, “15 min”, “1 h 30 min” e a hora dos registros).
+
+## Validação
+
+Executada nesta máquina, nesta versão:
+
+- `npm run check` (tsc): **limpo**. `npm test` (vitest): **142 testes aprovados em 16 arquivos**, incluindo os novos de formatação (`src/format.test.ts`: duração legível e hora nunca quebrada).
+- Playwright (navegação real, Edge): **90 testes aprovados**, incluindo os novos de comportamento (`tests/ui/history.spec.ts`: histórico sem “Invalid Date” e seletor preservando valor salvo) e a auditoria geométrica automatizada nas cinco larguras (1440, 1280, 1152, 922 e 680 px) **sem achados**.
+- **Capturas antes/depois** de todas as telas em 1100 px (25 telas), seis telas densas em 1600 px, cinco abaixo de 960 px e quatro modais/editores, em `%TEMP%\botlive-ux\auditoria-antes` e `auditoria-depois` — os pares úteis são Visão geral (data), Comandos/Automações (intervalo e ações), Meta (cores) e Sons de Live (salvamento).
+- **Console do navegador sem erros** nas capturas finais (antes: 1× 404 de favicon).
+- `npm run update:check`: válido. Nenhum push nem release nesta entrega.
+
+**Não executado aqui:** leitura visual individual de Discord, Rótulos OBS, Contadores, Respostas, OBS Studio, Inteligência artificial, Presets, Histórico e Estatísticas (capturadas e auditadas geometricamente, sem inspeção um a um); medição de contraste com ferramenta WCAG; varredura tab-a-tab completa; dados reais muito longos e listas de centenas de itens. O documento da auditoria registra cada pendência.
+
+## Limitações
+
+- A auditoria **não é completa** nem a interface está perfeita: telas e estados listados no documento não foram exercitados, e melhorias continuam possíveis (erros por campo nas demais telas, contraste medido, teclado).
+- Os padrões novos (`.row-actions`, `.save-state`, `MissingOption`, `button.danger/ghost`, `.field-error`) começaram nos pontos apontados; a adoção em todas as telas é incremental.
+- Nada do que foi visto com mocks atesta integrações reais (Twitch, OBS, Voicemod, Spotify): a prévia web é distinguível do desktop e não finge conexão.
+
+---
+
 # BotLive 0.12.0
 
 ## O que mudou

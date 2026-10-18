@@ -215,3 +215,27 @@ button.swatch-theme.selected,button.swatch-dot.selected{border-color:var(--accen
 .preflight-list li span{min-width:0}
 .preflight-list li button{flex-shrink:0}
 .preflight-ok{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:600;color:var(--accent);margin:0}
+/* Auditoria visual 0.13.0: estados de botão, ações de linha, erro por campo
+   e legibilidade das amostras de cor. */
+button.danger{color:#f79195;border-color:#f7919544}
+button.danger:hover{background:#f7919518;border-color:#f7919566}
+button.ghost{background:transparent;border-color:transparent;width:32px;height:32px;padding:0;flex:0 0 auto}
+button.ghost:hover{background:var(--surface2);border-color:var(--border)}
+.row-actions{display:flex;align-items:center;justify-content:flex-end;gap:2px;flex-wrap:nowrap;white-space:nowrap}
+.nowrap{white-space:nowrap}
+.field-error{display:block;margin-top:7px;font-size:11px;line-height:1.6;color:#f79195}
+.field--error input,.field--error select,.field--error textarea{border-color:#f7919566}
+[data-theme=light] .field-error{color:#b23a41}
+[data-theme=light] button.danger{color:#b23a41;border-color:#b23a4144}
+/* Amostras de cor: sempre redondas, sem encolher, com o valor visível ao lado. */
+.swatch-line{display:flex;align-items:center;gap:8px;min-width:0}
+.swatch-line input.swatch-dot,.swatch-line .swatch-dot{flex:0 0 auto;width:var(--h-md);height:var(--h-md);min-width:var(--h-md)}
+.swatch-hex{font-size:10px;letter-spacing:.5px;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* Rótulos mínimos legíveis (8px não passava de fita). */
+.eyebrow{font-size:9px}
+.nav-group{font-size:9px}
+/* Estado de alterações não salvas nos formulários com botão Salvar. */
+.save-state{display:inline-flex;align-items:center;gap:6px;font-size:10px;font-weight:650;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);border:1px solid var(--border);border-radius:var(--r-pill);padding:4px 11px;white-space:nowrap}
+.save-state.dirty{color:#f0c674;border-color:#f0c67444;background:#f0c67412}
+.save-state.saved{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 35%,var(--border))}
+[data-theme=light] .save-state.dirty{color:#8a5f10;border-color:#8a5f1044;background:#8a5f1012}

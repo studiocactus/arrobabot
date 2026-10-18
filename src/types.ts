@@ -33,4 +33,18 @@ export const timerCategories:Record<string,string>={interacao:'Interação',comu
 export const timerPriorities:Record<string,string>={baixa:'Baixa',normal:'Normal',alta:'Alta'};
 /** Intervalos aparecem em minutos na tela e continuam em segundos no armazenamento e nas APIs. */
 export const secondsToMinutes=(s:number)=>{const m=(Number(s)||0)/60;return String(Math.round(m*100)/100)};
+/** Duração legível para tabelas e resumos: "5 s", "15 min", "1 h", "1 h 30 min". */
+export const fmtDuration=(s:number):string=>{
+ const total=Math.max(0,Math.round(Number(s)||0));
+ if(total<60)return `${total} s`;
+ const h=Math.floor(total/3600),m=Math.round((total%3600)/60);
+ if(h&&m)return `${h} h ${m} min`;
+ if(h)return `${h} h`;
+ return `${m} min`;
+};
+/** Hora legível de um registro; nunca mostra "Invalid Date" para dado antigo. */
+export const fmtTime=(iso:unknown):string=>{
+ const d=new Date(String(iso??''));
+ return isNaN(d.getTime())?'—':d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+};
 export const minutesToSeconds=(m:number)=>Math.max(0,Math.round((Number(m)||0)*60));

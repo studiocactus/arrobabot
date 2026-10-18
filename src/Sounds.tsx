@@ -2,8 +2,8 @@ import {useCallback,useEffect,useState} from 'react';
 import {open} from '@tauri-apps/plugin-dialog';
 import {Play,Plus,Search,Trash2,Upload} from 'lucide-react';
 import {api,desktop,errorText} from './api';
-import {AccordionItem,Card,Empty,Field,ItemStack,ListTools,Toggle} from './components';
-import {minutesToSeconds,secondsToMinutes} from './types';
+import {AccordionItem,Card,Empty,Field,ItemStack,ListTools,MissingOption,Toggle} from './components';
+import {fmtDuration,minutesToSeconds,secondsToMinutes} from './types';
 type Asset={id:string;kind:string;name:string};
 type Person={trigger:string;id:string;enabled:boolean;name:string;nickname:string;userId:string;asset:string;mode:string;cooldown:number;volume:number};
 /** A config salva junta respostas e sons; esta tela mexe só nos sons por espectador. */
@@ -20,6 +20,7 @@ export default function Sounds({profileId,notify}:{profileId:string;notify:(s:st
  const [message,setMessage]=useState('');
  const [playing,setPlaying]=useState('');
  const [openIds,setOpenIds]=useState<Record<string,boolean>>({});
+ const [dirty,setDirty]=useState(false);
  const load=useCallback(async()=>{
   try{
    const v=await api<{assets:Asset[];config:Config}>('chatExtras.get',{profileId});
@@ -51,9 +52,9 @@ export default function Sounds({profileId,notify}:{profileId:string;notify:(s:st
   catch(e){setError(errorText(e))}
   finally{setPlaying('')}
  }
- const person=(id:string,patch:Partial<Person>)=>setState(c=>({...c,people:c.people.map(p=>p.id===id?{...p,...patch}:p)}));
+ const person=(id:string,patch:Partial<Person>)=>{setDirty(true);setState(c=>({...c,people:c.people.map(p=>p.id===id?{...p,...patch}:p)}))};
  const assetName=(id:string)=>assets.find(a=>a.id===id)?.name||'';
- const addPerson=()=>{const id=crypto.randomUUID();setOpenIds(o=>({...o,[id]:true}));setState(c=>({...c,people:c.people.concat({id,enabled:true,trigger:'message',name:'',nickname:'',userId:'',asset:'',mode:'first',cooldown:60,volume:0.7})}))};
+ const addPerson=()=>{const id=crypto.randomUUID();setDirty(true);setOpenIds(o=>({...o,[id]:true}));setState(c=>({...c,people:c.people.concat({id,enabled:true,trigger:'message',name:'',nickname:'',userId:'',asset:'',mode:'first',cooldown:60,volume:0.7})}))};
  const personRows=config.people.map((p,i)=>({p,i}));
  const personVisible=personRows.filter(({p,i})=>!qPeople||`${p.nickname} ${p.name} ${assetName(p.asset)} pessoa ${i+1}`.toLowerCase().includes(qPeople.toLowerCase()));
  const allPersonIds=personVisible.map(({p})=>p.id);
@@ -93,10 +94,10 @@ export default function Sounds({profileId,notify}:{profileId:string;notify:(s:st
      <ListTools count={personRows.length+(personRows.length===1?' pessoa':' pessoas')} total={personRows.length} shown={personVisible.length} search={qPeople} onSearch={setQPeople} searchLabel="Filtrar pessoas" onExpandAll={()=>setOpenIds(o=>{const n={...o};allPersonIds.forEach(id=>n[id]=true);return n})} onCollapseAll={()=>setOpenIds(o=>{const n={...o};allPersonIds.forEach(id=>n[id]=false);return n})}/>
      <ItemStack>{personVisible.map(({p,i})=>{
       const label='Pessoa '+(i+1);
-      return <AccordionItem key={p.id} id={p.id} open={!!openIds[p.id]} enabled={p.enabled} enabledLabel={'Ativar som da pessoa '+(i+1)} title={p.nickname.trim()||p.name.trim()||label} meta={[TRIGGER[p.trigger]||'',MODE[p.mode]||'',assetName(p.asset)||'sem som',secondsToMinutes(p.cooldown)+' min']} onToggle={()=>setOpenIds(o=>({...o,[p.id]:!o[p.id]}))} onEnabled={enabled=>person(p.id,{enabled})}>
+      return <AccordionItem key={p.id} id={p.id} open={!!openIds[p.id]} enabled={p.enabled} enabledLabel={'Ativar som da pessoa '+(i+1)} title={p.nickname.trim()||p.name.trim()||label} meta={[TRIGGER[p.trigger]||'',MODE[p.mode]||'',assetName(p.asset)||'sem som',fmtDuration(p.cooldown)]} onToggle={()=>setOpenIds(o=>({...o,[p.id]:!o[p.id]}))} onEnabled={enabled=>person(p.id,{enabled})}>
        <div className="form-grid"><Field label="Nome no chat" hint="Exatamente como a pessoa aparece no chat (sem @)."><input value={p.name} maxLength={100} onChange={e=>person(p.id,{name:e.target.value})}/></Field><Field label="Apelido" hint="Só para sua organização na lista."><input value={p.nickname} maxLength={100} onChange={e=>person(p.id,{nickname:e.target.value})}/></Field></div>
        <Field label="ID da pessoa (opcional)" hint="Quando preenchido, o ID tem prioridade sobre o nome; recomendado para evitar nomes duplicados."><input value={p.userId} maxLength={200} onChange={e=>person(p.id,{userId:e.target.value})}/></Field>
-       <Field label="Som da pessoa" hint="Um áudio da biblioteca; toca na saída dos sons do bot."><div className="row"><select aria-label={'Som da pessoa '+(i+1)} value={p.asset} onChange={e=>person(p.id,{asset:e.target.value})}><option value="">Escolha um som</option>{assets.map(a=><option key={a.id} value={a.id}>{a.name}</option>)}</select><button disabled={!desktop||!p.asset} onClick={()=>void play(assets.find(a=>a.id===p.asset)||{id:p.asset,kind:'sound',name:''})}>Testar som</button></div></Field>
+       <Field label="Som da pessoa" hint="Um áudio da biblioteca; toca na saída dos sons do bot."><div className="row"><select aria-label={'Som da pessoa '+(i+1)} value={p.asset} onChange={e=>person(p.id,{asset:e.target.value})}><option value="">Escolha um som</option>{assets.map(a=><option key={a.id} value={a.id}>{a.name}</option>)}{!assets.some(a=>a.id===p.asset)&&<MissingOption value={p.asset}/>}</select><button disabled={!desktop||!p.asset} onClick={()=>void play(assets.find(a=>a.id===p.asset)||{id:p.asset,kind:'sound',name:''})}>Testar som</button></div></Field>
        <div className="form-grid"><Field label="Disparar som" hint="Quando a pessoa precisa estar presente para o som tocar."><select value={p.trigger} onChange={e=>person(p.id,{trigger:e.target.value})}><option value="message">Quando enviar mensagem</option><option value="join">Quando entrar, mesmo sem falar</option><option value="either">Ao entrar ou enviar mensagem</option></select></Field><Field label="Quando tocar" hint="Uma vez evita repetição na mesma live; com intervalo permite tocar de novo."><select value={p.mode} onChange={e=>person(p.id,{mode:e.target.value})}><option value="first">Uma vez por sessão</option><option value="interval">Repetir com intervalo</option></select></Field><Field label="Intervalo mínimo (minutos)" hint="Com intervalo mínimo de 5 minutos."><input type="number" min="0.5" max="1440" step="any" value={secondsToMinutes(p.cooldown)} onChange={e=>person(p.id,{cooldown:Math.max(5,minutesToSeconds(Number(e.target.value)))})}/></Field></div>
        <Field label={'Volume: '+Math.round(p.volume*100)+'%'}><input type="range" min="0" max="1" step="0.05" value={p.volume} onChange={e=>person(p.id,{volume:+e.target.value})}/></Field>
        <div className="item-actions"><button className="danger" onClick={()=>setState({...config,people:config.people.filter(x=>x.id!==p.id)})}>Remover pessoa</button></div>
@@ -109,7 +110,7 @@ export default function Sounds({profileId,notify}:{profileId:string;notify:(s:st
      <button disabled={!desktop} onClick={()=>void run(async()=>{await api('chatExtras.reset',{profileId});setMessage('Sessão de sons reiniciada. A próxima participação poderá tocar novamente.')})}>Reiniciar sessão de sons</button>
     </div>
     <p className="help">Há intervalo geral de 5 segundos entre sons. A sessão reinicia ao fechar o app ou pelo botão acima. Mantenha o aplicativo aberto e desbloqueado. Testar som reproduz mesmo com a função desativada.</p>
-    <footer className="form-footer"><button className="primary" disabled={!desktop} onClick={()=>void run(async()=>{await api('chatExtras.save',{profileId,config});setMessage('Sons por espectador salvos.')})}>Salvar sons por espectador</button></footer>
+    <footer className="form-footer"><span className={'save-state '+(dirty?'dirty':'saved')} role="status">{dirty?'Alterações não salvas':'Tudo salvo'}</span><button className="primary" disabled={!desktop} onClick={()=>void run(async()=>{await api('chatExtras.save',{profileId,config});setDirty(false);setMessage('Sons por espectador salvos.')})}>Salvar sons por espectador</button></footer>
     {error&&<p role="alert" className="inline-error">{error}</p>}{message&&<p role="status">{message}</p>}
    </Card>
   </div>;

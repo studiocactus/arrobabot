@@ -21,9 +21,9 @@ export const flows=[
 export const NAV=['Visão geral','Perfis de bot','Discord','Rótulos OBS','Comandos','Timers','Respostas','Sons de Live','Contadores','Automações','OBS Studio','Áudio no OBS','Voicemod','Spotify','Meta','Alertas','Chat no OBS','Inteligência artificial','Memórias','Comunidade','Biblioteca de presets','Histórico','Estatísticas'];
 
 const LOGS=[
- {id:'l1',profileId:'p1',kind:'run',message:'Execução concluída com sucesso no fluxo de boas-vindas',status:'success',at:'2026-10-07T10:00:00Z'},
- {id:'l2',profileId:'p1',kind:'obs',message:'Fonte mutada',status:'info',at:'2026-10-07T09:00:00Z'},
- {id:'l3',profileId:'p1',kind:'obs',message:'Não foi possível alcançar o OBS em ws://127.0.0.1:4455. Abra o OBS e ative o WebSocket do OBS em Ferramentas.',status:'error',at:'2026-10-07T08:00:00Z'}
+ {id:'l1',profileId:'p1',kind:'run',message:'Execução concluída com sucesso no fluxo de boas-vindas',status:'success',timestamp:'2026-10-07T10:00:00Z'},
+ {id:'l2',profileId:'p1',kind:'obs',message:'Fonte mutada',status:'info',timestamp:'2026-10-07T09:00:00Z'},
+ {id:'l3',profileId:'p1',kind:'obs',message:'Não foi possível alcançar o OBS em ws://127.0.0.1:4455. Abra o OBS e ative o WebSocket do OBS em Ferramentas.',status:'error',timestamp:'2026-10-07T08:00:00Z'}
 ];
 
 /** Forma padrão que o backend devolve para `community` (struct Community). */

@@ -102,10 +102,10 @@ export function FlowEnableToggle({flow,notify,onSaved}:{flow:Flow;notify:Notify;
 }
 
 export function FlowRowActions({flow,profile,notify,onEdit,onRemove}:{flow:Flow;profile:Profile;notify:Notify;onEdit:()=>void;onRemove:()=>void}){
- return <div className="row">
- {flow.trigger.kind==='timer'&&<button className="icon-button" disabled={!desktop||!flow.enabled} aria-label={'Simular timer '+flow.name} onClick={()=>api('timer.preview',{profileId:profile.id,id:flow.id}).then(()=>notify('Simulação do timer enviada. Veja o Histórico; nada foi publicado.')).catch(e=>notify(friendlyMessage(e)))}><Play size={16}/></button>}
- <button className="icon-button" aria-label={'Salvar preset '+flow.name} onClick={async()=>{try{const preset=await api<Preset>('preset.create',{profileId:profile.id,kind:flow.trigger.kind==='command'?'command':'flow',name:flow.name,ids:[flow.id]});await api('preset.save',{preset});notify('Salvo na biblioteca de presets.')}catch(e){notify(friendlyMessage(e))}}}><Package size={16}/></button>
- <button className="icon-button" aria-label={'Editar '+flow.name} onClick={onEdit}><Pencil size={16}/></button>
- <button className="icon-button danger" aria-label={'Apagar '+flow.name} onClick={onRemove}><Trash2 size={16}/></button>
+ return <div className="row-actions">
+ {flow.trigger.kind==='timer'&&<button className="icon-button" disabled={!desktop||!flow.enabled} title="Simular disparo (sem publicar)" aria-label={'Simular timer '+flow.name} onClick={()=>api('timer.preview',{profileId:profile.id,id:flow.id}).then(()=>notify('Simulação do timer enviada. Veja o Histórico; nada foi publicado.')).catch(e=>notify(friendlyMessage(e)))}><Play size={16}/></button>}
+ <button className="icon-button" title="Salvar como preset" aria-label={'Salvar preset '+flow.name} onClick={async()=>{try{const preset=await api<Preset>('preset.create',{profileId:profile.id,kind:flow.trigger.kind==='command'?'command':'flow',name:flow.name,ids:[flow.id]});await api('preset.save',{preset});notify('Salvo na biblioteca de presets.')}catch(e){notify(friendlyMessage(e))}}}><Package size={16}/></button>
+ <button className="icon-button" title="Editar" aria-label={'Editar '+flow.name} onClick={onEdit}><Pencil size={16}/></button>
+ <button className="icon-button danger" title="Apagar" aria-label={'Apagar '+flow.name} onClick={onRemove}><Trash2 size={16}/></button>
  </div>
 }

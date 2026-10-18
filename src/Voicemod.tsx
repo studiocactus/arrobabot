@@ -190,7 +190,7 @@ export default function Voicemod({profileId,notify}:{profileId:string;notify:(s:
      <span className="status-pill on"><span className="status-dot" aria-hidden="true"></span><span>Pronto</span></span>
     </div>
     :<div className="form-grid">
-     {(!snap?.hasKey||key)&&<Field label="Chave da Control API" hint={`Peça em control-api.voicemod.net (menu Control API). ${snap?.hasKey?`Já guardamos uma chave (${snap.keyLen} caracteres) — só preencha para trocar.`:'Ela vai direto para o cofre desta máquina.'}`}>
+     {(!snap?.hasKey||key)&&<Field label="Chave da Control API" error={error&&error.includes('chave')?error:undefined} hint={`Peça em control-api.voicemod.net (menu Control API). ${snap?.hasKey?`Já guardamos uma chave (${snap.keyLen} caracteres) — só preencha para trocar.`:'Ela vai direto para o cofre desta máquina.'}`}>
       <input type="password" value={key} autoComplete="off" onChange={e=>setKey(e.target.value)} placeholder="Cole a chave aqui"/>
      </Field>}
     </div>}

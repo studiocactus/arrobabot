@@ -22,7 +22,14 @@ export function Modal({title,children,onClose,wide=false}:{title:string;children
  },[]);
  return <div className="modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)onClose()}}><section ref={ref} role="dialog" aria-modal="true" aria-label={title} className={'modal '+(wide?'wide':'')}><header><h2>{title}</h2><button className="icon-button" onClick={onClose} aria-label="Fechar"><X size={20}/></button></header>{children}</section></div>;
 }
-export function Field({label,children,hint}:{label:string;children:ReactNode;hint?:string}){return <div className="field"><label><span>{label}</span>{children}</label>{hint&&<small>{hint}</small>}</div>}
+/** Campo com rótulo sempre visível. `error` aparece junto do campo (nunca só
+ *  em toast) e `hint` fica para a orientação de uso. */
+export function Field({label,children,hint,error}:{label:string;children:ReactNode;hint?:string;error?:string}){
+ return <div className={'field'+(error?' field--error':'')}>
+  <label><span>{label}</span>{children}</label>
+  {error?<small className="field-error" role="alert">{error}</small>:(hint&&<small>{hint}</small>)}
+ </div>;
+}
 export function Empty({title,children,action}:{title:string;children:ReactNode;action?:ReactNode}){return <div className="empty"><span className="empty-icon"><Inbox size={28}/></span><h3>{title}</h3><p>{children}</p>{action}</div>}
 export function Card({title,children,action,className=''}:{title?:string;children:ReactNode;action?:ReactNode;className?:string}){return <section className={'card '+className}>{title&&<div className="card-heading"><h3>{title}</h3>{action}</div>}{children}</section>}
 export function Toggle({checked,onChange,label}:{checked:boolean;onChange:(v:boolean)=>void;label:string}){
@@ -35,6 +42,13 @@ export function Check({checked,onChange,label,hint}:{checked:boolean;onChange:(v
   <Toggle checked={checked} onChange={onChange} label={label}/>
   <span className="check-text"><span>{label}</span>{hint&&<small>{hint}</small>}</span>
  </label>;
+}
+/** Preservação de valor salvo: quando o item escolhido não existe mais na
+ *  lista (arquivo apagado, voz removida), ele continua visível e explicado —
+ *  nunca some nem é substituído em silêncio por uma opção válida. */
+export function MissingOption({value,label}:{value:string;label?:string}){
+ if(!value)return null;
+ return <option value={value}>{label||'Arquivo salvo indisponível — escolha outro'}</option>;
 }
 export function Busy({children,busy}:{children:ReactNode;busy:boolean}){return <>{busy&&<LoaderCircle className="spin" size={16}/>} {children}</>}
 export function Tag({children,color='green'}:{children:ReactNode;color?:string}){return <span className={'tag '+color}>{children}</span>}

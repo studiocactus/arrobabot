@@ -5,7 +5,7 @@ A partir da versão 0.7.0, respostas e sons por espectador moram em **duas telas
 - **Respostas** — as regras de resposta em texto (TXT), cada uma com um som opcional da biblioteca.
 - **Sons de Live** — a biblioteca de áudios e os sons por espectador, com a sessão de sons.
 
-O botão **Respostas** em **Comunidade** abre a tela de Respostas. Escolha o perfil correto em ambas. Cada tela tem seu próprio botão de salvar (**Salvar respostas** e **Salvar sons por espectador**); as alterações só entram em vigor ao salvar. O navegador mostra os controles, mas os arquivos e a execução dependem do aplicativo desktop.
+O botão **Respostas** em **Comunidade** abre a tela de Respostas. Escolha o perfil correto em ambas. Cada tela tem seu próprio botão de salvar (**Salvar respostas** e **Salvar sons por espectador**); as alterações só entram em vigor ao salvar, e a tela mostra **Alterações não salvas** / **Tudo salvo** enquanto você edita. O navegador mostra os controles, mas os arquivos e a execução dependem do aplicativo desktop.
 
 Nas duas telas, cada regra ou pessoa aparece como uma linha compacta com um ponto de situação, o nome, os resumos em pastilhas, o controle de ativar e uma seta. Clique no título para abrir ou fechar o formulário; **Expandir todos** e **Recolher todos** trabalham na lista inteira, e o contador informa quantos cadastros existem. Com mais de cinco itens, o campo **Filtrar** localiza pelo nome ou arquivo. Um cadastro recém-adicionado já abre sozinha, e o conteúdo fechado sai da tabulação do teclado. Quando a lista está vazia, o botão **Adicionar** fica logo abaixo da explicação.
 

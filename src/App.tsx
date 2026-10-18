@@ -6,7 +6,7 @@ import {useState,useEffect,useCallback} from 'react';
 import {listen} from '@tauri-apps/api/event';
 import {LayoutDashboard,Bot,Terminal,Clock,Hash,Workflow,Sparkles,BookOpen,Package,Settings as SettingsIcon,Users,Activity,BarChart3,Plus,ArrowUpRight,ArrowRight,Radio,Zap,Check,ChevronDown,Search,Sun,Moon,Power,Trash2,X,Menu,ShieldCheck,MessageSquare,MessagesSquare,Monitor,Volume2,Clapperboard,Mic,Bell,MessageCircle,Headphones,Music} from 'lucide-react';
 import {api,desktop,errorText} from './api';
-import {type Snapshot,type Profile,type Flow,type Activity as Log,platforms} from './types';
+import {type Snapshot,type Profile,type Flow,type Activity as Log,platforms,fmtTime} from './types';
 import {Card,Empty,Modal,Tag,Jump,ScreenBoundary} from './components';
 import ProfileForm from './ProfileForm';
 import Commands from './Commands';
@@ -101,4 +101,4 @@ export default function App(){
 }
 function statusText(s?:string){return s==='online'?'Conectado':s==='connecting'?'Conectando':s==='reconnecting'?'Reconectando':'Desconectado'}
 function Metric({icon:Icon,label,value,detail,color}:{icon:typeof Radio;label:string;value:string|number;detail:string;color:string}){return <Card className="metric"><div><span>{label}</span><Icon size={18} className={color}/></div><strong>{value}</strong><small>{detail}</small></Card>}
-function ActivityList({logs}:{logs:Log[]}){return <div className="activity-list">{logs.map(l=><div key={l.id} className="activity-row"><span className={'activity-symbol '+(l.status==='error'?'red':l.status==='success'?'green':'blue')}>{l.status==='success'?<Check size={15}/>:<Zap size={15}/>}</span><div><span className="activity-kind">{l.kind}</span><p>{l.message}</p></div><time>{new Date(l.timestamp).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit',second:'2-digit'})}</time></div>)}</div>}
+function ActivityList({logs}:{logs:Log[]}){return <div className="activity-list">{logs.map(l=><div key={l.id} className="activity-row"><span className={'activity-symbol '+(l.status==='error'?'red':l.status==='success'?'green':'blue')}>{l.status==='success'?<Check size={15}/>:<Zap size={15}/>}</span><div><span className="activity-kind">{l.kind}</span><p>{l.message}</p></div><time>{fmtTime((l as {timestamp?:unknown}).timestamp??(l as {at?:unknown}).at)}</time></div>)}</div>}

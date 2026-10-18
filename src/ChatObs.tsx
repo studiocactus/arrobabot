@@ -2,7 +2,7 @@ import {useCallback,useEffect,useRef,useState} from 'react';
 import {listen} from '@tauri-apps/api/event';
 import {Check,Copy,Play,Trash2,Zap} from 'lucide-react';
 import {api,desktop,errorText} from './api';
-import {Card,Check as ToggleCheck,Field,Toggle} from './components';
+import {Card,Check as ToggleCheck,Field,MissingOption,Toggle} from './components';
 import {fontGroups} from './overlayDesign';
 import {
  CHAT_EVENT_KINDS,CHAT_EVENT_LABELS,CHAT_SAMPLES,DEFAULT_CHAT,clearChat,chatSample,chatVisible,
@@ -335,6 +335,7 @@ export default function ChatObs({profileId,notify}:{profileId:string;notify:(s:s
          <select value={cfg.ev[evSel].sound} aria-label={'Som de '+CHAT_EVENT_LABELS[evSel]} onChange={e=>setEv(evSel,{sound:e.target.value})}>
           <option value="">Sem som</option>
           {sounds.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
+          {!sounds.some(s=>s.id===cfg.ev[evSel].sound)&&<MissingOption value={cfg.ev[evSel].sound} label="Som salvo indisponível — escolha outro"/>}
          </select>
          <button type="button" className="lp-seg" onClick={()=>void testEvent(evSel)}><Play size={12}/> Testar {CHAT_EVENT_LABELS[evSel].toLowerCase()}</button>
         </div>
@@ -406,6 +407,7 @@ function ColorRow({label,hint,value,onChange}:{label:string;hint?:string;value:s
  return <div className="lp-color">
   <span>{label}</span>
   <input type="color" value={rgb} aria-label={label} onChange={e=>onChange(e.target.value)}/>
+  <code aria-hidden="true">{rgb.toUpperCase()}</code>
   {hint&&<small className="lp-note">{hint}</small>}
  </div>;
 }

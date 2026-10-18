@@ -399,7 +399,7 @@ function RangeRow({label,min,max,step,value,fmt,onChange}:{label:string;min:numb
 }
 
 function ColorRow({label,value,onChange}:{label:string;value:string;onChange:(v:string)=>void}){
- return <label className="lp-color"><span>{label}</span><input type="color" value={value} onChange={e=>onChange(e.target.value)}/></label>;
+ return <label className="lp-color"><span>{label}</span><input type="color" value={value} aria-label={label} onChange={e=>onChange(e.target.value)}/><code aria-hidden="true">{value.toUpperCase()}</code></label>;
 }
 
 function Toggle({label,checked,onChange}:{label:string;checked:boolean;onChange:(v:boolean)=>void}){

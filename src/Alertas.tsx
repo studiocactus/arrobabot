@@ -1,7 +1,7 @@
 import {useCallback,useEffect,useRef,useState} from 'react';
 import {Check,Copy,Play} from 'lucide-react';
 import {api,desktop,errorText} from './api';
-import {AccordionItem,Card,Check as ToggleCheck,Field,ItemStack,Toggle} from './components';
+import {AccordionItem,Card,Check as ToggleCheck,Field,ItemStack,MissingOption,Toggle} from './components';
 import {fontGroups} from './overlayDesign';
 import {
  ALERT_KINDS,ALERT_LABELS,DEFAULT_ALERTS,normalizeAlerts,queueAlert,renderStatic,sampleVars,
@@ -244,8 +244,9 @@ export default function Alertas({profileId,notify}:{profileId:string;notify:(s:s
         <select value={ev.sound} aria-label="Som do evento" onChange={e=>setEv({sound:e.target.value})}>
          <option value="">Sem som</option>
          {sounds.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
+         {!sounds.some(s=>s.id===ev.sound)&&<MissingOption value={ev.sound} label="Som salvo indisponível — escolha outro"/>}
         </select>
-        <small className="lp-note">{sounds.length?'O som toca na saída dos sons do bot (tela Áudio) junto com o painel. Envie áudios na tela Sons de Live.':'Nenhum som neste perfil ainda — envie um WAV, MP3 ou OGG na tela Sons de Live.'}</small>
+        <small className="lp-note">{sounds.length?'O som toca pela saída única do BotLive (fonte “Áudio do BotLive”, tela Áudio no OBS) junto com o painel. Envie áudios na tela Sons de Live.':'Nenhum som neste perfil ainda — envie um WAV, MP3 ou OGG na tela Sons de Live.'}</small>
        </div>
       </AccordionItem>
 
@@ -383,6 +384,7 @@ function ColorRow({label,hint,value,onChange,onReset}:{label:string;hint?:string
  return <div className="lp-color">
   <span>{label}</span>
   <input type="color" value={rgb} aria-label={label} onChange={e=>onChange(e.target.value)}/>
+  <code aria-hidden="true">{rgb.toUpperCase()}</code>
   {onReset&&<button type="button" className="text-button" onClick={onReset}>Usar cor global</button>}
   {hint&&<small className="lp-note">{hint}</small>}
  </div>;
