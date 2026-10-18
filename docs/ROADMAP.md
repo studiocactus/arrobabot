@@ -29,6 +29,6 @@ O que já está no BotLive e o que está planejado. Este documento é a referên
 
 ## Planejado
 
-### Integração com o Voicemod — REMOVIDA
+### Integração com o Voicemod — removida em 0.1.95, reintroduzida em 0.9.0
 
-A integração com o Voicemod foi retirada do produto: a etapa 1 entregue em 0.1.93 saiu do código em 0.1.95, e nada conversa mais com a Control API. O objetivo de trocar a voz da live foi alcançado por outro caminho, sem depender de outro programa aberto: a tela **Voz da live** aplica os efeitos no microfone dentro do próprio BotLive e envia o resultado para o VB-Cable, que o OBS usa como microfone. A troca de voz por resgate da Twitch e a etapa de automação (ação **Voz da live**) passaram a existir nessa tela.
+A integração foi retirada do produto em 0.1.95 (a etapa 1 de 0.1.93 saiu do código e nada falava mais com a Control API) e **voltou na 0.9.0** como o caminho opcional **Minha voz** da tela **Voz da live**: o BotLive fala com a Control API local do Voicemod para trocar a sua voz (lista real de vozes, resgates de recompensa com fila e restauração garantida, teste com volta à voz de antes), sem reprocessar nem retransmitir áudio — os sons do bot nunca passam pelo Voicemod. O caminho interno continua existindo: a tela **Voz da live** aplica os efeitos no microfone dentro do próprio BotLive e envia o resultado para o VB-Cable, que o OBS usa como microfone. A troca de voz por resgate da Twitch e a ação **Voz da live** passaram a existir nessa tela. Ver [Áudio no OBS](13-AUDIO.md).

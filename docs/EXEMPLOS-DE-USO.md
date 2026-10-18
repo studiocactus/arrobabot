@@ -54,7 +54,7 @@ Nome no chat: login real da Ana. Apelido: Aninha. Escolha um WAV, MP3 ou OGG. Em
 
 **Entrada:** primeira mensagem da Ana. **Resultado:** o som escolhido é solicitado. Mensagens seguintes não repetem até reiniciar a sessão. **Testar som** ajuda a conferir áudio e volume sem esperar por Ana.
 
-Para entrada silenciosa na Twitch, escolha **Quando entrar, mesmo sem falar**, ative o monitor e autorize novamente a conta do bot. A pessoa deve entrar depois de o monitor estar ativo. Para transmissão, escolha **Dispositivo de saída dos sons** e capture essa saída no OBS. A entrada depende dos eventos de conexão ao chat, não da lista de quem assiste ao vídeo.
+Para entrada silenciosa na Twitch, escolha **Quando entrar, mesmo sem falar**, ative o monitor e autorize novamente a conta do bot. A pessoa deve entrar depois de o monitor estar ativo. Para transmissão, os sons saem pela fonte **Áudio do BotLive** no OBS (tela [Áudio no OBS](13-AUDIO.md)). A entrada depende dos eventos de conexão ao chat, não da lista de quem assiste ao vídeo.
 
 Veja limites de arquivos, intervalos, permissões e diagnóstico em [Respostas TXT e sons](RESPOSTAS-E-SONS.md).
 

@@ -159,7 +159,7 @@ export default function Alertas({profileId,notify}:{profileId:string;notify:(s:s
    }else{
     setAnimating(true);flagEnsaio();
     if(stage.current&&r?.kind&&r.vars){
-     // O som sai pela linha de áudio do app (evento alert-sound); a prévia é visual.
+     // O som sai pela saída única (evento audio.play); a prévia é visual.
      await queueAlert(stage.current,{cfg,kind:r.kind,vars:r.vars,audio:null});
     }
    }

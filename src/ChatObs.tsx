@@ -11,7 +11,6 @@ import {
 } from './chatOverlay';
 import {applyCode} from './codeMode';
 import {CodeTabs} from './CodeTabs';
-import {playViewerSound} from './viewerSound';
 import './overlay-studio.css';
 
 type OverlayInfo={token:string;port:number;url:string};
@@ -44,7 +43,6 @@ export default function ChatObs({profileId,notify}:{profileId:string;notify:(s:s
  const [copied,setCopied]=useState(false);
  const [live,setLive]=useState(false);
  const [sounds,setSounds]=useState<{id:string;name:string}[]>([]);
- const [audioDevice,setAudioDevice]=useState('');
  const [burstChat,setBurstChat]=useState(false);
  const [evSel,setEvSel]=useState<ChatEventKind>('follow');
  const [ensaio,setEnsaio]=useState(false);
@@ -91,8 +89,8 @@ export default function ChatObs({profileId,notify}:{profileId:string;notify:(s:s
  useEffect(()=>{
   if(!desktop)return;
   let live=true;
-  api<{config:{audioDeviceId?:string};assets:{id:string;kind:string;name:string}[]}>('chatExtras.get',{profileId})
-   .then(v=>{if(live){setSounds((v.assets||[]).filter(a=>a.kind==='sound'));setAudioDevice(v.config?.audioDeviceId||'')}})
+  api<{assets:{id:string;kind:string;name:string}[]}>('chatExtras.get',{profileId})
+   .then(v=>{if(live)setSounds((v.assets||[]).filter(a=>a.kind==='sound'))})
    .catch(()=>{});
   return()=>{live=false};
  },[profileId,desktop]);
@@ -160,8 +158,8 @@ export default function ChatObs({profileId,notify}:{profileId:string;notify:(s:s
   const box=preview.current;if(!box)return;
   pushChatEvent(box,cfg,k,eventBoxHtml(cfg,k),cfg.ev[k].color,20);
   flagEnsaio();
-  const asset=cfg.ev[k].sound;
-  if(asset)void playViewerSound({profileId,asset,volume:1,deviceId:audioDevice}).catch(()=>{});
+  // Sem aplicativo não há biblioteca de sons: a prévia web fica só no visual.
+  // No desktop o som sai pelo backend, pelo mesmo caminho da live.
  };
 
  /** Aba Data: aplica o JSON pelo mesmo normalizador do formulário. */
@@ -340,7 +338,7 @@ export default function ChatObs({profileId,notify}:{profileId:string;notify:(s:s
          </select>
          <button type="button" className="lp-seg" onClick={()=>void testEvent(evSel)}><Play size={12}/> Testar {CHAT_EVENT_LABELS[evSel].toLowerCase()}</button>
         </div>
-        <small className="lp-note">{sounds.length?'O som toca na linha de áudio do app (tela Áudio), nunca dentro do OBS. Envie áudios na tela Sons de Live.':'Nenhum som neste perfil ainda — envie um WAV, MP3 ou OGG na tela Sons de Live.'}</small>
+        <small className="lp-note">{sounds.length?(desktop?'O som sai pela saída única do BotLive (tela Áudio no OBS), nunca dentro do OBS. Envie áudios na tela Sons de Live.':'Na prévia web só o visual toca: no aplicativo o som sai pela saída única (tela Áudio no OBS). Envie áudios na tela Sons de Live.'):'Nenhum som neste perfil ainda — envie um WAV, MP3 ou OGG na tela Sons de Live.'}</small>
        </div>
       </>}
      </div>

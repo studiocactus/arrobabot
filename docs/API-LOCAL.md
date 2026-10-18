@@ -61,6 +61,48 @@ Acrescente &view=songs à mesma URL. A primeira música da fila é apresentada c
 
 A fila é inicializada após autenticação quando existem pedidos. A seleção avança quando você usa **Finalizar primeira música** no painel. Não há reprodução de áudio, leitura de metadados nem sincronização automática com o player.
 
+## Fonte de áudio no OBS: rota /audio
+
+A tela **Áudio no OBS** copia um endereço próprio para uma Fonte de navegador dedicada — a **Áudio do BotLive**, a saída única dos sons do bot. A página servida em `GET /audio` não mostra nada: ela só toca som. O endereço tem a forma:
+
+```text
+http://127.0.0.1:9876/audio#token=TOKEN_DO_OVERLAY&profile=UUID_DO_PERFIL
+```
+
+Como nas camadas do overlay, o `token` e o `profile` autorizam o acesso e só arquivos do perfil entram. Marque **Controlar áudio pelo OBS** na fonte para a reprodução automática.
+
+### WebSocket da fonte (modo audio)
+
+A página abre o mesmo WebSocket local, autenticando com o modo `audio`:
+
+```json
+{"token":"TOKEN_DO_OVERLAY","mode":"audio"}
+```
+
+Resposta: `{"type":"audio.claim"}` quando esta fonte passa a ser a dona da reprodução do perfil, ou `{"type":"audio.standby","payload":{"profileId":"UUID","reason":"duplicate"}}` quando outra fonte já reproduz. A fonte em espera não toca nada; se a dona desconectar, a de espera assume e recebe `audio.claim`.
+
+Mensagens recebidas pela fonte:
+
+| type | Conteúdo principal de payload |
+|---|---|
+| audio.play | profileId, id, kind (`sound`, `alert`, `tts`, `preview`, `test`), src (endereço local do áudio), volume (0–1), nickname e issuedAt (ms) |
+| audio.stop | sem payload — para tudo e limpa a fila |
+| audio.claim / audio.standby | papel desta conexão na reprodução do perfil |
+
+A fonte confirma a reprodução enviando **apenas** `audio.ack`:
+
+```json
+{"type":"audio.ack","id":"ID_DO_SOM","phase":"started"}
+```
+
+com `phase` em `started`, `done`, `error` ou `stopped` e `detail` opcional (até 200 caracteres). A confirmação vira a notificação `audio.feedback` — é o que diferencia **som enviado** de **reprodução iniciada**. Outras mensagens vindas da fonte são ignoradas.
+
+Eventos `audio.play` com `issuedAt` antigo (mais de 10 segundos) são descartados: reconectar o OBS não repete sons antigos. A fila é serial, aceita até 5 pendentes e descarta som que não começa em 15 segundos.
+
+### Rota de TTS
+
+`GET /tts?token=…&id=…` devolve uma fala gerada pelo Windows (SAPI) e guardada em cache pelo BotLive (32 hexadecimais + `.wav`, grupo `media` da pasta de dados). Assim como `GET /asset?token=…&id=…`, exige token de overlay válido, só serve arquivos do perfil autorizado e fica só em 127.0.0.1.
+
 ## Protocolo versão 1
 
 ### Abrir e autenticar
@@ -141,7 +183,10 @@ Formato geral:
 | platform-event | Evento normalizado pelo motor |
 | overlay | profileId e text |
 | captions | profileId e text (fala finalizada da escuta contínua) |
-| tts | profileId, text, voice e rate |
+| audio.play | profileId, id, kind, src, volume, nickname, issuedAt e sink (`obs` quando a fonte do OBS reproduz; `local` quando o aplicativo toca) |
+| audio.stopLocal | profileId — o aplicativo deve parar e limpar a fila local |
+| audio.feedback | profileId, id, phase (`started`, `done`, `error`, `stopped`) e detail |
+| audio.state | profileId, clients (fontes conectadas) e claimed (se há fonte dona) |
 | community | profileId; aviso de atualização, sem todo o estado |
 | songs | profileId e queue, com itens user e url |
 

@@ -596,18 +596,19 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn sons_da_meta_saim_pela_linha_somente_com_escolha_valida() {
+    async fn sons_da_meta_saim_pela_saida_unica_somente_com_escolha_valida() {
         let dir = tempfile::tempdir().unwrap();
         let rt = Runtime::new(dir.path().into()).unwrap();
         let p = profile("P");
         rt.db.save_profile(&p).unwrap();
+        // Escolha antiga de aparelho (migração): não entra mais em nenhum payload.
         rt.db.set_module(&p.id, "audio", &json!({"device": "cable-3"})).unwrap();
         let mut rx = rt.broadcast.subscribe();
         // Sem escolha no design não toca nada.
         goal_sound(&rt, &p, "soundDonate");
         goal_sound(&rt, &p, "soundCelebrate");
-        assert!(!std::iter::from_fn(|| rx.try_recv().ok()).any(|v| v["type"] == "viewer-sound"), "nada sem escolha");
-        // Com escolha, toca na linha do app com o aparelho da tela Áudio.
+        assert!(!std::iter::from_fn(|| rx.try_recv().ok()).any(|v| v["type"] == "audio.play"), "nada sem escolha");
+        // Com escolha, toca pela saída única do BotLive (fonte do OBS ou local).
         let file = dir.path().join("jingle.wav");
         std::fs::write(&file, b"RIFF0000WAVEfmt ").unwrap();
         let id = crate::chat_extras::operation(&rt, &p.id, "chatExtras.import", &json!({"path": file, "kind": "sound"}))
@@ -618,10 +619,13 @@ mod tests {
         rt.db.set_module(&p.id, DESIGN, &d).unwrap();
         goal_sound(&rt, &p, "soundDonate");
         goal_sound(&rt, &p, "soundCelebrate");
-        let seen: Vec<_> = std::iter::from_fn(|| rx.try_recv().ok()).filter(|v| v["type"] == "viewer-sound").collect();
+        let seen: Vec<_> = std::iter::from_fn(|| rx.try_recv().ok()).filter(|v| v["type"] == "audio.play").collect();
         assert_eq!(seen.len(), 2, "doação e celebração tocam");
-        assert_eq!(seen[0]["payload"]["deviceId"], "cable-3", "aparelho vem da aba Áudio");
-        assert_eq!(seen[0]["payload"]["asset"], json!(id));
+        let src = seen[0]["payload"]["src"].as_str().unwrap();
+        assert!(src.contains("/asset?token="), "som servido pela API local: {src}");
+        assert!(src.contains(&format!("id={id}")), "carrega o arquivo do perfil");
+        assert_eq!(seen[0]["payload"]["kind"], "sound");
+        assert_eq!(seen[0]["payload"]["deviceId"], Value::Null, "aparelho antigo não volta ao payload");
         assert_eq!(seen[0]["payload"]["volume"], 1.0, "volume cheio na escala 0–1");
         // Arquivo removido depois da escolha: silencia em vez de notificar erro.
         rt.db.set_module(&p.id, DESIGN, &default_design()).unwrap();

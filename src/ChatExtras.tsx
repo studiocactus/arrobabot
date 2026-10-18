@@ -3,15 +3,14 @@ import {open} from '@tauri-apps/plugin-dialog';
 import {api,desktop,errorText} from './api';
 import {AccordionItem,Card,Field,ItemStack,ListTools,Toggle} from './components';
 import {secondsToMinutes} from './types';
-import {playViewerSound} from './viewerSound';
 type Asset={id:string;kind:string;name:string;issues?:Issue[]};
 type Issue={line:number;marker:string;suggestion:string|null};
 type Reply={id:string;enabled:boolean;keyword:string;matching:string;selection:string;asset:string;cooldown:number;userCooldown:number;reply:boolean;sound:string;soundVolume:number};
 /** A config salva junta respostas e sons por espectador; esta tela mexe só nas respostas. */
-type Config={repliesEnabled:boolean;replies:Reply[];soundsEnabled:boolean;presenceEnabled:boolean;audioDeviceId:string;people:unknown[]};
+type Config={repliesEnabled:boolean;replies:Reply[];soundsEnabled:boolean;presenceEnabled:boolean;people:unknown[]};
 const MATCH:Record<string,string>={word:'Palavra inteira',contains:'Contém trecho'};
 const SELECT:Record<string,string>={random:'Aleatória',sequence:'Sequência'};
-const blank:Config={repliesEnabled:false,replies:[],soundsEnabled:false,presenceEnabled:false,audioDeviceId:'',people:[]};
+const blank:Config={repliesEnabled:false,replies:[],soundsEnabled:false,presenceEnabled:false,people:[]};
 export default function ChatExtras({profileId}:{profileId:string}){
  const [config,setConfig]=useState<Config>(blank);const [sounds,setSounds]=useState<Asset[]>([]);const [assets,setAssets]=useState<Asset[]>([]);const [error,setError]=useState('');const [message,setMessage]=useState('');const [busy,setBusy]=useState(false);const [loaded,setLoaded]=useState(!desktop);
  const [preview,setPreview]=useState<{count:number;lines:string[];issues?:Issue[]}|null>(null);
@@ -50,7 +49,7 @@ export default function ChatExtras({profileId}:{profileId:string}){
     <div className="form-grid"><Field label="Intervalo da regra (segundos)" hint="60 = 1 minuto; no mínimo 60."><input type="number" min="60" max="86400" step="5" value={r.cooldown} onChange={e=>reply(r.id,{cooldown:Math.max(60,Number(e.target.value)||60)})}/></Field><Field label="Intervalo por pessoa (segundos)" hint="60 = 1 minuto. 0 sem limite."><input type="number" min="0" max="86400" step="5" value={r.userCooldown} onChange={e=>reply(r.id,{userCooldown:Number(e.target.value)||0})}/></Field></div>
     <div className="list-row"><div><strong>Responder no fio da pessoa</strong><small>Na Twitch a resposta sai no fio de quem falou; no Discord, citando a mensagem.</small></div><Toggle label="Responder no fio da pessoa" checked={r.reply!==false} onChange={v=>reply(r.id,{reply:v})}/></div>
     <Field label="Som junto com a resposta (opcional)" hint="Um áudio da biblioteca toca na saída dos sons do bot no mesmo instante da resposta. Escolha um som importado na tela Sons de Live.">
-     <div className="row"><select aria-label="Som junto com a resposta" value={r.sound} onChange={e=>reply(r.id,{sound:e.target.value})}><option value="">Sem som</option>{sounds.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select><button disabled={!desktop||!r.sound} onClick={()=>void run(async()=>{await playViewerSound({profileId,asset:r.sound,volume:r.soundVolume,deviceId:config.audioDeviceId})})}>Testar som</button></div>
+     <div className="row"><select aria-label="Som junto com a resposta" value={r.sound} onChange={e=>reply(r.id,{sound:e.target.value})}><option value="">Sem som</option>{sounds.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select><button disabled={!desktop||!r.sound} onClick={()=>void run(async()=>{await api('audio.preview',{profileId,asset:r.sound,volume:r.soundVolume})})}>Testar som</button></div>
     </Field>
     {r.sound&&<Field label={'Volume do som: '+Math.round(r.soundVolume*100)+'%'}><input type="range" min="0" max="1" step="0.05" value={r.soundVolume} onChange={e=>reply(r.id,{soundVolume:+e.target.value})}/></Field>}
     <div className="item-actions"><button disabled={!desktop||!r.asset} onClick={()=>void run(async()=>{setPreview(await api('chatExtras.preview',{profileId,asset:r.asset}))})}>Conferir linhas</button><button className="danger" onClick={()=>setConfig({...config,replies:config.replies.filter(x=>x.id!==r.id)})}>Remover regra</button></div>

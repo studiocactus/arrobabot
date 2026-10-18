@@ -2,7 +2,6 @@ import {useCallback,useEffect,useRef,useState} from 'react';
 import {Play,Square,Trash2,Plus,Copy,Check,RefreshCw,Pencil} from 'lucide-react';
 import {api,desktop,errorText} from './api';
 import {Card,Field} from './components';
-import {playViewerSound} from './viewerSound';
 import './overlay-studio.css';
 import OverlayPreview,{type StageBg} from './OverlayPreview';
 import {TEMPLATE_IDS,TEMPLATES,defaultDesign,fontGroups,normalizeDesign,type Align,type Layout,type OverlayDesign,type VAlign} from './overlayDesign';
@@ -51,7 +50,6 @@ export default function LivePix({profileId,notify}:{profileId:string;notify:(s:s
  const [ensaio,setEnsaio]=useState(false);
  const [editing,setEditing]=useState('');
  const [sounds,setSounds]=useState<Sound[]>([]);
- const [audioDevice,setAudioDevice]=useState('');
  const [burstMeta,setBurstMeta]=useState(false);
  const hydrated=useRef(false);
  const lastSaved=useRef('');
@@ -66,9 +64,8 @@ export default function LivePix({profileId,notify}:{profileId:string;notify:(s:s
   // "Perfil não encontrado" e o endereço nunca sairia do "Gerando…".
   try{const d=normalizeDesign(await api<unknown>('livepix.design_get',{profileId}));lastSaved.current=JSON.stringify(d);setDesign(d)}catch{}
   try{const i=await api<Info|null>('livepix.overlay_info',{profileId});setInfo(i&&i.token?i:null)}catch{}
-  // Sons da Meta e a saída da tela Áudio (a prévia deve ouvir na mesma saída do OBS).
+  // Sons da Meta: a prévia toca pelo mesmo caminho da live (saída única).
   try{const g=await api<{assets:{id:string;kind:string;name:string}[]}>('chatExtras.get',{profileId});setSounds((g.assets||[]).filter(a=>a.kind==='sound'))}catch{}
-  try{const a=await api<{device?:string}|null>('module.config.get',{profileId,key:'audio'});setAudioDevice(a?.device||'')}catch{}
   try{const b=await api<{events?:{meta?:boolean}}|null>('module.config.get',{profileId,key:'emoteBurst'});setBurstMeta(b?.events?.meta!==false)}catch{}
   hydrated.current=true;
  },[profileId,desktop]);
@@ -181,7 +178,9 @@ export default function LivePix({profileId,notify}:{profileId:string;notify:(s:s
  };
  const previewSound=(asset:string)=>{
   if(!desktop||!asset)return;
-  void playViewerSound({profileId,asset,volume:1,deviceId:audioDevice||undefined}).catch(e=>notify(errorText(e)));
+  // Mesmo caminho da live: sai pela fonte do OBS quando conectada; sem fonte,
+  // o aplicativo toca na saída padrão.
+  void api('audio.preview',{profileId,asset,volume:1}).catch(e=>notify(errorText(e)));
  };
 
  const set=(patch:Partial<OverlayDesign>)=>setDesign(d=>({...d,...patch}));

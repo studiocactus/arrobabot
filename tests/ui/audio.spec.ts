@@ -1,9 +1,14 @@
 import {test,expect,type Page} from '@playwright/test';
 
 const profile={id:'p1',name:'Canal de teste',platform:'twitch',channel:'cactus',channelId:'1',botId:'',clientId:'',blocklist:[],topics:[],editors:[],ai:{},modules:{}};
+const URL='http://127.0.0.1:9876/audio#token=tok123&profile=p1';
 
-/** Mock desktop: `audio.get` devolve a config da tela Áudio e os aparelhos da voz. */
-async function setup(page:Page){
+/**
+ * Mock desktop: `audio.get` devolve o endereço da fonte e quantas fontes estão
+ * conectadas; `audio.test`/`audio.stop` registram os argumentos em
+ * sessionStorage para o teste conferir.
+ */
+async function setup(page:Page,sink:{url:string;clients:number;claimed:boolean},testResult:{id:string;sink:string}={id:'t1',sink:'local'}){
  await page.addInitScript(p=>{
   Object.assign(window,{isTauri:true,
    __TAURI_EVENT_PLUGIN_INTERNALS__:{registerListener:()=>{},unregisterListener:()=>{}},
@@ -11,64 +16,82 @@ async function setup(page:Page){
     invoke:async(cmd:string,payload:{op:string;args?:Record<string,unknown>})=>{
      if(cmd!=='rpc')return 1;
      const op=payload.op;const args=payload.args||{};
-     if(op==='snapshot')return {profiles:[p],flows:[],notes:{},presets:[],theme:'dark',logs:[],statuses:{},apiPort:9876,dataDir:'teste'};
+     if(op==='snapshot')return {profiles:[p.profile],flows:[],notes:{},presets:[],theme:'dark',logs:[],statuses:{},apiPort:9876,dataDir:'teste'};
      if(op==='flows')return [];
      if(op==='command.counters')return {};
      if(op==='settings.get')return {theme:'dark',apiPort:9876,apiToken:'',updateEndpoint:'',updatePublicKey:'',autoUpdate:false};
-     if(op==='audio.get')return {config:{device:''},voiceFx:{selection:{input:'Microfone (Realtek)',output:'CABLE Input (VB-Audio Virtual Cable)'},devices:{inputs:[{name:'Microfone (Realtek)',default:true}],outputs:[{name:'CABLE Input (VB-Audio Virtual Cable)',default:true}]}},status:{phase:'off',message:'Prévia no navegador: a voz ao vivo só existe no aplicativo desktop.',input:'',output:''}};
-     if(op==='voiceFx.saveSelection'){sessionStorage.setItem('voiceSave',JSON.stringify(args));return null}
-     if(op==='module.config'){sessionStorage.setItem('audioSave',JSON.stringify({key:args.key,value:args.value}));return null}
+     if(op==='audio.get')return p.sink;
+     if(op==='audio.test'){sessionStorage.setItem('audioTest',JSON.stringify(args));return p.testResult}
+     if(op==='audio.stop'){sessionStorage.setItem('audioStop',JSON.stringify(args));return {stopped:p.sink.claimed}}
      return null;
     }}});
-  // Uma saída só no seletor: o CABLE que o OBS captura como fonte única.
-  Object.defineProperty(navigator,'mediaDevices',{configurable:true,value:{
-   enumerateDevices:async()=>[{kind:'audiooutput',deviceId:'cable-1',label:'CABLE Input (VB-Audio)',groupId:''}],
-   addEventListener:()=>{},removeEventListener:()=>{}
-  }});
-  sessionStorage.removeItem('audioSave');
- },profile);
+  sessionStorage.removeItem('audioTest');sessionStorage.removeItem('audioStop');
+ },{sink,testResult,profile});
  await page.goto('/');
- await page.locator('.sidebar').getByRole('button',{name:'Áudio',exact:true}).click();
+ await page.locator('.sidebar').getByRole('button',{name:'Áudio no OBS',exact:true}).click();
 }
 
-const saved=async(page:Page)=>JSON.parse(await page.evaluate(()=>sessionStorage.getItem('audioSave')||'null'));
+test('tela Áudio no OBS dita o caminho único, copia o endereço e testa pelo mesmo caminho',async({page})=>{
+ await page.context().grantPermissions(['clipboard-read','clipboard-write']);
+ await setup(page,{url:URL,clients:0,claimed:false});
 
-test('tela Áudio leva todos os sons para uma saída só e salva o aparelho',async({page})=>{
- await setup(page);
+ await expect(page.getByRole('heading',{name:'Áudio no OBS'}).first()).toBeVisible();
 
- await expect(page.getByRole('heading',{name:'Saída dos sons do bot'})).toBeVisible();
+ // O modelo dito na própria tela: uma fonte de navegador no OBS, um fader.
+ await expect(page.getByText('única saída de sons do BotLive')).toBeVisible();
+ await expect(page.getByText('“Controlar áudio pelo OBS”', {exact:true})).toBeVisible();
 
- // O modelo novo dito na própria tela: uma fonte de áudio no OBS para o bot inteiro.
- await expect(page.getByText('uma única Fonte de áudio')).toBeVisible();
+ // Estado real: sem fonte conectada, o painel espera o OBS.
+ await expect(page.getByText('Aguardando o OBS')).toBeVisible();
 
- // Escolher o aparelho grava a config {device} sozinha, com a chave certa.
- const device=page.getByRole('combobox',{name:'Dispositivo de saída dos sons'});
- await expect(device).toHaveValue('');
- await device.selectOption('cable-1');
- await expect.poll(async()=>(await saved(page))?.key,{timeout:3000}).toBe('audio');
- await expect.poll(async()=>(await saved(page))?.value?.device,{timeout:3000}).toBe('cable-1');
+ // Endereço visível, selecionável e copiável.
+ const url=page.getByLabel('Endereço da fonte de áudio');
+ await expect(url).toHaveValue(URL);
+ await page.getByRole('button',{name:'Copiar endereço'}).click();
+ await expect(page.getByRole('button',{name:'Copiado'})).toBeVisible();
+ await expect.poll(()=>page.evaluate(()=>navigator.clipboard.readText())).toBe(URL);
 
- // Os interruptores por origem não existem mais: só a saída e a voz.
- await expect(page.getByRole('switch',{name:'Sons de espectador na linha de áudio'})).toHaveCount(0);
- await expect(page.getByRole('heading',{name:'Voz da live — linha do microfone'})).toBeVisible();
+ // Testar sem fonte conectada: o backend toca local e a tela avisa sem fingir sucesso.
+ await page.getByRole('button',{name:'Testar áudio'}).click();
+ await expect(page.getByRole('status')).toContainText('A fonte do OBS ainda não está conectada');
+ await expect.poll(async()=>page.evaluate(()=>sessionStorage.getItem('audioTest'))).toContain('"profileId":"p1"');
 
- // O TTS declara a limitação: saída padrão do Windows.
- await expect(page.getByText('saída padrão do Windows').first()).toBeVisible();
+ // Parar todos os sons limpa a fila local e manda para a fonte.
+ await page.getByRole('button',{name:'Parar todos os sons'}).click();
+ await expect(page.getByRole('status')).toContainText('Todos os sons pararam');
+ await expect.poll(async()=>page.evaluate(()=>sessionStorage.getItem('audioStop'))).toContain('"profileId":"p1"');
+
+ // A seleção de aparelho de saída não existe mais nesta tela (o único seletor
+ // da página de áudio seria de dispositivo — o global é "Perfil ativo", do
+ // cabeçalho, e continua de pé).
+ await expect(page.getByRole('combobox',{name:/aparelho|dispositivo|saída/i})).toHaveCount(0);
+ await expect(page.getByText('VB-Cable deixou de ser necessário')).toBeVisible();
 });
 
-test('aparelhos da voz da live ficam na mesma tela e salvam ao trocar',async({page})=>{
- await setup(page);
+test('com a fonte conectada o teste segue o mesmo caminho, sem aviso de bloqueio',async({page})=>{
+ await setup(page,{url:URL,clients:1,claimed:true},{id:'t-obs',sink:'obs'});
 
- const mic=page.getByRole('combobox',{name:'Microfone de entrada'});
- await expect(mic).toHaveValue('Microfone (Realtek)');
- await expect(page.getByRole('combobox',{name:'Saída da linha (VB-Cable)'})).toHaveValue('CABLE Input (VB-Audio Virtual Cable)');
- await mic.selectOption('');
- await expect.poll(async()=>page.evaluate(()=>sessionStorage.getItem('voiceSave')),{timeout:3000}).toContain('"input":""');
+ await expect(page.getByText('Conectada',{})).toBeVisible();
+
+ await page.getByRole('button',{name:'Testar áudio'}).click();
+ // "Enviado" antes da confirmação: enviado não é "o público ouvindo".
+ await expect(page.getByText('Som enviado — aguardando a fonte do OBS confirmar…')).toBeVisible();
+ // Sem erro de bloqueio: com a fonte conectada o som foi para ela.
+ await expect(page.getByRole('alert')).toHaveCount(0);
 });
 
-test('tela de áudio cabe em 1100px sem espremer texto',async({page})=>{
+test('duas fontes conectadas aparecem como aviso, sem fingir que tudo bem',async({page})=>{
+ await setup(page,{url:URL,clients:2,claimed:true});
+ await expect(page.getByText('Conectada — 2 fontes; só a primeira reproduz')).toBeVisible();
+});
+
+test('tela de áudio cabe em 1100px e em janela larga sem espremer texto',async({page})=>{
  await page.setViewportSize({width:1100,height:950});
- await setup(page);
- await expect(page.getByRole('heading',{name:'Saída dos sons do bot'})).toBeVisible();
+ await setup(page,{url:URL,clients:0,claimed:false});
+ await expect(page.getByRole('heading',{name:'Áudio no OBS'}).first()).toBeVisible();
+ const noScroll=await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth);
+ expect(noScroll,'sem rolagem horizontal a 1100px').toBe(true);
  await page.screenshot({path:'artifacts/saida-audio-1100.png'});
+ await page.setViewportSize({width:1680,height:1000});
+ await page.screenshot({path:'artifacts/saida-audio-larga.png'});
 });

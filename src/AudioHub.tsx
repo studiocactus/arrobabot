@@ -1,123 +1,126 @@
 import {useCallback,useEffect,useRef,useState} from 'react';
-import {Play} from 'lucide-react';
+import {Check,Copy,Play,Square} from 'lucide-react';
+import {listen} from '@tauri-apps/api/event';
 import {api,desktop,errorText} from './api';
-import {Card,Field} from './components';
-import AudioOutput from './AudioOutput';
-import {beepDataUri,normalizeAudio,type AudioConfig} from './audio';
-import {playViewerSound} from './viewerSound';
+import {Card} from './components';
+import {stopViewerSounds} from './viewerSound';
 
-type Dev={name:string;default:boolean};
-type Devices={inputs:Dev[];outputs:Dev[]};
-type VoiceStatus={phase:string;message:string;input:string;output:string;effect?:string};
-type Selection={input?:string;output?:string};
-type GetResult={config:unknown;voiceFx:{selection:Selection;devices:Devices};status:VoiceStatus};
+type Sink={url:string;clients:number;claimed:boolean};
+type Feedback={phase:string;detail?:string};
 
-const PHASE:Record<string,string>={off:'Voz parada',starting:'Iniciando',running:'Voz ao vivo ativa',failed:'Falha'};
+const FEEDBACK:Record<string,string>={
+ started:'Reprodução iniciada pela fonte do OBS — o som entrou na transmissão.',
+ done:'Reprodução confirmada e encerrada pela fonte do OBS.',
+ stopped:'Som interrompido pela fonte do OBS.',
+};
 
 /**
- * Áudio: uma saída só para todos os sons do bot. Escolha o aparelho da linha
- * (ex.: CABLE Input do VB-Cable) e o OBS captura o bot inteiro como uma única
- * fonte de áudio. A voz da live tem caminho próprio (microfone → processamento
- * → linha) e o TTS continua preso à saída padrão do Windows.
+ * "Áudio no OBS": a única saída dos sons do bot. Uma fonte de navegador local
+ * toca todos os sons (espectador, fluxo, alertas, meta e TTS) — o fader dela
+ * no mixer do OBS é o volume do bot inteiro. O aplicativo só toca localmente
+ * enquanto essa fonte não está conectada; nunca os dois ao mesmo tempo.
  */
 export default function AudioHub({profileId,notify}:{profileId:string;notify:(s:string)=>void}){
- const [cfg,setCfg]=useState<AudioConfig>(()=>normalizeAudio(null));
- const [selection,setSelection]=useState<Selection>({});
- const [devices,setDevices]=useState<Devices>({inputs:[],outputs:[]});
- const [status,setStatus]=useState<VoiceStatus>({phase:'off',message:'Prévia no navegador: a voz ao vivo só existe no aplicativo desktop.',input:'',output:''});
- const [saveState,setSaveState]=useState<'idle'|'saving'|'saved'|'error'>('idle');
- const [saveError,setSaveError]=useState('');
+ const [sink,setSink]=useState<Sink>({url:'',clients:0,claimed:false});
+ const [feedback,setFeedback]=useState<Feedback|null>(null);
  const [testing,setTesting]=useState(false);
- const hydrated=useRef(false);
- const lastSaved=useRef('');
+ const [copied,setCopied]=useState(false);
+ const testId=useRef('');
+ const copyTimer=useRef(0);
 
  const load=useCallback(async()=>{
   if(!desktop)return;
-  try{
-   const g=await api<GetResult>('audio.get',{profileId});
-   const normalized=normalizeAudio(g.config);
-   setCfg(normalized);
-   lastSaved.current=JSON.stringify(normalized);
-   setSelection(g.voiceFx?.selection||{});
-   setDevices(g.voiceFx?.devices||{inputs:[],outputs:[]});
-   if(g.status)setStatus(g.status);
-  }catch{}
-  hydrated.current=true;
- },[profileId,desktop]);
+  try{setSink(await api<Sink>('audio.get',{profileId}))}catch(e){notify(errorText(e))}
+ },[profileId,desktop,notify]);
  useEffect(()=>{if(desktop)void load()},[load]);
 
- // Autosave: o backend valida e guarda na hora.
+ // Estado real da conexão, atualizado a cada mudança no backend.
  useEffect(()=>{
-  if(!desktop||!hydrated.current)return;
-  const key=JSON.stringify(cfg);
-  if(key===lastSaved.current)return;
-  setSaveState('saving');
-  let cancelled=false;
-  const timer=setTimeout(async()=>{
-   try{
-    await api('module.config',{profileId,key:'audio',value:cfg});
-    lastSaved.current=key;
-    if(!cancelled)setSaveState('saved');
-   }catch(e){if(!cancelled){setSaveState('error');setSaveError(errorText(e))}}
-  },700);
-  return()=>{cancelled=true;clearTimeout(timer)};
- },[cfg,profileId,desktop]);
+  if(!desktop)return;let active=true;const off:(()=>void)[]=[];
+  const track=(p:Promise<()=>void>)=>{void p.then(f=>active?off.push(f):f())};
+  track(listen<{profileId:string;clients:number;claimed:boolean}>('audio.state',e=>{
+   if(e.payload.profileId===profileId)setSink(s=>({...s,clients:e.payload.clients,claimed:e.payload.claimed}));
+  }));
+  track(listen<{profileId:string;id:string;phase:string;detail?:string}>('audio.feedback',e=>{
+   const p=e.payload;
+   if(p.id!==testId.current)return;
+   setFeedback({phase:p.phase,detail:p.detail});
+  }));
+  return()=>{active=false;off.forEach(f=>f())};
+ },[profileId,desktop]);
 
- const set=(patch:Partial<AudioConfig>)=>setCfg(c=>({...c,...patch}));
-
- /** Bipe pela saída escolhida: é o mesmo caminho de qualquer som do bot. */
- const testLine=()=>{
-  setTesting(true);
-  playViewerSound({profileId,src:beepDataUri(),volume:0.8,deviceId:cfg.device})
-   .then(()=>notify('Bipe tocado na saída dos sons.'))
-   .catch(e=>notify(errorText(e)))
-   .finally(()=>setTesting(false));
+ /** Teste: o mesmo caminho de qualquer som — sai pela fonte do OBS quando
+  *  conectada; sem fonte, toca na saída padrão e o texto diz isso. */
+ const test=async()=>{
+  setTesting(true);setFeedback(null);
+  try{
+   const out=await api<{id:string;sink:string}>('audio.test',{profileId});
+   if(out.sink!=='obs'){
+    notify('A fonte do OBS ainda não está conectada — o bipe tocou na saída padrão do aplicativo. Conecte a fonte no OBS e teste de novo.');
+    setTesting(false);return;
+   }
+   testId.current=out.id;
+   setFeedback({phase:'sent'});
+   window.setTimeout(()=>{
+    setFeedback(f=>f&&f.phase==='sent'?{phase:'timeout'}:f);
+    setTesting(false);
+   },12000);
+  }catch(e){notify(errorText(e));setTesting(false)}
  };
 
- const saveVoice=async(side:'input'|'output',value:string)=>{
-  const next={...selection,[side]:value};
-  setSelection(next);
-  try{await api('voiceFx.saveSelection',{profileId,input:next.input||'',output:next.output||''})}
-  catch(e){notify(errorText(e))}
+ const stop=async()=>{
+  stopViewerSounds();
+  try{await api('audio.stop',{profileId});notify('Todos os sons pararam.')}catch(e){notify(errorText(e))}
  };
- const running=status.phase==='running';
+
+ const copy=async()=>{
+  try{await navigator.clipboard.writeText(sink.url);setCopied(true);window.clearTimeout(copyTimer.current);copyTimer.current=window.setTimeout(()=>setCopied(false),2500)}
+  catch{notify('Não foi possível copiar. Selecione o endereço e copie manualmente.')}
+ };
+
+ const status=sink.clients===0
+  ?{cls:'status-pill wait',text:'Aguardando o OBS'}
+  :sink.clients>1
+   ?{cls:'status-pill wait',text:`Conectada — ${sink.clients} fontes; só a primeira reproduz`}
+   :{cls:'status-pill on',text:'Conectada'};
 
  return <div>
-  <Card title="Saída dos sons do bot" action={<span className={'au-save au-save--'+saveState}>{saveState==='saving'?'Salvando…':saveState==='saved'?'Salvo':saveState==='error'?'Não salvou':'Alterações salvam sozinhas'}</span>}>
-   <p className="help">Todos os sons saem por aqui — <strong>espectador, comandos, timers, automações, resgates e alertas</strong>. No OBS, adicione <strong>uma única Fonte de áudio</strong> (por exemplo, “CABLE Output”) e você controla o bot inteiro num fader só. Escolha abaixo a entrada “CABLE Input” do <strong>VB-Cable</strong>.</p>
-   <AudioOutput value={cfg.device} onChange={v=>set({device:v})}/>
+  <Card title="Áudio no OBS" action={<span className={status.cls}><span className="status-dot" aria-hidden="true"></span>{status.text}</span>}>
+   <p className="help">Esta é a <strong>única saída de sons do BotLive</strong>: espectador, comandos, timers, automações, resgates, alertas, meta e texto para voz saem todos por aqui. No OBS, o fader da fonte “Áudio do BotLive” vira o volume do bot inteiro — sem VB-Cable e sem saída por módulo.</p>
+   <ol className="help">
+    <li>Copie o endereço abaixo.</li>
+    <li>No OBS: <strong>Fontes → + → Navegador</strong>, nomeie “Áudio do BotLive” e cole o endereço. Largura 640, altura 360 (o visual é transparente).</li>
+    <li>Na fonte, marque <strong>“Controlar áudio pelo OBS”</strong> — é isso que coloca o bot no mixer.</li>
+    <li>Volte aqui e clique em <strong>Testar áudio</strong>.</li>
+   </ol>
    <div className="row">
-    <button className="primary" disabled={!desktop||testing} onClick={()=>testLine()}><Play size={15}/>{testing?'Tocando…':'Testar saída'}</button>
+    <input readOnly value={sink.url} aria-label="Endereço da fonte de áudio" onFocus={e=>e.currentTarget.select()}/>
+    <button onClick={()=>void copy()}>{copied?<Check size={15}/>:<Copy size={15}/>}{copied?'Copiado':'Copiar endereço'}</button>
    </div>
-   {!desktop&&<p className="help">Prévia no navegador: listar aparelhos e tocar exigem o aplicativo desktop.</p>}
-   {saveError&&<p role="alert" className="inline-error">{saveError}</p>}
-   <p className="help">Dica: escolha o mesmo aparelho aqui e na saída da Voz da live logo abaixo, e tudo do bot cai no mesmo cabo.</p>
+   <div className="row">
+    <button className="primary" disabled={!desktop||testing} onClick={()=>void test()}><Play size={15}/>{testing?'Tocando…':'Testar áudio'}</button>
+    <button disabled={!desktop} onClick={()=>void stop()}><Square size={15}/>Parar todos os sons</button>
+   </div>
+   {feedback&&feedback.phase==='sent'&&<p className="help">Som enviado — aguardando a fonte do OBS confirmar…</p>}
+   {feedback&&feedback.phase==='started'&&<p className="help">{FEEDBACK.started}</p>}
+   {feedback&&feedback.phase==='done'&&<p className="help">{FEEDBACK.done}</p>}
+   {feedback&&feedback.phase==='stopped'&&<p className="help">{FEEDBACK.stopped}</p>}
+   {feedback&&feedback.phase==='error'&&<p role="alert" className="inline-error">Falha na fonte: {feedback.detail||'a reprodução não começou'}</p>}
+   {feedback&&feedback.phase==='timeout'&&<p role="alert" className="inline-error">Sem confirmação da fonte em 12 s. Confira se a fonte está ativa na cena, se “Controlar áudio pelo OBS” está marcado e se ela não foi silenciada no mixer.</p>}
+   {!desktop&&<p className="help">Prévia no navegador: a saída de sons funciona no aplicativo desktop.</p>}
   </Card>
 
-  <Card title="Voz da live — linha do microfone" action={<span className={'status-pill '+(running?'on':'off')}><span className="status-dot" aria-hidden="true"></span>{PHASE[status.phase]||'Voz parada'}</span>}>
-   <p className="help">A voz com efeitos sai por caminho próprio: microfone → processamento → linha, sempre separada dos sons e do TTS. Aqui ficam os aparelhos que a tela <strong>Voz da live</strong> usa; efeitos, corte de ruído e o botão de iniciar continuam lá.</p>
-   <div className="list-row"><div><strong>Estado</strong><small>{status.message}</small></div></div>
-   <Field label="Microfone de entrada" hint="Seu microfone de verdade. Não escolha o CABLE aqui — ele é só a saída.">
-    <select value={selection.input||''} disabled={!desktop} onChange={e=>void saveVoice('input',e.target.value)}>
-     <option value="">Escolha o microfone…</option>
-     {selection.input&&!devices.inputs.some(d=>d.name===selection.input)&&<option value={selection.input}>{selection.input} — confira se está conectado</option>}
-     {devices.inputs.map(d=><option key={d.name} value={d.name}>{d.name}{d.default?' (padrão)':''}</option>)}
-    </select>
-   </Field>
-   <Field label="Saída da linha (VB-Cable)" hint="Escolha a entrada “CABLE Input”: é por aí que o OBS ouve a voz alterada.">
-    <select value={selection.output||''} disabled={!desktop} onChange={e=>void saveVoice('output',e.target.value)}>
-     <option value="">Escolha a saída…</option>
-     {selection.output&&!devices.outputs.some(d=>d.name===selection.output)&&<option value={selection.output}>{selection.output} — confira se está conectado</option>}
-     {devices.outputs.map(d=><option key={d.name} value={d.name}>{d.name}{d.default?' (padrão)':''}</option>)}
-    </select>
-   </Field>
-   <p className="help">A voz só passa pelo caminho quando você clica em Iniciar na tela Voz da live — nada muda até lá.</p>
+  <Card title="Como o som chega na transmissão">
+   <div className="list-row"><div><strong>O fader “Áudio do BotLive” controla os sons na transmissão</strong><small>Com a fonte marcada como “Controlar áudio pelo OBS”, todos os sons do bot entram no mixer do OBS por essa fonte só. Mutar o fader silencia o bot inteiro; mexer no volume mexe em tudo.</small></div></div>
+   <div className="list-row"><div><strong>Ouvir localmente depende da monitoração do OBS</strong><small>Para ouvir no seu fone, use a monitoração de áudio do próprio OBS (Configurações → Áudio → Monitoramento de áudio de saída). Não capture a monitoração como fonte de novo — isso duplicaria o som.</small></div></div>
+   <div className="list-row"><div><strong>“Enviado” não é “o público ouvindo”</strong><small>O estado acima confirma conexão e reprodução iniciada pela fonte. Mesmo assim, mute, volume baixo ou transmissão parada no OBS podem impedir que o público ouça — confira o mixer durante a live.</small></div></div>
+   <div className="list-row"><div><strong>Mantenha a fonte ativa nas cenas</strong><small>A fonte precisa existir nas cenas que você usa (ou numa cena-mãe sempre ativa). Se ela sumir da cena, os sons ficam de fora até voltar; ao reconectar, sons antigos não são repetidos.</small></div></div>
+   <div className="list-row"><div><strong>Volumes individuais continuam onde sempre estiveram</strong><small>Som de espectador, som do fluxo, alerta e meta guardam o volume de cada tela. Aqui só se decide <em>para onde</em> o som vai.</small></div></div>
   </Card>
 
-  <Card title="Texto para voz (TTS)">
-   <p className="help">O leitor de voz dos fluxos sai pela <strong>saída padrão do Windows</strong>: o navegador não permite ao BotLive escolher outro aparelho para essa voz. Para colocá-la na linha, troque a saída padrão do Windows ou use o Mixer de volume para rotear o áudio do BotLive.</p>
-   <div className="list-row"><div><strong>Saída do TTS</strong><small>Saída padrão do Windows — não há como o app escolher outro aparelho</small></div><span className="au-fixed">Fixa</span></div>
-   <div className="list-row"><div><strong>Voz e velocidade</strong><small>Configuradas em Comunidade → Texto para voz</small></div></div>
+  <Card title="O que mudou na migração">
+   <p className="help">Antes, cada som saía por um aparelho de saída escolhido no Windows (muitas vezes o <strong>VB-Cable</strong>) e o OBS capturava esse aparelho. Esse caminho foi substituído: a escolha de aparelho da tela Áudio <strong>não tem mais efeito</strong> e o VB-Cable deixou de ser necessário para os sons do bot. Arquivos, comandos, resgates, alertas e volumes continuam exatamente como você configurou.</p>
+   <p className="help">Se o OBS ainda captura um cabo antigo (“Áudio da área de trabalho” apontando para CABLE Output), remova essa fonte do OBS para os sons do bot não entrarem em dois lugares. O <strong>VB-Cable em si pode continuar instalado</strong> — a Voz da live (efeitos internos e Voicemod) ainda usa o cabo como caminho próprio do microfone, separado dos sons do bot.</p>
   </Card>
  </div>;
 }

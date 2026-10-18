@@ -39,7 +39,7 @@ Com o mestre **Eventos no chat** ligado, follow, sub, renovação, presente, bit
 - Escolha o evento nas pílulas (Follow, Sub, Renovação, Sub presente, Presentes em lote, Bits, Raid) e edite **Texto da caixa** e **Cor do evento**; a cor pinta a borda e tinge o fundo da caixa, que tem base escura para o texto branco ler em qualquer cena.
 - O texto aceita `{name}`, `{amount}`, `{months}`, `{tier}`, `{sender}` e `{message}`; em presente, `{name}` é quem ganhou e `{sender}` quem deu.
 - **Mostrar a mensagem do espectador** entra como segunda linha nas caixas de renovação e bits com texto escrito.
-- **Som do evento** escolhe um arquivo da tela [Sons de Live](RESPOSTAS-E-SONS.md) e toca na **linha de áudio do aplicativo** (tela [Áudio](13-AUDIO.md)), nunca dentro do OBS; o botão **Testar …** preenche o texto pelo motor e desenha a caixa na prévia pelo mesmo caminho da live (com o selo **Ensaio**), tocando o som escolhido.
+- **Som do evento** escolhe um arquivo da tela [Sons de Live](RESPOSTAS-E-SONS.md) e toca pela **saída única do BotLive** (tela [Áudio no OBS](13-AUDIO.md) — a fonte de áudio dedicada), nunca pela camada visual dentro do OBS; o botão **Testar …** preenche o texto pelo motor e desenha a caixa na prévia pelo mesmo caminho da live (com o selo **Ensaio**), tocando o som escolhido.
 - Cada evento tem interruptor próprio (**Exibir caixa de …**) além do mestre.
 
 Por padrão os eventos estão **desligados**, para não duplicar a camada de alertas. Com o mestre desligado, nada muda na coluna — e o botão **Testar …** avisa que, em live, a caixa também não apareceria; o mesmo vale quando a caixa individual do evento está desligada.

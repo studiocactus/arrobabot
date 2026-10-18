@@ -52,7 +52,7 @@ Acima do acordeão, as abas **Fields · HTML · CSS · JS · Data** abrem o cód
 
 ## Sons
 
-O seletor **Som** de cada evento lista os arquivos enviados na tela [Sons de Live](RESPOSTAS-E-SONS.md) (WAV, MP3 ou OGG, até 5 MiB). O áudio toca na **saída dos sons do bot** — o aparelho escolhido na tela [Áudio](13-AUDIO.md) — junto com o painel, usando o volume ajustado no grupo Painel. Sem som selecionado, o alerta é silencioso. Capture essa saída no OBS (por exemplo, a fonte de áudio apontando para o CABLE Output) para ouvir os alertas na live.
+O seletor **Som** de cada evento lista os arquivos enviados na tela [Sons de Live](RESPOSTAS-E-SONS.md) (WAV, MP3 ou OGG, até 5 MiB). O áudio toca pela **saída única dos sons do bot** — a fonte **Áudio do BotLive** no OBS (tela [Áudio no OBS](13-AUDIO.md)) — junto com o painel, usando o volume ajustado no grupo Painel. Sem som selecionado, o alerta é silencioso. Confira o fader dessa fonte no mixer do OBS para ouvir os alertas na live.
 
 ## Explosão de emotes
 

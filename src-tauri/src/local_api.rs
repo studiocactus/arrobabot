@@ -9,6 +9,11 @@ use tokio_tungstenite::{accept_async_with_config, tungstenite::{Message, protoco
 /// HTML do overlay gerado por scripts/build-overlay.cjs a partir de src/overlayApp.ts.
 const OVERLAY_HTML: &str = include_str!("../overlay.html");
 
+/// HTML da fonte de áudio "Áudio do BotLive" (GET /audio), gerado pelo mesmo
+/// script a partir de src/audioSourceApp.ts. Página só de áudio: nenhum visual
+/// e nenhum código de usuário roda aqui.
+const AUDIO_HTML: &str = include_str!("../audio.html");
+
 pub async fn serve(rt: Arc<Runtime>) -> Result<(), String> {
     let port = rt.db.get("apiPort").as_u64().unwrap_or(9876).clamp(1024, 65535) as u16;
     let listener = tokio::net::TcpListener::bind(("127.0.0.1", port)).await.map_err(|_| format!("Porta local {port} ocupada. Altere a porta nas configurações e reinicie."))?;
@@ -42,6 +47,12 @@ pub async fn serve(rt: Arc<Runtime>) -> Result<(), String> {
                 }
             };
             if let Some(pid) = &overlay_profile {
+                // Fonte de áudio do OBS: recebe só eventos de som do próprio
+                // perfil e responde com confirmações de reprodução.
+                if auth["mode"].as_str() == Some("audio") {
+                    audio_source(&rt, ws, pid).await;
+                    return;
+                }
                 let design = json!({"type": "design", "payload": {"profileId": pid, "design": livepix::design(&rt, pid)}});
                 if ws.send(Message::Text(design.to_string().into())).await.is_err() { return; }
                 if ws.send(Message::Text(livepix::goal_message(&rt, pid).to_string().into())).await.is_err() { return; }
@@ -100,6 +111,45 @@ pub async fn serve(rt: Arc<Runtime>) -> Result<(), String> {
     }
 }
 
+/// Conexão da fonte "Áudio do BotLive": registra a fonte no perfil (a primeira
+/// reproduz; as demais ficam em espera) e só aceita confirmações de reprodução
+/// daqui — a fonte nunca envia comandos nem eventos administrativos.
+async fn audio_source(rt: &Arc<Runtime>, mut ws: tokio_tungstenite::WebSocketStream<TcpStream>, pid: &str) {
+    let (tx, mut rx) = tokio::sync::mpsc::channel::<Value>(64);
+    let (sink_id, _) = crate::audio::register(rt, pid, tx);
+    loop {
+        tokio::select! {
+        item = ws.next() => {
+            match item {
+            Some(Ok(Message::Text(t))) => {
+                // Canal de ida restrito: só a confirmação de reprodução, com
+                // forma validada; qualquer outra mensagem é ignorada.
+                if let Ok(msg) = serde_json::from_str::<Value>(&t) {
+                    if msg["type"] == "audio.ack" {
+                        let _ = crate::audio::ack(
+                            rt,
+                            pid,
+                            msg["id"].as_str().unwrap_or(""),
+                            msg["phase"].as_str().unwrap_or(""),
+                            msg["detail"].as_str(),
+                        );
+                    }
+                }
+            },
+            Some(Ok(Message::Ping(v))) => { if ws.send(Message::Pong(v)).await.is_err() { break } },
+            Some(Ok(Message::Close(_))) | Some(Err(_)) | None => break,
+            _ => {}
+            }
+        },
+        msg = rx.recv() => {
+            let Some(msg) = msg else { break };
+            if ws.send(Message::Text(msg.to_string().into())).await.is_err() { break }
+        },
+        }
+    }
+    crate::audio::unregister(rt, pid, sink_id);
+}
+
 /// Só decide olhando o começo da requisição; os bytes seguem intactos para o
 /// handshake do WebSocket quando for o caso.
 async fn is_websocket(socket: &TcpStream) -> bool {
@@ -121,8 +171,9 @@ async fn is_websocket(socket: &TcpStream) -> bool {
     }
 }
 
-/// Responde a fonte do OBS (GET /overlay) e os sons do alerta
-/// (GET /asset?token=…&id=…), sem depender de arquivo local.
+/// Responde às fontes do OBS (GET /overlay e GET /audio), aos sons
+/// (GET /asset?token=…&id=…) e ao texto para voz (GET /tts?token=…&id=…),
+/// sem depender de arquivo local.
 async fn http(rt: Arc<Runtime>, mut socket: TcpStream) -> Result<(), String> {
     let mut buf = vec![0u8; 8192];
     let mut n = 0usize;
@@ -144,6 +195,13 @@ async fn http(rt: Arc<Runtime>, mut socket: TcpStream) -> Result<(), String> {
     let path = target.split('?').next().unwrap_or("/");
     let (status, body, ctype): (&str, Vec<u8>, &str) = if method == "GET" && path == "/overlay" {
         ("200 OK", OVERLAY_HTML.as_bytes().to_vec(), "text/html; charset=utf-8")
+    } else if method == "GET" && path == "/audio" {
+        ("200 OK", AUDIO_HTML.as_bytes().to_vec(), "text/html; charset=utf-8")
+    } else if method == "GET" && path == "/tts" {
+        match serve_tts(&rt, target) {
+            Ok((bytes, mime)) => ("200 OK", bytes, mime),
+            Err(_) => ("404 Not Found", b"N\xc3\xa3o encontrado.\r\n".to_vec(), "text/plain; charset=utf-8"),
+        }
     } else if method == "GET" && path == "/asset" {
         match serve_asset(&rt, target) {
             Ok((bytes, mime)) => ("200 OK", bytes, mime),
@@ -171,6 +229,15 @@ fn serve_asset(rt: &Arc<Runtime>, target: &str) -> Result<(Vec<u8>, &'static str
     let id = query(target, "id").ok_or("Som ausente")?;
     let pid = livepix::overlay_profile(rt, &token).ok_or("Chave de overlay inválida")?;
     crate::alerts::sound_file(rt, &pid, &id)
+}
+
+/// WAV do texto para voz gerado neste perfil: id em formato estrito, servido
+/// só da pasta de cache do próprio perfil.
+fn serve_tts(rt: &Arc<Runtime>, target: &str) -> Result<(Vec<u8>, &'static str), String> {
+    let token = query(target, "token").ok_or("Chave ausente")?;
+    let id = query(target, "id").ok_or("Áudio ausente")?;
+    let pid = livepix::overlay_profile(rt, &token).ok_or("Chave de overlay inválida")?;
+    crate::tts::file(rt, &pid, &id)
 }
 
 fn query(target: &str, key: &str) -> Option<String> {

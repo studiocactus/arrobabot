@@ -1,24 +1,61 @@
-import {api} from './api';
-export type ViewerSound={profileId:string;asset?:string;src?:string;nickname?:string;volume:number;deviceId?:string};
-let queue=Promise.resolve();let pending=0;
-export function playViewerSound(sound:ViewerSound):Promise<void>{
- if(pending>=5)return Promise.reject(Error('Fila de sons cheia. Aguarde o áudio atual.'));
- pending++;
- const next=queue.catch(()=>{}).then(async()=>{
-  // src pronto (alerta na linha) ou asset do perfil que vira endereço na hora.
-  const url=sound.src??await api<string>('chatExtras.audio',{profileId:sound.profileId,asset:sound.asset||''});
-  await new Promise<void>((resolve,reject)=>{
-   const audio=new Audio(url);audio.volume=Math.max(0,Math.min(1,sound.volume));
-   let done=false;const finish=(err?:Error)=>{if(done)return;done=true;clearTimeout(timer);audio.pause();audio.removeAttribute('src');audio.load();err?reject(err):resolve()};
-   const timer=setTimeout(()=>finish(),15000);audio.onended=()=>finish();audio.onerror=()=>finish(Error('Não foi possível reproduzir este áudio. Tente WAV ou MP3.'));
-   void (async()=>{
-    if(sound.deviceId){
-     if(typeof audio.setSinkId!=='function')throw Error('Seleção de saída não disponível. Escolha Padrão do Windows e configure o Mixer de volume.');
-     try{await audio.setSinkId(sound.deviceId)}catch{throw Error('Saída de áudio indisponível. Conecte o dispositivo ou escolha outra saída e salve.');}
-    }
-    if(!done)await audio.play();
-   })().catch(e=>finish(e instanceof Error?e:Error('Áudio bloqueado. Clique em Testar som e confira a saída de áudio do Windows.')));
+/**
+ * Fila de reprodução local do aplicativo — usada só quando a fonte
+ * "Áudio do BotLive" do OBS **não** está conectada. O backend decide o
+ * destino (sink) e envia o mesmo evento para os dois lados; o aplicativo
+ * nunca toca junto com a fonte do OBS.
+ */
+export type ViewerSound = {profileId: string; src: string; volume: number};
+
+let queue = Promise.resolve();
+let pending = 0;
+let current: HTMLAudioElement | null = null;
+let release: (() => void) | null = null;
+let generation = 0;
+
+export function playViewerSound(sound: ViewerSound): Promise<void> {
+  if (pending >= 5) return Promise.reject(Error('Fila de sons cheia. Aguarde o áudio atual.'));
+  const gen = generation;
+  pending++;
+  const next = queue.catch(() => {}).then(
+    () =>
+      new Promise<void>((resolve, reject) => {
+        if (gen !== generation) return resolve();
+        const audio = new Audio(sound.src);
+        current = audio;
+        audio.volume = Math.max(0, Math.min(1, sound.volume));
+        let done = false;
+        const finish = (err?: Error) => {
+          if (done) return;
+          done = true;
+          clearTimeout(timer);
+          try {
+            audio.pause();
+          } catch {}
+          audio.removeAttribute('src');
+          audio.load();
+          if (current === audio) current = null;
+          if (release === finish) release = null;
+          err ? reject(err) : resolve();
+        };
+        release = finish;
+        const timer = setTimeout(() => finish(), 15000);
+        audio.onended = () => finish();
+        audio.onerror = () => finish(Error('Não foi possível reproduzir este áudio. Tente WAV ou MP3.'));
+        void audio.play().catch(() => finish(Error('O navegador bloqueou a reprodução. Clique em Testar áudio de novo.')));
+      }),
+  );
+  queue = next.catch(() => {});
+  void next.catch(() => {}).finally(() => {
+    pending--;
   });
- });
- queue=next.finally(()=>{pending--});queue.catch(()=>{});return next;
+  return next;
+}
+
+/** Para imediatamente o som atual e descarta a fila local. */
+export function stopViewerSounds(): void {
+  generation++;
+  const releaseNow = release;
+  release = null;
+  releaseNow?.();
+  current = null;
 }

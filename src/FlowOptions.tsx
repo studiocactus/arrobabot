@@ -3,11 +3,10 @@ import {open} from '@tauri-apps/plugin-dialog';
 import {api,desktop} from './api';
 import {friendlyMessage} from './errors';
 import {Field,Toggle} from './components';
-import {playViewerSound} from './viewerSound';
 import {sendTypes,sendColors} from './types';
 
 type Asset={id:string;kind:string;name:string};
-type Extras={config:{audioDeviceId:string};assets:Asset[]};
+type Extras={assets:Asset[]};
 
 const HINT:Record<string,string>={
  chat:'Publica no chat como qualquer outra mensagem do bot.',
@@ -39,11 +38,10 @@ export function SendPicker({value,color,platform,reply,onChange,onColor,onReply}
 
 export function AudioPicker({profileId,value,volume,onChange,onVolume}:{profileId:string;value:string;volume:number;onChange:(v:string)=>void;onVolume:(v:number)=>void}){
  const [assets,setAssets]=useState<Asset[]>([]);
- const [device,setDevice]=useState('');
  const [error,setError]=useState('');
  const [busy,setBusy]=useState(false);
  useEffect(()=>{let live=true;if(!desktop){setAssets([]);return}
-  api<Extras>('chatExtras.get',{profileId}).then(v=>{if(live){setAssets(v.assets.filter(a=>a.kind==='sound'));setDevice(v.config.audioDeviceId||'')}}).catch(e=>{if(live)setError(friendlyMessage(e))});
+  api<Extras>('chatExtras.get',{profileId}).then(v=>{if(live)setAssets(v.assets.filter(a=>a.kind==='sound'))}).catch(e=>{if(live)setError(friendlyMessage(e))});
   return()=>{live=false}},[profileId]);
  async function run(fn:()=>Promise<void>){setBusy(true);setError('');try{await fn()}catch(e){setError(friendlyMessage(e))}finally{setBusy(false)}}
  const choose=()=>run(async()=>{
@@ -52,10 +50,10 @@ export function AudioPicker({profileId,value,volume,onChange,onVolume}:{profileI
   const asset=await api<Asset>('chatExtras.import',{profileId,kind:'sound',path});
   setAssets(list=>list.concat(asset));onChange(asset.id);
  });
- const test=()=>run(async()=>{await playViewerSound({profileId,asset:value,volume,deviceId:device})});
+ const test=()=>run(async()=>{await api('audio.preview',{profileId,asset:value,volume})});
  return <>
  <div className="form-grid">
-  <Field label="Tocar áudio ao disparar" hint="Escolha um som da biblioteca em Sons. Ele toca na saída de áudio do BotLive quando o comando, o timer ou a automação executar; capture essa saída no OBS para a live ouvir.">
+  <Field label="Tocar áudio ao disparar" hint="Escolha um som da biblioteca em Sons. Ele toca pela fonte “Áudio do BotLive” do OBS (tela Áudio no OBS) quando o comando, o timer ou a automação executar.">
    <select value={value} onChange={e=>onChange(e.target.value)}>
     <option value="">Nenhum áudio</option>
     {assets.map(a=><option key={a.id} value={a.id}>{a.name}</option>)}

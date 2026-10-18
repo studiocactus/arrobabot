@@ -36,14 +36,16 @@ async fn flow_audio_and_twitch_delivery_type(){
  assert!(dispatch(rt.clone(),"flow.save",json!({"profileId":p.id,"flow":f.clone()})).await.is_ok());
  let mut rx=rt.broadcast.subscribe();
  engine::process(rt.clone(),event(&p,"!oi",false)).await;
- let sounds:Vec<_>=std::iter::from_fn(||rx.try_recv().ok()).filter(|v|v["type"]=="viewer-sound").collect();
- assert_eq!(sounds.len(),1);assert_eq!(sounds[0]["payload"]["asset"].as_str().unwrap(),asset["id"].as_str().unwrap());assert_eq!(sounds[0]["payload"]["volume"].as_f64().unwrap(),0.6);
+ let sounds:Vec<_>=std::iter::from_fn(||rx.try_recv().ok()).filter(|v|v["type"]=="audio.play").collect();
+ assert_eq!(sounds.len(),1);
+ assert!(sounds[0]["payload"]["src"].as_str().unwrap().contains(asset["id"].as_str().unwrap()),"som do fluxo pela saída única");
+ assert_eq!(sounds[0]["payload"]["volume"].as_f64().unwrap(),0.6);
  // Sem autorização a ação falha com aviso no histórico, sem interromper o processo.
  let logs=rt.db.logs(&p.id).unwrap();
  assert!(logs.iter().any(|l|l.status=="error"&&l.message.starts_with("ifood · ")));
  // A simulação registra o plano: sem som e com o tipo de envio escolhido.
  engine::process(rt.clone(),event(&p,"!oi",true)).await;
- assert!(!std::iter::from_fn(||rx.try_recv().ok()).any(|v|v["type"]=="viewer-sound"));
+ assert!(!std::iter::from_fn(||rx.try_recv().ok()).any(|v|v["type"]=="audio.play"));
  let logs=rt.db.logs(&p.id).unwrap();
  assert!(logs.iter().any(|l|l.message.contains("Tocaria o áudio do fluxo")));
  assert!(logs.iter().any(|l|l.message.starts_with("[Simulação] [Anúncio]")));

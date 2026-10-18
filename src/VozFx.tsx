@@ -120,7 +120,7 @@ export default function VozFx({profileId,notify}:{profileId:string;notify:(s:str
 
  return <div>
   <Card title="Minha voz na live">
-   <p className="help">Escolha como a sua voz chega ao OBS. Só um caminho fica de pé por vez — nunca dois capturando o microfone ao mesmo tempo. Sons do bot, alertas e TTS seguem no caminho de sempre (tela Áudio), sem mexer no microfone do Windows.</p>
+   <p className="help">Escolha como a sua voz chega ao OBS. Só um caminho fica de pé por vez — nunca dois capturando o microfone ao mesmo tempo. Sons do bot, alertas e TTS seguem pela saída única (tela Áudio no OBS), sem mexer no microfone do Windows.</p>
    <Field label="Caminho da voz" hint="Troque parado: com a voz ao vivo rodando, o BotLive barra a troca para não capturar o microfone duas vezes.">
     <select value={mode} disabled={busy||running} onChange={e=>changeMode(e.target.value)}>
      <option value="internal">Efeitos internos do BotLive (microfone → VB-Cable → OBS)</option>

@@ -18,7 +18,7 @@ export const flows=[
   actions:[act('condition','',{condVar:'reward.cost',condOp:'greater_or_equal',condValue:'100',condFalse:'stop'}),act('chat','Oi {{viewer.name}}'),act('overlay','Aparece na OBS')]}
 ];
 
-export const NAV=['Visão geral','Perfis de bot','Discord','Rótulos OBS','Comandos','Timers','Respostas','Sons de Live','Contadores','Automações','OBS Studio','Áudio','Voz da live','Spotify','Meta','Alertas','Chat no OBS','Inteligência artificial','Memórias','Comunidade','Biblioteca de presets','Histórico','Estatísticas'];
+export const NAV=['Visão geral','Perfis de bot','Discord','Rótulos OBS','Comandos','Timers','Respostas','Sons de Live','Contadores','Automações','OBS Studio','Áudio no OBS','Voz da live','Spotify','Meta','Alertas','Chat no OBS','Inteligência artificial','Memórias','Comunidade','Biblioteca de presets','Histórico','Estatísticas'];
 
 const LOGS=[
  {id:'l1',profileId:'p1',kind:'run',message:'Execução concluída com sucesso no fluxo de boas-vindas',status:'success',at:'2026-10-07T10:00:00Z'},
@@ -106,7 +106,9 @@ export async function mock(page:Page){
       }
       case 'alerts.test':return {kind:String((payload.args as Record<string,unknown>)?.kind||'follow'),vars:{name:'NovoSeguidor',amount:1,months:1,tier:'TIER 1',message:''}};
       case 'chat.get':return {config:null,overlay:{token:'preview-token',port:9876,url:'http://127.0.0.1:9876/overlay#token=preview-token&profile=p1'}};
-      case 'audio.get':return {config:null,voiceFx:{selection:{input:'Microfone (Realtek)',output:'CABLE Input (VB-Audio Virtual Cable)'},devices:{inputs:[{name:'Microfone (Realtek)',default:true}],outputs:[{name:'CABLE Input (VB-Audio Virtual Cable)',default:true}]}},status:{phase:'off',message:'Prévia no navegador: a voz ao vivo só existe no aplicativo desktop.',input:'',output:''}};
+      // Saída única (0.11.0): endereço da fonte + quantas fontes do OBS estão
+      // conectadas. Sem aparelho de Windows nenhum.
+      case 'audio.get':return {url:'http://127.0.0.1:9876/audio#token=preview-token&profile=p1',clients:0,claimed:false};
       case 'update.check':return {available:false};
       default:st.unknown.push(op);return lists.includes(op)?[]:null;
      }

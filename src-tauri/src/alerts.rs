@@ -171,22 +171,22 @@ fn dispatch(rt: &Runtime, p: &Profile, kind: &str, vars: Value, rehearsal: bool)
     line_sound(rt, p, kind);
 }
 
-/// Som do alerta na linha de áudio do aplicativo — a mesma saída que o OBS
-/// captura como fonte única do bot. A fonte de navegador ficou só visual.
+/// Som do alerta pela **saída única** do BotLive — a mesma fonte de navegador
+/// do OBS que toca todos os demais sons do bot. O overlay continua só visual.
 fn line_sound(rt: &Runtime, p: &Profile, kind: &str) {
     let cfg = config(rt, &p.id);
     let Some(sound) = cfg["events"][kind]["sound"].as_str().filter(|s| !s.is_empty()) else { return };
-    let Ok(info) = crate::livepix::overlay_info(rt, &p.id) else { return };
-    let _ = rt.emit(
-        "alert-sound",
-        json!({
-            "profileId": p.id,
-            "src": format!("http://127.0.0.1:{}/asset?token={}&id={}", info["port"], info["token"], sound),
-            // O volume salvo é 0–100, mas o player da linha aceita 0–1
-            // (Math.min(1, volume) engolia qualquer valor acima de 1).
-            "volume": (cfg["volume"].as_f64().unwrap_or(70.0) / 100.0).clamp(0.0, 1.0),
-            "deviceId": crate::audio::device(rt, &p.id),
-        }),
+    let Ok(src) = crate::audio::asset_src(rt, &p.id, sound) else { return };
+    let _ = crate::audio::play(
+        rt,
+        &p.id,
+        crate::audio::Req {
+            kind: "alert",
+            src,
+            // O volume salvo é 0–100; a saída única aceita 0–1.
+            volume: (cfg["volume"].as_f64().unwrap_or(70.0) / 100.0).clamp(0.0, 1.0),
+            nickname: None,
+        },
     );
 }
 
@@ -502,7 +502,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn som_do_alerta_sai_sempre_na_linha_do_aplicativo() {
+    async fn som_do_alerta_sai_sempre_pela_saida_unica() {
         let dir = tempfile::tempdir().unwrap();
         let rt = Runtime::new(dir.path().join("app")).unwrap();
         let p = p();
@@ -512,15 +512,17 @@ mod tests {
         let id = crate::chat_extras::operation(&rt, &p.id, "chatExtras.import", &json!({"path": file, "kind": "sound"}))
             .unwrap()["id"].as_str().unwrap().to_string();
         save(&rt, &p, json!({"enabled": true, "volume": 70, "events": {"follow": {"on": true, "sound": id}}}));
+        // Migração: o aparelho antigo da tela Áudio não entra em payload nenhum.
         rt.db.set_module(&p.id, "audio", &json!({"device": "cable-3"})).unwrap();
         let mut rx = rt.broadcast.subscribe();
         fire(&rt, &p, &e(&p, "follow", json!({})));
-        let line: Vec<_> = std::iter::from_fn(|| rx.try_recv().ok()).filter(|v| v["type"] == "alert-sound").collect();
-        assert_eq!(line.len(), 1, "o alerta toca na linha");
+        let line: Vec<_> = std::iter::from_fn(|| rx.try_recv().ok()).filter(|v| v["type"] == "audio.play").collect();
+        assert_eq!(line.len(), 1, "o alerta toca pela saída única");
         let src = line[0]["payload"]["src"].as_str().unwrap();
         assert!(src.contains("/asset?token="), "som servido pela API local: {src}");
         assert!(src.contains(&id));
-        assert_eq!(line[0]["payload"]["deviceId"], "cable-3", "aparelho vem da aba Áudio");
+        assert_eq!(line[0]["payload"]["kind"], "alert");
+        assert_eq!(line[0]["payload"]["deviceId"], Value::Null, "aparelho antigo não volta ao payload");
         assert_eq!(
             line[0]["payload"]["volume"], 0.7,
             "volume salvo 0–100 chega ao player como 0–1 (senão Math.min(1,…) engolia tudo acima de 1 e tocava 100%)"
@@ -529,6 +531,6 @@ mod tests {
         save(&rt, &p, json!({"events": {"follow": {"sound": ""}}}));
         let mut rx = rt.broadcast.subscribe();
         fire(&rt, &p, &e(&p, "follow", json!({})));
-        assert!(!std::iter::from_fn(|| rx.try_recv().ok()).any(|v| v["type"] == "alert-sound"), "sem som não há linha");
+        assert!(!std::iter::from_fn(|| rx.try_recv().ok()).any(|v| v["type"] == "audio.play"), "sem som não há linha");
     }
 }

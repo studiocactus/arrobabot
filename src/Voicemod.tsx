@@ -83,11 +83,20 @@ export default function Voicemod({profileId,notify}:{profileId:string;notify:(s:
  });
  const stopTest=()=>run(async()=>{await api('voicemod.testStop',{profileId})});
 
- return <Card title="Voicemod (voz no aplicativo Voicemod)">
+ return <Card title="Minha voz — Voicemod">
   <p className="help">Caminho alternativo à voz interna: o BotLive pede ao Voicemod (nesta máquina) para trocar a voz, e o Voicemod alimenta o OBS pelo microfone virtual dele. O BotLive não reprocessa nem retransmite áudio. Pede-se a chave da Control API em control-api.voicemod.net — a chave fica no cofre, nunca no chat nem no Histórico.</p>
+  <h4>Como usar em 4 passos</h4>
+  <ol className="help">
+   <li><strong>Abra e configure o Voicemod</strong> nesta máquina, com sua voz e efeitos por lá.</li>
+   <li><strong>Conecte o controle</strong>: cole a chave da Control API abaixo e clique em Conectar.</li>
+   <li><strong>Aponte o OBS para o microfone virtual</strong>: na cena, use “Voicemod Microphone” como microfone. O microfone padrão do Windows <strong>não muda</strong>.</li>
+   <li><strong>Teste a voz</strong> aqui embaixo: o efeito vale só durante o teste e a voz de antes volta sozinha ao terminar.</li>
+  </ol>
+  <p className="help">Sons do bot, alertas e texto para voz <strong>não passam pelo Voicemod</strong> — eles saem pela fonte “Áudio do BotLive” do OBS (tela Áudio no OBS). A escuta de comandos continua no seu microfone físico, antes do Voicemod.</p>
   <div className="list-row"><div><strong>Estado</strong><small>{status?.message||'Abra o Voicemod nesta máquina e clique em Conectar.'}</small></div><span className={pill.cls}><span className="status-dot" aria-hidden="true"></span><span>{pill.text}</span></span></div>
   {error&&<p role="alert" className="inline-error">{error}</p>}
   {status?.phase==='failed'&&status.message&&<p role="alert" className="inline-error">{status.message}</p>}
+  {status?.phase==='failed'&&<p className="help">Confira: o Voicemod está aberto e logado nesta máquina; a chave veio de control-api.voicemod.net (menu Control API); e a licença libera a Control API. Depois clique em Conectar de novo.</p>}
   {!snap?.hasKey&&<p className="help">Sem chave salva: a conexão é barrada com “Chave da Control API ausente”.</p>}
   {snap?.hasKey&&<p className="help">Chave salva ({snap.keyLen} caracteres). Nada é exibido dela aqui.</p>}
   <Field label="Chave da Control API" hint="Cole a chave recebida da Voicemod. Ela vai só para o cofre desta máquina.">

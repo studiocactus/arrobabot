@@ -9,7 +9,7 @@ Esta documentação descreve a versão implementada do BotLive. Os exemplos usam
 - [Respostas TXT e sons](RESPOSTAS-E-SONS.md): regras de resposta em texto com som opcional, biblioteca de sons e sons de pessoas na tela Sons de Live.
 - [Alertas da live](11-ALERTAS.md): painéis animados de follow, sub, bits e raid no overlay do OBS.
 - [Chat no OBS](12-CHAT-OBS.md): coluna do chat na mesma fonte do overlay, com badges, emotes e moderação sincronizada.
-- [Saída de áudio](13-AUDIO.md): todos os sons do bot numa saída só, em qual aparelho, e como capturar essa saída como uma única fonte no OBS.
+- [Áudio no OBS](13-AUDIO.md): todos os sons do bot numa saída só — a fonte de navegador **Áudio do BotLive**, sem VB-Cable — e como ligá-la no OBS.
 - [Música do Spotify](14-SPOTIFY.md): a música que está tocando num cartão próprio do overlay do OBS, ajustável no Estúdio, e nas automações — lida da sua conta com um aplicativo próprio, sem programa extra.
 - [Discord](09-DISCORD.md): bot no servidor, moderação em dupla, espelho de chat, sorteios, XP e slash.
 - [Variáveis](VARIAVEIS.md): montar respostas usando informações do chat.

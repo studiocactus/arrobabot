@@ -7,7 +7,8 @@
  * camada: `goal` (meta), `alerts` (alertas), `chat` (chat) ou `spotify`
  * (música tocando). Sem o parâmetro, a fonte continua mostrando tudo
  * (compatibilidade com fontes já criadas).
- * A fonte do overlay é só visual: todo som sai pela linha de áudio do app.
+ * A fonte do overlay é só visual: todo som sai pela saída única (fonte
+ * “Áudio do BotLive” no OBS, ou o aplicativo quando o OBS não está ouvindo).
  *
  * Compilado por scripts/build-overlay.cjs para src-tauri/overlay.html.
  */
@@ -180,7 +181,7 @@ function handle(msg:Message){
   const vars=(payload?.vars&&typeof payload.vars==='object'?payload.vars:{}) as Record<string,unknown>;
   queueAlert(alertHost,{
    cfg:alertsCfg,kind,vars:vars as AlertVars,
-   // A fonte do overlay é só visual: o som sai na linha de áudio do app.
+   // A fonte do overlay é só visual: o som sai pela saída única do BotLive.
    audio:null,
   });
   return;

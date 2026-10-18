@@ -2,21 +2,19 @@ import {useCallback,useEffect,useState} from 'react';
 import {open} from '@tauri-apps/plugin-dialog';
 import {Play,Plus,Search,Trash2,Upload} from 'lucide-react';
 import {api,desktop,errorText} from './api';
-import {playViewerSound} from './viewerSound';
 import {AccordionItem,Card,Empty,Field,ItemStack,ListTools,Toggle} from './components';
 import {minutesToSeconds,secondsToMinutes} from './types';
 type Asset={id:string;kind:string;name:string};
 type Person={trigger:string;id:string;enabled:boolean;name:string;nickname:string;userId:string;asset:string;mode:string;cooldown:number;volume:number};
 /** A config salva junta respostas e sons; esta tela mexe só nos sons por espectador. */
-type Config={soundsEnabled:boolean;presenceEnabled:boolean;audioDeviceId:string;repliesEnabled:boolean;replies:unknown[];people:Person[]};
+type Config={soundsEnabled:boolean;presenceEnabled:boolean;repliesEnabled:boolean;replies:unknown[];people:Person[]};
 const TRIGGER:Record<string,string>={message:'Ao falar',join:'Ao entrar',either:'Entrar ou falar'};
 const MODE:Record<string,string>={first:'Uma vez por sessão',interval:'Com intervalo'};
-const blank:Config={soundsEnabled:false,presenceEnabled:false,audioDeviceId:'',repliesEnabled:false,replies:[],people:[]};
+const blank:Config={soundsEnabled:false,presenceEnabled:false,repliesEnabled:false,replies:[],people:[]};
 export default function Sounds({profileId,notify}:{profileId:string;notify:(s:string)=>void}){
  const [assets,setAssets]=useState<Asset[]>([]);
  const [config,setState]=useState<Config>(blank);
  const [query,setQuery]=useState('');const [qPeople,setQPeople]=useState('');
- const [device,setDevice]=useState('');
  const [busy,setBusy]=useState(false);
  const [error,setError]=useState('');
  const [message,setMessage]=useState('');
@@ -28,7 +26,6 @@ export default function Sounds({profileId,notify}:{profileId:string;notify:(s:st
    setAssets((v.assets||[]).filter(a=>a.kind==='sound'));
    const c={...blank,...v.config,people:((v.config?.people||[]) as Person[]).map(p=>({...p,trigger:p.trigger||'message'}))};
    setState(c);
-   setDevice(c.audioDeviceId||'');
   }catch(e){setError(errorText(e))}
  },[profileId]);
  useEffect(()=>{if(desktop)void load()},[load]);
@@ -45,7 +42,12 @@ export default function Sounds({profileId,notify}:{profileId:string;notify:(s:st
  }
  async function play(a:Asset){
   setPlaying(a.id);setError('');
-  try{await playViewerSound({profileId,asset:a.id,volume:1,deviceId:device})}
+  try{
+   // Mesmo caminho da live: sai pela fonte do OBS quando conectada; sem
+   // fonte, o aplicativo toca na saída padrão do Windows.
+   await api('audio.preview',{profileId,asset:a.id,volume:1});
+   setMessage('Som enviado pela saída única do BotLive: toca na fonte do OBS quando ela está conectada.');
+  }
   catch(e){setError(errorText(e))}
   finally{setPlaying('')}
  }
@@ -58,7 +60,7 @@ export default function Sounds({profileId,notify}:{profileId:string;notify:(s:st
  const visible=assets.filter(a=>!query||a.name.toLowerCase().includes(query.toLowerCase()));
  return <div>
   <Card title="Biblioteca de sons" action={assets.length?<span className="list-count">{assets.length} {assets.length===1?'som':'sons'}</span>:undefined}>
-   <p className="help">Sons importados valem para tudo o que o bot toca: comandos, timers, automações, resgates de pontos, alertas, respostas e sons por espectador. Um som apagado aqui fica sem áudio onde estiver em uso. A saída de todos eles é a mesma: a escolhida na tela <strong>Áudio</strong>.</p>
+   <p className="help">Sons importados valem para tudo o que o bot toca: comandos, timers, automações, resgates de pontos, alertas, respostas e sons por espectador. Um som apagado aqui fica sem áudio onde estiver em uso. A saída de todos eles é a mesma: a fonte “Áudio do BotLive” do OBS (tela <strong>Áudio no OBS</strong>).</p>
    <div className="row">
     <span className="grow" style={{position:'relative'}}>
      <Search size={15} aria-hidden="true" style={{position:'absolute',left:11,top:'50%',transform:'translateY(-50%)',color:'var(--muted)'}}/>
@@ -78,11 +80,11 @@ export default function Sounds({profileId,notify}:{profileId:string;notify:(s:st
       </td>
      </tr>)}</tbody>
     </table>}
-   <p className="help">Clique em Ouvir para conferir pelo mesmo aparelho que o bot usa na live.</p>
+   <p className="help">Clique em Ouvir para conferir pelo mesmo caminho que o bot usa na live — a fonte do OBS quando ela está conectada; senão, a saída padrão do aplicativo.</p>
   </Card>
 
   <Card title="Sons por espectador">
-   <p className="help">Cada pessoa pode ter seu próprio som: escolha o nome de quem fala no chat, o áudio e quando ele toca — ao falar, ao entrar no chat ou nos dois casos. Na Twitch, a entrada silenciosa exige ativar o monitor abaixo e autorizar novamente a conta do bot. Informe o nome exato do chat ou o ID da plataforma; o apelido serve para sua organização. Os sons saem na saída escolhida na tela <strong>Áudio</strong>, com o Testar som de cada pessoa.</p>
+   <p className="help">Cada pessoa pode ter seu próprio som: escolha o nome de quem fala no chat, o áudio e quando ele toca — ao falar, ao entrar no chat ou nos dois casos. Na Twitch, a entrada silenciosa exige ativar o monitor abaixo e autorizar novamente a conta do bot. Informe o nome exato do chat ou o ID da plataforma; o apelido serve para sua organização. Os sons saem pela saída única do BotLive (tela <strong>Áudio no OBS</strong>), com o Testar som de cada pessoa.</p>
    <div className="list-row"><div><strong>Sons por espectador</strong><small>{config.soundsEnabled?'Quem fala no chat dispara o som da pessoa':'Desligado: nada toca até você ativar'}</small></div><Toggle label="Ativar sons por espectador" checked={config.soundsEnabled} onChange={soundsEnabled=>setState({...config,soundsEnabled})}/></div>
     <div className="list-row"><div><strong>Monitorar entradas silenciosas na Twitch</strong><small>Detecta conexões ao chat, não quem está assistindo ao vídeo. A Twitch pode atrasar ou omitir entradas. Pessoas já presentes ao conectar o bot não disparam som. No YouTube, use mensagens; outras plataformas precisam de uma ponte de entrada.</small></div><Toggle label="Monitorar entradas silenciosas na Twitch" checked={config.presenceEnabled} onChange={presenceEnabled=>setState({...config,presenceEnabled})}/></div>
     {config.people.length===0

@@ -65,7 +65,7 @@ O fio vale para a forma escolhida em **Como enviar na Twitch**; se você trocar 
 
 ## Tocar áudio ao disparar
 
-**Tocar áudio ao disparar** escolhe um som da biblioteca de **Sons de Live** para tocar quando o comando, o timer ou a automação executar. O som sai na saída de áudio do BotLive (a escolhida na tela [Áudio](13-AUDIO.md)): capture essa saída no OBS para a live ouvir. Use **Escolher som** para importar um arquivo novo, **Testar som** para ouvir antes de salvar e **Volume** para ajustar a intensidade.
+**Tocar áudio ao disparar** escolhe um som da biblioteca de **Sons de Live** para tocar quando o comando, o timer ou a automação executar. O som sai pela fonte **Áudio do BotLive** no OBS (tela [Áudio no OBS](13-AUDIO.md)): a saída única de todos os sons do bot. Confira o fader dela no mixer para a live ouvir. Use **Escolher som** para importar um arquivo novo, **Testar som** para ouvir antes de salvar e **Volume** para ajustar a intensidade.
 
 O áudio é solicitado antes das ações, na mesma execução da contagem do comando. Com **Contar usos deste comando** ativado, a resposta `O ifood já passou a milhão na rua {{commandCount}} vezes!` sai com o número certo enquanto o som toca. Escrever `{{commandCount}}` na resposta já liga **Contar usos deste comando** sozinho quando você salva: não é preciso lembrar do interruptor.
 

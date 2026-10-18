@@ -1,31 +1,60 @@
-# Saída de áudio
+# Áudio no OBS
 
-A tela **Áudio** reúne todos os sons do bot numa saída só. Em vez de cada origem escolher seu caminho, você aponta **um único aparelho de saída** — por exemplo a entrada **CABLE Input** do VB-Cable — e todos os sons do bot saem por ele. No OBS, isso vira **uma única Fonte de áudio** para o bot inteiro: você controla voz e efeitos num fader só, sem montar um mix de várias fontes.
+A tela **Áudio no OBS** reúne todos os sons do bot numa saída só: uma **Fonte de navegador** local e dedicada no OBS, chamada **Áudio do BotLive**. Não há aparelho do Windows nem VB-Cable no caminho dos sons — o OBS recebe o áudio por uma página servida pelo próprio BotLive (nesta máquina, porta local, perfil autorizado), e o **fader dessa fonte no mixer vira o volume do bot inteiro**, preservando os volumes individuais de cada som.
 
-Os sons cobertos são: **espectador, comandos, timers, automações, resgates, alertas e os sons da Meta** (doação e celebração, escolhidos no Estúdio do overlay em [Integrações](INTEGRACOES.md)).
+Os sons cobertos são: **espectador, comandos, timers, automações, resgates, alertas, os sons da Meta** (doação e celebração, escolhidos no Estúdio do overlay em [Integrações](INTEGRACOES.md)) e o **texto para voz (TTS)**.
 
-## Saída dos sons do bot
+## Como usar (uma vez)
 
-No cartão **Saída dos sons do bot**, escolha o aparelho em **Dispositivo de saída dos sons** e clique em **Testar saída**: o bipe toca exatamente pelo aparelho que qualquer som do bot usaria. As alterações salvam sozinhas.
+1. Abra a tela **Áudio no OBS** e copie o **Endereço da fonte de áudio**.
+2. No OBS: **Fontes → + → Navegador**, cole o endereço e nomeie **Áudio do BotLive**. A página não tem visual nenhum — só toca som —, então qualquer tamanho serve.
+3. Na fonte, mantenha marcada **Controlar áudio pelo OBS**: é o que permite tocar sem interação e sincroniza a parada com o mute.
+4. Volte ao BotLive e clique em **Testar áudio**: o bipe é gerado pelo próprio aplicativo (não depende de arquivo) e chega à fonte pelo mesmo caminho de qualquer som.
 
-Com o **VB-Cable** instalado, escolha a entrada **CABLE Input**. No OBS, adicione **Fontes → + → Áudio da área de trabalho** apontando para o **CABLE Output**: todos os sons do bot passam a entrar na live por aquela fonte, e o volume dela é o fader do bot inteiro.
+O endereço é estável e não muda ao reabrir o BotLive. Se você criar uma **segunda** Fonte de navegador com o mesmo endereço, ela fica em espera e a tela avisa: a primeira fonte que conectou reproduz; quando ela sai, a de espera assume automaticamente.
 
-Se o aparelho escolhido for desconectado, os sons são recusados com um aviso em vez de sumir no silêncio; escolha outra saída e a tela salva sozinha. **Atualizar dispositivos** recarrega a lista quando você ligar ou desligar um cabo.
+## Estado e diagnóstico
 
-## Voz da live
+A tela mostra o estado real da saída, sem fingir sucesso:
 
-A tela **Voz da live** é o hub da sua voz: **Minha voz na live**, **Comandos do Arroba** e **Resgates de voz** num lugar só.
+- **Aguardando o OBS**: nenhuma fonte conectada — confira o endereço colado, o aplicativo aberto e a opção **Controlar áudio pelo OBS**.
+- **Conectada**: a fonte está ouvindo (a tela mostra quantas; com duas, avisa que **só a primeira reproduz**).
+- **Reproduzindo**: a fonte confirmou que começou a tocar.
+- **Erro**: a fonte recusou, o formato não é suportado ou a resposta não chegou.
+
+**Testar áudio** e **Parar todos os sons** são os controles da tela. O teste distingue **som enviado** de **reprodução iniciada** e de **falha**: a confirmação vem da própria fonte do OBS (ou do aplicativo, quando ele toca), e tempo esgotado também aparece como tal — nunca sucesso falso.
+
+## Regras de reprodução
+
+- **Um som por vez** (fila serial): novos sons entram na fila (até **5 pendentes**) e cada som tem **15 segundos** para terminar antes de ser descartado.
+- **Parar todos os sons** limpa a fila na hora e para o que está tocando — na fonte e no aplicativo.
+- **Eventos antigos são descartados**: um som com mais de 10 segundos (por exemplo, enquanto o OBS reinicia) não toca atrasado; reconectar não repete sons antigos.
+- **O aplicativo nunca toca junto com a fonte**: quando a fonte está conectada, os sons vão só para ela; o app só toca quando o OBS não está ouvindo.
+- **Overlays visuais são mudos**: Alertas, Chat no OBS e Meta desenham na camada deles; o som sempre sai pela fonte de áudio.
+- **Trocar de perfil isola os sons**: cada perfil tem sua própria fila e sua própria fonte — eventos de um perfil nunca tocam em outro.
+
+## Texto para voz (TTS)
+
+O TTS é gerado no próprio computador pelo **Windows (SAPI)** — sem nuvem e sem custo — e sai pelo **mesmo caminho** de qualquer som: chega ao OBS pela fonte Áudio do BotLive, com as mesmas regras de fila e volume. Voz e velocidade ficam em **Comunidade → Texto para voz**; **Testar voz** ouve pelo mesmo caminho da live. As falas geradas ficam em cache na pasta de dados (grupo `media`) e são reusadas quando o texto não muda; o cache é limitado e limpa os arquivos mais antigos sozinho.
+
+## Voz da live (caminho separado)
+
+A tela **Voz da live** é o hub da sua voz: **Minha voz na live**, **Comandos do Arroba** e **Resgates de voz** num lugar só. Sua voz **nunca** passa pela saída dos sons do bot nem é reprocessada por ela.
 
 ### Minha voz na live
 
 A voz com efeitos tem caminho próprio — microfone → processamento → linha —, separada dos sons e do TTS. No cartão **Minha voz na live** você escolhe o **Caminho da voz**:
 
 - **Efeitos internos do BotLive** (padrão, como sempre foi): o BotLive captura o microfone e envia a voz para o VB-Cable — o que o microfone captura, o OBS recebe. Nada muda até você clicar em **Iniciar voz ao vivo**; ao parar, o microfone volta ao normal.
-- **Voicemod**: o BotLive não captura nem retransmite áudio — ele só pede ao aplicativo Voicemod (nesta máquina) para trocar a voz. O caminho do áudio vira microfone → Voicemod → microfone virtual do Voicemod → OBS. Para usar, peça a chave da **Control API** em control-api.voicemod.net, salve-a (ela fica no cofre, nunca no chat nem no Histórico) e clique em **Conectar**: a tela só mostra “Conectado” depois da autorização aceita pelo próprio Voicemod, e cada falha tem o seu motivo (aplicativo fechado, chave ausente, chave recusada, versão incompatível, conexão perdida). **Testar uma voz** troca no Voicemod por alguns segundos e devolve a voz de antes, com confirmação.
+- **Voicemod** (cartão **Minha voz**): o BotLive não captura nem retransmite áudio — ele só pede ao aplicativo Voicemod (nesta máquina) para trocar a voz. O caminho do áudio vira microfone → Voicemod → microfone virtual do Voicemod → OBS. Os sons do bot **não passam pelo Voicemod** — eles seguem pela fonte Áudio do BotLive. Para usar, em quatro passos:
+  1. **Abra e configure o Voicemod** nesta máquina, com sua voz e efeitos por lá.
+  2. **Conecte o controle**: peça a chave da **Control API** em control-api.voicemod.net, cole abaixo e clique em **Conectar**. A chave fica no cofre, nunca no chat nem no Histórico, e a tela só mostra “Conectado” depois da autorização aceita pelo próprio Voicemod.
+  3. **Aponte o OBS** para o microfone virtual: na cena, use **Voicemod Microphone** como microfone. O microfone padrão do Windows **não muda**.
+  4. **Teste a voz** na tela: o efeito vale só durante o teste e a voz de antes volta sozinha ao terminar.
 
-Só um caminho fica de pé por vez: o BotLive barra a troca com a voz interna no ar e recusa o início da voz interna enquanto o caminho estiver em Voicemod — nunca dois capturando o microfone ao mesmo tempo. O cartão **Diagnóstico** mostra o estado real de ponta a ponta: microfone e nível, saída para o OBS, conexão com o Voicemod e se a escuta de comandos está ativa, com avisos para captura dupla, aparelho desconectado e circuito fechado.
+  Cada falha tem o seu motivo (aplicativo fechado, chave ausente, chave recusada, versão incompatível, conexão perdida) com o que fazer em seguida — por exemplo, conferir se o Voicemod está aberto e logado e se a licença libera a Control API.
 
-A voz só sai pelo aparelho escolhido na tela Voz da live (caminho interno); a saída aqui embaixo é o caminho dos sons do bot.
+Só um caminho fica de pé por vez: o BotLive barra a troca com a voz interna no ar e recusa o início da voz interna enquanto o caminho estiver em Voicemod — nunca dois capturando o microfone ao mesmo tempo. O cartão **Diagnóstico** mostra o estado real de ponta a ponta: microfone e nível, saída para o OBS, conexão com o Voicemod e se a escuta de comandos está ativa, com avisos para captura dupla, aparelho desconectado e circuito fechado. Nos dois caminhos, a escuta de comandos continua no seu **microfone físico** (antes de qualquer efeito).
 
 ### Comandos do Arroba
 
@@ -35,21 +64,21 @@ A mesma tela concentra a escuta contínua (RealtimeSTT local, microfone físico 
 
 No caminho Voicemod, cada recompensa do canal pode trocar sua voz por um tempo combinado: escolha a recompensa (lista real da Twitch), a voz (lista real do Voicemod), duração, cooldown e o que acontece se outro efeito já estiver no ar (fila, ignorar ou substituir). A fila aparece na hora — efeito atual com o tempo que resta e o que vem depois — com os botões **Cancelar efeitos e voltar à voz normal** e **Recuperar restauração pendente**. A seção **Efeitos internos antigos** liga efeitos antigos (fina, robô…) a vozes do Voicemod quando você migrar de caminho — o mapeamento é sempre escolhido por você, nada é adivinhado.
 
-## Texto para voz (TTS)
+## Migração (de versões com VB-Cable)
 
-O leitor de voz dos fluxos sai pela **saída padrão do Windows**: o navegador não permite ao BotLive escolher outro aparelho para essa voz, então o TTS é o único som com caminho fixo. Para colocá-lo na linha, troque a saída padrão do Windows ou use o Mixer de volume para rotear o áudio do BotLive. Voz e velocidade ficam em Comunidade → Texto para voz. O cartão **Texto para voz** marca essa saída como **Fixa** para deixar a limitação explícita.
+Antes, cada som saía por um aparelho de saída do Windows (muitas vezes o VB-Cable) e o OBS capturava esse aparelho com uma fonte **Áudio da área de trabalho**. Agora existe uma saída só, a fonte de navegador. Para migrar:
 
-## Passo a passo: alinhar tudo numa linha só
+1. Crie a fonte **Áudio do BotLive** como acima e clique em **Testar áudio**.
+2. Confira o som no fader da fonte nova e ajuste o volume dela no mixer do OBS.
+3. **Remova do OBS a fonte antiga** que capturava o cabo (**Áudio da área de trabalho** apontando para **CABLE Output**): sem isso os sons entram em dois lugares.
+4. Pronto: a escolha de aparelho antiga da tela Áudio **perdeu o efeito**, mas nada foi apagado — arquivos, vínculos, volumes, comandos, resgates, alertas e as configurações continuam exatamente como você deixou (os dados antigos ficam preservados, sem uso).
 
-1. Instale o **VB-Cable** (um driver leve, uma vez).
-2. Em **Áudio → Saída dos sons do bot** escolha **CABLE Input** e clique em **Testar saída**.
-3. Em **Áudio → Voz da live** escolha seu microfone na entrada e **CABLE Input** na saída da linha.
-4. No OBS, adicione a fonte de áudio **CABLE Output** (áudio da área de trabalho) — voz e sons do bot passam a entrar na live pela mesma fonte.
-5. Ajuste o volume dessa única fonte no mixer do OBS: ela controla o bot inteiro.
+O **VB-Cable pode continuar instalado** se você usa a voz com efeitos internos; para os sons do bot ele não é mais necessário. Nada foi desinstalado e nenhuma cena do OBS foi alterada por aqui — a migração é toda feita por você, no seu ritmo.
 
 ## Limitações
 
-- O TTS sai pela saída padrão do Windows (limitação do navegador); use o Mixer de volume para rotear.
-- Os sons do bot dependem do aplicativo BotLive aberto — é ele que toca no aparelho.
-- A voz da live depende de você clicar em Iniciar na tela Voz da live; ela tem aparelho próprio e não é afetada pela saída dos sons.
-- Sons gerados fora do BotLive (por exemplo, efeitos do próprio OBS ou áudio de outra ponta, como o Discord) não passam por esta saída; cada fonte continua com seu áudio.
+- Os sons dependem do aplicativo BotLive aberto: é a fonte do OBS que toca, mas quem entrega os arquivos e a fila é o app. Com ele fechado, a fonte fica muda.
+- O TTS usa as vozes do Windows (SAPI instaladas no sistema); não há vozes de nuvem.
+- Um som interrompido no meio (mute da fonte, troca de cena com a fonte desligada, **Parar todos os sons**) não retoma de onde parou; ele é encerrado e a fila segue.
+- Sons de outras origens (áudio do Discord, efeitos do próprio OBS, música tocada em outro programa) não passam por esta saída; cada fonte continua com seu áudio.
+- A homologação com OBS, Voicemod e microfone reais não foi executada nesta entrega (ver notas da versão): a validação automatizada cobre o caminho completo — incluindo a geração **real** de TTS pelo Windows nesta máquina —, mas não substitui um teste com OBS aberto na sua live.

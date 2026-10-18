@@ -27,7 +27,7 @@ Ao vincular um TXT, o BotLive confere as variáveis de todas as linhas na hora e
 
 ### Som junto com a resposta
 
-Cada regra pode tocar um áudio da biblioteca no mesmo instante da resposta. No campo **Som junto com a resposta (opcional)**, escolha um som já importado em **Sons de Live** (ou **Sem som**). O áudio toca na saída dos sons do bot (a escolhida na tela [Áudio](13-AUDIO.md)). Use **Testar som** para ouvir pelo mesmo aparelho da live e ajuste o **Volume do som** (aparece quando um som está escolhido). Escolher som é opcional: regras sem som respondem em silêncio.
+Cada regra pode tocar um áudio da biblioteca no mesmo instante da resposta. No campo **Som junto com a resposta (opcional)**, escolha um som já importado em **Sons de Live** (ou **Sem som**). O áudio toca pela saída única dos sons do bot (a fonte **Áudio do BotLive** no OBS, tela [Áudio no OBS](13-AUDIO.md)). Use **Testar som** para ouvir pelo mesmo caminho da live e ajuste o **Volume do som** (aparece quando um som está escolhido). Escolher som é opcional: regras sem som respondem em silêncio.
 
 Exemplo de arquivo:
 
@@ -47,7 +47,7 @@ São permitidas 100 regras por perfil. **Remover regra** remove a configuração
 
 ## Sons de Live: biblioteca e sons por espectador
 
-A tela **Sons de Live** tem duas partes. A **Biblioteca de sons** é o depósito central de áudios: adicione WAV, MP3 ou OGG (até 5 MiB), ouça para conferir e apague quando não servir mais. Tudo que usa som — comandos, timers, automações, resgates de pontos, alertas e respostas — escolhe daqui. Um som apagado fica sem áudio onde estiver em uso, até você escolher outro. A saída de todos eles é a mesma, a escolhida na tela [Áudio](13-AUDIO.md).
+A tela **Sons de Live** tem duas partes. A **Biblioteca de sons** é o depósito central de áudios: adicione WAV, MP3 ou OGG (até 5 MiB), ouça para conferir e apague quando não servir mais. Tudo que usa som — comandos, timers, automações, resgates de pontos, alertas e respostas — escolhe daqui. Um som apagado fica sem áudio onde estiver em uso, até você escolher outro. A saída de todos eles é a mesma, a fonte **Áudio do BotLive** no OBS (tela [Áudio no OBS](13-AUDIO.md)).
 
 Abaixo fica o cartão **Sons por espectador**: para cada pessoa, o áudio e quando ele toca.
 
@@ -83,15 +83,15 @@ No YouTube, use mensagem: o conector não fornece presença silenciosa. Uma pont
 
 ## Fazer o som sair na live
 
-A saída dos sons é escolhida na tela [Áudio](13-AUDIO.md), no cartão **Saída dos sons do bot** — não há seletor de aparelho nesta tela. Escolha lá o aparelho (por exemplo, **CABLE Input** do VB-Cable), use **Testar saída** e **Testar som** daqui para confirmar que o áudio passa pelo mesmo aparelho da live.
+A saída dos sons é a fonte **Áudio do BotLive** no OBS, configurada na tela [Áudio no OBS](13-AUDIO.md) — não há seletor de aparelho nesta tela nem naquela. Use **Testar som** daqui para confirmar que o áudio segue o mesmo caminho da live.
 
-No OBS, inclua o áudio do aparelho correspondente (por exemplo, uma fonte de áudio da área de trabalho apontando para **CABLE Output**). Confira o medidor e faça uma gravação local para validar volume e roteamento. Evite capturar o mesmo áudio duas vezes. O BotLive não altera o mixer da transmissão.
+No OBS, a fonte de navegador **Áudio do BotLive** já é esse caminho: confira o medidor dela e faça uma gravação local para validar volume e roteamento. Evite capturar o mesmo áudio duas vezes (se sobrou uma fonte antiga apontando para o cabo, remova-a). O BotLive não altera o mixer da transmissão.
 
 Há até 200 pessoas e 300 arquivos cadastrados por perfil (TXT e sons somados). Remover regras ou pessoas mantém os arquivos registrados para reutilização; não apaga originais nem cópias do áudio. Arquivos de áudio corrompidos podem ser recusados pelo player mesmo com extensão válida.
 
 ## Backup e migração
 
-As configurações ficam no banco. Preserve também a pasta **media** dentro da pasta de dados, que contém as cópias dos áudios. Os TXT ficam nos caminhos externos escolhidos e precisam de cópia separada. Estes recursos não são transportados pelos presets. Ao mudar de computador, selecione novamente a saída de áudio na tela **Áudio**: o identificador é local. Ao mudar a pasta de dados ou de computador, vincule novamente os arquivos para atualizar os caminhos registrados. Apagar um perfil remove seu cadastro do banco, mas conserva suas cópias de áudio no disco; elas não são executadas sem cadastro.
+As configurações ficam no banco. Preserve também a pasta **media** dentro da pasta de dados, que contém as cópias dos áudios. Os TXT ficam nos caminhos externos escolhidos e precisam de cópia separada. Estes recursos não são transportados pelos presets. Ao mudar de computador ou reinstalar o OBS, crie de novo a fonte **Áudio do BotLive** no OBS com o endereço da tela **Áudio no OBS**: a fonte vive na configuração do OBS daquela máquina. Ao mudar a pasta de dados ou de computador, vincule novamente os arquivos para atualizar os caminhos registrados. Apagar um perfil remove seu cadastro do banco, mas conserva suas cópias de áudio no disco; elas não são executadas sem cadastro.
 
 ## Resolver problemas
 

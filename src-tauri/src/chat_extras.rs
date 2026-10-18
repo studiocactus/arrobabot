@@ -163,30 +163,31 @@ fn available(s:&State,key:&str,seconds:u64)->bool{!s.last.get(key).is_some_and(|
   let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().join("app")).unwrap();let p=p();rt.db.save_profile(&p).unwrap();let path=dir.path().join("som.wav");std::fs::write(&path,b"RIFF0000WAVEfmt ").unwrap();let id=register(&rt,&p,&path,"sound");std::fs::remove_file(path).unwrap();
   assert!(operation(&rt,&p.id,"chatExtras.audio",&json!({"asset":id})).unwrap().as_str().unwrap().starts_with("data:audio/wav;base64,"));
   let mut c=Config{sounds_enabled:true,people:vec![Person{trigger:"either".into(),id:uuid::Uuid::new_v4().to_string(),enabled:true,name:"OutroNome".into(),nickname:"Aninha".into(),user_id:"123".into(),asset:id,mode:"first".into(),cooldown:60,volume:0.7}],..Default::default()};save(&rt,&p,&c);
-  let mut event=e(&p);let mut rx=rt.broadcast.subscribe();event.simulated=true;sound(&rt,&p,&event);assert!(!std::iter::from_fn(||rx.try_recv().ok()).any(|v|v["type"]=="viewer-sound"));event.simulated=false;
-  sound(&rt,&p,&event);sound(&rt,&p,&event);let events:Vec<_>=std::iter::from_fn(||rx.try_recv().ok()).filter(|v|v["type"]=="viewer-sound").collect();assert_eq!(events.len(),1);assert_eq!(events[0]["payload"]["nickname"],"Aninha");
+  let mut event=e(&p);let mut rx=rt.broadcast.subscribe();event.simulated=true;sound(&rt,&p,&event);assert!(!std::iter::from_fn(||rx.try_recv().ok()).any(|v|v["type"]=="audio.play"));event.simulated=false;
+  sound(&rt,&p,&event);sound(&rt,&p,&event);let events:Vec<_>=std::iter::from_fn(||rx.try_recv().ok()).filter(|v|v["type"]=="audio.play").collect();assert_eq!(events.len(),1);assert_eq!(events[0]["payload"]["nickname"],"Aninha");
   operation(&rt,&p.id,"chatExtras.reset",&json!({})).unwrap();c.people[0].enabled=false;save(&rt,&p,&c);sound(&rt,&p,&event);assert!(rx.try_recv().is_err());
   c.people[0].enabled=true;c.sounds_enabled=false;save(&rt,&p,&c);sound(&rt,&p,&event);assert!(rx.try_recv().is_err());
-  c.sounds_enabled=true;c.people[0].user_id="".into();c.people[0].name="@ana".into();save(&rt,&p,&c);event.kind="join".into();sound(&rt,&p,&event);assert_eq!(rx.try_recv().unwrap()["type"],"viewer-sound");
+  c.sounds_enabled=true;c.people[0].user_id="".into();c.people[0].name="@ana".into();save(&rt,&p,&c);event.kind="join".into();sound(&rt,&p,&event);assert_eq!(rx.try_recv().unwrap()["type"],"audio.play");
   c.people.push(c.people[0].clone());assert!(operation(&rt,&p.id,"chatExtras.save",&json!({"config":c})).is_err());
  }
- #[tokio::test] async fn todos_os_sons_sao_para_a_mesma_linha_com_o_aparelho_escolhido(){
+ #[tokio::test] async fn todos_os_sons_sao_pela_saida_unica_do_botlive(){
   let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().join("app")).unwrap();let p=p();rt.db.save_profile(&p).unwrap();let path=dir.path().join("som.wav");std::fs::write(&path,b"RIFF0000WAVEfmt ").unwrap();let id=register(&rt,&p,&path,"sound");std::fs::remove_file(path).unwrap();
   let person=Person{trigger:"either".into(),id:uuid::Uuid::new_v4().to_string(),enabled:true,name:"Ana".into(),nickname:"Aninha".into(),user_id:"123".into(),asset:id.clone(),mode:"interval".into(),cooldown:5,volume:0.7};
   save(&rt,&p,&Config{sounds_enabled:true,people:vec![person],..Default::default()});
   let event=e(&p);
+  // A escolha antiga de aparelho não muda mais nada: o som sai pela saída única.
   rt.db.set_module(&p.id,"audio",&json!({"device":"cable"})).unwrap();
   let mut rx=rt.broadcast.subscribe();
   sound(&rt,&p,&event);
   let seen:Vec<_>=std::iter::from_fn(||rx.try_recv().ok()).collect();
-  assert!(seen.iter().any(|v|v["type"]=="viewer-sound"&&v["payload"]["deviceId"]=="cable"),"espectador toca na linha");
-  assert!(!seen.iter().any(|v|v["type"]=="sound"),"não existe mais som pelo navegador");
+  assert!(seen.iter().any(|v|v["type"]=="audio.play"&&v["payload"]["kind"]=="sound"&&v["payload"]["sink"]=="local"&&v["payload"]["src"].as_str().unwrap().contains(&format!("id={id}"))),"espectador toca pela saída única");
+  assert!(!seen.iter().any(|v|v["type"]=="viewer-sound"||v["type"]=="sound"),"os eventos antigos não existem mais");
   // Fluxo (comando, timer, automação ou resgate) usa a mesma saída.
   let flow=crate::model::Flow{id:"f".into(),profile_id:p.id.clone(),name:"Teste".into(),audio:id,audio_volume:0.5,..Default::default()};
   let mut rx=rt.broadcast.subscribe();
   play_flow(&rt,&p,&flow,&event);
   let seen:Vec<_>=std::iter::from_fn(||rx.try_recv().ok()).collect();
-  assert!(seen.iter().any(|v|v["type"]=="viewer-sound"&&v["payload"]["deviceId"]=="cable"&&v["payload"]["volume"].as_f64()==Some(0.5)),"fluxo toca na mesma linha");
+  assert!(seen.iter().any(|v|v["type"]=="audio.play"&&v["payload"]["volume"].as_f64()==Some(0.5)),"fluxo toca pela mesma saída");
  }
  #[tokio::test] async fn regra_txt_pode_puxar_um_som_da_biblioteca(){
   let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().join("app")).unwrap();let p=p();rt.db.save_profile(&p).unwrap();let txtpath=dir.path().join("respostas.txt");std::fs::write(&txtpath,"Boa noite").unwrap();
@@ -198,9 +199,9 @@ fn available(s:&State,key:&str,seconds:u64)->bool{!s.last.get(key).is_some_and(|
   let mut bad=rule.clone();bad.sound="fantasma".into();assert!(operation(&rt,&p.id,"chatExtras.save",&json!({"config":Config{replies_enabled:true,replies:vec![bad],..Default::default()}})).is_err());
   let mut rx=rt.broadcast.subscribe();
   assert_eq!(response(&rt,&p,&event).unwrap(),Some(("Boa noite".into(),true)));
-  let seen:Vec<_>=std::iter::from_fn(||rx.try_recv().ok()).filter(|v|v["type"]=="viewer-sound").collect();
+  let seen:Vec<_>=std::iter::from_fn(||rx.try_recv().ok()).filter(|v|v["type"]=="audio.play").collect();
   assert_eq!(seen.len(),1,"a regra toca o som junto");
-  assert_eq!(seen[0]["payload"]["asset"],json!(sid));
+  assert!(seen[0]["payload"]["src"].as_str().unwrap().contains(&format!("id={sid}")),"som da biblioteca servido pela API local");
   assert_eq!(seen[0]["payload"]["volume"].as_f64(),Some(0.5));
   // Simulação não toca som.
   rt.chat_extras.lock().unwrap().last.clear();
@@ -217,12 +218,12 @@ fn available(s:&State,key:&str,seconds:u64)->bool{!s.last.get(key).is_some_and(|
  }
 }
 pub fn trigger_matches(trigger:&str,kind:&str)->bool{match trigger{"message"=>kind=="chat","join"=>kind=="join","either"=>kind=="chat"||kind=="join",_=>false}}
-/// Toca um som na **linha de áudio** do aplicativo — a mesma saída que o OBS
-/// captura como fonte única do BotLive. Não existe mais rota pelo navegador:
-/// a fonte do overlay ficou só visual.
+/// Toca um som da biblioteca pela **saída única** do BotLive — a fonte de
+/// navegador "Áudio do BotLive" do OBS, ou o aplicativo quando a fonte não
+/// está conectada. Nunca os dois.
 pub(crate) fn play_line(rt:&Runtime,p:&Profile,asset:&str,nickname:Option<&str>,volume:f64){
- let volume=if volume.is_finite(){volume.clamp(0.0,1.0)}else{1.0};
- rt.emit("viewer-sound",json!({"profileId":p.id,"asset":asset,"nickname":nickname,"volume":volume,"deviceId":crate::audio::device(rt,&p.id)}));
+ let Ok(src)=crate::audio::asset_src(rt,&p.id,asset) else {return};
+ crate::audio::play(rt,&p.id,crate::audio::Req{kind:"sound",src,volume,nickname});
 }
 pub fn sound(rt:&Runtime,p:&Profile,e:&Event){
  if e.kind!="chat"&&e.kind!="join"{return}let c=config(rt,&p.id);if !c.sounds_enabled{return}
