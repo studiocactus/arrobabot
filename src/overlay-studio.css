@@ -38,12 +38,14 @@ button.lp-tpl.selected{border-color:var(--accent)}
 .lp-color span{font-size:9px;letter-spacing:1.1px;text-transform:uppercase;color:var(--muted);font-weight:700}
 /* Seletor de cor redondo de verdade: 1:1, fora do esticar do flex/grid e com o
    miolo do WebView normalizado — sem a ovais que o input nativo virava. */
-.lp-color input[type=color]{width:34px;height:34px;flex:0 0 auto;padding:3px;cursor:pointer;appearance:none;-webkit-appearance:none;border:1px solid var(--border);border-radius:50%;background:var(--bg)}
+.lp-color input[type=color]{width:100%;max-width:170px;height:24px;flex:0 0 auto;padding:2px;cursor:pointer;appearance:none;-webkit-appearance:none;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--bg)}
 .lp-color input[type=color]::-webkit-color-swatch-wrapper{padding:0;margin:0;border:none}
-.lp-color input[type=color]::-webkit-color-swatch{border:none;border-radius:50%}
+.lp-color input[type=color]::-webkit-color-swatch{border:none;border-radius:calc(var(--r-sm) - 2px)}
 .lp-color code{font-size:10px;color:var(--muted);font-family:Consolas,'Courier New',monospace}
 /* Seletor + hex lado a lado: a cor escolhida fica legível sem depender só do miolo. */
-.lp-color-pick{display:flex;align-items:center;gap:9px;min-width:0}
+.lp-color-pick{display:flex;align-items:center;gap:9px;min-width:0;width:100%}
+.lp-color-pick input[type=color]{width:auto;flex:1 1 auto;min-width:64px;max-width:170px}
+.lp-color-pick code{flex:0 0 auto;min-width:0}
 .lp-toggles{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,150px),1fr));gap:4px 12px;margin-bottom:12px}
 .lp-toggle{display:flex;align-items:center;gap:9px;font-size:12px;cursor:pointer;min-width:0}
 .lp-toggle input{width:auto;height:auto;margin:0;accent-color:var(--accent);flex:0 0 auto}
@@ -129,5 +131,5 @@ button.lp-tpl.selected{border-color:var(--accent)}
 .sp-tints{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 /* Amostra de destaque: 1:1 travado (não estica no flex), seleção com anel duplo
    além da cor e nome acessível no próprio botão. */
-.sp-tint{width:26px;height:26px;flex:0 0 auto;border-radius:50%;border:2px solid transparent;cursor:pointer;padding:0}
+.sp-tint{width:34px;height:18px;min-width:34px;flex:0 0 auto;border-radius:5px;border:2px solid transparent;cursor:pointer;padding:0}
 .sp-tint.selected{border-color:var(--text);box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--accent)}

@@ -72,10 +72,10 @@ export default function Sounds({profileId,notify}:{profileId:string;notify:(s:st
    {visible.length===0
     ?<Empty title={query?'Nenhum som encontrado':'Nenhum som ainda'}>{query?'Ajuste o filtro acima.':'Envie um WAV, MP3 ou OGG para o bot poder tocar em comandos, alertas e mais.'}</Empty>
     :<table className="asset-table">
-     <thead><tr><th>Nome</th><th>Ações</th></tr></thead>
+     <thead><tr><th>Nome</th><th className="actions-right">Ações</th></tr></thead>
      <tbody>{visible.map(a=><tr key={a.id}>
       <td>{a.name}</td>
-      <td className="row">
+      <td className="row actions-right">
        <button disabled={!desktop||playing===a.id||busy} onClick={()=>void play(a)}><Play size={14}/>{playing===a.id?'Tocando…':'Ouvir'}</button>
        <button className="danger" disabled={busy} onClick={()=>void remove(a)}><Trash2 size={14}/>Apagar</button>
       </td>

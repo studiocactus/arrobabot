@@ -246,6 +246,8 @@ test('tela de IA oferece base de conhecimento, padrões e controle por ação',a
  await page.getByRole('button',{name:'Salvar perfil',exact:true}).click();
  await page.getByRole('dialog').getByRole('button',{name:'Fechar',exact:true}).click();
  await page.locator('.sidebar').getByRole('button',{name:'Inteligência artificial',exact:true}).click();
+ // Os padrões de resposta ficam recolhidos (divulgação progressiva).
+ await page.getByText('Como a IA deve responder (padrões)').click();
  await expect(page.getByRole('heading',{name:'Base de conhecimento',exact:true})).toBeVisible();
  await expect(page.getByRole('heading',{name:'Como responder',exact:true})).toBeVisible();
  await expect(page.getByText('Gírias gerais da Twitch e Kick',{exact:true})).toBeVisible();
@@ -259,6 +261,7 @@ test('tela de IA oferece base de conhecimento, padrões e controle por ação',a
  await expect(page.getByText('Configuração de IA salva.',{exact:true})).toBeVisible();
  await page.locator('.sidebar').getByRole('button',{name:'Visão geral',exact:true}).click();
  await page.locator('.sidebar').getByRole('button',{name:'Inteligência artificial',exact:true}).click();
+ await page.getByText('Como a IA deve responder (padrões)').click();
  await expect(page.getByRole('combobox',{name:'Onde a resposta se ancora',exact:true})).toHaveValue('message');
  await expect(page.getByRole('switch',{name:'Evitar repetição',exact:true})).toHaveAttribute('aria-checked','true');
  await page.screenshot({path:'artifacts/ai-knowledge-defaults.png',fullPage:true});

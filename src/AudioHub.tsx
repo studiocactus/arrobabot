@@ -100,11 +100,9 @@ export default function AudioHub({profileId,notify}:{profileId:string;notify:(s:
     <li>Na fonte, marque <strong>“Controlar áudio pelo OBS”</strong> — é isso que coloca o bot no mixer.</li>
     <li>Volte aqui e clique em <strong>Testar áudio</strong>.</li>
    </ol>
+   <input readOnly value={sink.url} aria-label="Endereço da fonte de áudio" onFocus={e=>e.currentTarget.select()}/>
    <div className="row">
-    <input readOnly value={sink.url} aria-label="Endereço da fonte de áudio" onFocus={e=>e.currentTarget.select()}/>
     <button onClick={()=>void copy()}>{copied?<Check size={15}/>:<Copy size={15}/>}{copied?'Copiado':'Copiar endereço'}</button>
-   </div>
-   <div className="row">
     <button className="primary" disabled={!desktop||testing} onClick={()=>void test()}><Play size={15}/>{testing?'Tocando…':'Testar áudio'}</button>
     <button disabled={!desktop} onClick={()=>void stop()}><Square size={15}/>Parar todos os sons</button>
    </div>

@@ -69,3 +69,21 @@ O que foi conferido e **não** tem problema: hierarquia de ações principais po
 - **Zoom por scroll do Spotify** preservado como estava (controles visíveis, canvas lógico intocado); o comportamento não foi revalidado mecanicamente nesta rodada.
 - Erros junto do campo (`Field error`) começaram na tela Voicemod; as demais telas ainda reportam por toast/rodapé — evolução incremental, sem reescrever formulários inteiros.
 - Nada aqui atesta funcionamento de integrações reais (Twitch, OBS, Voicemod, Spotify): as capturas usam os mocks da prévia, que são distinguíveis do desktop (banner de prévia e ausência de núcleo).
+
+## Retorno do usuário (0.14.0) — correções
+
+Após a entrega da 0.13.0, o uso real apontou nove pontos. Todos corrigidos, com capturas em `%TEMP%\botlive-ux\auditoria-0.14.0\`:
+
+| # | Ponto do usuário | Causa | Correção |
+|---|---|---|---|
+| 1 | Sons de Live: botões das linhas sem alinhamento | célula de ações sem alinhamento definido | célula e cabeçalho com classe `actions-right` (alinhados à direita) |
+| 2 | Contadores: mesmo problema | idem | botão do contador alinhado à direita da coluna |
+| 3 | Áudio no OBS: três botões empilhados | duas linhas de `.row` separadas | **Copiar endereço · Testar áudio · Parar todos os sons** numa linha só, sob o endereço |
+| 4–6 | Meta, Alertas e Chat no OBS: amostras de cor viraram óvalo | regra `border-radius:50%` em `.lp-color input[type=color]` (e `.sp-tint`) | amostras como **barras** (retângulos arredondados, largura ≥ altura), com o hex visível — o padrão da casa |
+| 7 | Spotify: “Autorizar conta” cortado, “Desconectar” sumido, “Testar conexão” sem caixa, cores ovais | a regra `button.ghost{width:32px}` da 0.13.0 forçava 32 px em botões de **texto** (o conteúdo transbordava e cobria os vizinhos); cores idem aos itens 4–6 | `.ghost` sem largura fixa e **com caixa de botão visível**; cores em barras |
+| 8 | Inteligência artificial: rolagem vertical demais | coluna de configuração empilhada, teste rolando junto | campos **Endereço + Modelo** pareados em `form-grid`, padrões de resposta em recolhível (“divulgação progressiva”) e o teste **fixo à vista** (coluna sticky) |
+| 9 | Memórias: a rolagem cresce com o arquivo | workspace com altura só mínima | workspace limitado à janela (`min(74vh, 820px)`) com **rolagem interna** no editor e na lista — o arquivo crescer não aumenta a rolagem da página |
+
+A correção do item 7 revelou a causa raiz: a melhoria de botões da 0.13.0 havia sido aplicada a uma classe usada também por botões de texto. Os testes pegaram dois desdobramentos antes da entrega: o `code` do hex transbordava o bloco da barra no layout do Spotify (62 achados geométricos → corrigido em `.lp-color-pick`) e o recolhível da IA exigiu ajuste no teste da tela (que agora abre a seção antes de conferir).
+
+**Validação desta rodada:** tsc limpo; vitest 142; Playwright **90 aprovados**, incluindo a auditoria geométrica nas cinco larguras com **0 achados**; console sem erros; capturas de todas as áreas ajustadas. As telas de IA e Memórias tiveram a estrutura revisada (não apenas cor): os comportamentos — campos, salvamento e conteúdo — permanecem os mesmos.
