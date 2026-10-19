@@ -20,7 +20,7 @@ A estrutura é `[prefixo] [badges] [nome colorido] : [texto com emotes]`, na ord
 
 O **prefixo** é o `>` de saudação do widget de referência: vem antes das badges, com texto livre (até 16 caracteres) e cor própria — desligue no grupo **Mensagem** se não quiser.
 
-Os emotes vêm direto do CDN da Twitch pelo id que a mensagem traz; sem internet, o emote vira o próprio texto. O tamanho segue o padrão da Twitch, ajustável: mensagem só de emotes cresce — **um emote sozinho aparece no maior tamanho permitido (4×)**, dois ou três em dobro, o resto no normal — e **Tamanho dos emotes** amplia ou reduz tudo em porcentagem. O interruptor **Emotes explodem ao aparecer** solta os emotes voando da mensagem (como na referência da StreamElements), sem mexer no texto. As mensagens da **conta do bot** também aparecem na coluna — o que o bot fala na live é visível para você — e não disparam automações, pontos nem contagem de presença.
+Os emotes vêm direto do CDN da Twitch pelo id que a mensagem traz — e os de **terceiros (BTTV, 7TV e FFZ)** também aparecem: o BotLive busca a lista do seu canal quando ele conecta e desenha cada emote pelo nome. Sem internet, o emote vira o próprio texto. O tamanho segue o padrão da Twitch, ajustável: mensagem só de emotes cresce — **um emote sozinho aparece no maior tamanho permitido (4×)**, dois ou três em dobro, o resto no normal — e **Tamanho dos emotes** amplia ou reduz tudo em porcentagem. O interruptor **Emotes explodem ao aparecer** solta os emotes voando da mensagem (como na referência da StreamElements), sem mexer no texto. Os nomes de quem fala ficam alinhados no topo de cada mensagem, mesmo quando o emote é grande. As mensagens da **conta do bot** também aparecem na coluna — o que o bot fala na live é visível para você — e não disparam automações, pontos nem contagem de presença.
 
 A **origem da cor do nome** é uma escolha de três vias no grupo **Mensagem**:
 
@@ -73,7 +73,7 @@ Acima do formulário, as abas **Fields · HTML · CSS · JS · Data** abrem o c�
 
 ## Limitações desta primeira versão
 
-- Só emotes da Twitch: BTTV e 7TV não aparecem.
+- Emotes de terceiros (BTTV, 7TV e FFZ) aparecem desde que o emote exista no seu canal ou nos conjuntos globais deles — a lista é buscada quando o canal conecta; um emote de outra comunidade que não esteja nesses conjuntos continua como texto.
 - A cor da Twitch só entra quando a live entrega um hex completo; quem nunca escolheu cor (ou entrega fora do padrão) ganha uma cor estável por conta — e ela pode se repetir entre espectadores.
 - “Primeira mensagem” vale desde que o BotLive abriu, não a primeira da vida no canal.
 - A sincronização de deleções depende da Twitch entregar os eventos de moderação ao bot; se uma assinatura falhar na conexão, o erro aparece no Histórico e as mensagens apagadas ficam até sair por tempo ou limite.

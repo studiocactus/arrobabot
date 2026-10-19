@@ -9,7 +9,7 @@
  */
 import {ensureFont} from './overlayDesign';
 
-export type ChatFrag={t:'t'|'e';v:string;id?:string};
+export type ChatFrag={t:'t'|'e';v:string;id?:string;url?:string};
 export type ChatMsg={
  id:string;user:string;userId:string;role:string;text:string;
  badges:string[];frags:ChatFrag[];first:boolean;bot:boolean;
@@ -246,7 +246,7 @@ export function ensureChatStyle():void{
 .bl-chat-col{position:absolute;display:flex;flex-direction:column;justify-content:flex-end;gap:5px;font-family:var(--bl-chat-font,"Segoe UI",sans-serif);}
 .bl-chat-col.bl-chat-fixed{position:fixed;z-index:40}
 .bl-chat-col.down{justify-content:flex-start}
-.bl-chat-msg{position:relative;display:flex;flex-wrap:wrap;align-items:baseline;column-gap:6px;row-gap:2px;padding:5px 9px;box-sizing:border-box;line-height:1.35;}
+.bl-chat-msg{position:relative;display:flex;flex-wrap:wrap;align-items:flex-start;column-gap:6px;row-gap:2px;padding:5px 9px;box-sizing:border-box;line-height:1.35;}
 .bl-chat-stripes .bl-chat-msg:nth-child(odd){background:rgba(255,255,255,.055)}
 .bl-chat-tint{position:absolute;inset:0;opacity:0;pointer-events:none}
 .bl-chat-msg.hl-bg .bl-chat-tint{background:var(--hl,#000);opacity:.16}
@@ -257,7 +257,7 @@ export function ensureChatStyle():void{
 .bl-chat-badge{display:inline-flex;align-items:center;align-self:center}
 .bl-chat-badge svg{width:100%;height:100%;display:block}
 .bl-chat-text{flex:1 1 auto;min-width:0;word-break:break-word}
-.bl-chat-emote{vertical-align:-.25em;margin:0 1px}
+.bl-chat-emote{vertical-align:middle;margin:0 1px}
 /* Evento na coluna: caixa própria com a cor do evento, como o widget de
    referência — mesma listra, mesma onda e o mesmo some-apois das mensagens. */
 .bl-chat-ev{row-gap:0}
@@ -361,10 +361,12 @@ function buildMessage(msg:ChatMsg,cfg:ChatConfig):HTMLElement{
  const tier=onlyEmotes&&cfg.bigEmotes?(emoteCount===1?4:emoteCount<=3?2:1.4):1.4;
  const emotePx=Math.max(12,Math.round(cfg.fontSize*tier*(cfg.emoteSize/100)));
  for(const f of msg.frags){
-  if(f.t==='e'&&f.id){
+  if(f.t==='e'){
    const img=document.createElement('img');
    img.className='bl-chat-emote';
-   img.src=`https://static-cdn.jtvnw.net/emoticons/v2/${encodeURIComponent(f.id)}/default/dark/2.0`;
+   // Emotes de terceiros chegam com a URL própria; os da Twitch usam o id na
+   // CDN. A escala 3x evita o empretecimento ao crescer em mensagem só de emote.
+   img.src=f.url||(f.id?`https://static-cdn.jtvnw.net/emoticons/v2/${encodeURIComponent(f.id)}/default/dark/${emotePx>48?'3.0':'2.0'}`:'');
    img.alt=f.v;img.title=f.v;img.style.height=emotePx+'px';
    // Sem internet o emote vira o próprio texto, nunca um ícone quebrado.
    img.onerror=()=>{const s=document.createElement('span');s.textContent=f.v;img.replaceWith(s)};

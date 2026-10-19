@@ -31,10 +31,11 @@ pub fn ids(db: &crate::db::Db, p: &str) -> Vec<String> {
     let v: Value = db.module(p, "ai_emotes");
     v["list"].as_array().map(|a| a.iter().filter_map(|e| e["id"].as_str()).filter(|id| !id.is_empty()).map(str::to_owned).collect()).unwrap_or_default()
 }
-fn store(db: &crate::db::Db, p: &str, list: &[Emote], at: i64) {
+fn store(db: &crate::db::Db, p: &str, list: &[Emote], ext: &std::collections::HashMap<String, String>, at: i64) {
     let names: Vec<&str> = list.iter().map(|e| e.name.as_str()).collect();
     let list: Vec<Value> = list.iter().map(|e| json!({"id": e.id, "name": e.name})).collect();
-    let _ = db.set_module(p, "ai_emotes", &json!({"at": at, "names": names, "list": list}));
+    let extv: Value = ext.iter().map(|(k, u)| (k.clone(), json!(u))).collect();
+    let _ = db.set_module(p, "ai_emotes", &json!({"at": at, "names": names, "list": list, "ext": extv}));
 }
 /// Busca os emotes do canal e os globais e atualiza a lista guardada. Roda na conexão
 /// do canal: falha nenhuma interrompe a live, as respostas apenas seguem sem emote.
@@ -45,10 +46,11 @@ pub async fn refresh(rt: &crate::engine::Runtime, p: &Profile) {
     let has_ids = !ids(&rt.db, &p.id).is_empty();
     if chrono::Utc::now().timestamp() - at < TTL && has_ids { return; }
     match tokio::time::timeout(std::time::Duration::from_secs(10), fetch(rt, p)).await {
-        Ok(Ok(fresh)) => {
+        Ok(Ok((fresh, ext))) => {
             let total = fresh.len();
-            store(&rt.db, &p.id, &fresh, chrono::Utc::now().timestamp());
-            notice(rt, &p.id, "emotes", &format!("Emotes da Twitch carregados: {total}."));
+            let extras = ext.len();
+            store(&rt.db, &p.id, &fresh, &ext, chrono::Utc::now().timestamp());
+            notice(rt, &p.id, "emotes", &format!("Emotes da Twitch carregados: {total}, mais {extras} de terceiros (BTTV/7TV/FFZ)."));
         }
         Ok(Err(err)) => retry(rt, p, &err),
         Err(_) => retry(rt, p, "a Twitch não respondeu a tempo"),
@@ -72,11 +74,97 @@ fn notice(rt: &crate::engine::Runtime, p: &str, kind: &str, msg: &str) {
     seen.push(key);
     rt.log(p, "ai", msg, "info");
 }
-async fn fetch(rt: &crate::engine::Runtime, p: &Profile) -> Result<Vec<Emote>, String> {
+async fn fetch(rt: &crate::engine::Runtime, p: &Profile) -> Result<(Vec<Emote>, std::collections::HashMap<String, String>), String> {
     let token = crate::oauth::token(&rt.http, p, "bot").await?;
     let channel = helix(rt, p, &token, Some(&p.channel_id)).await?;
     let global = helix(rt, p, &token, None).await?;
-    Ok(pick(channel, global))
+    Ok((pick(channel, global), fetch_ext(rt, p).await))
+}
+
+/// Emotes de terceiros (BTTV, 7TV e FFZ): a Twitch os manda como palavra
+/// comum, e o overlay desenha a imagem pelo nome guardado aqui. Melhor
+/// esforço — qualquer falha de rede simplesmente não contribui com emotes.
+pub fn ext(db: &crate::db::Db, p: &str) -> std::collections::HashMap<String, String> {
+    let v: Value = db.module(p, "ai_emotes");
+    v["ext"]
+        .as_object()
+        .map(|o| o.iter().filter_map(|(k, u)| Some((k.clone(), u.as_str()?.to_owned()))).collect())
+        .unwrap_or_default()
+}
+
+async fn fetch_ext(rt: &crate::engine::Runtime, p: &Profile) -> std::collections::HashMap<String, String> {
+    use std::collections::HashMap;
+    let mut out: HashMap<String, String> = HashMap::new();
+    if p.platform != "twitch" || p.channel_id.is_empty() {
+        return out;
+    }
+    let id = p.channel_id.as_str();
+    // BTTV: emotes do canal (inclui os compartilhados) e os globais.
+    if let Ok(v) = get_json(rt, &format!("https://api.betterttv.net/3/cached/users/twitch/{id}")).await {
+        for key in ["channelEmotes", "sharedEmotes"] {
+            for e in v[key].as_array().map(|a| a.as_slice()).unwrap_or(&[]) {
+                if let (Some(eid), Some(code)) = (e["id"].as_str(), e["code"].as_str()) {
+                    out.entry(code.to_owned()).or_insert_with(|| format!("https://cdn.betterttv.net/emote/{eid}/3x"));
+                }
+            }
+        }
+    }
+    if let Ok(v) = get_json(rt, "https://api.betterttv.net/3/cached/emotes/global").await {
+        for e in v.as_array().map(|a| a.as_slice()).unwrap_or(&[]) {
+            if let (Some(eid), Some(code)) = (e["id"].as_str(), e["code"].as_str()) {
+                out.entry(code.to_owned()).or_insert_with(|| format!("https://cdn.betterttv.net/emote/{eid}/3x"));
+            }
+        }
+    }
+    // 7TV: conjunto do canal e o global.
+    for url in [format!("https://7tv.io/v3/users/twitch/{id}"), "https://7tv.io/v3/emote-sets/global".to_owned()] {
+        if let Ok(v) = get_json(rt, &url).await {
+            let set = if v["emote_set"].is_object() { &v["emote_set"] } else { &v };
+            for e in set["emotes"].as_array().map(|a| a.as_slice()).unwrap_or(&[]) {
+                if let (Some(eid), Some(name)) = (e["id"].as_str(), e["name"].as_str()) {
+                    out.entry(name.to_owned()).or_insert_with(|| format!("https://cdn.7tv.app/emote/{eid}/3x.webp"));
+                }
+            }
+        }
+    }
+    // FFZ: a sala e o conjunto global; a imagem maior vem em urls.4.
+    for url in [format!("https://api.frankerfacez.com/v1/room/id/{id}"), "https://api.frankerfacez.com/v1/set/global".to_owned()] {
+        if let Ok(v) = get_json(rt, &url).await {
+            let sets: Vec<Value> = match v["sets"].as_object() {
+                Some(map) => map.values().cloned().collect(),
+                None => vec![v.clone()],
+            };
+            for set in sets {
+                for e in set["emoticons"].as_array().map(|a| a.as_slice()).unwrap_or(&[]) {
+                    let name = e["name"].as_str().unwrap_or("");
+                    let url = e["urls"]["4"].as_str().or(e["urls"]["2"].as_str()).or(e["urls"]["1"].as_str()).unwrap_or("");
+                    if !name.is_empty() && !url.is_empty() {
+                        let url = if url.starts_with("//") { format!("https:{url}") } else { url.to_owned() };
+                        out.entry(name.to_owned()).or_insert(url);
+                    }
+                }
+            }
+        }
+    }
+    while out.len() > 800 {
+        if let Some(k) = out.keys().next().cloned() {
+            out.remove(&k);
+        } else {
+            break;
+        }
+    }
+    out
+}
+
+async fn get_json(rt: &crate::engine::Runtime, url: &str) -> Result<Value, String> {
+    let res = tokio::time::timeout(std::time::Duration::from_secs(8), rt.http.get(url).send())
+        .await
+        .map_err(|_| "sem resposta".to_string())?
+        .map_err(|e| e.to_string())?;
+    if !res.status().is_success() {
+        return Err(format!("HTTP {}", res.status().as_u16()));
+    }
+    res.json().await.map_err(|e| e.to_string())
 }
 async fn helix(rt: &crate::engine::Runtime, p: &Profile, token: &str, broadcaster: Option<&str>) -> Result<Vec<Emote>, String> {
     let mut req = crate::helix::get(&rt.http, p, token, "chat/emotes", &[]);
@@ -137,9 +225,12 @@ mod tests {
         assert_eq!(list(&db, &p.id), "", "sem busca, sem emote no prompt");
         assert!(ids(&db, &p.id).is_empty(), "sem busca, sem id para a explosão");
         assert_eq!(cached(&db, &p.id).1, 0);
-        store(&db, &p.id, &[e("25", "Kappa"), e("88", "LUL")], 1_700_000_000);
+        let mut extras = std::collections::HashMap::new();
+        extras.insert("KappaExt".to_owned(), "https://cdn.7tv.app/emote/1/3x.webp".to_owned());
+        store(&db, &p.id, &[e("25", "Kappa"), e("88", "LUL")], &extras, 1_700_000_000);
         assert_eq!(list(&db, &p.id), "Kappa, LUL");
         assert_eq!(ids(&db, &p.id), vec!["25", "88"], "o id acompanha o nome para a CDN");
+        assert_eq!(ext(&db, &p.id).get("KappaExt").map(String::as_str), Some("https://cdn.7tv.app/emote/1/3x.webp"), "emote de terceiros sobrevive ao cache");
         assert_eq!(cached(&db, &p.id).1, 1_700_000_000);
         assert!(ids(&db, "outro").is_empty(), "cada perfil guarda a sua lista");
     }

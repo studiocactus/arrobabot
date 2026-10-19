@@ -157,6 +157,43 @@ fn first_time(rt: &Runtime, p: &Profile, user: &str) -> bool {
 
 /// Mensagem real do chat vira evento do overlay, com a identificação que o
 /// motor usa para badges, emotes e destaque por papel.
+/// Resolve nomes de emotes de terceiros (BTTV, 7TV, FFZ) dentro dos textos: a
+/// Twitch os manda como palavra comum e o overlay desenha a imagem pelo nome
+/// guardado no cache do canal. O que não tem URL continua texto.
+fn resolve_ext(rt: &Runtime, profile: &str, frags: Value) -> Value {
+    let map = crate::emotes::ext(&rt.db, profile);
+    if map.is_empty() {
+        return frags;
+    }
+    let mut out: Vec<Value> = Vec::new();
+    for f in frags.as_array().cloned().unwrap_or_default() {
+        if f["t"] != "t" {
+            out.push(f);
+            continue;
+        }
+        let text = f["v"].as_str().unwrap_or("");
+        let mut buf = String::new();
+        for word in text.split_inclusive(char::is_whitespace) {
+            let trimmed = word.trim();
+            if !trimmed.is_empty() && map.contains_key(trimmed) {
+                if !buf.is_empty() {
+                    out.push(json!({"t": "t", "v": buf}));
+                    buf = String::new();
+                }
+                out.push(json!({"t": "e", "v": trimmed, "url": map[trimmed]}));
+                // O espaço que veio junto do nome continua no texto seguinte.
+                buf.push_str(&word[trimmed.len()..]);
+            } else {
+                buf.push_str(word);
+            }
+        }
+        if !buf.is_empty() {
+            out.push(json!({"t": "t", "v": buf}));
+        }
+    }
+    Value::Array(out)
+}
+
 pub fn fire(rt: &Runtime, p: &Profile, e: &Event) {
     if e.simulated {
         return;
@@ -182,7 +219,7 @@ pub fn fire(rt: &Runtime, p: &Profile, e: &Event) {
     let first = first_time(rt, p, &e.user_id);
     let mut payload = json!({
         "profileId": p.id, "id": id, "user": e.user, "userId": e.user_id, "role": e.role,
-        "text": e.message, "badges": badges, "frags": frags(&e.data, &e.message),
+        "text": e.message, "badges": badges, "frags": resolve_ext(rt, &p.id, frags(&e.data, &e.message)),
         "first": first, "bot": e.data["bot"] == Value::Bool(true), "color": twitch_color(&e.data["color"]),
     });
     if e.rehearsal { payload["rehearsal"] = json!(true); }
@@ -417,7 +454,7 @@ pub fn bot(rt: &Runtime, p: &Profile, text: &str) {
     rt.emit("chat", json!({
         "profileId": p.id, "id": uuid::Uuid::new_v4().to_string(), "user": name,
         "userId": "bot", "role": "everyone", "text": text, "badges": [],
-        "frags": [{"t": "t", "v": text}], "first": false, "bot": true,
+        "frags": resolve_ext(rt, &p.id, json!([{"t": "t", "v": text}])), "first": false, "bot": true,
     }));
 }
 
@@ -491,6 +528,27 @@ pub fn defaults() -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Emote de terceiros (BTTV/7TV/FFZ) vira imagem pelo nome; o resto do
+    /// texto mantém os espaços e o que não é emote continua texto.
+    #[tokio::test]
+    async fn emote_de_terceiros_vira_imagem_pelo_nome() {
+        let dir = tempfile::tempdir().unwrap();
+        let rt = crate::engine::Runtime::new(dir.path().join("app")).unwrap();
+        let p = crate::model::Profile{id:uuid::Uuid::new_v4().to_string(),name:"P".into(),platform:"twitch".into(),channel:"c".into(),channel_id:"1".into(),bot_id:"b".into(),client_id:"cli".into(),blocklist:vec![],topics:vec![],editors:vec![],ai:Default::default(),modules:json!({})};
+        rt.db.save_profile(&p).unwrap();
+        rt.db.set_module(&p.id, "ai_emotes", &json!({"ext": {"KappaExt": "https://cdn.7tv.app/emote/1/3x.webp"}})).unwrap();
+        let f = resolve_ext(&rt, &p.id, json!([{"t": "t", "v": "olha o KappaExt aí "}]));
+        assert_eq!(f[0]["t"], "t");
+        assert_eq!(f[0]["v"], "olha o ", "o texto antes fica intacto");
+        assert_eq!(f[1]["t"], "e");
+        assert_eq!(f[1]["v"], "KappaExt");
+        assert_eq!(f[1]["url"], "https://cdn.7tv.app/emote/1/3x.webp");
+        assert_eq!(f[2]["t"], "t");
+        assert_eq!(f[2]["v"], " aí ", "o espaço depois do emote não gruda");
+        let f = resolve_ext(&rt, &p.id, json!([{"t": "t", "v": "sem emote aqui"}]));
+        assert_eq!(f[0]["t"], "t", "palavra desconhecida continua texto");
+    }
 
     #[test]
     fn padrao_valido_e_faixas_estranhas_barram() {

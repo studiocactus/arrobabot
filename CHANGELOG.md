@@ -1,5 +1,38 @@
 # Histórico de atualizações
 
+# BotLive 0.16.0
+
+## O que mudou
+
+**O chat do OBS alinha os nomes mesmo com emote gigante, e os emotes de terceiros (BTTV, 7TV e FFZ) finalmente aparecem como imagem — não mais como nome escrito.**
+
+- **Nomes alinhados (o desencontro com emotes).** A linha de nome ficava presa à base do emote grande e “descia” nas mensagens com emote. Agora o nome de quem fala ancora no **topo** de cada mensagem e o emote fica centralizado no texto: a lista de quem escreve se mantém alinhada em todas as linhas, inclusive com emotes de 4×.
+- **Emotes de terceiros viram imagem.** A Twitch entrega BTTV/7TV/FFZ como **texto** — por isso muitos emotes apareciam só com o nome. O BotLive agora busca a lista do seu canal (e os conjuntos globais) desses três serviços quando o canal conecta e desenha cada emote pelo nome, na mesma linha dos da Twitch. O que não estiver em nenhum dos conjuntos continua texto (é a realidade da plataforma).
+- **Imagem nítida em tamanho grande.** Os emotes da Twitch passam a pedir a escala **3×** da CDN quando crescem (antes o 2× esticava e borrava, como o coração da sua captura).
+- O espaço antes e depois dos emotes é preservado no texto (nada de palavras grudadas em “KappaExtaí”).
+
+## Como usar
+
+Nada a configurar: ao conectar o canal, o BotLive carrega os emotes da Twitch **e** de terceiros (aviso no Histórico com as contagens). Os controles de tamanho e da explosão continuam em **Chat no OBS → Mensagem**.
+
+## Validação
+
+Executada nesta máquina, nesta versão:
+
+- `cargo test` (src-tauri, `-j 1`): **359 testes aprovados, 2 ignorados, 0 falhas** — incluindo o novo `emote_de_terceiros_vira_imagem_pelo_nome` (nome vira imagem, espaços preservados, palavra desconhecida continua texto) e o cache de terceiros sobrevivendo ao `store`.
+- `npm run check` (tsc): **limpo**. `npm test` (vitest): **143 aprovados**. Playwright: **90 aprovados** (o alinhamento novo não derrubou a auditoria geométrica nem os testes do chat).
+- `npm run update:check`: válido.
+
+**Pendente de validação externa:** os emotes de terceiros dependem das APIs públicas do BTTV/7TV/FFZ e do seu canal — a conferência visual (emotes grandes nítidos, nomes alinhados, BTTV/7TV/FFZ aparecendo) precisa da sua live de teste. Se algum emote específico continuar como nome, me diga qual: provavelmente ele não está no seu canal nem nos conjuntos globais.
+
+## Limitações
+
+- Só os emotes do **seu canal + globais** dos três serviços; emotes exclusivos de outra comunidade não aparecem (a plataforma não os entrega).
+- A lista de terceiros segue o mesmo ciclo da Twitch (busca ao conectar, válida por 12 horas); um emote novo ganho no meio da live entra na próxima busca.
+- A explosão de emotes dos eventos continua usando os emotes da Twitch (CDN dela).
+
+---
+
 # BotLive 0.15.0
 
 ## O que mudou
