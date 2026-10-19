@@ -123,14 +123,14 @@ export default function ChatObs({profileId,notify}:{profileId:string;notify:(s:s
     const box=preview.current;if(!box)return;
     if(chatVisible(ev.payload,cfgRef.current)){pushChat(box,ev.payload,cfgRef.current,20);if(!ev.payload.rehearsal)setLive(true)}
    }),
-   listen<{kind:string;text:string;color:string;rehearsal?:boolean}>('chat.event',ev=>{
+   listen<{kind:string;text:string;color:string;rehearsal?:boolean}>('chat-event',ev=>{
     if(ev.payload.rehearsal)flagEnsaio();
     const box=preview.current;
     if(box&&isChatEventKind(ev.payload.kind))pushChatEvent(box,cfgRef.current,ev.payload.kind,ev.payload.text||'',ev.payload.color||'',20);
    }),
-   listen<{id:string}>('chat.delete',ev=>{if(preview.current)deleteChat(preview.current,ev.payload.id)}),
-   listen<{userId:string}>('chat.deleteUser',ev=>{if(preview.current)deleteUserChat(preview.current,ev.payload.userId)}),
-   listen('chat.clear',()=>{if(preview.current)clearChat(preview.current)}),
+   listen<{id:string}>('chat-delete',ev=>{if(preview.current)deleteChat(preview.current,ev.payload.id)}),
+   listen<{userId:string}>('chat-deleteUser',ev=>{if(preview.current)deleteUserChat(preview.current,ev.payload.userId)}),
+   listen('chat-clear',()=>{if(preview.current)clearChat(preview.current)}),
   ];
   return()=>{disposed=true;void Promise.all(unsubs).then(fns=>{if(!disposed)fns.forEach(f=>f&&f())})};
  },[desktop]);
@@ -271,6 +271,13 @@ export default function ChatObs({profileId,notify}:{profileId:string;notify:(s:s
       </div>
       <RangeRow label="Tamanho do texto" hint="Tamanho das mensagens." min={10} max={28} step={1} value={cfg.fontSize} fmt={v=>v+'px'} onChange={v=>set({fontSize:v})}/>
       <RangeRow label="Tamanho do nome" hint="Tamanho do nome de quem falou." min={10} max={36} step={1} value={cfg.nameSize} fmt={v=>v+'px'} onChange={v=>set({nameSize:v})}/>
+      <RangeRow label="Tamanho dos emotes" hint="Percentual sobre o tamanho normal; 100% é o padrão." min={50} max={200} step={5} value={cfg.emoteSize} fmt={v=>v+'%'} onChange={v=>set({emoteSize:v})}/>
+      <div className="lp-ctrl">
+       <ToggleCheck label="Emote grande em mensagem só de emote" hint="Como na Twitch: 1 emote aparece no maior tamanho (4×), 2 ou 3 em dobro, o resto no normal." checked={cfg.bigEmotes} onChange={v=>set({bigEmotes:v})}/>
+      </div>
+      <div className="lp-ctrl">
+       <ToggleCheck label="Emotes explodem ao aparecer" hint="Os emotes saem voando da mensagem, como na referência da StreamElements; o texto continua no lugar." checked={cfg.emoteFloat} onChange={v=>set({emoteFloat:v})}/>
+      </div>
       <ColorRow label="Cor do texto" hint="Cor da mensagem; o nome pode ter cor própria." value={cfg.color} onChange={v=>set({color:v})}/>
       <div className="lp-ctrl">
        <ToggleCheck label="Nome em caixa alta" hint="Deixa o nome todo em maiúsculas." checked={cfg.upper} onChange={v=>set({upper:v})}/>

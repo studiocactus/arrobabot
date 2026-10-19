@@ -51,7 +51,7 @@ export type ChatConfig={
  upper:boolean;nameFixed:string;color:string;
  nameMode:NameMode;
  prefixOn:boolean;prefix:string;prefixColor:string;
- font:string;fontSize:number;nameSize:number;
+ font:string;fontSize:number;nameSize:number;emoteSize:number;bigEmotes:boolean;emoteFloat:boolean;
  badges:Record<BadgeKey,boolean>;
  hlMode:'none'|'bar'|'bg'|'both';
  hl:{broadcaster:string;moderator:string;vip:string;subscriber:string};
@@ -70,7 +70,7 @@ export const DEFAULT_CHAT:ChatConfig={
  upper:false,nameFixed:'',color:'#ffffff',
  nameMode:'twitch',
  prefixOn:true,prefix:'> ',prefixColor:'#c6ff00',
- font:'Segoe UI',fontSize:16,nameSize:16,
+ font:'Segoe UI',fontSize:16,nameSize:16,emoteSize:100,bigEmotes:true,emoteFloat:true,
  badges:{broadcaster:true,moderator:true,vip:true,subscriber:true,founder:true,prime:true,bits:true,gift:true,other:true},
  hlMode:'bar',
  hl:{broadcaster:'#e91916',moderator:'#00ad03',vip:'#e005b9',subscriber:'#1f9bff'},
@@ -132,7 +132,7 @@ export function normalizeChat(v:unknown):ChatConfig{
   upper:bool(o.upper,DEFAULT_CHAT.upper),
   nameFixed:typeof o.nameFixed==='string'&&(/^#[0-9a-fA-F]{3,8}$/.test(o.nameFixed)||o.nameFixed==='')?o.nameFixed:DEFAULT_CHAT.nameFixed,
   color:color(o.color,DEFAULT_CHAT.color),
-  font,fontSize:clamp(o.fontSize,10,28,DEFAULT_CHAT.fontSize),nameSize:clamp(o.nameSize,10,36,DEFAULT_CHAT.nameSize),
+  font,fontSize:clamp(o.fontSize,10,28,DEFAULT_CHAT.fontSize),nameSize:clamp(o.nameSize,10,36,DEFAULT_CHAT.nameSize),emoteSize:clamp(o.emoteSize,50,200,DEFAULT_CHAT.emoteSize),bigEmotes:bool(o.bigEmotes,DEFAULT_CHAT.bigEmotes),emoteFloat:bool(o.emoteFloat,DEFAULT_CHAT.emoteFloat),
   badges,
   hlMode:pick(o.hlMode,['none','bar','bg','both'] as const,DEFAULT_CHAT.hlMode),
   hl:{
@@ -355,7 +355,11 @@ function buildMessage(msg:ChatMsg,cfg:ChatConfig):HTMLElement{
  text.className='bl-chat-text';
  text.style.fontSize=cfg.fontSize+'px';
  const onlyEmotes=msg.frags.length>0&&msg.frags.every(f=>f.t==='e');
- const emotePx=Math.round(cfg.fontSize*(onlyEmotes?2.4:1.4));
+ const emoteCount=msg.frags.filter(f=>f.t==='e').length;
+ // Padrão da Twitch: mensagem só de emotes cresce — um emote sozinho aparece no
+ // maior tamanho permitido (4×), dois ou três em dobro, o resto no normal.
+ const tier=onlyEmotes&&cfg.bigEmotes?(emoteCount===1?4:emoteCount<=3?2:1.4):1.4;
+ const emotePx=Math.max(12,Math.round(cfg.fontSize*tier*(cfg.emoteSize/100)));
  for(const f of msg.frags){
   if(f.t==='e'&&f.id){
    const img=document.createElement('img');
@@ -392,8 +396,33 @@ function insert(host:HTMLElement,cfg:ChatConfig,node:HTMLElement,inset:number):v
 }
 
 /** Empurra a mensagem na coluna, respeitando direção, teto e some-apois. */
+/** Explosão dos emotes: cada emote sai voando da mensagem (referência
+ *  StreamElements) — o texto e o nome continuam no lugar. */
+function floatEmotes(el:HTMLElement):void{
+ if(!el.isConnected)return;
+ let fx=document.getElementById('bl-chat-fx');
+ if(!fx){fx=document.createElement('div');fx.id='bl-chat-fx';fx.setAttribute('aria-hidden','true');document.body.appendChild(fx);}
+ const rnd=(a:number,b:number)=>a+Math.random()*(b-a);
+ el.querySelectorAll<HTMLImageElement>('.bl-chat-emote').forEach(img=>{
+  const r=img.getBoundingClientRect();
+  if(!r.width)return;
+  const c=img.cloneNode() as HTMLImageElement;
+  c.removeAttribute('class');
+  c.style.cssText=`position:fixed;left:${r.left}px;top:${r.top}px;width:${r.width}px;height:${r.height}px;pointer-events:none;z-index:999`;
+  fx.appendChild(c);
+  const x=rnd(-40,40),y=rnd(-180,-70),rot=rnd(-35,35);
+  const anim=c.animate(
+   [{transform:'translate(0,0) rotate(0deg)',opacity:1},{transform:`translate(${x}px,${y}px) rotate(${rot}deg)`,opacity:0}],
+   {duration:1600,easing:'ease-in'},
+  );
+  anim.onfinish=()=>c.remove();
+ });
+}
+
 export function pushChat(host:HTMLElement,msg:ChatMsg,cfg:ChatConfig,inset=24):void{
- insert(host,cfg,buildMessage(msg,cfg),inset);
+ const el=buildMessage(msg,cfg);
+ insert(host,cfg,el,inset);
+ if(cfg.emoteFloat)window.setTimeout(()=>floatEmotes(el),280);
 }
 
 /** Fundo da caixa: a própria cor do evento a 16% de opacidade. */

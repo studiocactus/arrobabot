@@ -7,7 +7,7 @@ import OverlayPreview,{type StageBg} from './OverlayPreview';
 import {TEMPLATE_IDS,TEMPLATES,defaultDesign,fontGroups,normalizeDesign,type Align,type Layout,type OverlayDesign,type VAlign} from './overlayDesign';
 
 type GoalDef={title:string;target:number;fontFamily?:string};
-type Config={enabled?:boolean;clientId?:string;activeGoal?:string;goals?:Record<string,GoalDef>};
+type Config={enabled?:boolean;clientId?:string;activeGoal?:string;goals?:Record<string,GoalDef>;startTimestamp?:number};
 type Data={current?:number;active_goal?:string;last_error?:string};
 type Info={token:string;port:number;url:string};
 type Sound={id:string;name:string};
@@ -334,6 +334,7 @@ export default function LivePix({profileId,notify}:{profileId:string;notify:(s:s
 
   <Card title="Metas">
    <p className="help">Cada meta tem título e valor-alvo em reais. A aparência — cores, fonte, bordas — fica no Estúdio acima. A meta ativa é consultada a cada 15 segundos. Excluir uma meta pede confirmação: o progresso dela não pode ser recuperado.</p>
+   <p className="help">O que conta é o que entrou <strong>desde o marco atual da contagem</strong>{config&&config.startTimestamp?` — iniciada em ${new Date(config.startTimestamp*1000).toLocaleDateString('pt-BR')}`:''}. Doações anteriores a ele não somam (use <strong>Reiniciar contador</strong> para mover o marco). Não há data de término: a meta segue até o valor-alvo ser batido.</p>
    {config?.goals&&Object.entries(config.goals).map(([gid,g])=>
     <div key={gid} className="list-row">
      <div><strong>{g.title}</strong><small>{fmt(g.target)} BRL</small></div>

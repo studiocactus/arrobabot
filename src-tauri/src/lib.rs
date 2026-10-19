@@ -186,7 +186,7 @@ pub async fn dispatch(rt:Arc<Runtime>,op:&str,args:Value)->R<Value>{
  "module.config.get"=>{rt.db.profile(&p)?;Ok(rt.db.module(&p,args["key"].as_str().ok_or("Configuração ausente")?))},
  "alerts.get"=>{let profile=rt.db.profile(&p)?;Ok(json!({"config":alerts::config(&rt,&p),"sounds":alerts::sounds(&rt,&p),"overlay":livepix::overlay_info(&rt,&profile.id)?}))},
  "alerts.test"=>{let profile=rt.db.profile(&p)?;alerts::test(&rt,&profile,args["kind"].as_str().ok_or("Evento ausente")?).await},
-  "emoteBurst.test"=>{let profile=rt.db.profile(&p)?;emote_burst::test(&rt,&profile)?;Ok(Value::Null)},
+  "emoteBurst.test"=>{let profile=rt.db.profile(&p)?;emote_burst::test_fresh(&rt,&profile).await?;Ok(Value::Null)},
  "chat.get"=>{let profile=rt.db.profile(&p)?;Ok(json!({"config":chat_overlay::config(&rt,&p),"overlay":livepix::overlay_info(&rt,&profile.id)?}))},
  "chat.test"=>{let profile=rt.db.profile(&p)?;chat_overlay::test(&rt,&profile,&args)},
  "spotify.get"=>{rt.db.profile(&p)?;Ok(json!({"config":spotify::merged(&rt,&p),"connected":spotify::connected(&p),"now":rt.spotify.now(&p),"overlay":livepix::overlay_info(&rt,&p)?}))},

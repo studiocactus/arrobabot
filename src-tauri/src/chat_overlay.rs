@@ -30,6 +30,19 @@ fn color_ok(v: &Value) -> bool {
 /// antes de qualquer coisa chegar ao overlay.
 pub fn valid_config(v: &Value) -> bool {
     const BOOLS: &[&str] = &["enabled", "showBot", "hideBots", "hideCommands", "stripes", "upper", "firstOn", "prefixOn", "eventsOn", "evShowMsg"];
+    // Campos novos são opcionais em configurações antigas; quando presentes,
+    // precisam ter o tipo e a faixa certos.
+    if !(v["bigEmotes"].is_null() || v["bigEmotes"].is_boolean()) {
+        return false;
+    }
+    if !(v["emoteFloat"].is_null() || v["emoteFloat"].is_boolean()) {
+        return false;
+    }
+    if let Some(n) = v["emoteSize"].as_f64() {
+        if !(50.0..=200.0).contains(&n) {
+            return false;
+        }
+    }
     if !BOOLS.iter().all(|k| v[k].is_boolean()) {
         return false;
     }
@@ -146,6 +159,11 @@ fn first_time(rt: &Runtime, p: &Profile, user: &str) -> bool {
 /// motor usa para badges, emotes e destaque por papel.
 pub fn fire(rt: &Runtime, p: &Profile, e: &Event) {
     if e.simulated {
+        return;
+    }
+    // Eco da conta do bot: o envio instantâneo (bot()) já mostrou esta mensagem
+    // — o retorno do EventSub não pode desenhá-la de novo.
+    if !e.rehearsal && e.data["bot"] == true && take_echo(rt, &p.id, &e.message) {
         return;
     }
     // Mensagem que veio do Discord não existe no chat da plataforma.
@@ -384,12 +402,37 @@ pub fn bot(rt: &Runtime, p: &Profile, text: &str) {
     if cfg["enabled"] != true || cfg["showBot"] != true {
         return;
     }
+    // Registra o eco: quando o EventSub devolver esta mesma mensagem da conta do
+    // bot, o fire() consome o registro em vez de desenhar de novo.
+    {
+        let mut q = rt.bot_sent.lock().unwrap();
+        let now = std::time::Instant::now();
+        q.retain(|(_, _, at)| at.elapsed() < std::time::Duration::from_secs(20));
+        q.push_back((p.id.clone(), text.to_owned(), now));
+        while q.len() > 20 {
+            q.pop_front();
+        }
+    }
     let name = cfg["botName"].as_str().filter(|s| !s.is_empty()).unwrap_or("BotLive");
     rt.emit("chat", json!({
         "profileId": p.id, "id": uuid::Uuid::new_v4().to_string(), "user": name,
         "userId": "bot", "role": "everyone", "text": text, "badges": [],
         "frags": [{"t": "t", "v": text}], "first": false, "bot": true,
     }));
+}
+
+/// Consumir o eco registrado por `bot()`: true quando esta mensagem já foi
+/// mostrada no envio (e não pode aparecer de novo).
+fn take_echo(rt: &Runtime, profile: &str, text: &str) -> bool {
+    let mut q = rt.bot_sent.lock().unwrap();
+    if let Some(i) = q
+        .iter()
+        .position(|(p, t, at)| p == profile && t == text && at.elapsed() < std::time::Duration::from_secs(20))
+    {
+        q.remove(i);
+        return true;
+    }
+    false
 }
 
 /// Moderação da Twitch (apagar mensagem, limpar chat) remove da fonte do OBS

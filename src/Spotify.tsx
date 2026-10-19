@@ -118,7 +118,7 @@ export default function SpotifyScreen({profileId,notify}:{profileId:string;notif
 
  // A música chega pelo mesmo caminho do overlay — a linha e a prévia acompanham a live.
  useEffect(()=>{
-  const un=listen<{profileId?:string;rehearsal?:boolean}>('spotify.now',ev=>{
+  const un=listen<{profileId?:string;rehearsal?:boolean}>('spotify-now',ev=>{
    if(ev.payload?.profileId!==profileId)return;
    if(ev.payload.rehearsal===true){
     const t=normalizeNow(ev.payload);
@@ -387,6 +387,7 @@ export default function SpotifyScreen({profileId,notify}:{profileId:string;notif
       <small className="lp-note">O que está desligado some da prévia e do OBS — e tira o espaço junto, sem buraco no cartão. O ícone é a atribuição que as regras de marca do Spotify pedem ao exibir a música; recomendamos mantê-lo ligado.</small>
       {rowsOn>=2&&<Seg label="Ordem das linhas visíveis" value={design.order} options={SPOTIFY_ORDERS} onChange={v=>d({order:v})}/>}
       <Seg label="Nome longo" hint="Reticências corta no fim; duas linhas deixa o título completo em dois filetes." value={design.titleWrap?'wrap':'ell'} options={[['ell','Reticências'],['wrap','Duas linhas']] as [string,string][]} onChange={v=>d({titleWrap:v==='wrap'})}/>
+      <Seg label="Texto do cartão" hint="Uma linha mostra “Artista — Título” num filete só, como o Snip." value={design.oneLine?'one':'multi'} options={[['multi','Em linhas'],['one','Tudo em uma linha']] as [string,string][]} onChange={v=>d({oneLine:v==='one'})}/>
      </Card>
 
      <Card title="Layout">

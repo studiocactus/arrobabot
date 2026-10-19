@@ -3,6 +3,12 @@ use serde_json::{json,Value};
 use std::{collections::{HashMap,HashSet},path::PathBuf,sync::{Arc,Mutex},time::{Instant,Duration}};
 use tokio::sync::{broadcast,mpsc,Semaphore};
 use tauri::Emitter;
+/// Nome do evento para o aplicativo: o Tauri só aceita `[a-zA-Z0-9-_/:]` e
+ /// rejeita pontos (que são o padrão do WebSocket). `audio.play` vira
+ /// `audio-play` só na ponte — o broadcast continua com o nome de sempre.
+ pub fn app_event_name(kind: &str) -> String {
+  kind.replace('.', "-")
+ }
 pub struct Runtime {
  pub db:Db,pub base:PathBuf,pub http:reqwest::Client,
  pub tx:mpsc::Sender<Event>,pub broadcast:broadcast::Sender<Value>,
@@ -19,6 +25,9 @@ pub struct Runtime {
  pub spotify:crate::spotify::States,
  pub listen:crate::listen::Sessions,
  pub chat_extras:Mutex<crate::chat_extras::State>,
+ /// O que o aplicativo acabou de falar no chat (eco instantâneo): o retorno do
+ /// EventSub da conta do bot consome aqui para não aparecer duas vezes.
+ pub bot_sent:Mutex<std::collections::VecDeque<(String,String,Instant)>>,
  pub runs:crate::runs::Runs,
  pub obs:crate::obs::Locks,
  pub voice_fx:crate::voice_fx::Fx,
@@ -40,14 +49,19 @@ impl Runtime {
  let (tx,rx)=mpsc::channel(512);let (broadcast,_)=broadcast::channel(512);
  let http=reqwest::Client::builder().timeout(Duration::from_secs(30)).redirect(reqwest::redirect::Policy::none()).build().map_err(|e|e.to_string())?;
  let actor=if db.get("accessEnabled")==true{"locked"}else{"owner"}.to_owned();
- let rt=Arc::new(Self{actor:Mutex::new(actor),db,base,http,tx,broadcast,app:Mutex::new(None),connections:Mutex::new(HashMap::new()),statuses:Mutex::new(HashMap::new()),discord_tasks:Mutex::new(HashMap::new()),discord_status:Mutex::new(HashMap::new()),discord_cache:Mutex::new(HashMap::new()),timer_pending:Mutex::new(std::collections::HashSet::new()),cooldowns:Mutex::new(HashMap::new()),conversation:Mutex::new(crate::conversation::History::default()),live:crate::live_state::LiveStates::default(),spotify:crate::spotify::States::default(),listen:crate::listen::Sessions::default(),chat_extras:Mutex::new(crate::chat_extras::State::default()),runs:crate::runs::Runs::default(),obs:crate::obs::Locks::default(),voice_fx:crate::voice_fx::Fx::default(),voicemod:crate::voicemod::Voice::default(),voice_resgates:crate::voice_redemptions::Engine::default(),intents:crate::intents::Intents::default(),audio:crate::audio::Sinks::default(),seen:Mutex::new(HashMap::new()),seen_chatters:Mutex::new(HashMap::new()),chat_seen:Mutex::new(HashMap::new()),emote_counts:Mutex::new(HashMap::new()),module_lock:Mutex::new(()),vault_lock:Mutex::new(()),send_locks:Mutex::new(HashMap::new()),api_token:format!("{}{}",uuid::Uuid::new_v4().simple(),uuid::Uuid::new_v4().simple()),api_port:Mutex::new(0)});
+ let rt=Arc::new(Self{actor:Mutex::new(actor),db,base,http,tx,broadcast,app:Mutex::new(None),connections:Mutex::new(HashMap::new()),statuses:Mutex::new(HashMap::new()),discord_tasks:Mutex::new(HashMap::new()),discord_status:Mutex::new(HashMap::new()),discord_cache:Mutex::new(HashMap::new()),timer_pending:Mutex::new(std::collections::HashSet::new()),cooldowns:Mutex::new(HashMap::new()),conversation:Mutex::new(crate::conversation::History::default()),live:crate::live_state::LiveStates::default(),spotify:crate::spotify::States::default(),listen:crate::listen::Sessions::default(),chat_extras:Mutex::new(crate::chat_extras::State::default()),bot_sent:Mutex::new(std::collections::VecDeque::new()),runs:crate::runs::Runs::default(),obs:crate::obs::Locks::default(),voice_fx:crate::voice_fx::Fx::default(),voicemod:crate::voicemod::Voice::default(),voice_resgates:crate::voice_redemptions::Engine::default(),intents:crate::intents::Intents::default(),audio:crate::audio::Sinks::default(),seen:Mutex::new(HashMap::new()),seen_chatters:Mutex::new(HashMap::new()),chat_seen:Mutex::new(HashMap::new()),emote_counts:Mutex::new(HashMap::new()),module_lock:Mutex::new(()),vault_lock:Mutex::new(()),send_locks:Mutex::new(HashMap::new()),api_token:format!("{}{}",uuid::Uuid::new_v4().simple(),uuid::Uuid::new_v4().simple()),api_port:Mutex::new(0)});
  tokio::spawn(worker(rt.clone(),rx));Ok(rt)
  }
  pub fn emit(&self,kind:&str,payload:Value){
  let _=self.broadcast.send(json!({"type":kind,"payload":payload}));
  let actor=crate::access::current(self);
  let visible=actor=="owner"||(actor!="locked"&&payload["profileId"].as_str().is_some_and(|id|self.db.profile(id).is_ok_and(|p|p.editors.contains(&actor))));
- if visible{if let Some(app)=self.app.lock().unwrap().as_ref(){let _=app.emit(kind,payload);}}
+ if visible{if let Some(app)=self.app.lock().unwrap().as_ref(){
+  if let Err(err)=app.emit(app_event_name(kind).as_str(),payload){
+   // Nunca mais em silêncio: um evento que não chega é um sintoma visível.
+   eprintln!("[BotLive] evento {kind} não chegou ao aplicativo: {err}");
+  }
+ }}
  }
  pub fn log(&self,p:&str,kind:&str,msg:&str,status:&str){let log=self.db.log(p,kind,msg,status);self.emit("activity",serde_json::to_value(log).unwrap());}
  pub fn status(&self,p:&str,status:&str){self.statuses.lock().unwrap().insert(p.into(),status.into());self.emit("connection",json!({"profileId":p,"status":status}));}
@@ -142,7 +156,12 @@ pub async fn process(rt:Arc<Runtime>,e:Event){
  // Deleções da Twitch (apagar mensagem, limpar chat) só mexem no overlay do
  // chat: removem o que já estava renderizado e seguem o fluxo do bot.
  if matches!(e.kind.as_str(),"chat.delete"|"chat.deleteUser"|"chat.clear"){if !e.simulated{crate::chat_overlay::removed(&rt,&p,&e);}return}
- if e.kind=="chat"&&!e.simulated&&!p.bot_id.is_empty()&&e.user_id==p.bot_id{return}
+ // Mensagem da conta do bot: o dono quer ver no overlay o que o bot fala, mas
+ // ela não dispara automações, pontos nem presença.
+ if e.kind=="chat"&&!e.simulated&&!p.bot_id.is_empty()&&e.user_id==p.bot_id{
+  crate::chat_overlay::fire(&rt,&p,&e);
+  return;
+ }
  // Mensagem de teste não registra frequência nem infla a explosão de emotes: o
  // ensaio não pode mexer em estado que a live usa para decidir.
  if e.kind=="chat"&&!e.simulated{crate::twitch_ops::note_chatter(&rt,&e);crate::emote_burst::count(&rt,&p.id,&e);}
@@ -496,6 +515,16 @@ async fn action(rt:&Arc<Runtime>,p:&Profile,e:&Event,a:&Action,variables:&mut cr
 }
 #[cfg(test)] mod tests {
  use super::*;
+ // O Tauri rejeita nomes com ponto; o app recebe hifenizado e o WS, pontilhado.
+ #[test]
+ fn nomes_de_evento_do_app_respeitam_o_alfabeto_do_tauri(){
+  for k in ["audio.play","audio.feedback","audio.stopLocal","chat.deleteUser","spotify.now","activity","command-counter"]{
+   let n=app_event_name(k);
+   assert!(n.chars().all(|c|c.is_ascii_alphanumeric()||" -/_:".contains(c)),"{k} => {n} fora do alfabeto do Tauri");
+  }
+  assert_eq!(app_event_name("audio.play"),"audio-play");
+  assert_eq!(app_event_name("activity"),"activity","nomes sem ponto continuam iguais");
+ }
  fn f(name:&str,kind:&str,pattern:&str,actions:&[&str])->Flow {
   serde_json::from_value(json!({"id":uuid::Uuid::new_v4(),"profileId":uuid::Uuid::new_v4(),"name":name,"enabled":true,
   "trigger":{"kind":kind,"pattern":pattern},

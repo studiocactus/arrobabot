@@ -4,7 +4,7 @@
  * destino (sink) e envia o mesmo evento para os dois lados; o aplicativo
  * nunca toca junto com a fonte do OBS.
  */
-export type ViewerSound = {profileId: string; src: string; volume: number};
+export type ViewerSound = {profileId: string; src: string; volume: number; onStart?: () => void};
 
 let queue = Promise.resolve();
 let pending = 0;
@@ -41,7 +41,15 @@ export function playViewerSound(sound: ViewerSound): Promise<void> {
         const timer = setTimeout(() => finish(), 15000);
         audio.onended = () => finish();
         audio.onerror = () => finish(Error('Não foi possível reproduzir este áudio. Tente WAV ou MP3.'));
-        void audio.play().catch(() => finish(Error('O navegador bloqueou a reprodução. Clique em Testar áudio de novo.')));
+        void audio
+          .play()
+          .then(() => {
+            // Começou mesmo: confirma e abre o teto para falas longas de TTS.
+            sound.onStart?.();
+            clearTimeout(timer);
+            setTimeout(() => finish(), 60000);
+          })
+          .catch(() => finish(Error('O navegador bloqueou a reprodução. Clique em Testar áudio de novo.')));
       }),
   );
   queue = next.catch(() => {});

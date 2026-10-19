@@ -1654,3 +1654,30 @@ async fn urls_de_som_e_tts_funcionam_nas_rotas_autenticadas_de_verdade(){
  let tok=frag.split("#token=").nth(1).unwrap().split('&').next().unwrap();
  assert_eq!(livepix::overlay_profile(&rt,tok).as_deref(),Some(p.id.as_str()),"o token do endereço abre a fonte no perfil certo");
 }
+
+/// O que o bot fala aparece no chat do overlay (o dono quer ver), sem disparar
+/// automações — e o eco do EventSub da conta do bot não duplica o que o
+/// aplicativo já mostrou no envio.
+#[tokio::test]
+async fn a_fala_do_bot_aparece_no_chat_sem_duplicar_nem_disparar_automacoes(){
+ let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().join("app")).unwrap();let mut p=profile("Bot");p.bot_id="bot-arroba".into();rt.db.save_profile(&p).unwrap();
+ rt.db.set_module(&p.id,"chatOverlay",&json!({"enabled":true,"showBot":true})).unwrap();
+ // Automação de toda mensagem: não pode ser acionada pela fala do bot.
+ let mut f=flow(&p);f.trigger.kind="chat".into();f.trigger.pattern="".into();
+ f.actions=vec![Action{kind:"overlay".into(),text:"alguém falou".into(),target:"".into(),value:0,condition:"".into(),..Default::default()}];
+ rt.db.save_flow(&f).unwrap();
+ let mut rx=rt.broadcast.subscribe();
+ // 1) O envio instantâneo do aplicativo já desenha a fala do bot...
+ chat_overlay::bot(&rt,&p,"fala automática");
+ // 2) ...e o retorno do EventSub da conta do bot não pode duplicar.
+ let mut echo=event(&p,"fala automática",false);echo.user_id="bot-arroba".into();echo.data=json!({"bot":true});
+ engine::process(rt.clone(),echo).await;
+ // 3) Uma fala manual da conta do bot aparece — uma vez.
+ let mut manual=event(&p,"oi pessoal",false);manual.user_id="bot-arroba".into();manual.data=json!({"bot":true});
+ engine::process(rt.clone(),manual).await;
+ let all:Vec<_>=std::iter::from_fn(||rx.try_recv().ok()).collect();
+ let chats:Vec<_>=all.iter().filter(|v|v["type"]=="chat").collect();
+ assert_eq!(chats.len(),2,"uma do envio e uma da fala manual — sem duplicata");
+ assert!(chats.iter().all(|v|v["payload"]["bot"]==true),"as duas saem marcadas como bot");
+ assert!(!all.iter().any(|v|v["type"]=="overlay"),"fala do bot não dispara automação");
+}

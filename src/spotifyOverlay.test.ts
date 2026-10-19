@@ -9,7 +9,7 @@ describe('design da música',()=>{
   expect(Object.keys(DEFAULT_SPOTIFY_DESIGN).sort()).toEqual([
    'albumColor','align','artRadius','artSize','artistColor','artistSize','barBg','barColor','barHeight','barRadius',
    'bg','borderColor','cover','coverBlur','coverGlow','empty','emptyArtist','emptyText','exitTransition','font',
-   'gap','hideOnPause','layout','opacity','order','padding','pauseDelay','position','radius','shadowSize',
+   'gap','hideOnPause','layout','oneLine','opacity','order','padding','pauseDelay','position','radius','shadowSize',
    'showAlbum','showArt','showArtist','showBg','showBorder','showDuration','showIcon','showProgress','showShadow','showTimes',
    'showTitle','titleColor','titleSize','titleWeight','titleWrap','transition','transitionMs','width',
   ]);

@@ -6,7 +6,7 @@ const profile={id:'p1',name:'Canal de teste',platform:'twitch',channel:'cactus',
 
 /** Mock desktop: `chat.get` devolve a config e o endereço do overlay; o op
  *  `chat.test` obedece os mesmos interruptores do backend e entrega o payload
- *  pelo evento do Tauri (`chat`/`chat.event`), como o aplicativo real faz —
+ *  pelo evento do Tauri (`chat`/`chat-event`), como o aplicativo real faz —
  *  a prévia só recebe pelo listener, igual ao que acontece em live. */
 async function setup(page:Page){
  await page.addInitScript(p=>{
@@ -70,7 +70,7 @@ async function setup(page:Page){
       let text=fill(String(ev.text||evDefaults[kind]?.text||''),vars);
       const msg=String(vars.message||'');
       if(chatCfg.evShowMsg!==false&&msg)text+=`<span class="bl-evmsg">${msg}</span>`;
-      emit('chat.event',{profileId:'p1',kind,color:String(ev.color||evDefaults[kind]?.color||''),text,rehearsal:true});
+      emit('chat-event',{profileId:'p1',kind,color:String(ev.color||evDefaults[kind]?.color||''),text,rehearsal:true});
       return {fired:true};
      }
      return null;

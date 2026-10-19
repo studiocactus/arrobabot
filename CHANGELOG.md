@@ -1,5 +1,46 @@
 # Histórico de atualizações
 
+# BotLive 0.15.0
+
+## O que mudou
+
+**Correções de raiz em três caminhos quebrados (Voicemod 401, confirmação de áudio e mensagens do bot no chat) e o chat do OBS ganhou os emotes no formato da Twitch — junto com as seis pautas que você trouxe.**
+
+- **Voicemod conecta de verdade (item 3).** O 401 **não era sua chave**: nosso `registerClient` mandava a chave embrulhada duas vezes no WebSocket (`payload.payload.clientKey`) e o protocolo oficial lê em `payload.clientKey` — o Voicemod nunca via a chave e respondia "não autorizado", mesmo com a chave inteira salva. Corrigido para o formato oficial (conferido na documentação pública da Control API), e o mock dos testes agora **exige a chave no lugar certo** — a suíte inteira reprovaria se o embrulho duplo voltasse. Atenção: a chave do e-mail tem o formato `controlapi-…`; guarde a cadeia inteira.
+- **Confirmação de áudio sem fantasma (item 6).** O teste tocava no OBS e a tela dizia "sem confirmação em 12 s": a causa era o **Tauri rejeitar nomes de evento com ponto** (`audio.feedback`, `audio.play`, `chat.event`, `spotify.now`…) — o erro era engolido e nada chegava ao aplicativo. Os nomes da ponte viram `audio-feedback` etc. (o WebSocket continua com os nomes de sempre); agora o erro também **não é mais engolido**. Além disso, a confirmação que chega antes do teste responder com o id não se perde mais, e o som local confirma **started quando toca** e **done quando termina** (com o mesmo teto de 60 s do OBS para falas longas).
+- **Toda mensagem do chat aparece — inclusive a do bot (item 1).** Duas barreiras descartavam tudo que vinha da conta do bot (`ArrobaSrv`): por isso só o teste "Sequência" aparecia. Agora **o que o bot fala aparece na coluna** (marcado como bot, respeitando "Mostrar as mensagens do bot"), **sem disparar automações, pontos ou presença** — e o retorno automático da Twitch não duplica o que o aplicativo já mostrou no envio.
+- **Emotes no formato da Twitch (item 1).** Mensagem só de emotes cresce como na Twitch: **1 emote sozinho aparece no maior tamanho permitido (4×)**, 2 ou 3 em dobro, o resto no normal — com os controles novos no Estúdio: **Tamanho dos emotes** (50% a 200%), **Emote grande em mensagem só de emote** e **Emotes explodem ao aparecer** (os emotes saem voando da mensagem, como na referência da StreamElements que você enviou; o texto continua no lugar).
+- **Spotify em uma linha (item 2).** Novo **Texto do cartão** em Conteúdo: **Tudo em uma linha** mostra “Artista — Título” num filete só, como o Snip; **Em linhas** mantém título, artista e álbum empilhados.
+- **Explosão de emotes nos alertas (item 5).** O botão parava com "Sem emotes carregados": agora, quando a lista está vazia, o BotLive **busca os emotes do canal na hora** antes de desistir — o cache frio não trava mais o teste.
+- **Meta da LivePix (item 4).** Resposta direta: o contador soma o que entrou **desde o marco atual da contagem** (não "desde que a meta foi criada" a menos que o marco seja esse) — doações anteriores não somam, e **Reiniciar contador** move o marco. **Não há data de término**: a meta segue até bater o valor-alvo. O cartão **Metas** agora mostra a data de início da contagem.
+
+## Como usar
+
+- **Voicemod:** salve a chave **inteira** (`controlapi-…`, do começo ao fim) em Voicemod → Etapa 1 → Alterar conexão e diagnóstico, confira o tamanho exibido e clique em **Conectar**.
+- **Chat no OBS:** nada a fazer — mensagens (inclusive as do bot) aparecem sozinhas. Para os emites: grupo **Mensagem** tem **Tamanho dos emotes**, **Emote grande em mensagem só de emote** e **Emotes explodem ao aparecer**.
+- **Spotify:** grupo **Conteúdo** → **Texto do cartão** → **Tudo em uma linha**.
+- **Meta:** o cartão **Metas** informa “iniciada em <data>”; para recomeçar a contagem use **Reiniciar contador**.
+- **Alertas:** **Testar explosão** funciona com o canal conectado; se a lista estiver vazia, ele busca na hora.
+
+## Validação
+
+Executada nesta máquina, nesta versão:
+
+- `cargo test` (src-tauri, `-j 1`): **358 testes aprovados, 2 ignorados, 0 falhas**. Novos: o formato oficial do `registerClient` (com o mock exigindo a chave no lugar certo), o alfabeto dos nomes de evento do app, e a regressão "fala do bot aparece no chat sem duplicar nem disparar automações" — mais o teste da Twitch atualizado para o contrato novo (chat do bot passa, marcado como bot).
+- `npm run check` (tsc): **limpo**. `npm test` (vitest): **143 testes aprovados** (novo: som que nunca começa é encerrado em 15 s; som iniciado tem teto de 60 s).
+- Playwright (navegação real, Edge): **90 testes aprovados**, incluindo os do Chat no OBS com eventos na coluna (o mock do teste foi alinhado ao nome real do evento).
+- `npm run update:check`: válido.
+
+**Pendente de validação externa (não executado aqui):** a conexão real com o **seu** Voicemod (o protocolo agora bate com o oficial, mas só a sua máquina confirma), a audição da explosão de emotes e dos emotes grandes no OBS, e o caminho completo de mensagens reais da Twitch ao overlay — tudo isso precisa da sua live de teste. **Nada é declarado homologado** sem a sua confirmação; se qualquer ponto continuar errado, me mande o print com o estado da tela.
+
+## Limitações
+
+- O Voicemod foi corrigido contra a **documentação pública** da Control API; se a sua versão do Voicemod usar outro formato, o diagnóstico mostra o motivo e eu ajusto.
+- Os emotes continuam só os da Twitch (BTTV/7TV/FFZ seguem fora), e a explosão ao aparecer usa tempos fixos de referência (1,6 s) por enquanto.
+- A "explosão" de emotes das mensagens é o efeito de voar ao aparecer; a explosão de eventos (sub, presente, meta) continua sendo a configurada na tela Alertas.
+
+---
+
 # BotLive 0.14.2
 
 ## O que mudou

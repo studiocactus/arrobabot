@@ -664,7 +664,7 @@ async fn open_and_install(rt: &Arc<Runtime>, p: &Profile, from_reconnect: bool) 
  let gen = rt.voicemod.gen.fetch_add(1, Ordering::SeqCst);
  let (link, task) = spawn_link(rt.clone(), gen, ws);
  let key_len = key.chars().count();
- let body = json!({"id": uuid::Uuid::new_v4().to_string(), "action": "registerClient", "payload": {"clientKey": key}});
+ let body = json!({"clientKey": key});
  let reply = request(rt, &link, "registerClient", &["registerClient"], body).await;
  let register = match reply {
   Ok(v) => v,
@@ -1418,7 +1418,11 @@ pub(crate) mod testkit {
   match action {
    "registerClient" => {
     m.registers.fetch_add(1, Ordering::SeqCst);
-    let code = if m.key_ok.load(Ordering::SeqCst) { 200 } else { 401 };
+    // Contrato oficial: a chave chega direto em `payload.clientKey` (um só
+    // embrulho). Um embrulho duplo aqui vira 401 e reprova a suíte inteira —
+    // exatamente o que acontecia com o Voicemod de verdade.
+    let placed = v["payload"]["clientKey"].as_str().map(|k| !k.is_empty()).unwrap_or(false);
+    let code = if m.key_ok.load(Ordering::SeqCst) && placed { 200 } else { 401 };
     let desc = if code == 200 { "Authorized" } else { "Unauthorized" };
     vec![tagged(m, json!({"action":"registerClient","payload":{"status":{"code":code,"description":desc}}}), id).to_string()]
    },

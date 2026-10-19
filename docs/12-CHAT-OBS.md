@@ -20,7 +20,7 @@ A estrutura é `[prefixo] [badges] [nome colorido] : [texto com emotes]`, na ord
 
 O **prefixo** é o `>` de saudação do widget de referência: vem antes das badges, com texto livre (até 16 caracteres) e cor própria — desligue no grupo **Mensagem** se não quiser.
 
-Os emotes vêm direto do CDN da Twitch pelo id que a mensagem traz; sem internet, o emote vira o próprio texto. Uma mensagem só de emotes aparece em tamanho dobrado.
+Os emotes vêm direto do CDN da Twitch pelo id que a mensagem traz; sem internet, o emote vira o próprio texto. O tamanho segue o padrão da Twitch, ajustável: mensagem só de emotes cresce — **um emote sozinho aparece no maior tamanho permitido (4×)**, dois ou três em dobro, o resto no normal — e **Tamanho dos emotes** amplia ou reduz tudo em porcentagem. O interruptor **Emotes explodem ao aparecer** solta os emotes voando da mensagem (como na referência da StreamElements), sem mexer no texto. As mensagens da **conta do bot** também aparecem na coluna — o que o bot fala na live é visível para você — e não disparam automações, pontos nem contagem de presença.
 
 A **origem da cor do nome** é uma escolha de três vias no grupo **Mensagem**:
 
@@ -55,7 +55,7 @@ Por padrão os eventos estão **desligados**, para não duplicar a camada de ale
 
 ## Ajustes da coluna
 
-O grupo **Coluna** controla fluxo, máximo de mensagens em tela (10 a 300), some depois de (0 a 120 s; 0 = nunca), animação de entrada (fade, deslize, pisca ou datilografia), largura (240 a 960 px), lado na tela e listras alternadas. O grupo **Explosão de emotes** tem um único interruptor, **Também nesta camada**: ligado, a explosão de sub, presente ou meta completada configurada na tela [Alertas](11-ALERTAS.md) cai também sobre a coluna de chat; desligado, a explosão toca só nas camadas de alertas e meta. **Mensagem** escolhe a fonte, o tamanho do texto e do nome, a cor do texto, o nome em caixa alta, a origem da cor do nome e o prefixo. As alterações salvam sozinhas e chegam ao OBS na hora, sem recarregar a fonte.
+O grupo **Coluna** controla fluxo, máximo de mensagens em tela (10 a 300), some depois de (0 a 120 s; 0 = nunca), animação de entrada (fade, deslize, pisca ou datilografia), largura (240 a 960 px), lado na tela e listras alternadas. O grupo **Explosão de emotes** tem um único interruptor, **Também nesta camada**: ligado, a explosão de sub, presente ou meta completada configurada na tela [Alertas](11-ALERTAS.md) cai também sobre a coluna de chat; desligado, a explosão toca só nas camadas de alertas e meta. **Mensagem** escolhe a fonte, o tamanho do texto, do nome e dos emotes (com o modo **Emote grande em mensagem só de emote** e a explosão dos emotes ao aparecer), a cor do texto, o nome em caixa alta, a origem da cor do nome e o prefixo. As alterações salvam sozinhas e chegam ao OBS na hora, sem recarregar a fonte.
 
 ## Modo código
 

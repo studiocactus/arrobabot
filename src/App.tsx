@@ -51,8 +51,8 @@ export default function App(){
  window.addEventListener('keydown',onKey);return()=>window.removeEventListener('keydown',onKey);
  },[]);
  useEffect(()=>{if(!desktop)return;let active=true;const off: (()=>void)[]=[];const track=(p:Promise<()=>void>)=>p.then(f=>active?off.push(f):f());
- track(listen<{profileId:string;sink?:string;src:string;volume:number;id:string}>('audio.play',e=>{const p=e.payload;if(p.sink!=='local')return;void playViewerSound({profileId:p.profileId,src:p.src,volume:p.volume}).then(()=>{void api('audio.ack',{profileId:p.profileId,id:p.id,phase:'started'}).catch(()=>{})}).catch(err=>{notify(errorText(err));void api('audio.ack',{profileId:p.profileId,id:p.id,phase:'error',detail:errorText(err)}).catch(()=>{})})}));
- track(listen('audio.stopLocal',()=>stopViewerSounds()));
+ track(listen<{profileId:string;sink?:string;src:string;volume:number;id:string}>('audio-play',e=>{const p=e.payload;if(p.sink!=='local')return;void playViewerSound({profileId:p.profileId,src:p.src,volume:p.volume,onStart:()=>{void api('audio.ack',{profileId:p.profileId,id:p.id,phase:'started'}).catch(()=>{})}}).then(()=>{void api('audio.ack',{profileId:p.profileId,id:p.id,phase:'done'}).catch(()=>{})}).catch(err=>{notify(errorText(err));void api('audio.ack',{profileId:p.profileId,id:p.id,phase:'error',detail:errorText(err)}).catch(()=>{})})}));
+ track(listen('audio-stopLocal',()=>stopViewerSounds()));
  track(listen<Log>('activity',e=>setSnapshot(s=>({...s,logs:[e.payload,...s.logs].slice(0,300)}))));
  track(listen<{profileId:string;status:string}>('connection',e=>setSnapshot(s=>({...s,statuses:{...s.statuses,[e.payload.profileId]:e.payload.status}}))));
  return()=>{active=false;off.forEach(f=>f())};

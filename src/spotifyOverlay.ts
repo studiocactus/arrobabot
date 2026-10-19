@@ -17,7 +17,7 @@ export type SpotifyDesign={
  showArt:boolean;showTitle:boolean;showArtist:boolean;showAlbum:boolean;
  showProgress:boolean;showTimes:boolean;showDuration:boolean;showIcon:boolean;
  showBg:boolean;showBorder:boolean;borderColor:string;showShadow:boolean;shadowSize:number;
- opacity:number;align:SpotifyAlign;gap:number;titleWrap:boolean;titleWeight:string;order:string;
+ opacity:number;align:SpotifyAlign;gap:number;titleWrap:boolean;titleWeight:string;order:string;oneLine:boolean;
  bg:string;titleColor:string;artistColor:string;albumColor:string;
  barBg:string;barColor:string;barHeight:number;barRadius:number;
  font:string;titleSize:number;artistSize:number;artSize:number;artRadius:number;
@@ -53,7 +53,7 @@ export const DEFAULT_SPOTIFY_DESIGN:SpotifyDesign={
  showArt:true,showTitle:true,showArtist:true,showAlbum:true,
  showProgress:true,showTimes:true,showDuration:true,showIcon:true,
  showBg:true,showBorder:false,borderColor:'#2a3140',showShadow:false,shadowSize:16,
- opacity:100,align:'auto',gap:12,titleWrap:false,titleWeight:'600',order:'title,artist,album',
+ opacity:100,align:'auto',gap:12,titleWrap:false,titleWeight:'600',order:'title,artist,album',oneLine:false,
  bg:'#0f1319',titleColor:'#ffffff',artistColor:'#b9c0cc',albumColor:'#8a92a3',
  barBg:'#2a3140',barColor:'#1ed760',barHeight:6,barRadius:3,
  font:'Segoe UI',titleSize:16,artistSize:13,artSize:88,artRadius:10,
@@ -142,6 +142,7 @@ export function normalizeSpotify(v:unknown):SpotifyConfig{
    gap:num(d.gap,2,24,dd.gap),titleWrap:bool(d.titleWrap,dd.titleWrap),
    titleWeight:pick(d.titleWeight,['400','500','600','700'] as const,dd.titleWeight),
    order:normalizeOrder(d.order),
+   oneLine:bool(d.oneLine,dd.oneLine),
    bg:color(d.bg,dd.bg),titleColor:color(d.titleColor,dd.titleColor),
    artistColor:color(d.artistColor,dd.artistColor),albumColor:color(d.albumColor,dd.albumColor),
    barBg:color(d.barBg,dd.barBg),barColor:color(d.barColor,dd.barColor),
@@ -272,6 +273,7 @@ export function ensureSpotifyStyle(){
  .bl-spy-album{font-size:var(--sp-asize);color:var(--sp-album);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
  .bl-spy[data-title=off] .bl-spy-title,.bl-spy[data-artist=off] .bl-spy-artist{display:none}
  .bl-spy[data-album=off] .bl-spy-album,.bl-spy[data-state=empty] .bl-spy-album{display:none}
+ .bl-spy[data-line=on] .bl-spy-artist,.bl-spy[data-line=on] .bl-spy-album{display:none}
  .bl-spy[data-align=center] .bl-spy-meta{text-align:center}
  .bl-spy[data-align=center] .bl-spy-icon{justify-content:center}
  .bl-spy[data-layout=stacked][data-align=left] .bl-spy-meta{text-align:left}
@@ -341,7 +343,7 @@ export function spotifyPlayer(host:HTMLElement):SpotifyPlayer{
   card.dataset.album=design.showAlbum?'on':'off';card.dataset.progress=design.showProgress?'on':'off';
   card.dataset.times=design.showTimes?'on':'off';card.dataset.duration=design.showDuration?'on':'off';
   card.dataset.icon=(design.showIcon&&!!t)?'on':'off';card.dataset.bg=design.showBg?'on':'off';
-  card.dataset.wrap=design.titleWrap?'on':'off';card.dataset.align=design.align;
+  card.dataset.wrap=design.titleWrap?'on':'off';card.dataset.line=design.oneLine?'on':'off';card.dataset.align=design.align;
   card.dataset.state=t?'music':'empty';card.dataset.paused=(t&&!t.playing)?'on':'off';
   slot.dataset.position=design.position;
   const vars=spotifyVars(design);
@@ -350,7 +352,7 @@ export function spotifyPlayer(host:HTMLElement):SpotifyPlayer{
   const rows:{title:HTMLElement;artist:HTMLElement;album:HTMLElement}={title:el.title,artist:el.artist,album:el.album};
   for(const k of design.order.split(','))el.meta.appendChild(rows[k as keyof typeof rows]??el.title);
   el.meta.appendChild(el.bar);el.meta.appendChild(el.times);el.meta.appendChild(el.icon);
-  el.title.textContent=t?t.name:design.emptyText;
+  el.title.textContent=design.oneLine&&t?`${t.artist} — ${t.name}`:(t?t.name:design.emptyText);
   el.artist.textContent=t?t.artist:design.emptyArtist;
   el.album.textContent=t?t.album:'';
   el.art.style.backgroundImage=t?.art?`url("${t.art.replace(/"/g,'%22')}")`:'';

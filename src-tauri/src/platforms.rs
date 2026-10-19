@@ -208,7 +208,10 @@ pub fn normalize_twitch(p:&Profile,v:&Value)->Option<Event>{
  let kind=match v["metadata"]["subscription_type"].as_str()?{
  "channel.chat.message"=>"chat","channel.chat.message_delete"=>"chat.delete","channel.chat.clear"=>"chat.clear","channel.chat.clear_user_messages"=>"chat.deleteUser","channel.follow"=>"follow","channel.subscribe"=>"subscription","channel.subscription.message"=>"resub","channel.subscription.gift"=>"gift","channel.cheer"=>"cheer","channel.raid"=>"raid","channel.channel_points_custom_reward_redemption.add"=>"redemption","channel.update"=>"category","stream.online"=>"live","stream.offline"=>"unlive",_=>return None};
  let user_id=payload["chatter_user_id"].as_str().or(payload["user_id"].as_str()).or(payload["target_user_id"].as_str()).or(payload["from_broadcaster_user_id"].as_str()).or(payload["broadcaster_user_id"].as_str()).unwrap_or("");
- if kind!="category"&&user_id==p.bot_id{return None}
+ let from_bot=!p.bot_id.is_empty()&&user_id==p.bot_id;
+ // A conta do bot fala no chat e o dono quer ver: o que é chat segue em frente
+ // (marcado como bot); o resto continua sendo ignorado como sempre.
+ if kind!="category"&&from_bot&&kind!="chat"{return None}
  let mut role="everyone";
  if let Some(badges)=payload["badges"].as_array(){
  for b in badges{if b["set_id"]=="subscriber"{role="subscriber"}}
@@ -221,6 +224,7 @@ pub fn normalize_twitch(p:&Profile,v:&Value)->Option<Event>{
  // chave da deduplicação). Os dois viajam separados: cumprir resgate usa o do
  // payload, e responder no fio usa o da mensagem.
  let mut data=payload.clone();
+ if from_bot{if data.is_object(){data["bot"]=true.into()}}
  if let Some(mid)=v["metadata"]["message_id"].as_str(){if data.is_object(){data["message_id"]=mid.into()}}
  Some(Event{id:v["metadata"]["message_id"].as_str()?.into(),profile_id:p.id.clone(),kind:kind.into(),user:payload["chatter_user_name"].as_str().or(payload["user_name"].as_str()).or(payload["target_user_name"].as_str()).or(payload["from_broadcaster_user_name"].as_str()).or(payload["broadcaster_user_name"].as_str()).unwrap_or("espectador").into(),user_id:user_id.into(),role:role.into(),message:payload["message"]["text"].as_str().or(payload["message"].as_str()).or(payload["message_id"].as_str()).or(payload["user_input"].as_str()).or(payload["category_name"].as_str()).unwrap_or("").into(),data,simulated:false,rehearsal:false})
 }
@@ -239,9 +243,12 @@ pub async fn youtube(rt:Arc<Runtime>,p:Profile)->Result<(),String>{
  let v:Value=res.json().await.map_err(|_|"Evento YouTube inválido")?;
  if !first {if let Some(items)=v["items"].as_array(){for item in items{
  let author=&item["authorDetails"];let snippet=&item["snippet"];
- let uid=author["channelId"].as_str().unwrap_or("");if uid==p.bot_id{continue}
+ let uid=author["channelId"].as_str().unwrap_or("");
  let kind=match snippet["type"].as_str().unwrap_or(""){"textMessageEvent"=>"chat","superChatEvent"|"superStickerEvent"=>"cheer","newSponsorEvent"|"memberMilestoneChatEvent"=>"subscription",_=>continue};
- rt.submit(Event{id:item["id"].as_str().unwrap_or("").into(),profile_id:p.id.clone(),kind:kind.into(),user:author["displayName"].as_str().unwrap_or("espectador").into(),user_id:uid.into(),role:if author["isChatOwner"]==true{"broadcaster"}else if author["isChatModerator"]==true{"moderator"}else if author["isChatSponsor"]==true{"subscriber"}else{"everyone"}.into(),message:snippet["displayMessage"].as_str().unwrap_or("").into(),data:snippet.clone(),simulated:false,rehearsal:false}).await?;
+ // O chat do canal (inclusive o escrito pela conta do bot) aparece no overlay;
+ // o resto da conta do bot continua sendo ignorado.
+ if uid==p.bot_id&&kind!="chat"{continue}
+ rt.submit(Event{id:item["id"].as_str().unwrap_or("").into(),profile_id:p.id.clone(),kind:kind.into(),user:author["displayName"].as_str().unwrap_or("espectador").into(),user_id:uid.into(),role:if author["isChatOwner"]==true{"broadcaster"}else if author["isChatModerator"]==true{"moderator"}else if author["isChatSponsor"]==true{"subscriber"}else{"everyone"}.into(),message:snippet["displayMessage"].as_str().unwrap_or("").into(),data:{let mut d=snippet.clone();if uid==p.bot_id{d["bot"]=true.into()}d},simulated:false,rehearsal:false}).await?;
  }}}
  first=false;page=v["nextPageToken"].as_str().unwrap_or("").into();
  tokio::time::sleep(Duration::from_millis(v["pollingIntervalMillis"].as_u64().unwrap_or(5000).max(1000))).await;
@@ -307,8 +314,11 @@ pub async fn youtube(rt:Arc<Runtime>,p:Profile)->Result<(),String>{
   // O canal pode trocar de jogo mesmo quando o bot é a própria conta.
   let own=json!({"metadata":{"subscription_type":"channel.update","message_id":"m2"},"payload":{"event":{"broadcaster_user_id":"456","broadcaster_user_name":"Streamer","category_name":"Just Chatting"}}});
   assert_eq!(normalize_twitch(&p,&own).map(|e|e.kind),Some("category".into()));
-  // Mas a fala do próprio bot continua de fora do contexto.
+  // A fala da conta do bot aparece no chat do overlay (o dono quer ver o que o
+  // bot fala), marcada como bot — as automações seguem ignorando.
   let chat=json!({"metadata":{"subscription_type":"channel.chat.message","message_id":"m3"},"payload":{"event":{"chatter_user_id":"456","chatter_user_name":"botinhos","message":{"text":"oi"}}}});
-  assert!(normalize_twitch(&p,&chat).is_none());
+  let said=normalize_twitch(&p,&chat).expect("a fala do bot chega ao chat do overlay");
+  assert_eq!(said.kind,"chat");
+  assert_eq!(said.data["bot"],true,"marcada como bot para o overlay e para os filtros");
  }
 }

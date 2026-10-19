@@ -104,6 +104,18 @@ pub fn test(rt:&Runtime,p:&Profile)->Result<(),String>{
  emit(rt,p,&cfg,ids,"sub",true);Ok(())
 }
 
+/// Mesmo teste, com uma tentativa de buscar os emotes do canal na hora: a lista
+/// vazia costuma ser cache frio, não canal desconectado.
+pub async fn test_fresh(rt:&crate::engine::Runtime,p:&Profile)->Result<(),String>{
+ match test(rt,p){
+  Err(err) if err.contains("Sem emotes")=>{
+   crate::emotes::refresh(rt,p).await;
+   match test(rt,p){Ok(())=>Ok(()),Err(_)=>Err("Sem emotes carregados: conecte o canal ao Twitch e tente de novo.".into())}
+  },
+  other=>other,
+ }
+}
+
 /// Guarda os totais da sessão no banco a cada tique do agendador.
 pub fn flush(rt:&Runtime){
  let snapshot:Vec<(String,HashMap<String,u64>)>={

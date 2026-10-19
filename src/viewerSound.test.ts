@@ -6,13 +6,20 @@ class FakeAudio {
  constructor(public src:string){sounds.push(this)}
 }
 afterEach(()=>{vi.useRealTimers();vi.unstubAllGlobals();sounds.length=0;stopViewerSounds()});
-it('serializa sons, aplica volume e limita reprodução a 15 segundos',async()=>{
+it('serializa sons, aplica volume e limita som iniciado a 60 segundos',async()=>{
  vi.stubGlobal('Audio',FakeAudio);vi.useFakeTimers();
  const a=playViewerSound({profileId:'p',src:'http://127.0.0.1:9876/asset?token=t&id=1',volume:0.4});
  const b=playViewerSound({profileId:'p',src:'http://127.0.0.1:9876/asset?token=t&id=2',volume:0.8});
  await vi.advanceTimersByTimeAsync(0);expect(sounds).toHaveLength(1);expect(sounds[0].volume).toBe(0.4);
  sounds[0].onended?.();await a;await vi.advanceTimersByTimeAsync(0);expect(sounds).toHaveLength(2);
- await vi.advanceTimersByTimeAsync(15000);await b;expect(sounds[1].pause).toHaveBeenCalled();expect(sounds[1].removeAttribute).toHaveBeenCalledWith('src');
+ // Começou a tocar: o teto passa a ser 60 s (falas longas de texto para voz cabem).
+ await vi.advanceTimersByTimeAsync(60000);await b;expect(sounds[1].pause).toHaveBeenCalled();expect(sounds[1].removeAttribute).toHaveBeenCalledWith('src');
+});
+it('som que nunca começa é encerrado em 15 segundos',async()=>{
+ vi.stubGlobal('Audio',class extends FakeAudio{play=vi.fn(()=>new Promise<void>(()=>{}))});vi.useFakeTimers();
+ const a=playViewerSound({profileId:'p',src:'parado.wav',volume:1});
+ await vi.advanceTimersByTimeAsync(15000);await a;
+ expect(sounds[0].pause).toHaveBeenCalled();
 });
 it('informa falha e libera a fila para o próximo som',async()=>{
  vi.stubGlobal('Audio',FakeAudio);vi.useFakeTimers();const a=playViewerSound({profileId:'p',src:'x.wav',volume:1});const rejected=expect(a).rejects.toThrow('reproduzir');

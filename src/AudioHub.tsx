@@ -27,6 +27,7 @@ export default function AudioHub({profileId,notify}:{profileId:string;notify:(s:
  const [copied,setCopied]=useState(false);
  const [lastPlay,setLastPlay]=useState<{kind:string;sink:string}|null>(null);
  const testId=useRef('');
+ const recent=useRef<{id:string;phase:string;detail?:string}[]>([]);
  const copyTimer=useRef(0);
 
  const load=useCallback(async()=>{
@@ -39,17 +40,20 @@ export default function AudioHub({profileId,notify}:{profileId:string;notify:(s:
  useEffect(()=>{
   if(!desktop)return;let active=true;const off:(()=>void)[]=[];
   const track=(p:Promise<()=>void>)=>{void p.then(f=>active?off.push(f):f())};
-  track(listen<{profileId:string;clients:number;claimed:boolean}>('audio.state',e=>{
+  track(listen<{profileId:string;clients:number;claimed:boolean}>('audio-state',e=>{
    if(e.payload.profileId===profileId)setSink(s=>({...s,clients:e.payload.clients,claimed:e.payload.claimed}));
   }));
-  track(listen<{profileId:string;id:string;phase:string;detail?:string}>('audio.feedback',e=>{
+  track(listen<{profileId:string;id:string;phase:string;detail?:string}>('audio-feedback',e=>{
    const p=e.payload;
+   // Confirmações ficam guardadas por alguns segundos: o "started" pode chegar
+   // antes de o RPC do teste responder com o id.
+   recent.current=[{id:p.id,phase:p.phase,detail:p.detail},...recent.current].slice(0,8);
    if(p.id!==testId.current)return;
    setFeedback({phase:p.phase,detail:p.detail});
   }));
   // Onde o último som foi parar: deixa explícito quando a saída pública (a
   // fonte do OBS) não estava disponível e o aplicativo tocou no lugar.
-  track(listen<{profileId:string;kind:string;sink:string}>('audio.play',e=>{
+  track(listen<{profileId:string;kind:string;sink:string}>('audio-play',e=>{
    const p=e.payload;
    if(p.profileId===profileId)setLastPlay({kind:p.kind||'sound',sink:p.sink||'local'});
   }));
@@ -67,11 +71,19 @@ export default function AudioHub({profileId,notify}:{profileId:string;notify:(s:
     setTesting(false);return;
    }
    testId.current=out.id;
-   setFeedback({phase:'sent'});
-   window.setTimeout(()=>{
-    setFeedback(f=>f&&f.phase==='sent'?{phase:'timeout'}:f);
+   // A confirmação pode ter chegado antes do RPC responder (o bipe é rápido):
+   // o buffer dos últimos feedbacks fecha a corrida.
+   const seen=recent.current.find(f=>f.id===out.id);
+   if(seen){
+    setFeedback({phase:seen.phase,detail:seen.detail});
     setTesting(false);
-   },12000);
+   }else{
+    setFeedback({phase:'sent'});
+    window.setTimeout(()=>{
+     setFeedback(f=>f&&f.phase==='sent'?{phase:'timeout'}:f);
+     setTesting(false);
+    },12000);
+   }
   }catch(e){notify(errorText(e));setTesting(false)}
  };
 
