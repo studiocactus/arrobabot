@@ -1252,6 +1252,14 @@ pub fn save_key(rt: &Runtime, profile: &str, value: &str) -> Result<Value, Strin
    "A chave veio com espaço, aspas ou quebra de linha: cole só a chave do e-mail, sem o rótulo e sem aspas.".into(),
   );
  }
+ // O rótulo sozinho ("clientKey") ou um pedaço da cadeia (como só a cauda do
+ // hífen) não passam: chave de verdade é longa. O diagnóstico mostra o tamanho
+ // salvo — sem expor o conteúdo — para conferir antes de conectar.
+ if !v.is_empty() && v.chars().count() < 15 {
+  return Err(
+   "Essa chave parece incompleta: menos de 15 caracteres não é uma chave da Control API. Copie a cadeia inteira do e-mail (ex.: controlapi-…), do começo ao fim, sem o rótulo.".into(),
+  );
+ }
  write_key(rt, profile, &v)?;
  Ok(json!({"hasKey": !v.is_empty(), "keyLen": v.chars().count()}))
 }
@@ -1871,6 +1879,21 @@ mod tests {
   assert!(stored_key(&rt, &p.id).is_none(), "nada foi guardado");
   let view = operation(&rt, &p.id, "voicemod.get", &json!({})).await.unwrap();
   assert_eq!(view["hasKey"], json!(false));
+ }
+
+ // Rótulo sozinho ("clientKey", 9 letras) ou um pedaço da chave não salvam.
+ #[tokio::test]
+ async fn a_label_or_key_fragment_is_refused_for_being_too_short() {
+  let (_dir, rt, p) = setup().await;
+  for short in ["clientKey", "controlapi", "hUNzyKZa4"] {
+   let err = save_key(&rt, &p.id, short).unwrap_err();
+   assert!(err.contains("incompleta"), "{short} => {err}");
+  }
+  assert!(stored_key(&rt, &p.id).is_none(), "nada foi guardado");
+  // A cadeia inteira passa — inclusive o formato curto real da Voicemod
+  // ("controlapi-" + cauda), que tem 20 caracteres.
+  let saved = save_key(&rt, &p.id, "controlapi-hUNzyKZa4").unwrap();
+  assert_eq!(saved["keyLen"], json!(20));
  }
 
  #[tokio::test]

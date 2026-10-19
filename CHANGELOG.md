@@ -1,5 +1,34 @@
 # Histórico de atualizações
 
+# BotLive 0.14.2
+
+## O que mudou
+
+**Salvar uma chave da Control API incompleta agora é recusado na hora, com o que recopiar — a armadilha que gerou o 401 do Voicemod (rótulo “clientKey” ou só a cauda depois do hífen) não passa mais nem chega ao cofre.**
+
+- **Trava de chave incompleta.** Ao salvar a chave do Voicemod, menos de 15 caracteres é recusado com “essa chave parece incompleta… copie a cadeia inteira (ex.: `controlapi-…`), do começo ao fim, sem o rótulo”. O diagnóstico continua mostrando o **tamanho** da chave guardada (sem expor o conteúdo) para conferir antes de conectar.
+- **O caso real vira teste.** O episódio: o e-mail traz `controlapi-…`, o duplo clique **para no hífen** e guarda só a cauda de 9 letras — a tela mostrava “a chave guardada tem 9 caracteres” e o Voicemod respondia 401. A regressão cobre o rótulo (`clientKey`), o prefixo sozinho (`controlapi`) e a só-cauda (`hUNzyKZa4`) recusados, e a cadeia inteira curta real (`controlapi-hUNzyKZa4`, 20 caracteres) aceita.
+- As demais proteções continuam: caracteres invisíveis do e-mail são limpos, e chave com espaço/aspas/quebra (rótulo colado junto) segue recusada com a orientação antiga.
+
+## Como usar
+
+Cole a chave **inteira** no campo da Control API (Voicemod → Etapa 1 → Alterar conexão e diagnóstico), incluindo o `controlapi-` do começo, e confira o tamanho exibido antes de **Conectar**. Se a tela disser “incompleta”, é sinal de que a cópia pegou só parte — recopie do começo ao fim (duplo clique corta no hífen).
+
+## Validação
+
+Executada nesta máquina, nesta versão:
+
+- `cargo test` (src-tauri, `-j 1`): **356 testes aprovados, 2 ignorados, 0 falhas** — inclui o novo `a_label_or_key_fragment_is_refused_for_being_too_short` com o formato real de chave da Voicemod.
+- `npm run check` (tsc) e `npm test` (vitest, 142): **limpos** (nada de frontend mudou nesta rodada).
+- `npm run update:check`: válido.
+
+## Limitações
+
+- A trava é de **tamanho e forma de cópia** (não inventamos o formato oficial da chave): uma chave real mais curta que 15 caracteres seria recusada — improvável, e a mensagem diz o que fazer. Se a Voicemod emitir chaves fora desse padrão, o ajuste é trivial.
+- Se a 401 persistir **com a chave inteira salva**, os próximos suspeitos são a conta (a chave pedida numa conta e o Voicemod logado em outra) e a Control API desativada no aplicativo — caminhos já cobertos pela tabela de diagnóstico.
+
+---
+
 # BotLive 0.14.1
 
 ## O que mudou
