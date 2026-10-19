@@ -1,5 +1,36 @@
 # Histórico de atualizações
 
+# BotLive 0.14.1
+
+## O que mudou
+
+**Correção de raiz de uma corrida rara no campo de mensagem: o texto que você digita (ou cola) nunca mais pode ser reescrito por um render atrasado — e, na automação de testes, isso eliminava uma duplicação de conteúdo que reprovou o pipeline da 0.14.0.**
+
+- **Campo de mensagem com texto vivo.** O editor de mensagens das etapas de fluxo (respostas, timer, automações) deixou de ser reescrito pelo React a cada render: enquanto você edita, **o texto no campo é a fonte da verdade**; a configuração carrega quando o campo não está em uso (trocar de etapa, abrir um preset). Inserir variável continua igual — o marcador entra na posição do cursor, no campo e no estado.
+- **A corrida, explicada.** Em máquinas lentas, um render atrasado podia devolver o valor antigo do campo no meio de um preenchimento programático; a automação de testes caía num fallback que **insere no cursor** em vez de substituir, e o resultado era texto duplicado (ex.: "Olá, {{arg0}}Olá, "). O fenômeno apareceu **uma vez em ~90 execuções** na CI da 0.14.0, foi reproduzido localmente sob estresse (1 em 88) e agora está eliminado pela raiz — não mascarado no teste.
+- **Teste endurecido no ponto certo.** O teste do catálogo de variáveis passou a conferir que o preenchimento assentou antes de inserir, para qualquer corrida futura falhar perto da causa e não longe dela.
+
+## Como usar
+
+Nada de novo: os mesmos campos, as mesmas inserções de variável. A diferença é que o texto digitado não some nem duplica em nenhuma condição de máquina lenta.
+
+## Validação
+
+Executada nesta máquina, nesta versão:
+
+- **Estresse do alvo da corrida**: `app.spec.ts --repeat-each=12` — **132 execuções aprovadas** (antes da correção, a duplicação aparecia ~1 em 88).
+- Playwright completo: **90 testes aprovados**, incluindo a auditoria geométrica nas cinco larguras com 0 achados. `npm test` (vitest): **142 aprovados**. `npm run check` (tsc): limpo. Console sem erros.
+- `npm run update:check`: válido.
+
+**Contexto do pipeline:** a CI da 0.14.0 (commit `b431c78`) foi **reprovada por essa corrida** — os testes e o build passaram, e a publicação **não** chegou a acontecer (nada foi lançado como release). Esta versão traz a correção para o próximo pipeline.
+
+## Limitações
+
+- A corrida era do campo de mensagem em condições de render atrasado; outros campos controlados do aplicativo não apresentaram o sintoma e não foram reescritos nesta rodada.
+- Nada aqui atesta integrações reais: a validação é de comportamento de interface, com os mocks da prévia.
+
+---
+
 # BotLive 0.14.0
 
 ## O que mudou

@@ -170,6 +170,9 @@ test('catálogo de variáveis insere marcador e informa limite da prévia web',a
  await expect(page.locator('.message-readable')).toContainText('Nome da pessoa');
  await page.screenshot({path:'artifacts/variables-message.png',fullPage:true});
  await response.fill('Olá, ');
+ // Espera o preenchimento assentar antes de abrir o catálogo: o valor é lido
+ // ao vivo na inserção, e uma corrida de render não pode passar despercebida.
+ await expect(response).toHaveValue('Olá, ');
  await page.getByText('Inserir variável e testar mensagem',{exact:true}).click();
  await page.getByRole('combobox',{name:'Categoria',exact:true}).selectOption('Mensagem');
  await page.getByLabel('Buscar informação',{exact:true}).fill('primeira');
@@ -178,6 +181,7 @@ test('catálogo de variáveis insere marcador e informa limite da prévia web',a
  await expect(response).toHaveValue('Olá, {{arg0}}');
  await expect(page.locator('.variable-done')).toContainText('{{arg0}}');
  await response.fill('Olá, ');
+ await expect(response).toHaveValue('Olá, ');
  await page.locator('.variable-card-more').click();
  const options=page.locator('.variable-options');
  await expect(options).toBeVisible();
