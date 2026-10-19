@@ -1,5 +1,36 @@
 # Histórico de atualizações
 
+# BotLive 0.16.1
+
+## O que mudou
+
+**A lista de vozes do Voicemod deixa de chegar vazia: o aplicativo lia os campos errados do formato oficial (`id`/`friendlyName` vieram como `voiceID`/`name`) — a conexão funcionava, mas as opções apareciam em branco.**
+
+- **Vozes aparecem de verdade.** A documentação oficial da Control API manda a lista como `{"id":"baby","friendlyName":"Baby","enabled":true}` e o nosso leitor esperava outros nomes de campo — por isso o seletor de vozes (Etapa 2 e regras da Etapa 3) abria com linhas em branco. Cada voz agora sai normalizada com **os dois formatos** (`id`/`friendlyName` e `voiceID`/`name`), então a tela, o motor e os rótulos passam a ler a mesma coisa.
+- **Contrato travado no teste.** A regressão usa o **exato exemplo da documentação oficial** (incluindo `currentVoice` na raiz) e garante que o que a tela lê existe junto do que o núcleo lê; o mock dos testes também passa a responder no formato oficial.
+- **Seletor sem mistério.** Quando não há voz carregada, o seletor explica: “Nenhuma voz carregada — atualize as vozes em Alterar conexão”, em vez de uma lista em branco.
+
+## Como usar
+
+Depois de atualizar: **Voicemod → Etapa 1 → Alterar conexão e diagnóstico → Atualizar vozes** (ou Desconectar e Conectar de novo) e a lista completa aparece na **Etapa 2** e nos campos **Voz do Voicemod** das regras. Depois é só: testar a voz na Etapa 2 (fale durante o teste) e criar as regras na Etapa 3.
+
+## Validação
+
+Executada nesta máquina, nesta versão:
+
+- `cargo test` (src-tauri, `-j 1`): **360 testes aprovados, 2 ignorados, 0 falhas** — incluindo o novo `read_voices_aceita_o_formato_oficial_e_preenche_o_que_o_app_le` com o payload exato da referência oficial.
+- `npm run check` (tsc): **limpo**. `npm test` (vitest): **143 aprovados**. Playwright (telas de voz e app): **16 aprovados**.
+- `npm run update:check`: válido.
+
+**Pendente de validação externa:** a lista de vozes com o **seu** Voicemod (formato real confirmado pela documentação oficial e pela sua captura de tela); se ainda faltar alguma voz que exista no Voicemod, me mande o print do diagnóstico.
+
+## Limitações
+
+- A normalização cobre os formatos documentados (`id`/`friendlyName` e `voiceID`/`name`); se o Voicemod mudar de formato de novo, o teste oficial falha primeiro e o ajuste é localizado.
+- Vozes marcadas como não habilitadas pela licença continuam fora da lista (como na própria tela do Voicemod).
+
+---
+
 # BotLive 0.16.0
 
 ## O que mudou

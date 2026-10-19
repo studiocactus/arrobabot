@@ -224,7 +224,7 @@ export default function Voicemod({profileId,notify}:{profileId:string;notify:(s:
    <div className="form-grid">
     <Field label="Voz para o teste" hint="Lista real do Voicemod, com as vozes da sua licença.">
      <select value={testVoice} disabled={!connected||busy} onChange={e=>setTestVoice(e.target.value)}>
-      <option value="">Escolha a voz…</option>
+      {voices.length?<option value="">Escolha a voz…</option>:<option value="" disabled>Nenhuma voz carregada — atualize as vozes em “Alterar conexão”</option>}
       {voices.map(v=><option key={v.voiceID} value={v.voiceID}>{v.name}</option>)}
      </select>
     </Field>

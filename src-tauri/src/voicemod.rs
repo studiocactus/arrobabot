@@ -318,6 +318,23 @@ fn read_voices(v: &Value) -> (Vec<Value>, Option<String>) {
   .or_else(|| v["voices"].as_array())
   .cloned()
   .unwrap_or_default();
+ // Formato oficial: id/friendlyName. O aplicativo também lê voiceID/name —
+ // cada entrada sai com os dois nomes para ninguém ler campo vazio.
+ let arr: Vec<Value> = arr
+  .into_iter()
+  .map(|mut x| {
+   if x["voiceID"].as_str().is_none() {
+    if let Some(id) = x["id"].as_str() {
+     x["voiceID"] = json!(id);
+    }
+   }
+   if x["name"].as_str().is_none() {
+    let n = x["friendlyName"].as_str().or(x["voiceName"].as_str()).unwrap_or("");
+    x["name"] = json!(n);
+   }
+   x
+  })
+  .collect();
  // A referência descreve `currentVoice` dentro de `actionObject`, mas o exemplo gerado
  // traz no raiz. Aceita as duas formas em vez de assumir uma só.
  let cur = v["actionObject"]["currentVoice"]
@@ -1426,7 +1443,7 @@ pub(crate) mod testkit {
     let desc = if code == 200 { "Authorized" } else { "Unauthorized" };
     vec![tagged(m, json!({"action":"registerClient","payload":{"status":{"code":code,"description":desc}}}), id).to_string()]
    },
-   "getVoices" => vec![tagged(m, json!({"actionType":"getVoices","actionObject":{"voices":m.voices.lock().unwrap().clone(),"currentVoice":m.voice.lock().unwrap().clone()}}), id).to_string()],
+   "getVoices" => vec![tagged(m, json!({"actionType":"getVoices","actionObject":{"voices":m.voices.lock().unwrap().clone()},"currentVoice":m.voice.lock().unwrap().clone()}), id).to_string()],
    "getCurrentVoice" => vec![tagged(m, json!({"actionType":"getCurrentVoice","actionObject":{"voiceID":m.voice.lock().unwrap().clone(),"parameters":[]}}), id).to_string()],
    "getVoiceChangerStatus" => vec![tagged(m, json!({"actionType":"toggleVoiceChanger","actionObject":{"value":*m.changer.lock().unwrap()}}), id).to_string()],
    "getHearMyselfStatus" => vec![tagged(m, json!({"actionType":"toggleHearMyVoice","actionObject":{"value":*m.hear.lock().unwrap()}}), id).to_string()],
@@ -1883,6 +1900,24 @@ mod tests {
   assert!(stored_key(&rt, &p.id).is_none(), "nada foi guardado");
   let view = operation(&rt, &p.id, "voicemod.get", &json!({})).await.unwrap();
   assert_eq!(view["hasKey"], json!(false));
+ }
+
+ #[test]
+ fn read_voices_aceita_o_formato_oficial_e_preenche_o_que_o_app_le() {
+  // Exato exemplo da referência oficial: id/friendlyName e currentVoice no raiz.
+  let v=json!({"actionType":"getVoices","actionObject":{"voices":[{"id":"baby","friendlyName":"Baby","enabled":true,"isCustom":false,"favorited":false,"isNew":false,"bitmapChecksum":"9af56b7cb7a87db7b9d4e93852599981"}]},"currentVoice":"nofx"});
+  let (voices,cur)=read_voices(&v);
+  assert_eq!(cur.as_deref(),Some("nofx"));
+  assert_eq!(voices.len(),1);
+  // O que a tela lê (voiceID/name) existe junto do que o núcleo lê (id/friendlyName).
+  assert_eq!(voices[0]["voiceID"],"baby");
+  assert_eq!(voices[0]["name"],"Baby");
+  assert_eq!(voices[0]["id"],"baby","o id oficial continua no lugar");
+  assert_eq!(voices[0]["friendlyName"],"Baby");
+  // Formato antigo (voiceID/name) segue funcionando, sem duplicar campos.
+  let (voices,_) = read_voices(&json!({"voices":[{"voiceID":"robot","name":"Robô"}]}));
+  assert_eq!(voices[0]["voiceID"],"robot");
+  assert_eq!(voices[0]["name"],"Robô");
  }
 
  // Rótulo sozinho ("clientKey", 9 letras) ou um pedaço da chave não salvam.

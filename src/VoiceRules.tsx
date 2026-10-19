@@ -160,7 +160,7 @@ export default function VoiceRules({profileId,notify,voices}:{profileId:string;n
      )}
      <Field label="Voz do Voicemod" hint="Só vozes de verdade da sua licença — “Efeito desligado” não serve.">
       <select aria-label="Voz do Voicemod" value={r.voiceId} disabled={busy} onChange={e=>{const next=patch(i,{voiceId:e.target.value});void save(next)}}>
-       <option value="">Escolha a voz…</option>
+       {voices.length?<option value="">Escolha a voz…</option>:<option value="" disabled>Nenhuma voz carregada — atualize as vozes na tela Voicemod</option>}
        {voices.map(v=><option key={v.voiceID} value={v.voiceID}>{v.name}</option>)}
       </select>
      </Field>
