@@ -1,4 +1,59 @@
-import type {Action} from './types';
+import type {Action,Flow,Trigger} from './types';
+import {triggers} from './types';
+
+/** Tipos de gatilho cujo `pattern` guarda um valor estável: o texto que dispara
+ *  ou o ID da recompensa da Twitch. Só esses preservam o padrão ao salvar — e
+ *  "Qualquer resgate" é a escolha explícita de deixar vazio. */
+export const patternKinds=new Set(['command','contains','voice','mention','redemption']);
+
+/** Gatilho pronto para salvar: timer limpa seus campos e tipos sem padrão
+ *  também; recompensa (ID estável) e textos seguem intactos — nunca zerados
+ *  silenciosamente, o que viraria "Qualquer resgate" sem ninguém pedir. */
+export function triggerForSave(t:Trigger):Trigger{
+ if(t.kind==='timer')return {...t,permission:'everyone',cooldown:0,userCooldown:0,pattern:'',patternName:''};
+ return patternKinds.has(t.kind)?t:{...t,pattern:'',patternName:''};
+}
+
+/** Rótulo do bloco do gatilho no canvas: reflete o estado real salvo. */
+export function triggerLabel(t:Trigger):string{
+ if(t.kind==='redemption'){
+  return t.pattern?`⚡ Resgate: ${t.patternName||t.pattern}`:'⚡ Qualquer resgate';
+ }
+ return '⚡ '+(triggers[t.kind]||t.kind);
+}
+
+type DupNode={id:string;[k:string]:unknown};
+type DupEdge={id?:string;source:string;target:string;[k:string]:unknown};
+
+/**
+ * Duplica uma automação numa cópia independente:
+ * - IDs novos para o fluxo e para blocos/conexões, com as pontas remapeadas
+ *   (o bloco `trigger` mantém esse id — é a âncora semântica do editor);
+ * - referências externas preservadas como estão (recompensa, voz, arquivos);
+ * - nada de objeto compartilhado com o original (clone profundo);
+ * - nada de histórico, fila, execução ou contadores — a cópia nasce zerada;
+ * - sempre **desativada**, para nunca disparar em dobro com o original.
+ */
+export function duplicateFlow(flow:Flow):Flow{
+ const copy:Flow=structuredClone(flow);
+ copy.id=crypto.randomUUID();
+ copy.name=`Cópia de ${flow.name}`;
+ copy.enabled=false;
+ const layout=copy.layout as {nodes?:DupNode[];edges?:DupEdge[]}|undefined;
+ if(layout&&Array.isArray(layout.nodes)){
+  const ids=new Map<string,string>();
+  for(const n of layout.nodes){
+   if(n.id==='trigger')continue;
+   const nid=crypto.randomUUID();ids.set(n.id,nid);n.id=nid;
+  }
+  for(const e of layout.edges||[]){
+   if(typeof e.id==='string')e.id=crypto.randomUUID();
+   e.source=ids.get(e.source)||e.source;
+   e.target=ids.get(e.target)||e.target;
+  }
+ }
+ return copy;
+}
 export type FlowNode={id:string;data:{action?:Action;[key:string]:unknown};position:{x:number;y:number}};
 type FlowEdge={source:string;target:string};
 export function chainIds(nodes:FlowNode[],edges:FlowEdge[]):string[]{

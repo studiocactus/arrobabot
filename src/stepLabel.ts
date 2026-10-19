@@ -15,7 +15,7 @@ export function stepLabel(a:Action):string{const kind=a.kind;
  if(kind==='condition')return '◆ '+(condVarLabel(a.condVar||'')||'variável')+' '+condOpLabel(a.condOp||'equals')+(a.condValue?' '+a.condValue:'');
  if(kind==='wait')return '◷ '+durationLabel(a.value||0);
  if(kind==='obs')return '◉ '+obsOpLabel(a.obsOp||'mute')+(a.obsTarget?' · '+a.obsTarget:'');
- if(kind==='voiceFx'){const legacy=voiceEffects[a.target||''];const name=a.text&&!voiceEffects[a.text]?a.text:(legacy||a.text||a.target||'Voz');return '🎙 '+name+(a.value>0?' · '+a.value+'s':'')}
+ if(kind==='voiceFx'){const legacy=voiceEffects[a.target||''];const name=a.text&&!voiceEffects[a.text]?a.text:(legacy||a.text||a.target||'Voz');return '🎙 Voz: '+name+(a.value>0?' · '+a.value+'s':' · até cancelar')}
  if(kind==='twitch')return '⚡ '+twitchKindLabel(a.twOp||'game');
  if(kind==='punish')return '🔨 '+(punishModes[a.punish||'timeout']||a.punish||'Punir');
  if(kind==='redemption')return '⚡ Resgate';

@@ -3,13 +3,14 @@ import {useState,useCallback,useEffect,useRef,type ReactNode} from 'react';
 import {ReactFlow,Background,Controls,MiniMap,addEdge,useNodesState,useEdgesState,useReactFlow,useStore,type Connection,type Node,type Edge} from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import {Plus,Save,Trash2,Zap,Play,Map as MapIcon} from 'lucide-react';
-import {actions,triggers,newAction,punishModes,punishTargets,twOps,condOps,condFalse,voiceEffects,type Flow,type Action,type AIConfig} from './types';
+import {actions,triggers,newAction,punishModes,punishTargets,twOps,condOps,condFalse,voiceEffects,type Flow,type Action,type Trigger,type AIConfig} from './types';
 import {orderedActions,moveAction,chainIds,stepBounds,fullChain,appendStepPlan,insertStepPlan,type StepPlan} from './flow';
 import {StepMenu,FlowHelp} from './FlowChrome';
 import {readPrefs,writePrefs} from './editorPrefs';
 import {Field,Toggle} from './components';
 import {VariableTarget} from './Variables';
 import {stepLabel} from './stepLabel';
+import {triggerForSave,triggerLabel} from './flow';
 import VariablePicker from './VariablePicker';
 import MessageEditor from './MessageEditor';
 import {SendPicker,AudioPicker} from './FlowOptions';
@@ -71,22 +72,22 @@ function StepReveal({target,restZoom}:{target:{id:string;x:number;y:number}|null
 /** Seção recolhível do painel lateral: agrupa campos parecidos e sai do caminho quando fechada. */
 type Reward={id:string;title:string;cost:number;enabled:boolean;paused:boolean};
 type Rewards={channel:string;rewards:Reward[]};
-function RewardPicker({profileId,value,onChange}:{profileId:string;value:string;onChange:(id:string)=>void}){
+function RewardPicker({profileId,value,onChange}:{profileId:string;value:string;onChange:(id:string,name:string)=>void}){
  const [rewards,setRewards]=useState<Reward[]>([]);const [channel,setChannel]=useState('');const [at,setAt]=useState('');const [error,setError]=useState('');const [loading,setLoading]=useState(false);
  const [creating,setCreating]=useState(false);const [ntitle,setNtitle]=useState('');const [ncost,setNcost]=useState(100);const [ninput,setNinput]=useState(false);const [busy,setBusy]=useState(false);
  const load=useCallback(()=>{setLoading(true);setError('');api<Rewards>('twitch.rewards',{profileId}).then(r=>{setRewards(r.rewards||[]);setChannel(r.channel||'');setAt(new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}))}).catch(()=>setError('Não foi possível listar as recompensas. Confira a conexão e a autorização da conta do canal.')).finally(()=>setLoading(false))},[profileId]);
  useEffect(()=>{if(desktop)void load()},[load]);
- const create=()=>{setBusy(true);setError('');api<Reward>('twitch.reward.create',{profileId,title:ntitle,cost:ncost,userInput:ninput}).then(r=>{setRewards(rs=>[...rs,r]);onChange(r.id);setCreating(false);setNtitle('');setNcost(100);setNinput(false)}).catch(e=>setError(errorText(e))).finally(()=>setBusy(false))};
+ const create=()=>{setBusy(true);setError('');api<Reward>('twitch.reward.create',{profileId,title:ntitle,cost:ncost,userInput:ninput}).then(r=>{setRewards(rs=>[...rs,r]);onChange(r.id,r.title);setCreating(false);setNtitle('');setNcost(100);setNinput(false)}).catch(e=>setError(errorText(e))).finally(()=>setBusy(false))};
  if(!desktop)return <p className="help">A lista de recompensas aparece no aplicativo desktop.</p>;
  const found=rewards.find(r=>r.id===value);
- return <><Field label="Recompensa" hint="Identidade por ID: renomear na Twitch não quebra. Vazio vale qualquer resgate."><div className="row">
-  <select value={value} onChange={e=>onChange(e.target.value)} aria-label="Recompensa da Twitch"><option value="">Qualquer resgate</option>{rewards.map(r=><option key={r.id} value={r.id}>{r.title} · {r.cost} pts{r.enabled===false?' (desativada)':''}{r.paused?' (pausada)':''}</option>)}{value&&!found&&<option value={value}>Resgate guardado fora desta lista — escolha de novo</option>}</select>
+ return <><Field label="Recompensa" hint="Vínculo pelo ID: renomear na Twitch não quebra. “Qualquer resgate” é uma escolha — só quando você quiser atender a todos."><div className="row">
+  <select value={value} onChange={e=>{const r=rewards.find(x=>x.id===e.target.value);onChange(e.target.value,r?.title||'')}} aria-label="Recompensa da Twitch"><option value="">Qualquer resgate</option>{rewards.map(r=><option key={r.id} value={r.id}>{r.title} · {r.cost} pts{r.enabled===false?' (desativada)':''}{r.paused?' (pausada)':''}</option>)}{value&&!found&&<option value={value}>Resgate guardado fora desta lista — atualize ou escolha outro</option>}</select>
   <button type="button" onClick={load} disabled={loading||busy}>{loading?'Buscando…':'Atualizar lista'}</button>
   <button type="button" onClick={()=>setCreating(v=>!v)} disabled={busy}>{creating?'Fechar':'Criar resgate'}</button>
  </div></Field>{creating&&<div className="form-grid">
   <Field label="Nome do resgate" hint="Como aparece na Twitch, no máximo 45 caracteres."><input value={ntitle} maxLength={45} placeholder="Ex.: Voz Fina" onChange={e=>setNtitle(e.target.value)}/></Field>
   <Field label="Custo em pontos" hint="Mínimo 1; é o que a pessoa paga para resgatar."><input type="number" min={1} max={1000000} step={1} value={ncost} onChange={e=>setNcost(Number(e.target.value)||0)}/></Field>
- </div>}{creating&&<div className="list-row"><div><strong>Pedir mensagem no resgate</strong><small>Quem resgata escreve um texto junto — útil para pedir a frase da live.</small></div><Toggle label="Pedir mensagem no resgate" checked={ninput} onChange={setNinput}/></div>}{creating&&<div className="row"><button className="primary" type="button" disabled={busy||!ntitle.trim()||ncost<1} onClick={create}>{busy?'Criando…':'Criar e escolher'}</button></div>}{error&&<p className="help">{error}</p>}{!error&&!loading&&rewards.length>0&&<p className="help">{rewards.length} recompensa{rewards.length>1?'s':''} do canal {channel} · lista atualizada às {at}.</p>}{!error&&!loading&&!rewards.length&&<p className="help">Nenhuma recompensa no canal {channel} ainda. Crie uma aqui embaixo ou em Pontos de canal na Twitch.</p>}{value&&!found&&<p className="help">O resgate guardado não está nesta lista: se você trocou de canal ou apagou o resgate, escolha de novo. Renomear na Twitch não quebra nada, pois a ligação é pelo id.</p>}</>;
+ </div>}{creating&&<div className="list-row"><div><strong>Pedir mensagem no resgate</strong><small>Quem resgata escreve um texto junto — útil para pedir a frase da live.</small></div><Toggle label="Pedir mensagem no resgate" checked={ninput} onChange={setNinput}/></div>}{creating&&<div className="row"><button className="primary" type="button" disabled={busy||!ntitle.trim()||ncost<1} onClick={create}>{busy?'Criando…':'Criar e escolher'}</button></div>}{error&&<p className="help">{error}</p>}{!error&&!loading&&rewards.length>0&&<p className="help">{rewards.length} recompensa{rewards.length>1?'s':''} do canal {channel} · lista atualizada às {at}.</p>}{!error&&!loading&&!rewards.length&&<p className="help">Nenhuma recompensa no canal {channel} ainda. Crie uma aqui embaixo ou em Pontos de canal na Twitch.</p>}{value&&!found&&<p className="help">O resgate salvo não está na lista atual (o vínculo é pelo ID, então renomear na Twitch não quebra). Ele continua valendo — clique em <strong>Atualizar lista</strong> ou escolha outro se você apagou o resgate. Nada muda para “Qualquer resgate” sozinho.</p>}</>;
 }
 function Section({title,open=false,children}:{title:string;open?:boolean;children:ReactNode}){return <details open={open}><summary>{title}</summary>{children}</details>}
 function WaitEditor({value,onChange}:{value:number;onChange:(ms:number)=>void}){
@@ -111,7 +112,7 @@ export default function FlowEditor({flow,platform='twitch',ai,onSave,onTest,intr
  const [sendType,setSendType]=useState(flow.sendType||'chat');const [sendColor,setSendColor]=useState(flow.sendColor||'primary');const [replyTo,setReplyTo]=useState(!!flow.replyTo);
  const [audio,setAudio]=useState(flow.audio||'');const [audioVolume,setAudioVolume]=useState(flow.audioVolume??1);const [obsTest,setObsTest]=useState('');
  const layout=flow.layout as {nodes?:Node<Data>[];edges?:Edge[]}|undefined;
- const startNodes:Node<Data>[]=layout?.nodes?layout.nodes.map(n=>n.data.action?{...n,data:{...n.data,label:stepLabel(n.data.action)}}:n):[{id:'trigger',position:{x:60,y:140},data:{label:'⚡ '+(triggers[flow.trigger.kind]||flow.trigger.kind)},type:'input'},...flow.actions.map((action,i)=>({id:'action-'+i,position:{x:60,y:140+(i+1)*90},data:{label:stepLabel(action),action}}))];
+ const startNodes:Node<Data>[]=layout?.nodes?layout.nodes.map(n=>n.data.action?{...n,data:{...n.data,label:stepLabel(n.data.action)}}:n):[{id:'trigger',position:{x:60,y:140},data:{label:triggerLabel(flow.trigger)},type:'input'},...flow.actions.map((action,i)=>({id:'action-'+i,position:{x:60,y:140+(i+1)*90},data:{label:stepLabel(action),action}}))];
  const startEdges:Edge[]=layout?.edges||flow.actions.map((_,i)=>({id:'e'+i,source:i===0?'trigger':'action-'+(i-1),target:'action-'+i,animated:true}));
  const [nodes,setNodes,onNodesChange]=useNodesState(startNodes);
  const [edges,setEdges,onEdgesChange]=useEdgesState(startEdges);
@@ -154,6 +155,9 @@ function move(dir:-1|1){try{const ns=nodes.map(n=>({id:n.id,position:{x:n.positi
  function addStep(){const id=crypto.randomUUID();try{applyStep(appendStepPlan(nodes,edges,id,flowSizes()),id)}catch(e){setError(friendlyError(e))}}
  function insertStep(){const id=crypto.randomUUID();try{applyStep(insertStepPlan(nodes,edges,selected,id,flowSizes()),id)}catch(e){setError(friendlyError(e))}}
  const keepText=(kind:string)=>["command","contains","voice","mention"].includes(kind);
+ /** Troca do gatilho com o rótulo do bloco sempre em dia: o canvas mostra o
+  *  estado real salvo, nunca o nome do fluxo. */
+ function changeTrigger(t:Trigger){setTrigger(t);setNodes(ns=>ns.map(n=>n.id==='trigger'?{...n,data:{...n.data,label:triggerLabel(t)}}:n))}
 function switchKind(current:Action,next:string){const base:Action={...current,kind:next};
   if(next==='ai.generate'&&!base.target.startsWith('local.'))base.target='local.aiResponse';
   if(next==='punish'){if(!['sender','first','random'].includes(base.target))base.target='sender';if(!base.punish)base.punish='timeout';if(base.value<1)base.value=60}
@@ -161,13 +165,13 @@ function switchKind(current:Action,next:string){const base:Action={...current,ki
   if(next==='twitch'){if(!base.twOp)base.twOp='game';if(base.value<1)base.value=60}
   if(next==='wait'&&!(base.value>=1))base.value=3000
   if(next==='obs'){if(!base.obsOp)base.obsOp='mute';if(!base.obsTarget)base.obsTarget=''}
-  if(next==='voiceFx'){if(!voiceEffects[base.target])base.target='fina';if(!(base.value>=0))base.value=15}
+  if(next==='voiceFx'){base.target='';base.text='';if(!(base.value>=0))base.value=15}
   update(base)}
  async function save(){
   const invalid=nodes.find(n=>n.data.action&&actionProblem(n.data.action));
   if(invalid){setNodes(ns=>ns.map(n=>n.id===invalid.id?{...n,className:'step-invalid'}:n));setSelected(invalid.id);return}
   setNodes(ns=>ns.map(n=>n.className==='step-invalid'?{...n,className:undefined}:n));
-  try{setBusy(true);setError(null);const ordered=orderedActions(nodes,edges);await onSave({...flow,name,trigger:trigger.kind==='timer'?{...trigger,permission:'everyone',cooldown:0,userCooldown:0,pattern:''}:keepText(trigger.kind)?trigger:{...trigger,pattern:''},counter:trigger.kind==='command'&&counter,timerSeconds,sendType,sendColor,replyTo,audio,audioVolume,actions:ordered,layout:{nodes,edges}})}catch(e){setError(friendlyError(e))}finally{setBusy(false)}}
+  try{setBusy(true);setError(null);const ordered=orderedActions(nodes,edges);await onSave({...flow,name,trigger:triggerForSave(trigger),counter:trigger.kind==='command'&&counter,timerSeconds,sendType,sendColor,replyTo,audio,audioVolume,actions:ordered,layout:{nodes,edges}})}catch(e){setError(friendlyError(e))}finally{setBusy(false)}}
  return <div className="flow-editor">
  <div className="flow-toolbar"><input aria-label="Nome do fluxo" value={name} onChange={e=>setName(e.target.value)}/><FlowHelp note={intro}/>{onTest&&<button type="button" data-test-flow disabled={busy} onClick={()=>{try{onTest({...flow,name,trigger,counter:trigger.kind==='command'&&counter,timerSeconds,sendType,sendColor,replyTo,audio,audioVolume,actions:orderedActions(nodes,edges),layout:{nodes,edges}})}catch(e){setError(friendlyError(e))}}}><Play size={16}/>Testar fluxo</button>}<button type="button" aria-expanded={showMini} onClick={toggleMini}><MapIcon size={16}/>Minimapa</button><button onClick={addStep}><Plus size={16}/>Adicionar etapa</button><button className="primary" disabled={busy} onClick={save}><Save size={16}/>Salvar fluxo</button></div>
  {error&&<div role="alert" className="inline-error">{error.message}{error.detail&&<details><summary>Detalhes técnicos</summary><code>{error.detail}</code></details>}</div>}
@@ -184,13 +188,13 @@ function switchKind(current:Action,next:string){const base:Action={...current,ki
  <div className="eyebrow"><Zap size={14}/> CONFIGURAR BLOCO</div>{selected==='trigger'?<>
  <Section title="Quando" open>
  <Field label="Evento">
- <select value={trigger.kind} onChange={e=>{const kind=e.target.value;setTrigger({...trigger,kind,pattern:keepText(kind)&&keepText(trigger.kind)?trigger.pattern:''});setNodes(ns=>ns.map(n=>n.id==='trigger'?{...n,data:{...n.data,label:'⚡ '+(triggers[kind]||kind)}}:n))}}>{Object.entries(triggers).filter(([k])=>flow.trigger.kind==='timer'?k==='timer':k!=='timer').map(([k,n])=>
+ <select value={trigger.kind} onChange={e=>{const kind=e.target.value;const keep=keepText(kind)&&keepText(trigger.kind);changeTrigger({...trigger,kind,pattern:keep?trigger.pattern:'',patternName:keep?trigger.patternName:''})}}>{Object.entries(triggers).filter(([k])=>flow.trigger.kind==='timer'?k==='timer':k!=='timer').map(([k,n])=>
  <option key={k} value={k}>{n}</option>)}</select>
  </Field>{['command','contains','voice','mention'].includes(trigger.kind)&&<Field label="Texto que dispara" hint={trigger.kind==='mention'?'Separe os nomes do bot com vírgula: o gatilho passa quando um deles aparece na mensagem, como palavra inteira. Ex.: Arroba, ArrobaSrv, arromba.':trigger.kind==='contains'?'Separe várias palavras ou frases com vírgula: o gatilho passa quando uma delas aparece na mensagem.':trigger.kind==='command'?'Separe variações com vírgula quando o povo erra o comando: !whislist, !whishlist, !wishlist. Qualquer uma delas dispara.':trigger.kind==='voice'?'Separe variações com vírgula: o gatilho passa quando uma delas aparece na fala. Ex.: troca o jogo, muda o jogo, minecraft.':undefined}>
- <input value={trigger.pattern} onChange={e=>setTrigger({...trigger,pattern:e.target.value})}/>
- </Field>}{trigger.kind==='redemption'&&<RewardPicker profileId={flow.profileId} value={trigger.pattern} onChange={pattern=>setTrigger({...trigger,pattern})}/>}{trigger.kind!=='timer'&&<>
+ <input value={trigger.pattern} onChange={e=>changeTrigger({...trigger,pattern:e.target.value})}/>
+ </Field>}{trigger.kind==='redemption'&&<RewardPicker profileId={flow.profileId} value={trigger.pattern} onChange={(pattern,patternName)=>changeTrigger({...trigger,pattern,patternName})}/>}{trigger.kind!=='timer'&&<>
  <Field label="Quem pode usar">
- <select value={trigger.permission} onChange={e=>setTrigger({...trigger,permission:e.target.value})}>
+ <select value={trigger.permission} onChange={e=>changeTrigger({...trigger,permission:e.target.value})}>
  <option value="everyone">Todo mundo</option>
  <option value="subscriber">Assinantes</option>
  <option value="moderator">Moderadores</option>
@@ -198,10 +202,10 @@ function switchKind(current:Action,next:string){const base:Action={...current,ki
  </select>
  </Field>
  <Field label="Intervalo entre usos (segundos)" hint="60 = 1 minuto. 0 libera sem espera.">
- <input type="number" min="0" max="86400" step="5" value={trigger.cooldown} onChange={e=>setTrigger({...trigger,cooldown:Number(e.target.value)||0})}/>
+ <input type="number" min="0" max="86400" step="5" value={trigger.cooldown} onChange={e=>changeTrigger({...trigger,cooldown:Number(e.target.value)||0})}/>
  </Field>
  <Field label="Intervalo por pessoa (segundos)" hint="60 = 1 minuto. Evita repetir na sequência.">
- <input type="number" min="0" max="86400" step="5" value={trigger.userCooldown} onChange={e=>setTrigger({...trigger,userCooldown:Number(e.target.value)||0})}/>
+ <input type="number" min="0" max="86400" step="5" value={trigger.userCooldown} onChange={e=>changeTrigger({...trigger,userCooldown:Number(e.target.value)||0})}/>
  </Field>
  </>}</Section>
  <Section title="Como sai" open>

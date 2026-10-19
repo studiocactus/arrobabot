@@ -1,5 +1,5 @@
 import {useEffect,useState} from 'react';
-import {Save,Play,Trash2,Pencil,Package,Workflow} from 'lucide-react';
+import {Save,Play,Trash2,Pencil,Package,Workflow,Copy} from 'lucide-react';
 import {api,desktop} from './api';
 import {friendlyMessage} from './errors';
 import {type Flow,type Profile,type Preset,minutesToSeconds,secondsToMinutes,timerCategories,timerPriorities} from './types';
@@ -49,6 +49,7 @@ export function FlowDialog({flow,mode,profile,notify,onSaved,onClose}:{flow:Flow
  }
  return <>
  <Modal wide={editor} title={title} onClose={onClose}>
+  {!editing.enabled&&<p className="help"><strong>Esta automação está desativada</strong>: ela não dispara na live até você ativá-la na lista. As alterações aqui continuam valendo.</p>}
  {editor?<FlowEditor flow={editing} platform={profile.platform} ai={profile.ai} onSave={save} onTest={f=>setTesting(f)} intro={intro}/>:<form className="form-pad" onSubmit={e=>{e.preventDefault();save(editing).catch(err=>notify(friendlyMessage(err)))}}>
   <div className="form-grid">
    <Field label="Nome"><input required value={editing.name} onChange={e=>setEditing({...editing,name:e.target.value})}/></Field>
@@ -101,9 +102,10 @@ export function FlowEnableToggle({flow,notify,onSaved}:{flow:Flow;notify:Notify;
  return <Toggle checked={flow.enabled} label={'Ativar '+flow.name} onChange={async enabled=>{try{await api('flow.save',{flow:{...flow,enabled}});await onSaved()}catch(e){notify(friendlyMessage(e))}}}/>
 }
 
-export function FlowRowActions({flow,profile,notify,onEdit,onRemove}:{flow:Flow;profile:Profile;notify:Notify;onEdit:()=>void;onRemove:()=>void}){
+export function FlowRowActions({flow,profile,notify,onEdit,onRemove,onDuplicate}:{flow:Flow;profile:Profile;notify:Notify;onEdit:()=>void;onRemove:()=>void;onDuplicate:()=>void}){
  return <div className="row-actions">
  {flow.trigger.kind==='timer'&&<button className="icon-button" disabled={!desktop||!flow.enabled} title="Simular disparo (sem publicar)" aria-label={'Simular timer '+flow.name} onClick={()=>api('timer.preview',{profileId:profile.id,id:flow.id}).then(()=>notify('Simulação do timer enviada. Veja o Histórico; nada foi publicado.')).catch(e=>notify(friendlyMessage(e)))}><Play size={16}/></button>}
+ <button className="icon-button" title="Duplicar automação (a cópia nasce desativada)" aria-label={'Duplicar '+flow.name} onClick={onDuplicate}><Copy size={16}/></button>
  <button className="icon-button" title="Salvar como preset" aria-label={'Salvar preset '+flow.name} onClick={async()=>{try{const preset=await api<Preset>('preset.create',{profileId:profile.id,kind:flow.trigger.kind==='command'?'command':'flow',name:flow.name,ids:[flow.id]});await api('preset.save',{preset});notify('Salvo na biblioteca de presets.')}catch(e){notify(friendlyMessage(e))}}}><Package size={16}/></button>
  <button className="icon-button" title="Editar" aria-label={'Editar '+flow.name} onClick={onEdit}><Pencil size={16}/></button>
  <button className="icon-button danger" title="Apagar" aria-label={'Apagar '+flow.name} onClick={onRemove}><Trash2 size={16}/></button>

@@ -99,12 +99,14 @@ pub fn needs_message(f:&Flow)->bool{f.actions.iter().any(|a|matches!(a.kind.as_s
 #[serde(rename_all="camelCase")]
 pub struct Trigger {
  pub kind:String, #[serde(default)] pub pattern:String,
+ /// Nome da recompensa para exibição (o `pattern` guarda o ID estável).
+ #[serde(default)] pub pattern_name:String,
  #[serde(default="everyone")] pub permission:String,
  #[serde(default)] pub cooldown:u64, #[serde(default)] pub user_cooldown:u64,
 }
 fn everyone()->String { "everyone".into() }
 impl Default for Trigger {
- fn default()->Self { Self{kind:"chat".into(),pattern:String::new(),permission:everyone(),cooldown:0,user_cooldown:0} }
+ fn default()->Self { Self{kind:"chat".into(),pattern:String::new(),pattern_name:String::new(),permission:everyone(),cooldown:0,user_cooldown:0} }
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all="camelCase")]
@@ -287,6 +289,12 @@ pub fn validate_flow(f:&Flow)->Result<(),String> {
  if f.trigger.cooldown>86400||f.trigger.user_cooldown>86400{return Err("Cooldown máximo: 24 horas".into())}
  if f.trigger.kind=="command" {let alts:Vec<&str>=f.trigger.pattern.split(',').map(str::trim).filter(|s|!s.is_empty()).collect();if alts.is_empty()||alts.iter().any(|c|!c.starts_with('!')||c.contains(char::is_whitespace)){return Err("Cada comando começa com ! e não tem espaço. Separe variações com vírgula, como !whislist, !whishlist".into())}}
  if f.trigger.kind=="mention" && f.trigger.pattern.trim().is_empty() {return Err("Informe pelo menos um nome do bot, separados por vírgula".into())}
+ // Recompensa vinculada guarda o ID estável da Twitch: valor absurdo é recusado
+ // aqui, nunca transformado silenciosamente em "Qualquer resgate".
+ if f.trigger.kind=="redemption" {
+  if f.trigger.pattern.len()>64 {return Err("Resgate: ID da recompensa longo demais".into())}
+  if f.trigger.pattern_name.len()>80 {return Err("Resgate: nome da recompensa longo demais".into())}
+ }
  if !SEND_TYPES.contains(&f.send_type.as_str()){return Err("Forma de envio inválida".into())}
  if !SEND_COLORS.contains(&f.send_color.as_str()){return Err("Cor do anúncio inválida".into())}
  if f.send_type=="shoutout"&&!needs_message(f){return Err("O destaque de canal usa o texto de uma ação que envia mensagem: escreva ali o canal de destino".into())}
@@ -535,6 +543,14 @@ pub fn validate_flow(f:&Flow)->Result<(),String> {
   // Ações salvas antes da punição existir continuam recebendo o campo vazio.
   let mut saved=serde_json::to_value(&f.actions[0]).unwrap();saved.as_object_mut().unwrap().remove("punish");
   let back:Action=serde_json::from_value(saved).unwrap();assert_eq!(back.punish,"");
+ }
+ /// Valor absurdo no vínculo é recusado — nunca vira "Qualquer resgate" no chute.
+ #[test] fn recompensa_vinculada_valida_sem_mudar_o_vinculo(){
+  let mut f=Flow{id:uuid::Uuid::new_v4().to_string(),profile_id:uuid::Uuid::new_v4().to_string(),name:"R".into(),trigger:Trigger{kind:"redemption".into(),pattern:"reward-a".into(),pattern_name:"Voz A".into(),..Default::default()},actions:vec![Action{kind:"overlay".into(),text:"ok".into(),..Default::default()}],..Default::default()};
+  assert!(validate_flow(&f).is_ok(),"vínculo com ID curto e nome curto salva");
+  f.trigger.pattern="x".repeat(65);assert!(validate_flow(&f).is_err(),"ID de recompensa longo demais é recusado");
+  f.trigger.pattern="reward-a".into();f.trigger.pattern_name="n".repeat(81);assert!(validate_flow(&f).is_err(),"nome de recompensa longo demais é recusado");
+  f.trigger.pattern="".into();f.trigger.pattern_name="".into();assert!(validate_flow(&f).is_ok(),"'Qualquer resgate' explícito continua válido");
  }
  #[test] fn redemption_matches_by_reward_id() {
   let t=Trigger{kind:"redemption".into(),pattern:"".into(),..Default::default()};

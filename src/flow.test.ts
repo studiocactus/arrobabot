@@ -1,6 +1,6 @@
 import {describe,it,expect} from 'vitest';
-import {orderedActions,moveAction,chainIds,stepBounds,testVarKeys,appendStepPlan,insertStepPlan,fullChain,type FlowNode} from './flow';
-import {newAction} from './types';
+import {orderedActions,moveAction,chainIds,stepBounds,testVarKeys,appendStepPlan,insertStepPlan,fullChain,duplicateFlow,triggerForSave,triggerLabel,type FlowNode} from './flow';
+import {newAction,newFlow,type Trigger} from './types';
 const nodes=['trigger','a','b','c'].map(id=>({id,position:{x:0,y:0},data:id==='trigger'?{}:{action:{...newAction(),text:id}}}));
 describe('editor de automação',()=>{
  it('serializa pela conexão, não pela posição ou ordem da lista',()=>{expect(orderedActions([nodes[3],nodes[0],nodes[2],nodes[1]],[{source:'trigger',target:'b'},{source:'b',target:'a'},{source:'a',target:'c'}]).map(a=>a.text)).toEqual(['b','a','c'])});
@@ -101,5 +101,86 @@ describe('adição e inserção de etapas na cadeia',()=>{
   // a serialização passa a ser a → b → nova → c: o "próximo" da condição é a etapa inserida
   const comNova=[...nodes2,{id:'n',position:plan.positions.n,data:{action:newAction()}}];
   expect(orderedActions(comNova,plan.edges).map(a=>a.kind)).toEqual(['chat','condition','chat','chat']);
+ });
+});
+
+describe('duplicar automação',()=>{
+ const base=()=>{
+  const f=newFlow('p1');
+  f.id='11111111-1111-4111-8111-111111111111';
+  f.name='Resgate da voz';
+  f.enabled=true;
+  f.trigger={kind:'redemption',pattern:'reward-a',patternName:'Voz A',permission:'moderator',cooldown:10,userCooldown:20};
+  f.actions=[{...newAction('voiceFx'),target:'voice-robot',text:'Robô',value:30},{...newAction('chat'),text:'valeu!'}];
+  f.audio='snd-1';f.audioVolume=0.5;
+  f.layout={nodes:[{id:'trigger',position:{x:0,y:0},data:{}},{id:'n1',position:{x:0,y:90},data:{action:f.actions[0]}},{id:'n2',position:{x:0,y:180},data:{action:f.actions[1]}}],edges:[{id:'e1',source:'trigger',target:'n1'},{id:'e2',source:'n1',target:'n2'}]};
+  return f;
+ };
+ it('gera IDs novos, remapeia conexões e mantém as referências externas',()=>{
+  const orig=base();
+  const copy=duplicateFlow(orig);
+  expect(copy.id).not.toBe(orig.id);
+  expect(copy.name).toBe('Cópia de Resgate da voz');
+  expect(copy.enabled).toBe(false);
+  // Referências externas preservadas: recompensa, voz e arquivos.
+  expect(copy.trigger.pattern).toBe('reward-a');
+  expect(copy.trigger.patternName).toBe('Voz A');
+  expect(copy.actions[0].target).toBe('voice-robot');
+  expect(copy.actions[0].text).toBe('Robô');
+  expect(copy.actions[0].value).toBe(30);
+  expect(copy.audio).toBe('snd-1');
+  // Blocos e conexões com identificadores novos e pontas remapeadas.
+  const layout=copy.layout as {nodes:{id:string}[];edges:{id?:string;source:string;target:string}[]};
+  const origLayout=orig.layout as typeof layout;
+  expect(layout.nodes[0].id).toBe('trigger');
+  expect(layout.nodes[1].id).not.toBe(origLayout.nodes[1].id);
+  expect(layout.edges[0].source).toBe('trigger');
+  expect(layout.edges[0].target).toBe(layout.nodes[1].id);
+  expect(layout.edges[1].source).toBe(layout.nodes[1].id);
+  expect(layout.edges[1].target).toBe(layout.nodes[2].id);
+  expect(layout.edges[0].id).not.toBe(origLayout.edges[0].id);
+ });
+ it('não compartilha nada com o original',()=>{
+  const orig=base();
+  const copy=duplicateFlow(orig);
+  copy.actions[0].target='outra-voz';
+  copy.trigger.pattern='reward-b';
+  (copy.layout as {nodes:{id:string}[]}).nodes[1].id='troquei';
+  expect(orig.actions[0].target).toBe('voice-robot');
+  expect(orig.trigger.pattern).toBe('reward-a');
+  expect((orig.layout as {nodes:{id:string}[]}).nodes[1].id).toBe('n1');
+  expect(copy.actions[0]).not.toBe(orig.actions[0]);
+ });
+ it('sem layout (fluxo antigo) também duplica: ações e gatilho copiados',()=>{
+  const f=newFlow('p1');
+  f.name='Antigo';
+  f.trigger={kind:'command',pattern:'!oi',permission:'everyone',cooldown:0,userCooldown:0};
+  delete (f as {layout?:unknown}).layout;
+  const copy=duplicateFlow(f);
+  expect(copy.actions).toEqual(f.actions);
+  expect(copy.actions[0]).not.toBe(f.actions[0]);
+  expect(copy.enabled).toBe(false);
+ });
+});
+describe('gatilho pronto para salvar',()=>{
+ it('recompensa preserva ID e nome — nunca vira “Qualquer resgate” sozinho',()=>{
+  const t:Trigger={kind:'redemption',pattern:'reward-a',patternName:'Voz A',permission:'everyone',cooldown:0,userCooldown:0};
+  const saved=triggerForSave(t);
+  expect(saved).toBe(t);
+  expect(saved.pattern).toBe('reward-a');
+  expect(triggerForSave({...t,pattern:'',patternName:''}).pattern).toBe('');
+ });
+ it('textos de comando preservam; timer e tipos sem padrão limpam',()=>{
+  expect(triggerForSave({kind:'command',pattern:'!oi',permission:'everyone',cooldown:0,userCooldown:0}).pattern).toBe('!oi');
+  expect(triggerForSave({kind:'timer',pattern:'x',permission:'moderator',cooldown:5,userCooldown:5})).toMatchObject({pattern:'',permission:'everyone',cooldown:0,userCooldown:0});
+  expect(triggerForSave({kind:'custom',pattern:'x',permission:'everyone',cooldown:0,userCooldown:0}).pattern).toBe('');
+ });
+});
+describe('rótulo do gatilho reflete o estado salvo',()=>{
+ it('resgate mostra o nome (ou o ID quando falta) e a escolha explícita de qualquer resgate',()=>{
+  expect(triggerLabel({kind:'redemption',pattern:'reward-a',patternName:'Voz A',permission:'everyone',cooldown:0,userCooldown:0})).toBe('⚡ Resgate: Voz A');
+  expect(triggerLabel({kind:'redemption',pattern:'reward-a',patternName:'',permission:'everyone',cooldown:0,userCooldown:0})).toBe('⚡ Resgate: reward-a');
+  expect(triggerLabel({kind:'redemption',pattern:'',permission:'everyone',cooldown:0,userCooldown:0})).toBe('⚡ Qualquer resgate');
+  expect(triggerLabel({kind:'command',pattern:'!oi',permission:'everyone',cooldown:0,userCooldown:0})).toBe('⚡ Comando de chat');
  });
 });

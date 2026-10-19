@@ -1681,3 +1681,51 @@ async fn a_fala_do_bot_aparece_no_chat_sem_duplicar_nem_disparar_automacoes(){
  assert!(chats.iter().all(|v|v["payload"]["bot"]==true),"as duas saem marcadas como bot");
  assert!(!all.iter().any(|v|v["type"]=="overlay"),"fala do bot não dispara automação");
 }
+
+
+/// Um vínculo de recompensa dispara só para o ID exato — pelo handler de
+/// produção, com eventos simulados (nada publica e ninguém paga pontos).
+/// "Qualquer resgate" continua valendo quando foi escolhido explicitamente.
+#[tokio::test]
+async fn recompensa_vinculada_dispara_so_para_o_id_exato(){
+ let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().join("app")).unwrap();let p=profile("Resgates");rt.db.save_profile(&p).unwrap();
+ let mk=|name:&str,pattern:&str,pattern_name:&str,text:&str|{
+  let mut f=flow(&p);f.name=name.into();
+  f.trigger=Trigger{kind:"redemption".into(),pattern:pattern.into(),pattern_name:pattern_name.into(),..Default::default()};
+  f.actions=vec![Action{kind:"overlay".into(),text:text.into(),target:"".into(),value:0,condition:"".into(),..Default::default()}];
+  f
+ };
+ rt.db.save_flow(&mk("Vinculada","reward-a","Voz A","resgate A")).unwrap();
+ rt.db.save_flow(&mk("Qualquer","","","qualquer resgate")).unwrap();
+ let ev=|data:Value|Event{id:uuid::Uuid::new_v4().to_string(),profile_id:p.id.clone(),kind:"redemption".into(),user:"Ana".into(),user_id:"ana".into(),role:"everyone".into(),message:String::new(),data,simulated:true,rehearsal:false};
+ let count=|needle:&str|rt.db.logs(&p.id).unwrap().iter().filter(|l|l.message.contains(needle)).count();
+ // A: dispara o vínculo dela e o "qualquer resgate".
+ engine::process(rt.clone(),ev(json!({"id":"red-1","reward":{"id":"reward-a","title":"Voz A"}}))).await;
+ assert_eq!(count("Executaria overlay: resgate A"),1,"o ID exato dispara o vínculo");
+ assert_eq!(count("Executaria overlay: qualquer resgate"),1);
+ // B: não toca o vínculo de A.
+ engine::process(rt.clone(),ev(json!({"id":"red-2","reward":{"id":"reward-b","title":"Outra"}}))).await;
+ assert_eq!(count("Executaria overlay: resgate A"),1,"outra recompensa não dispara o vínculo de A");
+ assert_eq!(count("Executaria overlay: qualquer resgate"),2,"o vínculo explícito de qualquer resgate pega B também");
+ // Sem ID de recompensa: o vínculo específico fica quieto.
+ engine::process(rt.clone(),ev(json!({"id":"red-3"}))).await;
+ assert_eq!(count("Executaria overlay: resgate A"),1,"sem ID não há como casar com um vínculo específico");
+ assert_eq!(count("Executaria overlay: qualquer resgate"),3,"qualquer resgate, escolhido explicitamente, segue firme");
+}
+
+/// Recompensa (ID e nome), voz e duração sobrevivem a salvar e recarregar.
+#[tokio::test]
+async fn vinculo_de_recompensa_voz_e_duracao_sobrevivem_ao_banco(){
+ let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().join("app")).unwrap();let p=profile("Persiste");rt.db.save_profile(&p).unwrap();
+ let mut f=flow(&p);f.name="Resgate da voz".into();
+ f.trigger=Trigger{kind:"redemption".into(),pattern:"reward-a".into(),pattern_name:"Voz A".into(),..Default::default()};
+ f.actions=vec![Action{kind:"voiceFx".into(),text:"Robô".into(),target:"voice-robot".into(),value:30,condition:"".into(),..Default::default()}];
+ rt.db.save_flow(&f).unwrap();
+ let loaded=rt.db.flows(&p.id).unwrap();
+ assert_eq!(loaded.len(),1);
+ assert_eq!(loaded[0].trigger.pattern,"reward-a","o ID da recompensa não é zerado pelo caminho");
+ assert_eq!(loaded[0].trigger.pattern_name,"Voz A");
+ assert_eq!(loaded[0].actions[0].target,"voice-robot","a voz configurada é a que volta");
+ assert_eq!(loaded[0].actions[0].text,"Robô");
+ assert_eq!(loaded[0].actions[0].value,30,"a duração volta igual");
+}
