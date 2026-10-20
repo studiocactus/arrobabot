@@ -215,15 +215,16 @@ Salve antes de mudar de tela, perfil ou fechar o app. A confirmação de altera�
 
 ## Como a memória é usada
 
-A recuperação usa as palavras da mensagem atual, separando pontuação e ignorando palavras muito comuns. Dá prioridade ao histórico da identidade atual (ID e plataforma), às notas da pessoa e às notas de contexto-live. Escolhe até quatro notas, até 1.400 caracteres de conteúdo por nota e seis mil caracteres no conjunto. Dentro das notas, trechos com palavras da pergunta vêm primeiro; em empate, entram as últimas linhas. Isso evita que o começo de uma nota longa esconda uma informação recente. Notas antigas continuam disponíveis; os novos históricos automáticos de outras identidades não são enviados na resposta.
+A recuperação usa as palavras da mensagem atual, separando pontuação e ignorando palavras muito comuns. Dá prioridade ao histórico da identidade atual (ID e plataforma), às notas da pessoa e às notas de contexto-live. **As notas de quem está falando entram sempre** — mesmo quando nenhuma palavra da mensagem casa com elas — para o bot responder como quem conhece; os fatos aprendidos sobre a pessoa seguem a mesma regra. Escolhe até quatro notas, até 1.400 caracteres de conteúdo por nota e seis mil caracteres no conjunto. Dentro das notas, trechos com palavras da pergunta vêm primeiro; em empate, entram as últimas linhas. Isso evita que o começo de uma nota longa esconda uma informação recente. Notas antigas continuam disponíveis; os novos históricos automáticos e fatos de outras identidades não são enviados na resposta.
 
-É uma busca lexical simples: uma informação escrita com termos muito diferentes da pergunta pode não ser recuperada. A IA não recebe o vault inteiro. As notas são tratadas como dados, não como instruções que substituem a personalidade.
+É uma busca lexical simples: uma informação escrita com termos muito diferentes da pergunta pode não ser recuperada — a exceção são as notas de quem fala, que sempre entram. A IA não recebe o vault inteiro. As notas são tratadas como dados, não como instruções que substituem a personalidade.
 
 A nota config-memoria.md contém orientações para quem organiza o vault. Ela é excluída da recuperação atual e não funciona como uma política automática executada pelo motor.
 
 ## Escrita automática e remoção
 
 - **Registrar interações na memória**, na tela de IA, salva falas de chat após uma geração bem-sucedida. O novo arquivo `usuarios/auto-<identidade-codificada>.md` separa ID e plataforma, mesmo se o apelido mudar. Mantém até 100 falas distintas, até 500 caracteres cada, e move uma fala repetida para o fim em vez de duplicá-la. Ignora comandos iniciados por `!`, mensagens com menos de oito caracteres e eventos sem ID. Notas manuais e arquivos antigos não são sobrescritos. Não é uma extração automática de fatos resumidos: são declarações do espectador, não fatos verificados.
+- **Aprender fatos sobre quem conversa**, também na tela de IA e **desligado por padrão**, guarda uma linha curta por descoberta em `usuarios/fatos-<identidade-codificada>.md` — o que a pessoa gosta, faz, joga ou como prefere ser chamada. Só quando a fala parece trazer informação duradoura há uma chamada extra ao provedor; quando não sai fato da extração, nada é gravado. O mesmo fato não entra duas vezes e o arquivo tem teto de 50 linhas. Os fatos são declarações da conversa: vale conferir de vez em quando na tela **Memórias**.
 - A ação **Registrar memória** acrescenta conteúdo com data; ela não substitui a nota inteira.
 - O botão Salvar do editor grava o conteúdo editado.
 - **Apagar nota** remove o arquivo do vault do perfil, após confirmação.

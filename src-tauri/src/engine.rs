@@ -463,6 +463,16 @@ async fn action(rt:&Arc<Runtime>,p:&Profile,e:&Event,a:&Action,variables:&mut cr
  ai::save_response(variables,rt,p,e,a,&output,success)?;
  if a.kind=="ai"{rt.send_with(p,e,&output,Some(f)).await?;}
  if p.ai.remember && e.kind=="chat" {let _lock=rt.vault_lock.lock().unwrap();rt.db.profile(&p.id)?;let platform=if crate::discord::from_discord(e).is_some(){"discord"}else{p.platform.as_str()};vault::record_interaction(&rt.base,&p.id,platform,&e.user_id,&e.user,&e.message)?;}
+  if p.ai.learn_facts && e.kind=="chat" {
+   // Aprender é opt-in e reusa a mesma conversa: a chamada extra só acontece
+   // quando a fala parece trazer fato, e nada é gravado sem sair um fato.
+   let platform=if crate::discord::from_discord(e).is_some(){"discord"}else{p.platform.as_str()};
+   match crate::ai::extract_fact(&rt.http,p,&e.message).await {
+    Ok(Some(fact))=>{let _lock=rt.vault_lock.lock().unwrap();if let Err(err)=vault::record_fact(&rt.base,&p.id,platform,&e.user_id,&e.user,&fact){rt.log(&p.id,"ai",&format!("Não guardei o fato sobre {}: {err}",e.user),"warn")}}
+    Ok(None)=>{}
+    Err(err)=>rt.log(&p.id,"ai",&format!("Não aprendi o fato sobre {}: {err}",e.user),"warn"),
+   }
+  }
  Ok(())
  },
  "memory"=>{let _lock=rt.vault_lock.lock().unwrap();rt.db.profile(&p.id)?;vault::write(&rt.base,&p.id,&variables.render(&a.target)?,&text,true)},

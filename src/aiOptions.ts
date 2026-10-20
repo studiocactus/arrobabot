@@ -13,6 +13,7 @@ export function normalizeAI(ai:AIConfig):AIConfig {
     temperature:num(src.temperature,0.7),
     fallback:str(src.fallback,''),
     remember:!!src.remember,
+    learnFacts:!!src.learnFacts,
     knowledge:src.knowledge!==false,
     knowledgeNicho:src.knowledgeNicho||'',
     knowledgeDepth:src.knowledgeDepth||'standard',

@@ -64,6 +64,8 @@ describe('perfil de IA salvo incompleto',()=>{
   expect(n.knowledgeOff).toEqual([]);
   expect(n.anchor).toBe('');
   expect(n.noRepeat).toBe(false);
+  expect(n.learnFacts).toBe(false);
+  expect(normalizeAI({...newProfile().ai,learnFacts:true}).learnFacts).toBe(true);
  });
  it('assume valores padrão quando o campo não existe',()=>{
   const vazio={} as unknown as ReturnType<typeof newProfile>['ai'];

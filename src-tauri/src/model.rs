@@ -30,11 +30,14 @@ pub struct AiConfig {
  #[serde(default)] pub anchor:String,
  #[serde(default)] pub answer_length:String,
  #[serde(default)] pub no_repeat:bool,
+ /// Aprende fatos duradouros de quem conversa, guardando uma linha curta por
+ /// pessoa. Desligado por padrão: nada é gravado além das falas optadas.
+ #[serde(default)] pub learn_facts:bool,
 }
 fn yes()->bool {true}
 fn std_depth()->String {"standard".into()}
 impl Default for AiConfig {
- fn default()->Self { Self { provider:"ollama".into(), endpoint:"http://localhost:11434".into(), model:"".into(),personality:"Você é um bot amigável de uma comunidade de live. Responda em português, brevemente e com respeito.".into(),temperature:0.7,fallback:String::new(), remember:false, knowledge:true, knowledge_nicho:String::new(), knowledge_depth:std_depth(), knowledge_off:Vec::new(), knowledge_source:String::new(), anchor:String::new(), answer_length:String::new(), no_repeat:false } }
+ fn default()->Self { Self { provider:"ollama".into(), endpoint:"http://localhost:11434".into(), model:"".into(),personality:"Você é um bot amigável de uma comunidade de live. Responda em português, brevemente e com respeito.".into(),temperature:0.7,fallback:String::new(), remember:false, knowledge:true, knowledge_nicho:String::new(), knowledge_depth:std_depth(), knowledge_off:Vec::new(), knowledge_source:String::new(), anchor:String::new(), answer_length:String::new(), no_repeat:false, learn_facts:false } }
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all="camelCase")]

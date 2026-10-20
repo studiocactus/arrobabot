@@ -109,6 +109,31 @@ pub fn looks_like_analysis(answer:&str)->bool {
  let text=answer.trim_start().to_lowercase();
  ABERTURAS.iter().any(|a|text.starts_with(a))
 }
+/// Instrução fixa da extração de fatos: um fato curto sobre quem fala, ou nada.
+const FACT_PROMPT:&str="Extraia no máximo UM fato duradouro sobre quem fala nesta mensagem (o que gosta, faz, joga, quando nasceu ou como prefere ser chamado). Responda só o fato, em português, sem nome e com no máximo 120 caracteres (ex.: \"gosta de jogos de terror\"). Se a mensagem não traz fato duradouro, responda NADA.";
+
+/// Só vale chamar o provedor quando a fala parece trazer informação duradoura.
+pub fn looks_like_fact(message:&str)->bool{
+ let m=message.to_lowercase();
+ ["gosto","gosta","gostar","amo","adoro","odeio","meu nome","pode me chamar","aniversário","nasci","jogo","jogar","streamo","trabalho","estudo","moro","prefiro","favorito","sou de","tenho um","tenho uma"].iter().any(|k|m.contains(k))
+}
+
+/// A resposta do modelo vira fato — ou nada, quando não trouxer um.
+pub fn fact_from_reply(reply:&str)->Option<String>{
+ let t=reply.trim().trim_matches(|c:char|c=='"'||c=='“'||c=='”'||c=='\'').trim();
+ let t:String=t.split_whitespace().collect::<Vec<_>>().join(" ");
+ if t.chars().count()<4||t.chars().count()>220{return None}
+ if t.to_lowercase().starts_with("nada"){return None}
+ Some(t.chars().take(200).collect())
+}
+
+/// Extrai um fato duradouro sobre quem conversa, ou None quando não há o que
+/// guardar. Sem chamada ao provedor quando a fala não parece trazer fato.
+pub async fn extract_fact(client:&reqwest::Client,p:&Profile,message:&str)->Result<Option<String>,String>{
+ if !looks_like_fact(message){return Ok(None)}
+ let reply=request(client,p,FACT_PROMPT,message,80,120).await?;
+ Ok(fact_from_reply(&reply))
+}
 pub async fn request(client:&reqwest::Client,p:&Profile,system:&str,prompt:&str,max_tokens:u32,chars:usize)->Result<String,String> {
  validate_url(&p.ai.endpoint)?;
  if p.ai.model.trim().is_empty(){return Err("Escolha um modelo de IA".into())}
@@ -186,6 +211,17 @@ async fn generate_with_instruction(client:&reqwest::Client,p:&Profile,prompt:&st
  }
  fn profile()->Profile{serde_json::from_value(json!({"id":uuid::Uuid::new_v4().to_string(),"name":"P","platform":"twitch","channel":"canal"})).unwrap()}
  #[test] fn endpoints(){assert!(validate_url("http://localhost:11434").is_ok());assert!(validate_url("http://example.org").is_err());assert!(validate_url("https://secret@example.org").is_err());assert!(validate_url("file:///test").is_err());}
+ #[test] fn fato_soh_quando_a_fala_traz_informacao_duradoura(){
+  assert!(looks_like_fact("hoje eu jogo valorant demais"));
+  assert!(looks_like_fact("meu nome é Ana, pode me chamar de Aninha"));
+  assert!(!looks_like_fact("kkkkk que live boa"));
+ }
+ #[test] fn a_resposta_do_modelo_vira_fato_ou_nada(){
+  assert_eq!(fact_from_reply("gosta de jogos de terror").as_deref(),Some("gosta de jogos de terror"));
+  assert_eq!(fact_from_reply("  NADA  "),None);
+  assert_eq!(fact_from_reply(""),None);
+  assert_eq!(fact_from_reply("\"streama às quintas\"").as_deref(),Some("streama às quintas"));
+ }
  #[test] fn size_limits_follow_the_selected_length(){
   assert_eq!(limits("short"),(500,120));assert_eq!(limits("medium"),(1000,300));assert_eq!(limits("free"),(1600,450));
   assert_eq!(limits(""),(500,120));assert_eq!(limits("outra"),(500,120));

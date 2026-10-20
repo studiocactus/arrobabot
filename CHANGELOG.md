@@ -1,5 +1,38 @@
 # Histórico de atualizações
 
+# BotLive 0.19.0
+
+## O que mudou
+
+**O ArrobaSrv agora lembra de quem está falando e pode aprender fatos sobre as pessoas: a memória passa a valer em toda resposta, não só quando as palavras casam.**
+
+- **Quem fala é sempre lembrado.** Antes, as notas da pessoa só entravam na resposta se alguma palavra da mensagem coincidisse com elas — por isso o bot “esquecia” quem estava conversando. Agora as notas de quem fala (interações registradas e fatos aprendidos) entram **sempre** no contexto, mesmo sem palavra em comum: ele responde como quem conhece, tipo “Ana, você tinha falado do seu gato!”. Os limites continuam os mesmos: até quatro notas, 1.400 caracteres por nota e seis mil no conjunto.
+- **Aprender fatos sobre quem conversa** — interruptor novo na tela **Inteligência artificial**, **desligado por padrão**. Quando a fala traz informação duradoura (o que a pessoa gosta, faz, joga, quando nasceu ou como prefere ser chamada), o BotLive guarda uma linha curta na memória dela (`usuarios/fatos-…md`, teto de 50, sem repetir o mesmo fato). Fala sem informação não grava nada, e a chamada extra ao provedor só acontece quando a fala parece trazer fato.
+- **Memória continua sendo só sua.** Fatos e interações seguem isolados por identidade (ID + plataforma): o que uma pessoa disse nunca entra na resposta de outra. Tudo continua em Markdown, na tela **Memórias**, para revisar, corrigir ou apagar.
+- Quem não ligar o interruptor novo não muda nada: a recuperação por palavras, os limites, as pastas e a tela Memórias continuam exatamente como estavam.
+
+## Como usar
+
+1. Atualize o BotLive e abra **Inteligência artificial**.
+2. Ligue **Aprender fatos sobre quem conversa** (e mantenha **Registrar interações na memória** ligado, como já está).
+3. **Salvar personalidade**. Nas próximas conversas, o que as pessoas disserem de duradouro vira linha curta na memória delas — visível em **Memórias**, onde dá para revisar e apagar.
+4. Para conferir sem ir ao ar: **Converse antes de colocar no ar** já responde usando as memórias do perfil.
+
+## Validação
+
+- Testes Rust (`cargo test`, src-tauri): 377 aprovados, incluindo os novos — quem fala é lembrado mesmo sem palavra em comum (e nunca vaza para outra pessoa), o mesmo fato entra uma vez, fatos diferentes ficam, e a extração só acontece quando a fala traz informação duradoura (a resposta “NADA” não grava nada).
+- Testes de interface (`vitest`): 153 aprovados, incluindo o campo novo em perfis antigos — aprender fatos nasce desligado e quem ligou mantém a escolha.
+- Testes de tela (`playwright`): 92 aprovados; captura da tela de IA com o interruptor novo, em 1100 px e janela larga (`%TEMP%\botlive-ux\ia-aprender-fatos.png` e `ia-aprender-fatos-larga.png`).
+- Build e verificação de tipos limpos; capítulo de IA e memória do manual atualizado.
+
+## Limitações
+
+- A qualidade do fato extraído depende do provedor de IA configurado; em modelos locais pequenos, vale revisar de vez em quando a tela **Memórias**.
+- O aprendizado acontece nas conversas com IA (nas respostas do bot): falas que não disparam nenhuma automação de IA não geram fato.
+- A homologação com chat real, com pessoas de verdade, continua sendo o teste na sua live.
+
+---
+
 # BotLive 0.18.2
 
 ## O que mudou
