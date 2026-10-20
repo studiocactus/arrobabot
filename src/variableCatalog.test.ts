@@ -76,6 +76,15 @@ describe('aviso de variável local sem origem no fluxo',()=>{
   expect(missingLocals('{{local.clipUrl}}',[chat,clipe])).toEqual([]);
   expect(missingLocals('{{local.clipUrl}}',[chat])).toEqual(['local.clipUrl']);
  });
+ it('a ordem importa: usar antes da etapa que define continua avisando',()=>{
+  const clipe={kind:'twitch',target:'',twOp:'clip'};
+  // na etapa 0 (mensagem antes do clipe), ninguém definiu o link ainda
+  expect(missingLocals('{{local.clipUrl}}',[clipe,chat],0)).toEqual(['local.clipUrl']);
+  // na etapa 1 (mensagem depois do clipe), o link já existe
+  expect(missingLocals('{{local.clipUrl}}',[clipe,chat],1)).toEqual([]);
+  // a etapa que gera o valor não vale para si mesma
+  expect(missingLocals('{{local.aiResponse}}',[gerada,chat],0)).toEqual(['local.aiResponse']);
+ });
  it('catálogo expõe contexto de execução sem segredos',()=>{
   const keys=variableCatalog.map(v=>v.key);
   for(const k of ['execution.id','viewer.id','viewer.login','viewer.name','reward.id','reward.title','reward.cost','redemption.id','redemption.input','time.timestamp'])expect(keys).toContain(k);

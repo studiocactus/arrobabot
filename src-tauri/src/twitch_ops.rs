@@ -189,6 +189,16 @@ async fn require_scopes(rt:&Runtime,p:&Profile,account:&str,op:&str,token:&str)-
  if missing.is_empty(){return Ok(())}
  Err(format!("O token da conta {account} não tem os escopos: {}. Reautorize a conta {account} em Perfis usando a versão atual do programa.",missing.join(", ")))
 }
+/// Erros do clipe, sempre com o próximo passo: 404 é live desligada, 429 é
+/// limite da Twitch, 401/403 é falta da permissão de clipes na conta do bot.
+fn clip_refused(status:u16)->String{
+ match status{
+  404=>"Só dá para clipar com a live ligada.".into(),
+  429=>"Clipe recusado: a Twitch limitou os pedidos agora. Espere alguns segundos e tente de novo.".into(),
+  401|403=>"Clipe recusado: falta a permissão de clipes. Reautorize a conta do bot em Perfis (Autorizar conta do bot) — a autorização nova traz essa permissão.".into(),
+  s=>format!("Clipe recusado pela Twitch: HTTP {s}. Confira se a live está ligada; se persistir, reautorize a conta do bot em Perfis."),
+ }
+}
 fn refused(what:&str,status:u16)->String{
  match status{
   401=>format!("{what} recusado (HTTP 401). A Twitch recusou o chamador: categoria, título e VIP usam a conta do canal; o resto usa a conta do bot, que precisa ser moderadora. Confira a conta autorizada em Perfis e o ID do canal."),
@@ -297,7 +307,13 @@ async fn vip(rt:&Runtime,p:&Profile,token:&str,add:bool,user_id:&str)->Result<()
 /// Guarda o resultado para as ações seguintes do mesmo fluxo, como
 /// `{{local.twitchGame}}` na mensagem de confirmação própria.
 fn remember(variables:&mut Option<&mut crate::variables::Context>,rt:&Arc<Runtime>,p:&Profile,e:&Event,key:&str,value:Value){
- if let Some(v)=variables{let _=v.change(&rt.db,p,e,key,"set",value);}
+ if let Some(v)=variables{
+  // Sem a variável gravada a etapa seguinte falharia com "Variável ausente";
+  // um erro aqui nunca pode passar em silêncio.
+  if let Err(err)=v.change(&rt.db,p,e,key,"set",value){
+   rt.log(&p.id,"twitch",&format!("Não guardei {key} para as próximas etapas: {err}"),"error");
+  }
+ }
 }
 /// Executa a operação da ação "twitch". `text` já vem renderizado.
 /// Devolve a mensagem de confirmação para o chat e o Histórico.
@@ -403,16 +419,20 @@ pub async fn run(rt:&Arc<Runtime>,p:&Profile,e:&Event,a:&Action,text:&str,trigge
    Ok(format!("Resposta enviada para @{login}"))
   }
   "clip"=>{
-   let res=crate::helix::post(&rt.http,p,&token,"clips",&[("broadcaster_id",p.channel_id.as_str())]).send().await.map_err(|_|"Não foi possível pedir o clipe à Twitch".to_string())?;
+   let res=crate::helix::post(&rt.http,p,&token,"clips",&[("broadcaster_id",p.channel_id.as_str())]).send().await.map_err(|_|"Não foi possível pedir o clipe à Twitch. Confira a internet e tente de novo.".to_string())?;
    if !res.status().is_success(){
-    return Err(if res.status().as_u16()==404{"Só dá para clipar com a live ligada".into()}else{format!("Clipe recusado pela Twitch: HTTP {}. Confira a live e a autorização do bot.",res.status().as_u16())});
+    let status=res.status().as_u16();
+    let detail=res.text().await.unwrap_or_default();
+    let detail=detail.trim().chars().take(200).collect::<String>();
+    let base=clip_refused(status);
+    return Err(if detail.is_empty(){base}else{format!("{base} Resposta da Twitch: {detail}")});
    }
    let v:Value=res.json().await.map_err(|_|"Resposta de clipe inválida".to_string())?;
    let id=v["data"][0]["id"].as_str().unwrap_or("").to_owned();
    if id.is_empty(){return Err("A Twitch não devolveu o clipe. Tente de novo em instantes.".into())}
    let url=clip_url(&id);
    remember(&mut variables,rt,p,e,"local.clipUrl",json!(url));
-   let done=format!("Clipe criado: {url}");
+   let done=format!("Clipe criado: {url} — a Twitch termina de montar em instantes.");
    rt.log(&p.id,"twitch",&done,"success");Ok(done)
   }
   _=>Err("Ação na Twitch: escolha uma operação válida".into())
@@ -451,6 +471,14 @@ pub async fn run(rt:&Arc<Runtime>,p:&Profile,e:&Event,a:&Action,text:&str,trigge
  }
  #[test] fn o_link_do_clipe_usa_o_id_da_twitch(){
   assert_eq!(clip_url("AbC123xYz"),"https://clips.twitch.tv/AbC123xYz");
+ }
+ /// Erro do clipe sempre diz o próximo passo: live, limite ou autorização.
+ #[test] fn o_erro_do_clipe_diz_o_proximo_passo(){
+  assert!(clip_refused(404).contains("live ligada"),"sem live é 404");
+  assert!(clip_refused(429).contains("limitou os pedidos"),"limite da Twitch é 429");
+  assert!(clip_refused(401).contains("Reautorize a conta do bot em Perfis"),"401 pede reautorização do bot");
+  assert!(clip_refused(403).contains("Reautorize a conta do bot em Perfis"),"403 também");
+  assert!(clip_refused(500).contains("se persistir"),"outros erros orientam o que fazer");
  }
  #[test] fn o_primeiro_numero_vira_duracao(){
   assert_eq!(first_number("timeout 300 por favor"),Some(300));

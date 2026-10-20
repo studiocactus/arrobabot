@@ -1729,3 +1729,28 @@ async fn vinculo_de_recompensa_voz_e_duracao_sobrevivem_ao_banco(){
  assert_eq!(loaded[0].actions[0].text,"Robô");
  assert_eq!(loaded[0].actions[0].value,30,"a duração volta igual");
 }
+
+
+/// O teste do fluxo não cria clipe de verdade (etapa externa pulada), mas a
+/// mensagem seguinte continua ensaiável: o link vira placeholder em vez de
+/// quebrar a etapa com "Variável ausente".
+#[tokio::test]
+async fn ensaio_do_clipe_ensafia_a_mensagem_sem_variavel_ausente(){
+ let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().join("app")).unwrap();let p=profile("Clipe");rt.db.save_profile(&p).unwrap();
+ let mut f=flow(&p);f.name="!clip".into();
+ f.trigger=Trigger{kind:"command".into(),pattern:"!clip, !clipe".into(),..Default::default()};
+ f.actions=vec![
+  Action{kind:"twitch".into(),text:"".into(),target:"".into(),value:60,condition:"".into(),tw_op:"clip".into(),..Default::default()},
+  Action{kind:"chat".into(),text:"{{user}} clipou esse momento! {{local.clipUrl}}".into(),target:"".into(),value:0,condition:"".into(),..Default::default()},
+ ];
+ rt.db.save_flow(&f).unwrap();
+ // Ensaio: gatilho de comando pelo caminho de produção, com evento simulado.
+ engine::process(rt.clone(),Event{id:uuid::Uuid::new_v4().to_string(),profile_id:p.id.clone(),kind:"chat".into(),user:"Ana".into(),user_id:"ana".into(),role:"everyone".into(),message:"!clip agora".into(),data:Value::Null,simulated:true,rehearsal:true}).await;
+ let logs=rt.db.logs(&p.id).unwrap();
+ assert!(logs.iter().any(|l|l.message.contains("teste pulou twitch")),"a etapa de clipe não roda em teste");
+ assert!(!logs.iter().any(|l|l.message.contains("Variável ausente")),"a mensagem não quebra mais por falta do link");
+ assert!(logs.iter().any(|l|l.message.contains("clipe-de-teste")),"a mensagem é ensaiada com o link de placeholder");
+ // O comando com variação "!clipe" também casa.
+ engine::process(rt.clone(),Event{id:uuid::Uuid::new_v4().to_string(),profile_id:p.id.clone(),kind:"chat".into(),user:"Ana".into(),user_id:"ana".into(),role:"everyone".into(),message:"!clipe".into(),data:Value::Null,simulated:true,rehearsal:true}).await;
+ assert!(rt.db.logs(&p.id).unwrap().iter().filter(|l|l.message.contains("clipe-de-teste")).count()>=2,"!clipe também dispara o mesmo fluxo");
+}

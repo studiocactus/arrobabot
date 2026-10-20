@@ -354,7 +354,14 @@ pub async fn process(rt:Arc<Runtime>,e:Event){
    if rt.runs.cancelled(&exec){rt.log(&p.id,"run",&format!("Execução {short} cancelada"),"info");rt.runs.finish(&exec,"CANCELLED");return false;}
    if ctl.skip_next{ctl.skip_next=false;rt.log(&p.id,"action",&format!("{} · etapa {} pulada pela condição",f.name,i+1),"info");rt.runs.step(&exec,i,"SKIPPED");continue}
    if !a.enabled{rt.log(&p.id,"action",&format!("{} · etapa {} pulada",f.name,i+1),"info");rt.runs.step(&exec,i,"SKIPPED");continue}
-   if testing&&test_skipped(a.kind.as_str(),a.target.as_str(),ensaio(&e)){rt.log(&p.id,"action",&format!("{} · teste pulou {}",f.name,a.kind),"info");rt.runs.step(&exec,i,"SKIPPED");continue}
+   if testing&&test_skipped(a.kind.as_str(),a.target.as_str(),ensaio(&e)){
+    // A etapa pulada pelo teste não pode deixar as seguintes no escuro: o que
+    // ela definiria vira placeholder local (salvo se o teste já injetou o
+    // valor), para a mensagem de confirmação ser ensaiada sem "Variável ausente".
+    if a.kind=="twitch"&&a.tw_op=="clip"&&variables.render("{{local.clipUrl}}").is_err(){
+     variables.set("local.clipUrl",json!("https://clips.twitch.tv/clipe-de-teste"));
+    }
+    rt.log(&p.id,"action",&format!("{} · teste pulou {}",f.name,a.kind),"info");rt.runs.step(&exec,i,"SKIPPED");continue}
    if !answers&&matches!(a.kind.as_str(),"chat"|"ai"|"ai.generate"){continue}
    if e.kind=="timer"&&!e.simulated&&!crate::timers::event_active(&rt,&e){break}
    if !a.condition.is_empty()&&!e.message.to_lowercase().contains(&a.condition.to_lowercase()){continue}

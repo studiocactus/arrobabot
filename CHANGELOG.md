@@ -1,5 +1,49 @@
 # Histórico de atualizações
 
+# BotLive 0.18.0
+
+## O que mudou
+
+**Duas entregas: o comando pronto de doação (!pix), com resposta de IA diferente a cada chamada e o seu link no fim, e as correções encontradas na análise do comando de clipe (`!clip`/`!clipe`).**
+
+### Comando pronto de doação (!pix), com resposta de IA variada
+- A tela Comandos ganhou o botão **Modelos**, com o comando pronto **Link de doação**.
+- Você informa o comando (o padrão é `!pix`; aceita variações como `!pix, !doar`) e o seu link de doação, como `livepix.gg/seucanal`.
+- O BotLive cria o comando já ativado, com duas etapas nesta ordem: **Gerar com IA** (frase curta e animada, diferente a cada chamada, sem inventar valores, prêmios nem regras) e **Enviar mensagem** (a frase com o seu link no fim — `{{local.aiResponse}} 💜 livepix.gg/seucanal`).
+- Precisa da IA configurada em **Personalidade de IA**; sem ela, salvar avisa o que falta e nenhum comando quebrado é criado.
+
+### Análise do comando de clipe (`!clip`/`!clipe`) — correções encontradas
+- Os erros do clipe agora dizem o próximo passo: live desligada, limite de pedidos da Twitch (espere alguns segundos) e falta da permissão de clipes (reautorize a conta do bot em Perfis). Antes, a falta de permissão e o limite viravam um erro genérico sem saída.
+- A confirmação ficou honesta: "Clipe criado: <link> — a Twitch termina de montar em instantes."
+- O aviso de variável do editor passou a considerar a **ordem** das etapas: usar `{{local.clipUrl}}` antes da etapa de clipe mostra "Nenhuma ação anterior deste fluxo define…" com a correção. Antes, nenhuma mensagem aparecia e a execução falhava com Variável ausente.
+- O teste do fluxo deixou de quebrar a mensagem seguinte ao clipe: a etapa de clipe é pulada e o link vira um endereço de exemplo, para a mensagem ser ensaiada sem erro.
+- Se o aplicativo não conseguir guardar o link do clipe para as próximas etapas, o motivo aparece no Histórico em vez de passar em silêncio.
+- A ajuda da etapa de clipe no editor explica onde o link fica, e a ajuda geral da ação Twitch cita a permissão de clipes.
+
+## Como usar
+
+### Comando !pix
+1. Atualize o BotLive e abra **Comandos**.
+2. Clique em **Modelos** e escolha **Link de doação**.
+3. Confirme o comando (o padrão é `!pix`) e escreva o seu link de doação.
+4. **Criar comando** — ele nasce ativado. Digite `!pix` no chat para conferir: cada resposta traz uma frase nova da IA com o seu link no fim.
+
+### Clipe
+- Monte a automação com a etapa **Ação na Twitch → criar clipe** antes da mensagem que usa `{{local.clipUrl}}`.
+- Reautorize a conta do bot em **Perfis** para trazer a permissão de clipes.
+
+## Validação
+- Testes Rust (`cargo test`, src-tauri): 365 aprovados, incluindo os novos — erros do clipe com próximo passo (live, limite, permissão), ensaio do fluxo com clipe (mensagem ensaiada com link de exemplo, sem Variável ausente) e disparo pelo caminho de produção com eventos simulados.
+- Testes de interface (`vitest`): 153 aprovados, incluindo o comando pronto (estrutura do !pix, variações do comando, validação dos campos) e a ordem das etapas no aviso de variável.
+- Testes de tela (`playwright`): 92 aprovados, incluindo as regressões de recompensa/voz e duplicação da 0.17.0.
+- Capturas em janela de ~1100 px e larga (`%TEMP%\botlive-ux`): `fluxo-clipe-ajuda.png`, `fluxo-clipe-aviso-ordem.png`, `fluxo-clipe-aviso-ordem-larga.png`, `pix-modelo-dialogo.png`, `pix-modelo-dialogo-larga.png`, `pix-modelo-criado.png`.
+
+## Limitações
+- A homologação com Twitch, OBS e Voicemod reais continua pendente: o clipe de verdade, com a live ligada e a permissão de clipes, precisa do teste manual na sua máquina.
+- Se o provedor da IA falhar durante a live, o comando !pix para na primeira etapa e não responde — é o comportamento documentado das etapas de IA, registrado no Histórico. Nesse caso o link não sai; se preferir o link garantido mesmo com a IA fora, dá para montar a versão com a mensagem do link antes da etapa de IA.
+
+---
+
 # BotLive 0.17.0
 
 ## O que mudou

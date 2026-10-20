@@ -107,9 +107,13 @@ export function makeVariableToken(key:string,fallback:string,format:string){
  * que era o caso de um timer citando {{local.aiResponse}} sem nenhuma ação de IA.
  * Um texto alternativo no próprio código (|default:) resolve e tira o aviso.
  */
-export function missingLocals(text:string,actions:{kind:string;target:string;twOp?:string}[]):string[]{
+/** Locais que o texto usa e que nenhuma ação **anterior** define. A ordem
+ *  importa: usar {{local.clipUrl}} antes da etapa de clipe falha em execução,
+ *  mesmo que uma etapa seguinte venha a definir o valor. `at` é a posição da
+ *  etapa editada; sem `at`, valem todas as ações (comportamento antigo). */
+export function missingLocals(text:string,actions:{kind:string;target:string;twOp?:string}[],at=actions.length):string[]{
  const defined=new Set<string>();
- for(const a of actions){
+ for(const a of actions.slice(0,Math.max(0,at))){
   if(a.kind==='ai'||a.kind==='ai.generate'){defined.add('local.aiResponse');defined.add('local.aiSuccess')}
   if(a.kind==='punish'){defined.add('local.punished')}
   if(a.kind==='twitch'){

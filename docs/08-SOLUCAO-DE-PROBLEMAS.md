@@ -54,6 +54,10 @@ Não precisa apagar o perfil para testar uma configuração. Excluir pode destru
 | A punição não executa | Perfil da Twitch com a conta do canal autorizada, gatilho restrito a Moderadores ou Só o streamer e alvo válido. Prévia e simulação nunca punem; veja o plano no Histórico |
 | A punição avisa que o evento não tem conta da Twitch | O evento não trouxe um ID numérico; use um disparo real de chat, não a simulação |
 | Anúncio, mensagem fixada ou destaque recusado | Autorize de novo as contas do bot e do canal, marque o bot como moderador do canal e leia o aviso no Histórico, que diz qual permissão falta |
+| Criar clipe não executa | Só funciona com a live ligada e com a permissão de clipes: reautorize a conta do bot em Perfis (a autorização nova traz a permissão) |
+| A Twitch limitou os pedidos do clipe | Espere alguns segundos e dispare de novo; clipe em sequência rápida é limitado pela Twitch |
+| O link do clipe não aparece na mensagem | A etapa que usa `{{local.clipUrl}}` precisa vir depois da etapa de clipe; antes dela, a ação falha com Variável ausente e o editor já avisa |
+| O comando !pix não respondeu | A etapa de IA falhou e o fluxo parou antes de responder (comportamento documentado); confira a IA em Personalidade de IA e o erro no Histórico |
 
 ## IA e memória
 
@@ -81,7 +85,7 @@ Não precisa apagar o perfil para testar uma configuração. Excluir pode destru
 | Os emotes não parecem na resposta | É esperado: a regra pede no máximo um emote por resposta e deixa a maioria das respostas sem emote; o modelo decide onde cabe, e a escolha muda de uma resposta para outra |
 | O contexto da live some | Esse estado fica só em memória e vale por 90 segundos; fechar o aplicativo, trocar de canal ou excluir o perfil zera |
 | Obsidian não responde | Confira instância aberta, plugin, endereço local, chave e certificado confiável quando usar HTTPS |
-| Variável ausente: local.aiResponse | A mensagem cita uma resposta da IA que nenhuma ação do fluxo define. Acrescente **Gerar resposta da IA** antes de usar o valor, ou escreva `{{local.aiResponse\|default:sem resposta}}` no próprio marcador. O editor já mostra esse aviso sob o quadro da mensagem, e o caso clássico é um timer antigo, como o timer Donate, que citava o valor sem a ação de IA ao lado |
+| Variável ausente: local.aiResponse | A mensagem cita uma resposta da IA que nenhuma ação **anterior** do fluxo define (a ordem das etapas importa). Coloque **Gerar resposta da IA** antes de usar o valor, ou escreva `{{local.aiResponse\|default:sem resposta}}` no próprio marcador. O editor já mostra esse aviso sob o quadro da mensagem, e o caso clássico é um timer antigo, como o timer Donate, que citava o valor sem a ação de IA ao lado |
 
 Erros HTTP são indícios, não diagnósticos completos. Verifique também o painel do serviço. Nunca envie a chave da API junto com uma captura de erro.
 
