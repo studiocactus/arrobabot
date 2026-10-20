@@ -1,5 +1,35 @@
 # Histórico de atualizações
 
+# BotLive 0.18.2
+
+## O que mudou
+
+**A área “Efeitos internos antigos (migração)” saiu da tela Voicemod.**
+
+- O cartão de migração (que mapeava efeitos antigos como “Voz fina” e “Robô” para vozes do Voicemod) aparecia no **Avançado** de perfis com configuração antiga e não era mais usado: todos os campos ficavam em “Sem equivalência”. Ele foi retirado, e a tela Voicemod fica só com o que está em uso (fila e intervalos no Avançado).
+- Nada quebrado para quem já tinha mapeamentos salvos: eles continuam valendo na execução. Efeito antigo pedido sem equivalência e sem o motor interno continua recusado, e o aviso agora aponta o caminho de verdade — “Troque para uma voz do Voicemod (regras de voz ou etapa Mudar minha voz) ou inicie o motor interno em Voz da live”.
+- A etapa **Mudar minha voz** deixa de sugerir a tela retirada: quem ainda tem fluxo com efeito antigo vê o aviso para escolher uma voz do Voicemod direto no editor.
+- O motor interno de voz (microfone → VB-Cable → OBS) **continua como está** para quem o utiliza: nada foi apagado, desinstalado nem migrado à força.
+
+## Como usar
+
+- Se você já usa só o Voicemod: nada a fazer — a tela fica mais limpa.
+- Se algum fluxo antigo ainda usa efeito interno (fina, robô…), atualize a etapa para uma voz do Voicemod (editor do fluxo → **Mudar minha voz**) ou inicie o motor interno em **Voz da live**.
+
+## Validação
+
+- Testes de tela (`playwright`): 92 aprovados, com a regressão reescrita — mesmo com configuração antiga salva, a área de migração não volta, e o Avançado continua com “Fila e intervalos”.
+- Testes Rust (`cargo test`, src-tauri): 373 aprovados; o aviso de efeito antigo sem motor interno aponta o novo caminho.
+- Testes de interface (`vitest`): 153 aprovados; build e verificação de tipos limpos.
+- Capturas da tela Voicemod sem a área, em 1100 px e janela larga (`%TEMP%\botlive-ux\voicemod-sem-migracao.png` e `voicemod-sem-migracao-larga.png`).
+
+## Limitações
+
+- A homologação com o Voicemod aberto e vozes reais continua sendo o teste na sua máquina.
+- Quem dependia da tela de migração para mapear efeitos antigos agora atualiza as etapas para vozes do Voicemod — os mapeamentos já salvos continuam funcionando, mas não há mais tela para criar novos.
+
+---
+
 # BotLive 0.18.1
 
 ## O que mudou

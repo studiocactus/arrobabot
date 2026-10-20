@@ -107,7 +107,7 @@ O módulo soma apenas pagamentos da LivePix em BRL; bits e subs da Twitch não e
 
 O Voicemod é o caminho principal de troca de voz desde a 0.12.0, na tela **Voicemod**: o BotLive recebe a recompensa ou o comando e pede ao Voicemod para trocar sua voz; o OBS recebe sua voz pelo microfone virtual do Voicemod. A conexão usa a [Control API](https://control-api.voicemod.net/) local por WebSocket, com a chave guardada no cofre — sem nuvem e sem sair desta máquina. Os sons do bot **não passam pelo Voicemod** (eles têm a fonte “Áudio do BotLive”). A integração existiu na 0.1.93, saiu em 0.1.95 e voltou na 0.9.0; os detalhes de uso estão em [Áudio no OBS](13-AUDIO.md).
 
-Quem ainda usa os efeitos internos antigos (fina, grossa, robô, engraçada, eco) continua com tudo como estava: o BotLive captura o microfone, aplica o efeito e envia a voz para o [VB-Cable](https://vb-audio.com/Cable/), que o OBS usa como microfone. A migração para vozes do Voicemod é manual — cada efeito antigo é ligado a uma voz por você, em **Voicemod › Avançado › Efeitos internos antigos**.
+Quem ainda usa os efeitos internos antigos (fina, grossa, robô, engraçada, eco) continua com tudo como estava: o BotLive captura o microfone, aplica o efeito e envia a voz para o [VB-Cable](https://vb-audio.com/Cable/), que o OBS usa como microfone. Quem já está no caminho do Voicemod não tem mais etapa de migração: as regras de voz e a etapa **Mudar minha voz** usam vozes do Voicemod diretamente (mapeamentos salvos em versões anteriores continuam valendo).
 
 ## Estados e reconexão
 

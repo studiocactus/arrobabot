@@ -280,7 +280,7 @@ function switchKind(current:Action,next:string){const base:Action={...current,ki
    </select>
   </Field>
   <Field label="Duração (segundos)" hint="0 = manter até a próxima troca. Com tempo, a voz de antes volta sozinha."><input type="number" min={0} max={3600} step={1} value={action.value??0} onChange={e=>update({...action,value:Math.max(0,Math.round(Number(e.target.value)||0))})}/></Field>
-  <p className="help">Troca sua voz pelo Voicemod — fila, duração e restauração iguais às das recompensas. Se outro efeito entrar no meio, o mais recente vale e a voz de antes volta no fim dele.{action.target&&voiceEffects[action.target]?<strong> Este fluxo ainda usa o efeito antigo “{voiceEffects[action.target]}”: escolha uma voz do Voicemod acima ou mapeie o efeito em Voicemod › Avançado.</strong>:''}</p>
+  <p className="help">Troca sua voz pelo Voicemod — fila, duração e restauração iguais às das recompensas. Se outro efeito entrar no meio, o mais recente vale e a voz de antes volta no fim dele.{action.target&&voiceEffects[action.target]?<strong> Este fluxo ainda usa o efeito antigo “{voiceEffects[action.target]}”: escolha uma voz do Voicemod acima para atualizar.</strong>:''}</p>
   </>}</Section>
   {(action.kind.startsWith('ai')||action.kind==='obs')&&<Section title="Avançado">
   {action.kind.startsWith('ai')&&<details className="ai-help"><summary>Como a IA monta a resposta</summary><p className="help">A mensagem atual, até 12 falas recentes dos últimos 5 minutos e as memórias entram automaticamente. Defina o tom aqui. {action.kind==='ai.generate'?'Esta ação só guarda a resposta. Conecte Enviar mensagem e clique em + Resposta da IA.':'Esta ação já envia ao chat e guarda a resposta para os próximos blocos.'}</p></details>}

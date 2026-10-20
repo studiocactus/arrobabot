@@ -507,7 +507,7 @@ async fn action(rt:&Arc<Runtime>,p:&Profile,e:&Event,a:&Action,variables:&mut cr
  }
  // 3) Motor interno antigo: caminho preservado para quem ainda usa.
  if crate::voice_fx::EFFECTS.contains(&effect.as_str()){
-  if !rt.voice_fx.is_running(){return Err("Os efeitos internos estão parados nesta máquina. Migre para uma voz do Voicemod (Voicemod › Avançado › Efeitos internos antigos) ou inicie o motor interno.".into())}
+  if !rt.voice_fx.is_running(){return Err("Os efeitos internos estão parados nesta máquina. Troque para uma voz do Voicemod (regras de voz ou etapa Mudar minha voz) ou inicie o motor interno em Voz da live.".into())}
   let gen=rt.voice_fx.set_effect(rt,&p.id,&effect)?["gen"].as_u64().unwrap_or(0);
   if secs>0{
    let rt2=rt.clone();let pid=p.id.clone();

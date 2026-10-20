@@ -1,4 +1,5 @@
 import {test,expect,type Page} from '@playwright/test';
+import {join} from 'path';
 import {OUT} from './ux-helpers';
 
 test.use({permissions:['microphone'],launchOptions:{args:['--use-fake-device-for-media-stream','--use-fake-ui-for-media-stream']}});
@@ -160,15 +161,17 @@ test('regra de troca de voz pede acionamento, voz, duração e ativação — co
  await expect(page.getByText(/sem gastar pontos/).first()).toBeVisible();
 });
 
-test('migração dos efeitos internos aparece só para o perfil afetado, sem presumir equivalência',async({page})=>{
+test('a área de migração dos efeitos internos saiu da tela Voicemod',async({page})=>{
  await mockVoicemod(page,{legacy:true});
  await page.goto('/');
  await page.locator('.sidebar').getByRole('button',{name:'Voicemod',exact:true}).click();
  await page.locator('summary',{hasText:'Avançado'}).last().click();
- await expect(page.getByText('Efeitos internos antigos (migração)')).toBeVisible();
- await expect(page.getByText(/nenhum nome vira voz por suposição/)).toBeVisible();
- // Cada efeito antigo mapeia na mão do usuário, com “Sem equivalência” como padrão.
- const map=page.getByLabel('Efeito antigo “Voz fina” vira');
- await expect(map).toBeVisible();
- await expect(map).toHaveValue('');
+ // O cartão de migração foi retirado; mesmo com configuração antiga salva, ele
+ // não volta. O Avançado continua com fila e intervalos.
+ await expect(page.getByText('Efeitos internos antigos (migração)')).toHaveCount(0);
+ await expect(page.getByText('Fila e intervalos')).toBeVisible();
+ await page.setViewportSize({width:1100,height:860});
+ await page.screenshot({path:join(OUT,'voicemod-sem-migracao.png'),fullPage:true});
+ await page.setViewportSize({width:1600,height:900});
+ await page.screenshot({path:join(OUT,'voicemod-sem-migracao-larga.png'),fullPage:true});
 });

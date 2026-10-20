@@ -4,7 +4,6 @@ import {listen} from '@tauri-apps/api/event';
 import {api,desktop,errorText} from './api';
 import {Card,Field,Toggle} from './components';
 import VoiceRules,{type VmVoice} from './VoiceRules';
-import {voiceEffects} from './types';
 
 /**
  * Tela Voicemod: configura uma vez e deixa a troca de voz no automático.
@@ -45,7 +44,6 @@ export default function Voicemod({profileId,notify}:{profileId:string;notify:(s:
  const [testVoice,setTestVoice]=useState('');
  const [testSecs,setTestSecs]=useState(10);
  const [now,setNow]=useState(Date.now());
- const [legacy,setLegacy]=useState<Record<string,string>>({});
  const timer=useRef<number|null>(null);
  const gotAt=useRef(Date.now());
  // O backend confirma começo e fim; aqui só o relógio visível anda, para o
@@ -60,7 +58,7 @@ export default function Voicemod({profileId,notify}:{profileId:string;notify:(s:
  const load=useCallback(async()=>{
   if(!desktop)return;
   try{const s=await api<VmSnapshot>('voicemod.get',{profileId});setSnap(s);if(s?.defaultSecs)setTestSecs(s.defaultSecs)}catch{}
-  try{const q=await api<{queue:QueueView;config:RulesConfig}>('voiceResgate.get',{profileId});setQueue(q?.queue||null);if(q?.config){setCfg(q.config);setLegacy(q.config.legacyMap||{})}}catch{}
+  try{const q=await api<{queue:QueueView;config:RulesConfig}>('voiceResgate.get',{profileId});setQueue(q?.queue||null);if(q?.config){setCfg(q.config)}}catch{}
   try{const status=await api<FxStatus>('voiceFx.get',{profileId});const selection=await api<FxSelection>('voiceFx.selection',{profileId});setFx({status,selection})}catch{}
  },[profileId]);
  useEffect(()=>{if(desktop)void load()},[load]);
@@ -145,7 +143,6 @@ export default function Voicemod({profileId,notify}:{profileId:string;notify:(s:
  const fxRunning=fx?.status?.phase==='running';
  // Migração contextual: só aparece para perfis afetados (motor interno em uso,
  // configuração antiga salva ou mapeamento existente).
- const affected=fxRunning||!!(fx?.selection&&(fx.selection.input||fx.selection.output))||Object.keys(legacy).length>0;
 
  return <div>
   <Card title="Sua voz no Voicemod">
@@ -266,18 +263,6 @@ export default function Voicemod({profileId,notify}:{profileId:string;notify:(s:
      </Field>
     </div>
    </Card>
-   {affected&&<Card title="Efeitos internos antigos (migração)">
-    <p className="help">Este perfil ainda tem configuração da voz interna do BotLive (microfone → VB-Cable → OBS). Ela continua funcionando como estava, mas o caminho principal agora é o Voicemod. Para migrar, escolha abaixo qual voz do Voicemod corresponde a cada efeito antigo — <strong>o mapeamento é sempre escolhido por você; nenhum nome vira voz por suposição</strong>. Enquanto houver efeito interno no ar, nada é migrado por cima.</p>
-    {fxRunning&&<div className="notice"><strong>Motor interno ativo nesta máquina.</strong><p className="help">Pare antes de usar as trocas de voz do Voicemod: os dois caminhos capturariam o seu microfone.</p><button className="secondary" disabled={busy} onClick={()=>void run(async()=>{await api('voiceFx.stop',{profileId});await load()})}><Mic size={14}/> Parar motor interno</button></div>}
-    {Object.entries(voiceEffects).filter(([k])=>k!=='normal').map(([k,n])=>(
-     <Field key={k} label={`Efeito antigo “${n}” vira`} hint="Sem equivalência, pedidos antigos continuam recusados com aviso.">
-      <select value={legacy[k]||''} disabled={busy} onChange={e=>setLegacy(m=>({...m,[k]:e.target.value}))} onBlur={()=>void run(async()=>{const q=await api<{config:RulesConfig}>('voiceResgate.get',{profileId});const config={...(q?.config||cfg),legacyMap:legacy};await api('voiceResgate.save',{profileId,config});setCfg(config)})}>
-       <option value="">Sem equivalência (mantém recusa)</option>
-       {voices.map(v=><option key={v.voiceID} value={v.voiceID}>{v.name}</option>)}
-      </select>
-     </Field>
-    ))}
-   </Card>}
   </details>
 
   {!desktop&&<div className="notice"><strong>Prévia no navegador.</strong><p className="help">O Voicemod é um aplicativo desta máquina: conexão, vozes e testes só existem no aplicativo desktop. Nada aqui finge conexão real.</p></div>}

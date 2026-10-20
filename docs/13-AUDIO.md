@@ -61,7 +61,7 @@ O reconhecimento da sua fala mora em **Comandos → Comandos por voz** (e no mó
 
 ### Efeitos internos antigos (quem ainda usa)
 
-O motor interno (microfone → VB-Cable → OBS) continua funcionando como estava para quem o utiliza: nada é apagado, desinstalado ou migrado sem você pedir. A migração aparece **só nos perfis afetados**, em **Voicemod › Avançado › Efeitos internos antigos**, e o mapeamento de cada efeito antigo (fina, robô…) para uma voz do Voicemod é escolhido por você — **nenhum nome vira voz por suposição**. Enquanto houver efeito interno no ar, nada é migrado por cima.
+O motor interno (microfone → VB-Cable → OBS) continua funcionando como estava para quem o utiliza: nada é apagado, desinstalado ou migrado sem você pedir. Quem já está no caminho do Voicemod não tem etapa de migração: as regras de voz e a etapa **Mudar minha voz** usam vozes do Voicemod diretamente, e mapeamentos salvos em versões anteriores continuam valendo. Efeito antigo pedido sem o motor interno e sem equivalência é recusado com aviso dizendo o próximo passo.
 
 ## Migração (de versões com VB-Cable)
 
