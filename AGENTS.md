@@ -6,6 +6,11 @@
 - Execute `npm run repo:setup` após clonar. O hook verifica o conteúdo staged; a CI verifica cada commit recebido.
 - Nunca versione `.private`, `.tools`, dados de usuários, credenciais, instaladores ou artefatos de teste. Binários são publicados em Releases.
 
+## Padrão de versões
+
+- Publicada uma versão minor (ex.: **v0.20.0**), as atualizações seguintes somam **um patch cada** — **v0.20.1**, **v0.20.2** e assim por diante — até o próximo salto minor (**v0.21.0**), quando o ciclo recomeça (v0.21.1, v0.21.2…).
+- Sem saltos e sem repetir versão já publicada. No `npm run update:prepare` e nos arquivos, a versão vai **sem** o "v" (`0.20.1`); nas releases, tags e conversa, **com** o "v" (`v0.20.1`).
+
 ## Regras de tela (qualidade visual)
 
 - Nunca esprema texto em coluna estreita: `.form-grid` usa colunas que só aparecem quando há largura para cada uma (mínimo de 240px) e dentro do inspetor de fluxos é sempre uma coluna.

@@ -29,6 +29,14 @@ Em versões antigas, o resultado podia aparecer apenas num aviso temporário, e 
 
 Não é necessário editar o código do script a cada commit. O script prepara e verifica os registros daquela atualização. As notas da versão são a descrição detalhada que acompanha o commit e a release.
 
+## Padrão de numeração
+
+As versões seguem `X.Y.Z` e avançam **uma a uma em patch**: publicada a **v0.20.0**, as próximas atualizações são **v0.20.1**, **v0.20.2** e assim por diante — cada entrega com seu commit, suas notas e seus testes. O salto para a próxima versão **minor** (**v0.21.0**) abre um ciclo novo, e o padrão continua igual: v0.21.1, v0.21.2…
+
+- No `npm run update:prepare`, nos arquivos `updates/` e em `package.json`, a versão vai **sem** o "v": `0.20.1`.
+- Nas releases do GitHub, nas tags e na conversa, vai **com** o "v": `v0.20.1`.
+- Nada de saltos (nunca pular de v0.20.0 para v0.20.3) e nada de repetir uma versão já publicada.
+
 ## Preparar o próximo commit
 
 Após clonar, execute:
