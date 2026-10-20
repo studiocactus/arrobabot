@@ -100,6 +100,9 @@ impl Runtime {
  pub fn disconnect(&self,id:&str){if let Some(h)=self.connections.lock().unwrap().remove(id){h.abort();}self.status(id,"offline");}
  pub async fn send(&self,p:&Profile,e:&Event,text:&str)->Result<(),String>{self.send_with(p,e,text,None).await}
  pub async fn send_with(&self,p:&Profile,e:&Event,text:&str,f:Option<&Flow>)->Result<(),String>{
+  // O mesmo endereço sai uma vez só: a IA imita as respostas anteriores do bot
+  // (elas ficam na memória da conversa) e repetia o link junto do enfeite.
+  let clean=crate::links::dedupe(text);let text=clean.as_str();
  let current=self.db.profile(&p.id)?;let p=&current;
  let (kind,color)=f.map(|f|(f.send_type.as_str(),f.send_color.as_str())).unwrap_or(("chat","primary"));
  let label=if kind=="announce"{"Anúncio"}else if kind=="pin"{"Mensagem fixada"}else if kind=="shoutout"{"Destaque"}else{"Mensagem"};

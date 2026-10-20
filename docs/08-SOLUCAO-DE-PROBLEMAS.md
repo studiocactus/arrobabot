@@ -57,6 +57,7 @@ Não precisa apagar o perfil para testar uma configuração. Excluir pode destru
 | Criar clipe não executa | Só funciona com a live ligada e com a permissão de clipes: reautorize a conta do bot em Perfis (a autorização nova traz a permissão) |
 | A Twitch limitou os pedidos do clipe | Espere alguns segundos e dispare de novo; clipe em sequência rápida é limitado pela Twitch |
 | O link do clipe não aparece na mensagem | A etapa que usa `{{local.clipUrl}}` precisa vir depois da etapa de clipe; antes dela, a ação falha com Variável ausente e o editor já avisa |
+| O link aparece mais de uma vez na mensagem do !pix | Não deve mais acontecer: o mesmo endereço sai uma vez só (a IA imita as respostas anteriores do bot e repetia o link junto do enfeite). Endereços diferentes continuam todos na mensagem |
 | O comando !pix não respondeu | A etapa de IA falhou e o fluxo parou antes de responder (comportamento documentado); confira a IA em Personalidade de IA e o erro no Histórico |
 
 ## IA e memória
@@ -115,6 +116,7 @@ Erros HTTP são indícios, não diagnósticos completos. Verifique também o pai
 | Palavra de ativação não dispara | A palavra deve aparecer **exata** (sem pontuação) na transcrição; confira **Histórico** para ver o texto reconhecido; sem palavra cadastrada, toda fala dispara (pode gerar muitos gatilhos) |
 | Overlay aguarda BotLive | Confira instância aberta, porta e token da sessão atual |
 | Overlay de outro perfil | Preencha o UUID correto no parâmetro profile |
+| Meta da LivePix parada, com aviso de acesso recusado | Salve as credenciais novamente na tela LivePix (Meta de doações) para renovar o token; até lá, o contador para e o aviso aparece uma vez no Histórico |
 | Discord falha (webhook) | Confira webhook salvo, módulo ativo, permissões do canal e erro HTTP |
 | Convite !discord inválido | Use convite HTTPS de discord.gg ou discord.com |
 | Bot do Discord não conecta | Token de bot (não de aplicativo), servidor escolhido, **Ativar o bot do Discord** ligado e o motivo no Histórico |

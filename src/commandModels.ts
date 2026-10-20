@@ -7,8 +7,11 @@ import {newAction,newFlow,type Action,type Flow} from './types';
 export type DonationFields={command:string;link:string};
 
 /** Instrução da resposta: curta, animada e nunca igual à anterior. O pedido
- *  proíbe inventar valores e regras — o link certo vem da mensagem fixa abaixo. */
-export const DONATION_PROMPT='Escreva uma frase curta (no máximo 100 caracteres), animada e DIFERENTE a cada resposta, agradecendo e convidando {{user}} a apoiar a live. Não invente valores, prêmios, metas ou regras.';
+ *  proíbe inventar valores e regras — o link certo vem da mensagem fixa abaixo.
+ *  A proibição de links é importante: cada resposta do bot entra na memória da
+ *  conversa e a IA imita as respostas anteriores — um link escrito por ela se
+ *  repete e cresce a cada disparo. */
+export const DONATION_PROMPT='Escreva uma frase curta (no máximo 100 caracteres), animada e DIFERENTE a cada resposta, agradecendo e convidando {{user}} a apoiar a live. Não invente valores, prêmios, metas ou regras. Não escreva links nem endereços: o link da doação já entra no fim da mensagem.';
 
 /** O comando de doação: gera a frase variada e responde com o link da pessoa. */
 export function donationFlow(profileId:string,{command,link}:DonationFields):Flow{

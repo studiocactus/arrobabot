@@ -209,10 +209,12 @@ Você também pode importar examples/boas-vindas.botlivepreset, que contém mens
 
 Na tela Comandos, o botão **Modelos** cria o comando pronto **Link de doação**. Você informa o comando (o padrão é !pix; aceite variações como !pix, !doar) e o seu link de doação, como livepix.gg/seucanal. O BotLive monta duas etapas, nesta ordem:
 
-1. **Gerar com IA**: escreve uma frase curta e animada, diferente a cada chamada, convidando quem pediu a apoiar a live. Não inventa valores, prêmios nem regras.
+1. **Gerar com IA**: escreve uma frase curta e animada, diferente a cada chamada, convidando quem pediu a apoiar a live. Não inventa valores, prêmios nem regras e **não escreve links** — o link entra uma vez só, na mensagem seguinte.
 2. **Enviar mensagem**: publica a frase com o seu link no fim — `{{local.aiResponse}} 💜 livepix.gg/seucanal`.
 
 O comando nasce ativado, com os intervalos padrão, e aparece na lista para você revisar quando quiser. Precisa da IA configurada em **Personalidade de IA**; sem ela, salvar o comando avisa o que falta. Se o provedor da IA falhar durante a live, o fluxo para na primeira etapa e o Histórico explica — é o comportamento documentado das etapas de IA. Digite !pix no chat para conferir.
+
+Se o link aparecer **mais de uma vez** na resposta, não se preocupe com o envio: a mensagem sai com o mesmo endereço **uma vez só** — o app remove a repetição junto do enfeite que se repete (emoji, `:codigo:` e separadores), e endereços diferentes continuam todos. Ainda assim, mantenha o link fora do prompt da IA e presente uma vez só na mensagem, depois de **+ Resposta da IA**: a causa mais comum da repetição é a memória da conversa — cada resposta do bot entra no histórico recente que a IA lê, e ela passa a imitar as próprias respostas.
 
 Para montar à mão em vez do modelo, use as mesmas duas etapas acima na ordem indicada.
 

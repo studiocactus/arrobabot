@@ -12,6 +12,7 @@ mod secrets;
 mod ai;
 mod conversation;
 mod chat_extras;
+mod links;
 mod oauth;
 mod engine;
 mod platforms;

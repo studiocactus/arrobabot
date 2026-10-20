@@ -300,12 +300,18 @@ async fn fetch_token(rt: &Arc<Runtime>, profile_id: &str) -> Result<String, Stri
 // ---- Tick ----
 
 /// Guarda o último problema na própria meta (chave `last_error`) para a tela
-/// mostrar o aviso na hora certa — token recusado não fica só no log.
-fn note_error(rt: &Runtime, p: &str, msg: &str) {
+/// mostrar o aviso na hora certa — token recusado não fica só no log. O tick
+/// roda a cada 15 segundos, então o Histórico recebe a linha uma única vez,
+/// enquanto o problema não muda: repetir a cada consulta só esconde o resto.
+fn note_error(rt: &Runtime, p: &str, msg: &str, level: &str) {
     let mut d = data(rt, p);
+    let changed = d.get("last_error").and_then(|v| v.as_str()) != Some(msg);
     d["last_error"] = json!(msg);
     d["last_error_at"] = json!(now_seconds());
     save_data(rt, p, &d);
+    if changed {
+        rt.log(p, "livepix", msg, level);
+    }
 }
 
 pub async fn tick(rt: &Arc<Runtime>) {
@@ -315,15 +321,14 @@ pub async fn tick(rt: &Arc<Runtime>) {
         let goal = match cfg.goals.get(&cfg.active_goal) { Some(g) => g.clone(), None => continue };
         let token = match fetch_token(rt, &profile.id).await {
             Ok(t) => t,
-            Err(e) => { rt.log(&profile.id, "livepix", &format!("token: {e}"), "warn"); note_error(rt, &profile.id, &format!("Não foi possível renovar o acesso da LivePix ({e}). Confira as credenciais na aba Conta.")); continue; }
+            Err(e) => { note_error(rt, &profile.id, &format!("Não foi possível renovar o acesso da LivePix ({e}). Confira as credenciais na tela LivePix (Meta de doações)."), "warn"); continue; }
         };
         let url = format!("https://api.livepix.gg/v2/payments?limit=100&currency=BRL");
         let resp = rt.http.get(&url).bearer_auth(&token).timeout(Duration::from_secs(20)).send().await;
-        let resp = match resp { Ok(r) => r, Err(e) => { rt.log(&profile.id, "livepix", &e.to_string(), "error"); note_error(rt, &profile.id, &format!("A API da LivePix não respondeu ({e}).")); continue; } };
+        let resp = match resp { Ok(r) => r, Err(e) => { note_error(rt, &profile.id, &format!("A API da LivePix não respondeu ({e})."), "error"); continue; } };
         if resp.status().as_u16() == 401 {
             forget_token(&profile.id);
-            rt.log(&profile.id, "livepix", "Token da LivePix recusado; será renovado na próxima consulta.", "warn");
-            note_error(rt, &profile.id, "O acesso da LivePix foi recusado (token expirado). Salve as credenciais novamente para renovar — o contador para enquanto isso.");
+            note_error(rt, &profile.id, "O acesso da LivePix foi recusado. Salve as credenciais novamente na tela LivePix (Meta de doações) para renovar — o contador para enquanto isso.", "warn");
             continue;
         }
         let body: Value = match resp.json().await { Ok(b) => b, Err(_) => continue };
@@ -672,6 +677,23 @@ mod tests {
         assert_eq!(sanitize_design(&json!({"font": "Bebas Neue", "template": "aurora"}))["font"], "Bebas Neue");
         assert_eq!(sanitize_design(&json!({"font": "Fonte d'água"}))["font"], "Fonte d'água");
         assert_eq!(sanitize_design(&json!({"font": "Press Start 2P"}))["font"], "Press Start 2P");
+    }
+
+    /// O tick roda a cada 15 segundos: o mesmo problema entra no Histórico uma
+    /// vez só, e volta a aparecer quando a mensagem muda.
+    #[tokio::test]
+    async fn aviso_repetido_nao_enche_o_historico() {
+        let dir = tempfile::tempdir().unwrap();
+        let rt = Runtime::new(dir.path().into()).unwrap();
+        let p = profile("P");
+        rt.db.save_profile(&p).unwrap();
+        note_error(&rt, &p.id, "Acesso recusado.", "warn");
+        note_error(&rt, &p.id, "Acesso recusado.", "warn");
+        note_error(&rt, &p.id, "Outro problema.", "warn");
+        let logs = rt.db.logs(&p.id).unwrap();
+        assert_eq!(logs.iter().filter(|l| l.message == "Acesso recusado.").count(), 1, "o mesmo aviso entra uma vez");
+        assert_eq!(logs.iter().filter(|l| l.message == "Outro problema.").count(), 1, "problema diferente entra de novo");
+        assert_eq!(data(&rt, &p.id)["last_error"], json!("Outro problema."), "a tela continua vendo o problema atual");
     }
 
     #[tokio::test]

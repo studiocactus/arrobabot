@@ -1,5 +1,36 @@
 # Histórico de atualizações
 
+# BotLive 0.18.1
+
+## O que mudou
+
+**O Histórico para de encher de linhas repetidas da LivePix: o problema de acesso aparece uma vez, dizendo o próximo passo.**
+
+- A Meta de doações consulta a LivePix a cada 15 segundos. Quando o acesso era recusado, cada consulta escrevia a mesma linha no Histórico — minutos depois, a lista inteira era só a repetição, escondendo os erros das automações (inclusive os do comando !pix, que pareciam sumir).
+- Agora o aviso entra **uma vez**, enquanto o problema não mudar, e diz o que fazer: "O acesso da LivePix foi recusado. Salve as credenciais novamente na tela LivePix (Meta de doações) para renovar — o contador para enquanto isso."
+- Os demais problemas da LivePix (credencial ausente, API fora do ar) seguem a mesma regra: uma linha, com o motivo e a correção.
+- O comando pronto de doação (!pix) ganhou uma regra a mais no prompt da IA: **não escrever links nem endereços**. Cada resposta do bot entra na memória da conversa e a IA imita as respostas anteriores — um link escrito por ela se repetia e crescia a cada disparo, até aparecer três vezes na mesma mensagem. O link fixo continua vindo uma vez só, no fim da mensagem.
+- E há agora a garantia no envio: **o mesmo endereço sai uma vez só na mensagem do chat**. Se a IA repetir o link mesmo assim, o app remove as repetições junto do enfeite que se repete (emoji, `:codigo:` e separadores) — endereços diferentes continuam todos, então links seguem sendo enviados normalmente.
+
+## Como usar
+
+- Se aparecer o aviso da LivePix, abra a tela **LivePix (Meta de doações)** e salve as credenciais de novo (Client ID e Client Secret): o token é renovado e o contador volta na próxima consulta. Se a meta não estiver em uso, desligue-a na mesma tela.
+- No comando !pix, mantenha o link fora do prompt da IA e presente uma vez só na mensagem (depois de **+ Resposta da IA**). Mesmo que a IA repita o endereço, a mensagem publicada sai com o link uma vez só.
+
+## Validação
+
+- Testes Rust (`cargo test`, src-tauri): todos aprovados, incluindo os novos — o aviso repetido da LivePix registrado duas vezes produz uma única linha no Histórico (com o aviso da tela sempre atualizado) e a limpeza de endereços cobre o caso real do chat (`:purple_heart: livepix.gg/thenees` duas e três vezes viram uma), emoji repetido, mesmo endereço com e sem `https://`, endereços diferentes preservados e texto sem repetição intacto.
+- Testes de interface (`vitest`): todos aprovados, incluindo o prompt do comando pronto com a proibição de links.
+- Cenário reproduzido aqui: Meta ativada com token recusado a cada consulta, medindo a quantidade de linhas no Histórico; e a mensagem exata que apareceu no chat, medida antes e depois da limpeza.
+
+## Limitações
+
+- A causa do token recusado continua sendo o acesso da conta LivePix: a correção é re-salvar as credenciais (ou desligar a meta). Esta atualização apenas evita que o aviso esconda o resto do Histórico.
+- A garantia de um endereço por mensagem vale para o **chat**. Voz, overlay e webhook continuam levando o texto como foi escrito.
+- A homologação com a API real da LivePix, usando as suas credenciais, e o comando !pix na sua live precisam do teste na sua máquina.
+
+---
+
 # BotLive 0.18.0
 
 ## O que mudou
