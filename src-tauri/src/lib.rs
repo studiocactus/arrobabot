@@ -224,7 +224,7 @@ pub async fn dispatch(rt:Arc<Runtime>,op:&str,args:Value)->R<Value>{
  "voiceResgate.save"=>{let profile=rt.db.profile(&p)?;crate::voice_redemptions::save(&rt,&profile,&args["config"])},
  "voiceResgate.cancel"=>{let profile=rt.db.profile(&p)?;crate::voice_redemptions::cancel_all(&rt,&profile).await},
  "voiceResgate.recover"=>{let profile=rt.db.profile(&p)?;crate::voice_redemptions::recover(&rt,&profile).await},
- "voiceResgate.testApply"=>{let profile=rt.db.profile(&p)?;crate::voice_redemptions::apply_manual(&rt,&profile,args["voiceId"].as_str().unwrap_or(""),"Teste da tela",args["seconds"].as_u64().unwrap_or(60)).await.map(|msg|json!({"message":msg}))},
+ "voiceResgate.testApply"=>{let profile=rt.db.profile(&p)?;crate::voice_redemptions::apply_manual(&rt,&profile,args["voiceId"].as_str().unwrap_or(""),"Teste da tela",args["seconds"].as_u64().unwrap_or(60),"").await.map(|msg|json!({"message":msg}))},
  _=>Err("Operação desconhecida".into())
  }
 }

@@ -19,7 +19,7 @@ type VmTest={active:boolean;phase:string;voiceId:string;voiceName:string;seconds
 type VmSnapshot={status:VmStatus;test:VmTest;outcome:{kind:string;detail:string};defaultSecs:number;minSecs:number;maxSecs:number;hasKey:boolean;keyLen:number};
 type Active={voiceName:string;user:string;durationSecs:number;remainingMs:number;forever:boolean};
 type QueueView={active:Active|null;upcoming:{voiceName:string;durationSecs:number}[];last:string;lastKind:string;pendingRestore:boolean;busy:boolean};
-type RulesConfig={enabled:boolean;queueLimit:number;bindings:{kind:string;enabled:boolean}[];legacyMap:Record<string,string>;obsChecked:boolean};
+type RulesConfig={enabled:boolean;queueLimit:number;bindings:{kind:string;enabled:boolean}[];legacyMap:Record<string,string>;obsChecked:boolean;queueNotice?:string};
 type FxStatus={phase:string;message:string;input:string;output:string;effect?:string};
 type FxSelection={input?:string;output?:string;gateDb?:number;mode?:string};
 
@@ -262,6 +262,9 @@ export default function Voicemod({profileId,notify}:{profileId:string;notify:(s:
       <input type="number" min={1} max={10} value={cfg?.queueLimit??3} disabled={busy} onChange={e=>setCfg(c=>c?{...c,queueLimit:Math.max(1,Math.min(10,+e.target.value||1))}:c)} onBlur={()=>{if(cfg)void run(async()=>{const q=await api<{config:RulesConfig}>('voiceResgate.get',{profileId});const config={...(q?.config||cfg),queueLimit:cfg.queueLimit};await api('voiceResgate.save',{profileId,config});setCfg(config)})}}/>
      </Field>
     </div>
+    <Field label="Mensagem quando o resgate entra na fila" hint="Avisa quem resgatou que o pedido começa em seguida. Use {{user}}, {{pos}} e {{voz}}; vazio desliga o aviso.">
+     <input value={cfg?.queueNotice??''} disabled={busy} placeholder="{{user}}, seu resgate de voz está na fila ({{pos}}º) — começa em seguida!" onChange={e=>setCfg(c=>c?{...c,queueNotice:e.target.value}:c)} onBlur={()=>{if(cfg)void run(async()=>{const q=await api<{config:RulesConfig}>('voiceResgate.get',{profileId});const config={...(q?.config||cfg),queueNotice:cfg.queueNotice};await api('voiceResgate.save',{profileId,config});setCfg(config)})}}/>
+    </Field>
    </Card>
   </details>
 

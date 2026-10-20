@@ -1,5 +1,5 @@
 import {describe,it,expect} from 'vitest';
-import {DONATION_PROMPT,donationCommandIssue,donationFlow,donationLinkIssue} from './commandModels';
+import {DONATION_PROMPT,clippersCommandIssue,clippersFlow,donationCommandIssue,donationFlow,donationLinkIssue} from './commandModels';
 
 describe('comando pronto de doação',()=>{
  it('monta o !pix com resposta de IA variada e o link no fim',()=>{
@@ -31,5 +31,28 @@ describe('comando pronto de doação',()=>{
   expect(donationCommandIssue('!pix')).toBe('');
   expect(donationLinkIssue('livepix.gg/thenees')).toBe('');
   expect(donationLinkIssue('https://livepix.gg/thenees')).toBe('');
+ });
+});
+
+describe('comando pronto de clipadores',()=>{
+ it('cria o clipe, conta por pessoa e anuncia a contagem',()=>{
+  const f=clippersFlow('p1',{command:'!clip, !clipe'});
+  expect(f.trigger.kind).toBe('command');
+  expect(f.trigger.pattern).toBe('!clip, !clipe');
+  expect(f.trigger.permission).toBe('everyone');
+  expect(f.actions.map(a=>a.kind)).toEqual(['twitch','variable.increment','chat']);
+  expect(f.actions[0].twOp).toBe('clip');
+  expect(f.actions[1].target).toBe('user.clips');
+  expect(f.actions[1].text).toBe('1');
+  expect(f.actions[2].text).toBe('{{user}}, esse é o seu {{user.clips}}º clipe da live! {{local.clipUrl}}');
+  expect(f.name).toBe('Clipadores (!clip)');
+  expect(f.enabled).toBe(true);
+ });
+ it('explica o que falta no comando',()=>{
+  expect(clippersCommandIssue('   ')).toContain('comando');
+  expect(clippersCommandIssue('!clip')).toBe('');
+  const outro=clippersFlow('p1',{command:'!cortar'});
+  expect(outro.name).toBe('Clipadores (!cortar)');
+  expect(outro.trigger.pattern).toBe('!cortar');
  });
 });

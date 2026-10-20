@@ -218,6 +218,14 @@ Se o link aparecer **mais de uma vez** na resposta, não se preocupe com o envio
 
 Para montar à mão em vez do modelo, use as mesmas duas etapas acima na ordem indicada.
 
+## Receita: ranking dos clipadores (!clip)
+
+O botão **Modelos** também cria o comando **Clipadores**. Com ele, quem digita `!clip` (ou a variação que você escolher) faz três coisas na ordem: **cria o clipe da live na hora**, soma **1** na contagem de quem pediu e responde no chat anunciando o número — “Ana, esse é o seu 3º clipe da live!” — com o link do clipe.
+
+- A contagem vive em **`{{user.clips}}`**: por pessoa, persistente, isolada por ID e plataforma. Use o marcador em outras mensagens, no overlay ou para montar o seu ranking.
+- **Só conta clipe criado com sucesso**: se o clipe falhar (live desligada, permissão, limite da Twitch), o fluxo para antes de somar — e o Histórico diz o motivo.
+- O comando nasce ativado, com os intervalos padrão. A etapa de clipe exige a permissão de clipes da conta do bot (reautorize em Perfis) e a live ligada.
+
 ## Histórico e comportamento em caso de erro
 
 As ações de um fluxo executam em ordem. Se uma falha ou ultrapassa o limite de execução, as ações seguintes daquele fluxo não são executadas. Efeitos anteriores não são desfeitos: uma mensagem já enviada continua publicada.

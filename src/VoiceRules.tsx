@@ -34,6 +34,7 @@ export type RulesConfig={
  bindings:Rule[];
  legacyMap:Record<string,string>;
  obsChecked:boolean;
+ queueNotice?:string;
 };
 
 type Reward={id:string;title:string;cost:number};
@@ -64,7 +65,7 @@ export default function VoiceRules({profileId,notify,voices}:{profileId:string;n
  const load=useCallback(()=>{
   if(!desktop)return;
   api<{config:RulesConfig}>('voiceResgate.get',{profileId}).then(r=>{
-   if(r?.config)setCfg({enabled:!!r.config.enabled,queueLimit:r.config.queueLimit||3,bindings:r.config.bindings||[],legacyMap:r.config.legacyMap||{},obsChecked:!!r.config.obsChecked});
+   if(r?.config)setCfg({enabled:!!r.config.enabled,queueLimit:r.config.queueLimit||3,bindings:r.config.bindings||[],legacyMap:r.config.legacyMap||{},obsChecked:!!r.config.obsChecked,queueNotice:r.config.queueNotice||''});
   }).catch(()=>{});
   api<{rewards:Reward[]}>('twitch.rewards',{profileId}).then(r=>{
    setRewards(r?.rewards||[]);setTwitchOn(true);
@@ -76,7 +77,7 @@ export default function VoiceRules({profileId,notify,voices}:{profileId:string;n
   setBusy(true);setError('');
   try{
    const out=await api<{config?:RulesConfig}>('voiceResgate.save',{profileId,config:next});
-   if(out?.config)setCfg({enabled:!!out.config.enabled,queueLimit:out.config.queueLimit||3,bindings:out.config.bindings||[],legacyMap:out.config.legacyMap||{},obsChecked:!!out.config.obsChecked});
+   if(out?.config)setCfg({enabled:!!out.config.enabled,queueLimit:out.config.queueLimit||3,bindings:out.config.bindings||[],legacyMap:out.config.legacyMap||{},obsChecked:!!out.config.obsChecked,queueNotice:out.config.queueNotice||''});
    notify('Trocas de voz salvas.');
   }catch(e){setError(errorText(e))}
   finally{setBusy(false)}

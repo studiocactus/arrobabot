@@ -36,3 +36,24 @@ export function donationLinkIssue(link:string):string{
  if(!v.includes('.'))return 'Escreva um endereço como livepix.gg/seucanal.';
  return '';
 }
+
+export type ClippersFields={command:string};
+
+/** O comando dos clipadores: cria o clipe na hora, soma na contagem de quem
+ *  pediu e anuncia o número ("seu 3º clipe!"). A contagem vive em
+ *  `{{user.clips}}` — por pessoa, persistente, pronta para ranking e mensagens.
+ *  Só conta clipe criado com sucesso: se o clipe falhar, o fluxo para antes. */
+export function clippersFlow(profileId:string,{command}:ClippersFields):Flow{
+ const pattern=command.trim();
+ const primary=pattern.split(',')[0].trim()||'!clip';
+ const clip:Action={...newAction('twitch'),twOp:'clip'};
+ const count:Action={...newAction('variable.increment'),target:'user.clips',text:'1'};
+ const msg:Action={...newAction('chat'),text:'{{user}}, esse é o seu {{user.clips}}º clipe da live! {{local.clipUrl}}'};
+ const flow=newFlow(profileId);
+ return {...flow,name:`Clipadores (${primary})`,trigger:{...flow.trigger,kind:'command',pattern,permission:'everyone'},actions:[clip,count,msg]};
+}
+
+/** O que falta no comando: nome vazio não tem como disparar. */
+export function clippersCommandIssue(command:string):string{
+ return command.trim()?'':'Escreva o comando que dispara, como !clip.';
+}

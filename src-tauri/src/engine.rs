@@ -504,14 +504,14 @@ async fn action(rt:&Arc<Runtime>,p:&Profile,e:&Event,a:&Action,variables:&mut cr
  //    muda de significado por causa do nome.
  if let Ok(known_name)=crate::voicemod::voice_known(rt,&raw){
   let label=if a.text.trim().is_empty(){known_name}else{a.text.trim().to_owned()};
-  let msg=crate::voice_redemptions::apply_manual(rt,&p,&raw,&label,secs).await?;
+  let msg=crate::voice_redemptions::apply_manual(rt,&p,&raw,&label,secs,&e.user).await?;
   rt.log(&p.id,"voiceFx",&format!("{} · {msg} (via Voicemod)",f.name),"success");
   return Ok(());
  }
  // 2) Efeito antigo (fina, robô…) com mapeamento explícito do dono — nunca
  //    por suposição de nome.
  if let Some(mapped)=crate::voice_redemptions::legacy_voice(rt,&p.id,&effect){
-  let msg=crate::voice_redemptions::apply_manual(rt,&p,&mapped,&effect,secs).await?;
+  let msg=crate::voice_redemptions::apply_manual(rt,&p,&mapped,&effect,secs,&e.user).await?;
   rt.log(&p.id,"voiceFx",&format!("{} · {msg} (via Voicemod, efeito antigo “{effect}”)",f.name),"success");
   return Ok(());
  }

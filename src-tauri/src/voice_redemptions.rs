@@ -112,12 +112,17 @@ pub struct Config {
  /// gravação). Conexão com o Voicemod nunca comprova áudio na cena.
  #[serde(default)]
  pub obs_checked: bool,
+ /// Mensagem ao chat quando um resgate entra na fila. Vazia desliga o aviso;
+ /// aceita {{user}}, {{pos}} e {{voz}}.
+ #[serde(default = "default_queue_notice")]
+ pub queue_notice: String,
 }
 fn default_queue_limit() -> u64 { 3 }
+fn default_queue_notice() -> String { "{{user}}, seu resgate de voz está na fila ({{pos}}º) — começa em seguida!".into() }
 
 impl Default for Config {
  fn default() -> Self {
-  Self { enabled: false, queue_limit: default_queue_limit(), bindings: Vec::new(), legacy_map: HashMap::new(), obs_checked: false }
+  Self { enabled: false, queue_limit: default_queue_limit(), bindings: Vec::new(), legacy_map: HashMap::new(), obs_checked: false, queue_notice: default_queue_notice() }
  }
 }
 
@@ -152,6 +157,7 @@ fn parse(v: &Value) -> R<Config> {
   bindings: Vec::new(),
   legacy_map: HashMap::new(),
   obs_checked: v["obsChecked"].as_bool().unwrap_or(false),
+  queue_notice: v["queueNotice"].as_str().map(|s| s.trim().chars().take(300).collect()).unwrap_or_else(default_queue_notice),
  };
  let list = v["bindings"].as_array().cloned().unwrap_or_default();
  if list.len() > MAX_BINDINGS {
@@ -495,7 +501,7 @@ async fn enqueue(rt: &Arc<Runtime>, p: &Profile, item: Queued, policy: String, c
   return;
  }
  let limit = queue_limit(rt, p) as usize;
- {
+ let queued = {
   let mut st = rt.voice_resgates.state.lock().unwrap();
   if let Some(t) = st.last_fire.get(&item.reward_id) {
    if t.elapsed().as_secs() < cooldown {
@@ -527,11 +533,17 @@ async fn enqueue(rt: &Arc<Runtime>, p: &Profile, item: Queued, policy: String, c
      drop(st);
      publish(rt);
      rt.log(&p.id, KIND, &msg, "info");
-     return;
+     Some(pos)
     },
-    _ => { /* replace: segue e sobrescreve, mantendo a voz de antes */ },
+    _ => None, // replace: segue e sobrescreve, mantendo a voz de antes
    }
+  } else {
+   None
   }
+ };
+ if let Some(pos) = queued {
+  send_queue_notice(rt, p, &item, pos).await;
+  return;
  }
  let (rt2, p2) = (rt.clone(), p.clone());
  let _ = apply_locked(&rt2, &p2, &item).await;
@@ -539,6 +551,23 @@ async fn enqueue(rt: &Arc<Runtime>, p: &Profile, item: Queued, policy: String, c
 
 fn queue_limit(rt: &Runtime, p: &Profile) -> u64 {
  load(&rt.db, &p.id).queue_limit.clamp(1, MAX_QUEUE_LIMIT)
+}
+
+/// Texto do aviso de fila: {{user}}, {{pos}} e {{voz}} viram o que foi pedido.
+pub fn queue_notice_text(template: &str, user: &str, pos: usize, voice: &str) -> String {
+ template.replace("{{user}}", user).replace("{{pos}}", &pos.to_string()).replace("{{voz}}", voice)
+}
+
+/// Avisa quem resgatou que o pedido entrou na fila e começa em seguida. A
+/// mensagem é configurável ("Mensagem quando o resgate entra na fila"); vazio
+/// desliga o aviso. Sem nome de quem resgatou, não há o que dirigir.
+async fn send_queue_notice(rt: &Arc<Runtime>, p: &Profile, item: &Queued, pos: usize) {
+ let cfg = load(&rt.db, &p.id);
+ let template = cfg.queue_notice.trim();
+ if template.is_empty() || item.user.trim().is_empty() { return; }
+ let text = queue_notice_text(template, &item.user, pos, &item.voice_name);
+ let e = Event { id: uuid::Uuid::new_v4().to_string(), profile_id: p.id.clone(), kind: "voice".into(), user: item.user.clone(), user_id: String::new(), role: "everyone".into(), message: String::new(), data: Value::Null, simulated: false, rehearsal: false };
+ let _ = rt.send(p, &e, &text).await;
 }
 
 fn note(rt: &Runtime, p: &Profile, msg: &str, status: &str) {
@@ -864,7 +893,7 @@ pub async fn recover(rt: &Arc<Runtime>, p: &Profile) -> R<Value> {
 
 /// Aplicação direta, sem resgate: ação "Mudar minha voz" em modo Voicemod e
 /// teste da tela de resgates. Mesmo portão, mesma restauração com geração.
-pub async fn apply_manual(rt: &Arc<Runtime>, p: &Profile, voice_id: &str, origin_label: &str, secs: u64) -> R<String> {
+pub async fn apply_manual(rt: &Arc<Runtime>, p: &Profile, voice_id: &str, origin_label: &str, secs: u64, user: &str) -> R<String> {
  let voice_id = voice_id.trim().to_owned();
  if voice_id.is_empty() {
   return Err("Escolha uma voz do Voicemod.".into());
@@ -889,10 +918,33 @@ pub async fn apply_manual(rt: &Arc<Runtime>, p: &Profile, voice_id: &str, origin
   duration_secs: secs,
   redemption_id: String::new(),
   profile_id: p.id.clone(),
-  user: String::new(),
+  user: user.trim().to_owned(),
  };
- apply_locked(rt, p, &item).await?;
+ // Automações respeitam a mesma fila dos resgates: cada efeito cumpre o seu
+ // tempo e os próximos esperam — ninguém é cancelado no meio. O efeito "até a
+ // próxima troca" (duração 0) é, pela própria definição, substituído pelo que
+ // vier depois.
+ let queued = {
+  let mut st = rt.voice_resgates.state.lock().unwrap();
+  if st.active.as_ref().is_some_and(|a| a.duration_secs > 0) {
+   let limit = queue_limit(rt, p) as usize;
+   if st.upcoming.len() >= limit {
+    return Err("Fila de vozes cheia: aguarde o efeito atual terminar.".into());
+   }
+   let pos = st.upcoming.len() + 1;
+   st.upcoming.push_back(item.clone());
+   Some(pos)
+  } else {
+   None
+  }
+ };
  let name = vm::voice_name(rt, &item.voice_id);
+ if let Some(pos) = queued {
+  publish(rt);
+  send_queue_notice(rt, p, &item, pos).await;
+  return Ok(format!("{name} entrou na fila de vozes ({pos}º)"));
+ }
+ apply_locked(rt, p, &item).await?;
  let msg = if secs == 0 { format!("{name} aplicada até a próxima troca") } else { format!("{name} por {}", when(secs)) };
  Ok(msg)
 }
@@ -1215,14 +1267,51 @@ mod tests {
   leave(&rt, &p).await;
  }
 
+ /// Automações ("Mudar minha voz") respeitam a mesma fila dos resgates: o
+ /// efeito no ar cumpre o seu tempo e o próximo espera — ninguém é cancelado.
+ #[tokio::test]
+ async fn manual_action_queues_instead_of_cancelling_the_running_effect() {
+  let (_dir, rt, p, m) = connected_runtime().await;
+  setup_with(&rt, &p, cfg_json(&[], 3)).await;
+  apply_manual(&rt, &p, "robot", "Regra A", 2, "Ana").await.unwrap();
+  assert_eq!(m.loads(), vec!["robot".to_string()], "primeiro aplicado");
+  let msg = apply_manual(&rt, &p, "alien", "Regra B", 1, "Bia").await.unwrap();
+  assert!(msg.contains("fila"), "o segundo entra em vez de cancelar: {msg}");
+  tokio::time::sleep(Duration::from_millis(200)).await;
+  assert_eq!(m.loads(), vec!["robot".to_string()], "o primeiro continua no ar, sem cancelamento");
+  tokio::time::sleep(Duration::from_millis(2300)).await;
+  assert_eq!(m.loads(), vec!["robot".to_string(), "alien".to_string()], "e o segundo começa na sequência");
+  leave(&rt, &p).await;
+ }
+
+ /// O efeito "até a próxima troca" (duração 0) é substituído — é a definição dele.
+ #[tokio::test]
+ async fn zero_duration_effect_is_replaced_by_the_next_change() {
+  let (_dir, rt, p, m) = connected_runtime().await;
+  setup_with(&rt, &p, cfg_json(&[], 3)).await;
+  apply_manual(&rt, &p, "robot", "Até a próxima troca", 0, "Ana").await.unwrap();
+  let msg = apply_manual(&rt, &p, "alien", "Regra B", 5, "Bia").await.unwrap();
+  assert!(!msg.contains("fila"), "duração zero não trava a fila: {msg}");
+  assert_eq!(m.loads(), vec!["robot".to_string(), "alien".to_string()]);
+  leave(&rt, &p).await;
+ }
+
+ /// O aviso de fila é personalizável e dirigido a quem resgatou.
+ #[test]
+ fn queue_notice_is_customizable() {
+  assert_eq!(queue_notice_text("{{user}}, espera aí: {{voz}} ({{pos}}º)", "Ana", 2, "Robô"), "Ana, espera aí: Robô (2º)");
+  assert_eq!(queue_notice_text("", "Ana", 1, "Robô"), "", "vazio desliga o aviso");
+ }
+
  #[tokio::test]
  async fn old_timer_never_undoes_a_newer_command() {
   let (_dir, rt, p, m) = connected_runtime().await;
   setup_with(&rt, &p, cfg_json(&[binding("r1", "robot", 1, 0, "queue")], 3)).await;
   on_redemption(&rt, &p, &redeem(&p.id, "r1", "redem-1", "u1")).await.unwrap();
   assert!(fired(&rt, 1).await);
-  // Antes do fim do primeiro, um comando manual assume a cena.
-  crate::voice_redemptions::apply_manual(&rt, &p, "alien", "Teste da tela", 600).await.unwrap();
+  // Antes do fim do primeiro, um comando manual entra na cena (na fila aqui, o
+  // primeiro cumpre o segundo inteiro antes dele).
+  crate::voice_redemptions::apply_manual(&rt, &p, "alien", "Teste da tela", 600, "").await.unwrap();
   tokio::time::sleep(Duration::from_millis(2200)).await;
   assert_eq!(m.voice(), "alien", "o temporizador antigo não desfez o comando novo");
   leave(&rt, &p).await;

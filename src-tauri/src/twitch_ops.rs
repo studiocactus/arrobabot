@@ -189,6 +189,15 @@ async fn require_scopes(rt:&Runtime,p:&Profile,account:&str,op:&str,token:&str)-
  if missing.is_empty(){return Ok(())}
  Err(format!("O token da conta {account} não tem os escopos: {}. Reautorize a conta {account} em Perfis usando a versão atual do programa.",missing.join(", ")))
 }
+/// O alvo do clipe é o canal do perfil. Com o canal apontando para a conta do
+/// bot (acontece quando a autorização é feita no navegador com a conta errada),
+/// a Twitch responde "Channel offline" do canal errado — por isso a recusa aqui
+/// explica o caminho em vez de deixar o erro solto.
+fn clip_target(p:&Profile)->Result<&str,String>{
+ if p.channel_id.is_empty(){return Err("O canal do perfil não está preenchido: autorize a conta do canal em Perfis.".into())}
+ if p.channel_id==p.bot_id{return Err("O canal do perfil está apontando para a conta do bot, então os clipes sairiam do canal errado. Em Perfis, autorize a conta do canal com a sua conta de streamer.".into())}
+ Ok(&p.channel_id)
+}
 /// Erros do clipe, sempre com o próximo passo: 404 é live desligada, 429 é
 /// limite da Twitch, 401/403 é falta da permissão de clipes na conta do bot.
 fn clip_refused(status:u16)->String{
@@ -419,7 +428,8 @@ pub async fn run(rt:&Arc<Runtime>,p:&Profile,e:&Event,a:&Action,text:&str,trigge
    Ok(format!("Resposta enviada para @{login}"))
   }
   "clip"=>{
-   let res=crate::helix::post(&rt.http,p,&token,"clips",&[("broadcaster_id",p.channel_id.as_str())]).send().await.map_err(|_|"Não foi possível pedir o clipe à Twitch. Confira a internet e tente de novo.".to_string())?;
+   let target=clip_target(p)?;
+    let res=crate::helix::post(&rt.http,p,&token,"clips",&[("broadcaster_id",target)]).send().await.map_err(|_|"Não foi possível pedir o clipe à Twitch. Confira a internet e tente de novo.".to_string())?;
    if !res.status().is_success(){
     let status=res.status().as_u16();
     let detail=res.text().await.unwrap_or_default();
@@ -472,6 +482,19 @@ pub async fn run(rt:&Arc<Runtime>,p:&Profile,e:&Event,a:&Action,text:&str,trigge
  #[test] fn o_link_do_clipe_usa_o_id_da_twitch(){
   assert_eq!(clip_url("AbC123xYz"),"https://clips.twitch.tv/AbC123xYz");
  }
+ /// O alvo do clipe nunca é a conta do bot: o canal errado faria a Twitch
+ /// responder "Channel offline" de quem não está ao vivo.
+ #[test] fn o_alvo_do_clipe_nunca_e_a_conta_do_bot(){
+  let mut p=Profile{id:uuid::Uuid::new_v4().to_string(),name:"Canal".into(),platform:"twitch".into(),channel:"canal".into(),channel_id:"123".into(),bot_id:"456".into(),client_id:String::new(),blocklist:vec![],topics:vec![],editors:vec![],ai:Default::default(),modules:json!({})};
+  assert_eq!(clip_target(&p).unwrap(),"123");
+  p.bot_id="123".into();
+  let err=clip_target(&p).unwrap_err();
+  assert!(err.contains("conta do bot"),"o motivo explica o canal errado: {err}");
+  assert!(err.contains("Perfis"),"e o próximo passo");
+  p.channel_id=String::new();
+  assert!(clip_target(&p).unwrap_err().contains("canal do perfil"),"canal vazio também é recusado");
+ }
+
  /// Erro do clipe sempre diz o próximo passo: live, limite ou autorização.
  #[test] fn o_erro_do_clipe_diz_o_proximo_passo(){
   assert!(clip_refused(404).contains("live ligada"),"sem live é 404");

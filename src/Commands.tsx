@@ -4,7 +4,7 @@ import {Plus,Search,Play,Workflow,Mic,Wand2} from 'lucide-react';
 import {api,errorText,desktop} from './api';
 import {newFlow,fmtDuration,type Flow,type Profile} from './types';
 import {duplicateFlow} from './flow';
-import {donationCommandIssue,donationFlow,donationLinkIssue} from './commandModels';
+import {clippersCommandIssue,clippersFlow,donationCommandIssue,donationFlow,donationLinkIssue} from './commandModels';
 import {Card,Empty,Field,Modal,Tag} from './components';
 import {CounterAdjustDialog,FlowDialog,FlowEnableToggle,FlowRowActions,RemoveFlowDialog,SimulateDialog,saveFlow,useFlows} from './FlowTools';
 import {VariableManager} from './Variables';
@@ -23,6 +23,7 @@ export default function Commands({profile,visual,notify,onChanged,createToken,on
  const [models,setModels]=useState(false);
  const [mCommand,setMCommand]=useState('!pix');
  const [mLink,setMLink]=useState('');
+ const [cCommand,setCCommand]=useState('!clip, !clipe');
  const refreshCounts=()=>api<Record<string,number>>('command.counters',{profileId:profile.id}).then(setCounts).catch(e=>notify(errorText(e)));
  const afterChange=async()=>{refresh();refreshCounts();onChanged()};
  useEffect(()=>{void refreshCounts();if(!desktop)return;let cancelled=false;let unlisten:(()=>void)|undefined;void listen<{profileId:string;id:string;value:number}>('command-counter',({payload})=>{if(payload.profileId===profile.id)setCounts(c=>({...c,[payload.id]:payload.value}))}).then(fn=>{if(cancelled)fn();else unlisten=fn});return()=>{cancelled=true;unlisten?.()}},[profile.id]);
@@ -37,6 +38,13 @@ export default function Commands({profile,visual,notify,onChanged,createToken,on
   const issue=donationCommandIssue(mCommand)||donationLinkIssue(mLink);
   if(issue){notify(issue);return}
   try{const flow=donationFlow(profile.id,{command:mCommand,link:mLink});await saveFlow(flow);await afterChange();setModels(false);notify('Comando '+mCommand.trim().split(',')[0].trim()+' criado e ativado. Digite no chat para testar.')}catch(e){notify(errorText(e))}
+ }
+ /** Comando pronto dos clipadores: cria o clipe na hora, soma na contagem de
+  *  quem pediu e anuncia o número — a contagem fica em {{user.clips}}. */
+ async function createClippers(){
+  const issue=clippersCommandIssue(cCommand);
+  if(issue){notify(issue);return}
+  try{const flow=clippersFlow(profile.id,{command:cCommand});await saveFlow(flow);await afterChange();setModels(false);notify('Comando '+cCommand.trim().split(',')[0].trim()+' criado e ativado. Cada clipe criado soma na contagem de quem pediu.')}catch(e){notify(errorText(e))}
  }
  const visible=flows.filter(f=>{
   if(f.trigger.kind==='timer')return false;
@@ -53,6 +61,6 @@ export default function Commands({profile,visual,notify,onChanged,createToken,on
  {simulate&&<SimulateDialog profile={profile} notify={notify} onClose={()=>setSimulate(false)}/>}
  {conversationOpen&&<Modal title="Criar resenha com IA" onClose={()=>setConversationOpen(false)}><ConversationForm profileId={profile.id} onSave={async f=>{await save(f);setConversationOpen(false)}}/></Modal>}
  {variablesOpen&&<VariableManager profileId={profile.id} onClose={()=>setVariablesOpen(false)}/>}
- {models&&<Modal title="Comandos prontos" onClose={()=>setModels(false)}><form className="form-pad" onSubmit={e=>{e.preventDefault();void createDonation()}}><h3>Link de doação</h3><p className="help">Resposta de IA diferente a cada chamada, com seu link de doação fixo no fim de toda resposta. Precisa da IA configurada em Personalidade de IA.</p><Field label="Comando" hint="Separe variações com vírgula: !pix, !doar."><input value={mCommand} onChange={e=>setMCommand(e.target.value)}/></Field><Field label="Seu link de doação" hint="Ex.: livepix.gg/seucanal. Vai no fim de toda resposta."><input value={mLink} onChange={e=>setMLink(e.target.value)} placeholder="livepix.gg/seucanal"/></Field><footer className="form-footer"><button type="button" onClick={()=>setModels(false)}>Cancelar</button><button className="primary"><Plus size={16}/>Criar comando</button></footer></form></Modal>}
+ {models&&<Modal title="Comandos prontos" onClose={()=>setModels(false)}><form className="form-pad" onSubmit={e=>{e.preventDefault();void createDonation()}}><h3>Link de doação</h3><p className="help">Resposta de IA diferente a cada chamada, com seu link de doação fixo no fim de toda resposta. Precisa da IA configurada em Personalidade de IA.</p><Field label="Comando" hint="Separe variações com vírgula: !pix, !doar."><input value={mCommand} onChange={e=>setMCommand(e.target.value)}/></Field><Field label="Seu link de doação" hint="Ex.: livepix.gg/seucanal. Vai no fim de toda resposta."><input value={mLink} onChange={e=>setMLink(e.target.value)} placeholder="livepix.gg/seucanal"/></Field><footer className="form-footer"><button type="button" onClick={()=>setModels(false)}>Cancelar</button><button className="primary"><Plus size={16}/>Criar comando</button></footer></form><form className="form-pad" onSubmit={e=>{e.preventDefault();void createClippers()}}><h3>Clipadores (!clip)</h3><p className="help">Cria o clipe da live na hora, conta de quem foi cada clipe e anuncia o número de quem pediu (fica em {'{{user.clips}}'}, pronta para ranking). Só conta clipe criado com sucesso.</p><Field label="Comando" hint="Separe variações com vírgula: !clip, !clipe."><input value={cCommand} onChange={e=>setCCommand(e.target.value)}/></Field><footer className="form-footer"><span className="help">O link do clipe sai na própria resposta.</span><button className="primary"><Plus size={16}/>Criar comando</button></footer></form></Modal>}
  </>
 }

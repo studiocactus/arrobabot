@@ -58,6 +58,8 @@ Não precisa apagar o perfil para testar uma configuração. Excluir pode destru
 | A Twitch limitou os pedidos do clipe | Espere alguns segundos e dispare de novo; clipe em sequência rápida é limitado pela Twitch |
 | O link do clipe não aparece na mensagem | A etapa que usa `{{local.clipUrl}}` precisa vir depois da etapa de clipe; antes dela, a ação falha com Variável ausente e o editor já avisa |
 | O link aparece mais de uma vez na mensagem do !pix | Não deve mais acontecer: o mesmo endereço sai uma vez só (a IA imita as respostas anteriores do bot e repetia o link junto do enfeite). Endereços diferentes continuam todos na mensagem |
+| O clipe não cria e o Histórico cita canal offline | O alvo do clipe é o canal do perfil: confira em Perfis se a conta do canal é a sua conta de streamer (a conta do bot não serve de alvo) e se a live está de fato ligada |
+| Quero contar quantas vezes alguém clipou | O comando pronto **Clipadores** (Comandos → Modelos) cria o clipe, soma em {{user.clips}} por pessoa e anuncia o número na resposta |
 | O comando !pix não respondeu | A etapa de IA falhou e o fluxo parou antes de responder (comportamento documentado); confira a IA em Personalidade de IA e o erro no Histórico |
 
 ## IA e memória
@@ -110,6 +112,7 @@ Erros HTTP são indícios, não diagnósticos completos. Verifique também o pai
 | Transcrição errada ou vazia | Ruído de fundo alto — aumente **Sensibilidade do microfone** no painel; fala muito curta — aumente **Silêncio que encerra a frase**; idioma diferente do configurado — use `auto` ou troque o idioma; modelo `small` tem precisão limitada — troque por `medium` ou `large-v3` no servidor |
 | Voicemod não conecta | Tela Voicemod: aplicativo Voicemod aberto e logado nesta máquina; chave da Control API salva (no cofre, nunca nos logs); licença que libera a Control API; botão **Conectar** |
 | Resgate ou comando não troca a voz | Tela Voicemod: regra **Ativada** e trocas de voz ligadas; Voicemod conectado; a voz da regra ainda existe na lista do Voicemod; em comandos, confira permissão e intervalo em **Avançado** |
+| O resgate de voz é cancelado quando chega outro | Não acontece mais: um efeito por vez cumpre o seu tempo e o próximo espera na fila (a exceção é duração 0, “até a próxima troca”, substituída por definição). Se preferir outro comportamento, mude a política da regra em **Avançado** |
 | Voz não volta ao fim do efeito | Use **Encerrar efeitos e restaurar minha voz** (seção Durante a live); se a conexão caiu no meio, **Recuperar restauração** — nada é reaplicado sozinho |
 | Minha voz não chega ao OBS | Na cena, a fonte de áudio da sua voz aponta para **Voicemod Microphone**; sem captura duplicada do mesmo microfone; na Etapa 2, fale durante o teste e ouça a gravação |
 | Legenda não aparece no overlay | Confira se a opção **Legenda no overlay** está ligada no painel e se o overlay usa o `examples/overlay.html` atualizado com o parâmetro `view` omitido |

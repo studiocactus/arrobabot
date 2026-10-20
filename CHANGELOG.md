@@ -1,5 +1,38 @@
 # Histórico de atualizações
 
+# BotLive 0.20.0
+
+## O que mudou
+
+**Resgates de voz não se cancelam mais (um cumpre o seu tempo e o próximo espera), dá para avisar quem resgatou com uma mensagem sua, o `!clip` explica quando o canal está errado e os clipadores ganham contagem por pessoa.**
+
+- **Uma troca por vez, na sequência.** As trocas de voz vindas de **automações** (etapa **Mudar minha voz**) sobrescreviam o efeito no ar — quem pagava pontos via o resgate ser cortado no meio. Agora automações e resgates respeitam a **mesma fila**: o efeito ativo cumpre o seu tempo inteiro e o próximo começa em seguida. A exceção é a duração **0** (“até a próxima troca”), que é substituída pelo próximo por definição. A política por regra (Fila/Ignorar/Substituir) continua em **Avançado**.
+- **Mensagem quando o resgate entra na fila** (campo novo em **Avançado → Fila e intervalos**). Quem resgata ouve do bot que o pedido começa em seguida — texto seu, com `{{user}}`, `{{pos}}` e `{{voz}}`; vazio desliga. Serve para resgates e para as automações.
+- **`!clip` com canal errado deixa de ser mistério.** O print do Histórico mostrava “Channel offline” da Twitch: o alvo do clipe é o canal do perfil, e quando ele está apontado para a conta do bot (autorização feita no navegador com a conta errada) a Twitch recusa como se o canal estivesse offline. Agora o BotLive recusa antes, explicando: “O canal do perfil está apontando para a conta do bot… autorize a conta do canal em Perfis”. Canal vazio também é recusado com o caminho.
+- **Ranking dos clipadores.** O botão **Modelos** ganhou o comando pronto **Clipadores (!clip)**: quem pede faz o clipe ser criado na hora, recebe a resposta com o nome dela e o número de clipe que já fez — “Ana, esse é o seu 3º clipe da live!” — e a contagem fica em `{{user.clips}}`, por pessoa e persistente, pronta para ranking. Só conta clipe criado com sucesso: se o clipe falhar, nada soma.
+
+## Como usar
+
+- **Resgates na fila:** atualize e pronto — quem tem regra ou automação de voz passa a ver um efeito cumprir o tempo inteiro. Para ligar o aviso: **Voicemod → Avançado → Fila e intervalos → Mensagem quando o resgate entra na fila** (o texto padrão já vem pronto; ajuste como quiser).
+- **Clipadores:** **Comandos → Modelos → Clipadores (!clip)** → confirme o comando (`!clip, !clipe`) → **Criar comando**. Teste no chat; a contagem de cada pessoa aparece na resposta.
+- **Se o !clip falhar:** leia a linha do Histórico — live desligada, limite da Twitch, permissão de clipes ou canal do perfil errado (o aviso diz qual, com o próximo passo).
+
+## Validação
+
+- Testes Rust (`cargo test`, src-tauri): 381 aprovados, incluindo os novos — a automação de voz entra na fila em vez de cancelar o efeito no ar (o primeiro cumpre o tempo inteiro e o segundo começa depois), duração 0 é substituída por definição, o aviso de fila renderiza `{{user}}`/`{{pos}}`/`{{voz}}` e vazio desliga, e o alvo do clipe recusa canal vazio ou apontado para a conta do bot com o próximo passo na mensagem.
+- Testes de interface (`vitest`): 155 aprovados, incluindo o comando pronto de clipadores (clipe → contagem `user.clips` → mensagem com nome, número e link).
+- Testes de tela (`playwright`): 93 aprovados, incluindo a nova regressão dos modelos de comando (os dois modelos aparecem, o dos clipadores nasce pronto e ativado) com capturas em 1100 px (`%TEMP%\botlive-ux\modelos-comandos.png` e `modelos-clipadores-criado.png`).
+- Build e verificação de tipos limpos; capítulos de comandos, áudio e solução de problemas atualizados.
+
+## Limitações
+
+- O aviso de fila usa o chat do canal; não há resposta direta (reply) ao resgate, que não é mensagem de chat.
+- A contagem `{{user.clips}}` é total (não zera a cada live). Para ranking por live, dá para zerar com uma automação no início da transmissão.
+- A causa da recusa da Twitch em “Channel offline” só é distinguida quando o canal do perfil aponta para a conta do bot; live desligada de verdade continua sendo o mesmo aviso.
+- A homologação com resgates pagos, Voicemod aberto e live na Twitch continua sendo o teste na sua máquina.
+
+---
+
 # BotLive 0.19.0
 
 ## O que mudou
