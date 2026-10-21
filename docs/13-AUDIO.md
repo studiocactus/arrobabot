@@ -43,6 +43,8 @@ Sua voz é outro assunto — ela **nunca** passa pela saída dos sons do bot nem
 
 > O BotLive recebe o resgate ou comando e pede ao Voicemod para trocar sua voz. O OBS recebe sua voz pelo microfone virtual do Voicemod.
 
+As seções da tela ficam em **acordeão** — uma aberta por vez — e cada cabeçalho mostra o estado da etapa (**PRONTO**, **A CONFERIR**, quantidade de regras). Assim a tela cresce sem virar parede de texto.
+
 **Etapa 1 · Conectar Voicemod.** Abra o aplicativo Voicemod nesta máquina e clique em **Conectar**. Quando precisar, cole a chave da **Control API** (peça em control-api.voicemod.net, menu Control API): ela vai direto para o cofre, nunca para o chat, os logs ou o Histórico. Conectado, a etapa recolhe sozinha; **Alterar conexão e diagnóstico** fica em área secundária.
 
 **Etapa 2 · Ouvir minha voz no OBS.** Na cena, edite a fonte de áudio da sua voz e escolha **Voicemod Microphone** como entrada — e evite capturar o mesmo microfone em duas fontes, senão a voz entra em dobro. Nada aqui muda seus dispositivos do Windows nem mexe nas suas cenas. Há **um único teste**: escolha a voz, aplique temporariamente e ouça — **fale durante o teste**, é a sua voz que o OBS precisa ouvir; ao terminar, a voz de antes volta sozinha, confirmada pelo próprio Voicemod. Dois estados ficam separados: **Voicemod conectado** (a API respondeu e autorizou) e **Áudio conferido no OBS** (só você confirma, ouvindo a gravação — uma chamada de API com sucesso nunca prova áudio na cena).

@@ -106,25 +106,32 @@ test('tela Voicemod tem as três etapas, um caminho só e nada de VB-Cable no ca
  await page.goto('/');
  await page.locator('.sidebar').getByRole('button',{name:'Voicemod',exact:true}).click();
 
- // O caminho dito em linguagem simples, na ordem prometida.
- await expect(page.getByRole('heading',{name:'Sua voz no Voicemod'})).toBeVisible();
+ // As seções viram o acordeão do nosso padrão: todas presentes, uma aberta por vez.
+ const intro=page.getByRole('button',{name:/Sua voz no Voicemod/});
+ const live=page.getByRole('button',{name:/Durante a live/});
+ await expect(intro).toBeVisible();
+ await expect(live).toBeVisible();
+ await expect(page.getByRole('button',{name:/Etapa 1 · Conectar Voicemod/})).toBeVisible();
+ await expect(page.getByRole('button',{name:/Etapa 2 · Ouvir minha voz no OBS/})).toBeVisible();
+ await expect(page.getByRole('button',{name:/Etapa 3 · Escolher o que troca minha voz/})).toBeVisible();
+
+ // Abrir a apresentação mostra o caminho dito em linguagem simples.
+ await intro.click();
  await expect(page.getByText(/pede ao Voicemod para trocar sua voz/)).toBeVisible();
- await expect(page.getByRole('heading',{name:'Durante a live'})).toBeVisible();
- await expect(page.getByRole('heading',{name:'Etapa 1 · Conectar Voicemod'})).toBeVisible();
- await expect(page.getByRole('heading',{name:'Etapa 2 · Ouvir minha voz no OBS'})).toBeVisible();
- await expect(page.getByRole('heading',{name:'Etapa 3 · Escolher o que troca minha voz'})).toBeVisible();
 
  // Um caminho só: o seletor de motor interno não existe mais na experiência.
  await expect(page.getByLabel('Caminho da voz')).toHaveCount(0);
  // VB-Cable não aparece no caminho principal (só na migração, que fica
  // oculta quando o perfil não tem efeitos internos).
  await expect(page.getByText('VB-Cable')).toHaveCount(0);
- // Distinção honesta: conectado ≠ áudio conferido.
+ // Distinção honesta: conectado ≠ áudio conferido, cada um na sua seção.
+ await live.click();
  await expect(page.getByText('Voicemod conectado',{exact:true}).first()).toBeVisible();
- await expect(page.getByText('Áudio conferido no OBS')).toBeVisible();
- await expect(page.getByRole('switch',{name:'Ouvi minha voz no OBS'})).toBeVisible();
  // Botão visível para encerrar e restaurar a voz.
  await expect(page.getByRole('button',{name:/Encerrar efeitos e restaurar minha voz/})).toBeVisible();
+ await page.getByRole('button',{name:/Etapa 2 · Ouvir minha voz no OBS/}).click();
+ await expect(page.getByText('Áudio conferido no OBS')).toBeVisible();
+ await expect(page.getByRole('switch',{name:'Ouvi minha voz no OBS'})).toBeVisible();
 
  const overflow=await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth);
  expect(overflow,'sem rolagem horizontal a 1100px').toBe(true);
@@ -137,6 +144,9 @@ test('regra de troca de voz pede acionamento, voz, duração e ativação — co
  await mockVoicemod(page);
  await page.goto('/');
  await page.locator('.sidebar').getByRole('button',{name:'Voicemod',exact:true}).click();
+
+ // As regras vivem na Etapa 3, agora em acordeão.
+ await page.getByRole('button',{name:/Etapa 3 · Escolher o que troca minha voz/}).click();
 
  // A regra existente se apresenta pelo resumo legível.
  await expect(page.getByRole('heading',{name:'Voz de robô → Robô → 30 segundos'})).toBeVisible();
@@ -165,7 +175,7 @@ test('a área de migração dos efeitos internos saiu da tela Voicemod',async({p
  await mockVoicemod(page,{legacy:true});
  await page.goto('/');
  await page.locator('.sidebar').getByRole('button',{name:'Voicemod',exact:true}).click();
- await page.locator('summary',{hasText:'Avançado'}).last().click();
+ await page.getByRole('button',{name:/^Avançado/}).click();
  // O cartão de migração foi retirado; mesmo com configuração antiga salva, ele
  // não volta. O Avançado continua com fila e intervalos.
  await expect(page.getByText('Efeitos internos antigos (migração)')).toHaveCount(0);

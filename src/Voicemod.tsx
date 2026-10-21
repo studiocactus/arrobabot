@@ -2,7 +2,7 @@ import {useCallback,useEffect,useRef,useState} from 'react';
 import {KeyRound,Play,Square,RefreshCw,StopCircle,Mic} from 'lucide-react';
 import {listen} from '@tauri-apps/api/event';
 import {api,desktop,errorText} from './api';
-import {Card,Field,Toggle} from './components';
+import {AccordionItem,Card,Field,ItemStack,Toggle} from './components';
 import VoiceRules,{type VmVoice} from './VoiceRules';
 
 /**
@@ -40,6 +40,9 @@ export default function Voicemod({profileId,notify}:{profileId:string;notify:(s:
  const [fx,setFx]=useState<{status:FxStatus;selection:FxSelection}|null>(null);
  const [key,setKey]=useState('');
  const [busy,setBusy]=useState(false);
+ // Acordeão das etapas: uma seção aberta por vez — a tela cresce sem virar
+ // parede de texto. Começa na Etapa 1.
+ const [openSection,setOpenSection]=useState<string>(()=>'etapa1');
  const [error,setError]=useState('');
  const [testVoice,setTestVoice]=useState('');
  const [testSecs,setTestSecs]=useState(10);
@@ -145,12 +148,13 @@ export default function Voicemod({profileId,notify}:{profileId:string;notify:(s:
  // configuração antiga salva ou mapeamento existente).
 
  return <div>
-  <Card title="Sua voz no Voicemod">
+  <ItemStack>
+   <AccordionItem id="intro" title="Sua voz no Voicemod" meta={[]} open={openSection==='intro'} onToggle={()=>setOpenSection(openSection==='intro'?'':'intro')}>
    <p className="help">Configure uma vez e deixe no automático: <strong>o BotLive recebe a recompensa ou o comando e pede ao Voicemod para trocar sua voz; o OBS recebe sua voz pelo microfone virtual do Voicemod.</strong> A troca dura o tempo que você escolher e a voz de antes volta sozinha, confirmada pelo próprio Voicemod.</p>
    <p className="help">Sons do bot, alertas e texto para voz <strong>não passam por aqui</strong> — eles saem pela fonte “Áudio do BotLive” (tela <strong>Áudio no OBS</strong>). São duas fontes com funções distintas no OBS: “Áudio do BotLive” para os sons e “Voicemod Microphone” para a sua voz.</p>
-  </Card>
+  </AccordionItem>
 
-  <Card title="Durante a live">
+   <AccordionItem id="live" title="Durante a live" meta={[connected?'CONECTADO':'SEM CONEXÃO']} open={openSection==='live'} onToggle={()=>setOpenSection(openSection==='live'?'':'live')}>
    <div className="list-row">
     <div><strong>Conexão</strong><small>{pill.text}{snap?.status?.message?` · ${snap.status.message}`:''}</small></div>
     <span className={pill.cls}><span className="status-dot" aria-hidden="true"></span><span>{pill.text}</span></span>
@@ -177,9 +181,9 @@ export default function Voicemod({profileId,notify}:{profileId:string;notify:(s:
     <span className="help">Encerrar devolve a voz que estava antes — se você tinha um efeito escolhido, é ele que volta.</span>
     <button className="secondary" disabled={busy} onClick={()=>void cancelAll()}><StopCircle size={15}/> Encerrar efeitos e restaurar minha voz</button>
    </div>
-  </Card>
+  </AccordionItem>
 
-  <Card title="Etapa 1 · Conectar Voicemod">
+   <AccordionItem id="etapa1" title="Etapa 1 · Conectar Voicemod" meta={[connected?'PRONTO':'PENDENTE']} open={openSection==='etapa1'} onToggle={()=>setOpenSection(openSection==='etapa1'?'':'etapa1')}>
    {!connected&&<p className="help">Abra o aplicativo <strong>Voicemod</strong> nesta máquina e deixe-o aberto. A conexão é local (Control API): nada sai do computador e a chave fica no cofre, nunca no chat nem no Histórico.</p>}
    {connected
     ?<div className="list-row">
@@ -214,9 +218,9 @@ export default function Voicemod({profileId,notify}:{profileId:string;notify:(s:
     </div>
     <p className="help">Diagnóstico: {snap?.status?.message||'sem detalhes'} · modificador de voz: {changer==null?'desconhecido':changer?'ligado':'desligado (algumas vozes não soam)'} · licença: {snap?.status?.license||'—'} · tentativas: {snap?.status?.attempts??0}.</p>
    </details>
-  </Card>
+  </AccordionItem>
 
-  <Card title="Etapa 2 · Ouvir minha voz no OBS">
+   <AccordionItem id="etapa2" title="Etapa 2 · Ouvir minha voz no OBS" meta={[cfg?.obsChecked?'CONFERIDO NO OBS':'A CONFERIR']} open={openSection==='etapa2'} onToggle={()=>setOpenSection(openSection==='etapa2'?'':'etapa2')}>
    <p className="help">No OBS, edite a fonte de áudio da <strong>sua voz</strong> e escolha <strong>Voicemod Microphone</strong> como dispositivo de entrada. Evite captura duplicada: se uma fonte já pega o microfone físico, não pegue o mesmo áudio em outra — a voz entraria em dobro. Nada aqui muda seus dispositivos do Windows nem mexe nas suas cenas.</p>
    <div className="form-grid">
     <Field label="Voz para o teste" hint="Lista real do Voicemod, com as vozes da sua licença.">
@@ -247,15 +251,15 @@ export default function Voicemod({profileId,notify}:{profileId:string;notify:(s:
     <Toggle label="Ouvi minha voz no OBS" checked={!!cfg?.obsChecked} onChange={v=>void markObsChecked(v)}/>
    </div>
    {!cfg?.obsChecked&&<p className="help">Para conferir de verdade: grave um trecho no OBS (Arquivo → Gravar), fale durante o teste e ouça a gravação. Se não ouvir, confira o dispositivo de entrada da fonte e o fader do Voicemod.</p>}
-  </Card>
+  </AccordionItem>
 
-  <Card title="Etapa 3 · Escolher o que troca minha voz">
+   <AccordionItem id="etapa3" title="Etapa 3 · Escolher o que troca minha voz" meta={[(cfg?.bindings?.length||0)===1?'1 regra':(cfg?.bindings?.length||0)+' regras']} open={openSection==='etapa3'} onToggle={()=>setOpenSection(openSection==='etapa3'?'':'etapa3')}>
    <p className="help">Regras com recompensa da Twitch ou comando do chat. Exemplo: <strong>“Voz de robô → Robô → 30 segundos”</strong>. Tudo passa pelo mesmo caminho: um efeito por vez, próximos esperam na fila e a voz de antes volta ao final. Resgates são marcados como cumpridos <strong>só depois que o Voicemod confirma a troca</strong>; se algo falhar, o motivo fica no Histórico e o estorno é com a Twitch — o BotLive não devolve pontos sozinho.</p>
    <VoiceRules profileId={profileId} notify={notify} voices={voices}/>
-  </Card>
+  </AccordionItem>
 
-  <details>
-   <summary>Avançado</summary>
+  <AccordionItem id="avancado" title="Avançado" meta={[]} open={openSection==='avancado'} onToggle={()=>setOpenSection(openSection==='avancado'?'':'avancado')}>
+
    <Card title="Fila e intervalos">
     <div className="form-grid">
      <Field label="Tamanho da fila" hint="Passou disso, a troca nova é recusada com aviso — a live não vira fila de espera.">
@@ -266,7 +270,8 @@ export default function Voicemod({profileId,notify}:{profileId:string;notify:(s:
      <input value={cfg?.queueNotice??''} disabled={busy} placeholder="{{user}}, seu resgate de voz está na fila ({{pos}}º) — começa em seguida!" onChange={e=>setCfg(c=>c?{...c,queueNotice:e.target.value}:c)} onBlur={()=>{if(cfg)void run(async()=>{const q=await api<{config:RulesConfig}>('voiceResgate.get',{profileId});const config={...(q?.config||cfg),queueNotice:cfg.queueNotice};await api('voiceResgate.save',{profileId,config});setCfg(config)})}}/>
     </Field>
    </Card>
-  </details>
+  </AccordionItem>
+  </ItemStack>
 
   {!desktop&&<div className="notice"><strong>Prévia no navegador.</strong><p className="help">O Voicemod é um aplicativo desta máquina: conexão, vozes e testes só existem no aplicativo desktop. Nada aqui finge conexão real.</p></div>}
   {error&&<p role="alert" className="inline-error">{error}</p>}
