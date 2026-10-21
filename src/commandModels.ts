@@ -20,7 +20,7 @@ export function donationFlow(profileId:string,{command,link}:DonationFields):Flo
  const ia:Action={...newAction('ai.generate'),text:DONATION_PROMPT,target:'local.aiResponse'};
  const msg:Action={...newAction('chat'),text:`{{local.aiResponse}} 💜 ${link.trim()}`};
  const flow=newFlow(profileId);
- return {...flow,name:`Doação (${primary})`,trigger:{...flow.trigger,kind:'command',pattern,permission:'everyone'},actions:[ia,msg]};
+ return {...flow,name:`Doação (${primary})`,fnId:'doacao',fnVersion:1,trigger:{...flow.trigger,kind:'command',pattern,permission:'everyone'},actions:[ia,msg]};
 }
 
 /** O que falta no comando: nome vazio não tem como disparar. */
@@ -50,7 +50,7 @@ export function clippersFlow(profileId:string,{command}:ClippersFields):Flow{
  const count:Action={...newAction('variable.increment'),target:'user.clips',text:'1'};
  const msg:Action={...newAction('chat'),text:'{{user}}, esse é o seu {{user.clips}}º clipe da live! {{local.clipUrl}}'};
  const flow=newFlow(profileId);
- return {...flow,name:`Clipadores (${primary})`,trigger:{...flow.trigger,kind:'command',pattern,permission:'everyone'},actions:[clip,count,msg]};
+ return {...flow,name:`Clipadores (${primary})`,fnId:'clipadores',fnVersion:1,trigger:{...flow.trigger,kind:'command',pattern,permission:'everyone'},actions:[clip,count,msg]};
 }
 
 /** O que falta no comando: nome vazio não tem como disparar. */
@@ -63,21 +63,25 @@ export const FOLLOW_ASK_DEFAULT='Você é o ArrobaSrv, um bot brasileiro bem-hum
 export const FOLLOW_COUNT_DEFAULT='{{user}}, o canal tem {{followerCount}} seguidores agora.';
 export const FOLLOW_SONG_DEFAULT='{{user}}, agora está tocando {{nowplaying.musica|default:nada}} — {{nowplaying.artista|default:sem artista}}.';
 
-export type FollowAgeFields={command:string;alias:string;mention:boolean;ok:string};
+export type FollowAgeFields={command:string;alias:string;mention:boolean;ai:boolean;ok:string;sayOk?:string;sayWarn?:string};
 
 /** Tempo de follow: a data vem da Twitch (followed_at de
  *  /helix/channels/followers), então vale para follows anteriores à instalação.
  *  A consulta guarda tempo, data e o aviso de quando não der — e a resposta
  *  nunca transforma falha de permissão em "não segue". */
+export const FOLLOW_SAY_OK_DEFAULT='{{user}} segue {{channel}} há {{local.followAge}}, desde {{local.followSince}}.';
+export const FOLLOW_SAY_WARN_DEFAULT='{{user}}, {{local.followNote}}';
 export function followAgeFlow(profileId:string,f:FollowAgeFields):Flow{
  const command=f.command.trim();
  const primary=command.split(',')[0].trim()||'!followers';
  const pattern=[command,f.alias.trim()].filter(Boolean).join(', ');
  const consult:Action={...newAction('followAge'),target:f.mention?'mention':'sender'};
- const ask:Action={...newAction('ai.generate'),text:f.ok.trim()||FOLLOW_ASK_DEFAULT,target:'local.aiResponse'};
- const say:Action={...newAction('chat'),text:'{{local.aiResponse}}'};
+ const checkOk:Action={...newAction('condition'),condVar:'local.followResult',condOp:'equals',condValue:'ok',condFalse:'skip'};
+ const checkWarn:Action={...newAction('condition'),condVar:'local.followResult',condOp:'not_equals',condValue:'ok',condFalse:'skip'};
+ const ask:Action={...newAction('ai.generate'),text:f.ok.trim()||FOLLOW_ASK_DEFAULT,target:'local.aiResponse',aiFallback:(f.sayOk||'').trim()||FOLLOW_SAY_OK_DEFAULT};
+ const say:Action={...newAction('chat'),text:f.ai?'{{local.aiResponse}}':(f.sayOk||FOLLOW_SAY_OK_DEFAULT)};
  const flow=newFlow(profileId);
- return {...flow,name:`Tempo de follow (${primary})`,trigger:{...flow.trigger,kind:'command',pattern,permission:'everyone'},actions:[consult,ask,say]};
+  return {...flow,name:`Tempo de follow (${primary})`,fnId:'tempo-de-follow',fnVersion:1,trigger:{...flow.trigger,kind:'command',pattern,permission:'everyone'},actions:f.ai?[consult,ask,say]:[consult,checkOk,{...newAction('chat'),text:f.sayOk||FOLLOW_SAY_OK_DEFAULT},checkWarn,{...newAction('chat'),text:f.sayWarn||FOLLOW_SAY_WARN_DEFAULT}]};
 }
 
 export type SimpleCommandFields={command:string;text:string};
@@ -87,7 +91,7 @@ export function followersCountFlow(profileId:string,f:SimpleCommandFields):Flow{
  const command=f.command.trim();
  const primary=command.split(',')[0].trim()||'!seguidores';
  const flow=newFlow(profileId);
- return {...flow,name:`Seguidores (${primary})`,trigger:{...flow.trigger,kind:'command',pattern:command,permission:'everyone'},actions:[{...newAction('chat'),text:f.text.trim()||FOLLOW_COUNT_DEFAULT}]};
+  return {...flow,name:`Seguidores (${primary})`,fnId:'seguidores',fnVersion:1,trigger:{...flow.trigger,kind:'command',pattern:command,permission:'everyone'},actions:[{...newAction('chat'),text:f.text.trim()||FOLLOW_COUNT_DEFAULT}]};
 }
 
 /** Música atual: usa a integração do Spotify, quando conectada. */
@@ -95,17 +99,20 @@ export function nowPlayingFlow(profileId:string,f:SimpleCommandFields):Flow{
  const command=f.command.trim();
  const primary=command.split(',')[0].trim()||'!musica';
  const flow=newFlow(profileId);
- return {...flow,name:`Música atual (${primary})`,trigger:{...flow.trigger,kind:'command',pattern:command,permission:'everyone'},actions:[{...newAction('chat'),text:f.text.trim()||FOLLOW_SONG_DEFAULT}]};
+  return {...flow,name:`Música atual (${primary})`,fnId:'musica',fnVersion:1,trigger:{...flow.trigger,kind:'command',pattern:command,permission:'everyone'},actions:[{...newAction('chat'),text:f.text.trim()||FOLLOW_SONG_DEFAULT}]};
 }
 
 /** Comando já existe? Compara as variações separadas por vírgula, sem
  *  diferenciar maiúsculas — nada de sobrescrever o que a pessoa já tem. */
-export function commandConflict(flows:{name:string;trigger:{kind:string;pattern:string}}[],pattern:string):string|null{
+export function commandConflict(flows:{name:string;trigger:{kind:string;pattern:string}}[],pattern:string,reserved:Record<string,string>={}):string|null{
  const want=pattern.split(',').map(s=>s.trim().toLowerCase()).filter(Boolean);
  if(!want.length)return null;
  for(const f of flows){
   const have=f.trigger.pattern.split(',').map(s=>s.trim().toLowerCase()).filter(Boolean);
   if(have.some(h=>want.includes(h)))return f.name;
+ }
+ for(const [nome,origem] of Object.entries(reserved)){
+  if(want.includes(nome.toLowerCase()))return origem;
  }
  return null;
 }

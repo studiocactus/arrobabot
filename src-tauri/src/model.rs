@@ -50,6 +50,11 @@ pub struct Flow {
  #[serde(default="send_primary")] pub send_color:String,
  /// Responde no fio de quem disparou: reply na Twitch, citação no Discord.
  #[serde(default)] pub reply_to:bool,
+ /// Identidade da função pronta (ex.: "tempo-de-follow") e a versão do formato.
+ /// É ela que escolhe o editor adequado — nunca o nome do comando ou os textos,
+ /// que o usuário pode editar. Vazio = automação comum.
+ #[serde(default)] pub fn_id:String,
+ #[serde(default)] pub fn_version:i64,
  /// Timer inteligente: categoria, prioridade, respostas alternadas, atividade
  /// mínima, limite por sessão e atraso inicial. Tudo opcional; ausente vale
  /// o comportamento clássico (sempre dispara no intervalo).
@@ -80,7 +85,7 @@ fn send_primary()->String{"primary".into()}
 impl Default for Flow {
  fn default()->Self { Self{
   counter:false,timer_seconds:timer_default(),audio:String::new(),audio_volume:full_volume(),
-  send_type:send_chat(),send_color:send_primary(),reply_to:false,
+  send_type:send_chat(),send_color:send_primary(),reply_to:false,fn_id:String::new(),fn_version:0,
   timer_category:timer_category_default(),timer_priority:timer_priority_default(),timer_variants:Vec::new(),
   timer_min_messages:0,timer_window_secs:timer_window_default(),timer_max_session:0,timer_start_delay_secs:0,
   id:String::new(),profile_id:String::new(),name:String::new(),enabled:true,
@@ -145,9 +150,13 @@ pub struct Action {
  #[serde(default)] pub ai_length:String,
  #[serde(default)] pub ai_style:String,
  #[serde(default)] pub ai_no_repeat:Option<bool>,
+ /// Resposta de reserva quando a IA não responde: texto determinístico que vai
+ /// ao chat no lugar de deixar o fluxo parar. Vazio mantém o comportamento
+ /// antigo (a falha da IA interrompe as próximas etapas).
+ #[serde(default)] pub ai_fallback:String,
 }
 impl Default for Action {
- fn default()->Self { Self{kind:"chat".into(),text:String::new(),target:String::new(),value:0,condition:String::new(),punish:String::new(),tw_op:String::new(),obs_op:String::new(),obs_target:String::new(),obs_duration:0,cond_var:String::new(),cond_op:String::new(),cond_value:String::new(),cond_false:String::new(),ai_anchor:String::new(),ai_knowledge:String::new(),ai_length:String::new(),ai_style:String::new(),ai_no_repeat:None,enabled:true} }
+ fn default()->Self { Self{kind:"chat".into(),text:String::new(),target:String::new(),value:0,condition:String::new(),punish:String::new(),tw_op:String::new(),obs_op:String::new(),obs_target:String::new(),obs_duration:0,cond_var:String::new(),cond_op:String::new(),cond_value:String::new(),cond_false:String::new(),ai_anchor:String::new(),ai_knowledge:String::new(),ai_length:String::new(),ai_style:String::new(),ai_no_repeat:None,ai_fallback:String::new(),enabled:true} }
 }
 impl Action {
  pub fn anchor<'a>(&'a self,ai:&'a AiConfig)->&'a str { self.pick(&self.ai_anchor,&ai.anchor,"all") }
@@ -330,6 +339,7 @@ pub fn validate_flow(f:&Flow)->Result<(),String> {
   if !crate::variables::is_known(base){let hint=crate::variables::suggest_variable(base).map(|v|format!(" Quis dizer {}?",v)).unwrap_or_default();return Err(format!("Condição: variável desconhecida.{hint}"))}
  }
  if a.kind=="ai.generate" {let (scope,name)=crate::variables::target(crate::ai::response_target(a))?;if scope!="local"||name=="aiSuccess"{return Err("Guarde a resposta da IA numa variável local de texto".into())}}
+ if a.ai_fallback.chars().count()>500{return Err("A resposta de reserva da IA pode ter no máximo 500 caracteres".into())}
  if a.kind.starts_with("variable."){crate::variables::target(&a.target)?;}
  if a.text.len()>32768 {return Err("Ação muito longa".into())}
  if a.kind=="delay" && !(0..=30000).contains(&a.value) {return Err("Espera máxima: 30 segundos".into())}

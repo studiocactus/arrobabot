@@ -56,3 +56,22 @@ test('Comandos prontos cria Tempo de follow em uma tela só e recusa nome repeti
  await page.screenshot({path:join(OUT,'comandos-prontos-larga.png'),fullPage:true});
  expect(errors).toEqual([]);
 });
+
+test('editar a função pronta abre o formulário dela, sem grafo',async({page})=>{
+ await mockDesktop(page);
+ await page.goto('/');
+ await page.locator('.sidebar').getByRole('button',{name:'Comandos',exact:true}).click();
+ await page.getByRole('button',{name:'Comandos prontos',exact:true}).click();
+ await page.getByRole('dialog').getByRole('button',{name:'Salvar e ativar',exact:true}).click();
+ await expect(page.getByText(/criado e ativado/)).toBeVisible();
+ // Editar reabre o formulário da função — nada de grafo técnico.
+ await page.getByRole('button',{name:/Editar/}).click();
+ await expect(page.getByLabel('Comando',{exact:true})).toHaveValue('!followers');
+ await expect(page.getByText('Personalizar no editor avançado')).toBeVisible();
+ await expect(page.locator('.react-flow')).toHaveCount(0);
+ await page.screenshot({path:join(OUT,'funcao-editor-simples.png'),fullPage:true});
+ // Ajusta a resposta pronta e salva; a edição continua simples.
+ await page.locator('.form-pad textarea').first().fill('{{user}} tá no time desde {{local.followSince}}!');
+ await page.getByRole('button',{name:'Salvar comando',exact:true}).click();
+ await expect(page.getByText('Comando salvo.')).toBeVisible();
+});

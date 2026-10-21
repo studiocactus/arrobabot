@@ -11,9 +11,9 @@ const chapters = [
  ['06-PRESETS-E-APARENCIA.md','Presets e aparência'],['07-OPERACAO-E-BACKUP.md','Acesso e backup'],
  ['API-LOCAL.md','OBS e API local'],['08-SOLUCAO-DE-PROBLEMAS.md','Solução de problemas'],
  ['README.md','Glossário e índice'],['ARQUITETURA.md','Arquitetura'],
- ['DISTRIBUICAO.md','Desenvolvimento'],['VALIDACAO.md','Validação'],['MATRIZ-DE-ACEITE.md','Pendências'],['VARIAVEIS.md','Variáveis'],['ATUALIZACOES.md','Atualizações e commits'],['RESPOSTAS-E-SONS.md','Respostas TXT e sons'],['TIMERS-E-CONTADORES.md','Timers e contadores'],['EXEMPLOS-DE-USO.md','Exemplos práticos'],['09-DISCORD.md','Discord'],['10-ROTULOS-OBS.md','Rótulos OBS'],['11-ALERTAS.md','Alertas da live'],['12-CHAT-OBS.md','Chat no OBS'],['13-AUDIO.md','Saída de áudio'],['ROADMAP.md','Roadmap'],['14-SPOTIFY.md','Música do Spotify'],['COMANDOS-SIMPLES.md','Comandos simples']
+ ['DISTRIBUICAO.md','Desenvolvimento'],['VALIDACAO.md','Validação'],['MATRIZ-DE-ACEITE.md','Pendências'],['VARIAVEIS.md','Variáveis'],['ATUALIZACOES.md','Atualizações e commits'],['RESPOSTAS-E-SONS.md','Respostas TXT e sons'],['TIMERS-E-CONTADORES.md','Timers e contadores'],['EXEMPLOS-DE-USO.md','Exemplos práticos'],['09-DISCORD.md','Discord'],['10-ROTULOS-OBS.md','Rótulos OBS'],['11-ALERTAS.md','Alertas da live'],['12-CHAT-OBS.md','Chat no OBS'],['13-AUDIO.md','Saída de áudio'],['ROADMAP.md','Roadmap'],['14-SPOTIFY.md','Música do Spotify'],['COMANDOS-SIMPLES.md','Comandos simples'],['ESTUDO-SIMPLIFICACAO-BOTLIVE.md','Simplificação da operação']
 ].map(([file,title],i)=>({file,title,id:'capitulo-'+(i+1)}));
-const groups=[{name:'Comece aqui',ids:[1,20,2,3]},{name:'Configure o bot',ids:[4,28,19,16,5,18,6,21,9,7]},{name:'Cuide da sua live',ids:[22,23,8,17,10,11,24,27,25]},{name:'Referência técnica',ids:[12,13,14,15,26]}];
+const groups=[{name:'Comece aqui',ids:[1,20,2,3]},{name:'Configure o bot',ids:[4,28,19,16,5,18,6,21,9,7]},{name:'Cuide da sua live',ids:[22,23,8,17,10,11,24,27,25]},{name:'Referência técnica',ids:[12,13,14,15,26,29]}];
 const readingOrder=groups.flatMap(g=>g.ids.map(id=>chapters.find(c=>c.id==='capitulo-'+id)));
 const escape = s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const tick=String.fromCharCode(96), fence=tick.repeat(3);

@@ -59,26 +59,31 @@ import {describe,it,expect} from 'vitest';
 import {FOLLOW_ASK_DEFAULT,commandConflict,followAgeFlow,followersCountFlow,nowPlayingFlow} from './commandModels';
 
 describe('modelo Tempo de follow',()=>{
- it('monta a consulta real e a resposta da IA no jeito do bot',()=>{
-  const f=followAgeFlow('p1',{command:'!followers',alias:'!followage',mention:true,ok:''});
+ it('sem IA: consulta real e respostas determinísticas nos dois desfechos',()=>{
+  const f=followAgeFlow('p1',{command:'!followers',alias:'!followage',mention:true,ai:false,ok:''});
   expect(f.trigger.kind).toBe('command');
   expect(f.trigger.pattern).toBe('!followers, !followage');
-  expect(f.trigger.permission).toBe('everyone');
-  // consulta real → frase da IA com os dados → mensagem
-  expect(f.actions.map(a=>a.kind)).toEqual(['followAge','ai.generate','chat']);
+  expect(f.fnId).toBe('tempo-de-follow');
+  expect(f.actions.map(a=>a.kind)).toEqual(['followAge','condition','chat','condition','chat']);
   expect(f.actions[0].target).toBe('mention');
-  expect(f.actions[1].target).toBe('local.aiResponse');
-  expect(f.actions[1].text).toBe(FOLLOW_ASK_DEFAULT);
-  expect(f.actions[1].text).toContain('{{local.followAge}}');
-  expect(f.actions[1].text).toContain('{{local.followNote}}');
-  expect(f.actions[2].text).toBe('{{local.aiResponse}}');
-  expect(f.enabled).toBe(true);
+  expect(f.actions[1].condOp).toBe('equals');
+  expect(f.actions[2].text).toBe('{{user}} segue {{channel}} há {{local.followAge}}, desde {{local.followSince}}.');
+  expect(f.actions[3].condOp).toBe('not_equals');
+  expect(f.actions[4].text).toBe('{{user}}, {{local.followNote}}');
+  expect(f.actions.every(a=>a.kind!=='ai.generate')).toBe(true);
  });
- it('sem @nome consulta quem enviou e aceita instrução própria',()=>{
-  const f=followAgeFlow('p1',{command:'!followage',alias:'',mention:false,ok:'Responda {{user}} com humor sobre {{local.followSince}}.'});
+ it('com IA: a frase vem da IA e a reserva continua determinística',()=>{
+  const f=followAgeFlow('p1',{command:'!followers',alias:'',mention:true,ai:true,ok:'Fale com humor sobre {{local.followSince}}.'});
+  expect(f.actions.map(a=>a.kind)).toEqual(['followAge','ai.generate','chat']);
+  expect(f.actions[1].text).toBe('Fale com humor sobre {{local.followSince}}.');
+  expect(f.actions[1].aiFallback).toContain('{{local.followAge}}');
+  expect(f.actions[2].text).toBe('{{local.aiResponse}}');
+ });
+ it('sem @nome consulta quem enviou e aceita texto próprio',()=>{
+  const f=followAgeFlow('p1',{command:'!followage',alias:'',mention:false,ai:false,ok:'',sayOk:'Oi {{user}}! {{local.followAge}}.'});
   expect(f.trigger.pattern).toBe('!followage');
   expect(f.actions[0].target).toBe('sender');
-  expect(f.actions[1].text).toBe('Responda {{user}} com humor sobre {{local.followSince}}.');
+  expect(f.actions[2].text).toBe('Oi {{user}}! {{local.followAge}}.');
  });
 });
 

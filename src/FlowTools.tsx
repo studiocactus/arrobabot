@@ -8,6 +8,7 @@ import TestFlowDialog,{focusTestButton} from './TestFlow';
 import FlowEditor from './FlowEditor';
 import MessageEditor from './MessageEditor';
 import {SendPicker,AudioPicker} from './FlowOptions';
+import {FN_LABELS,FunctionForm,templateMatches} from './FunctionForm';
 import CommandOptions from './CommandOptions';
 
 export type FlowMode='command'|'timer'|'flow';
@@ -38,7 +39,9 @@ export function FlowDialog({flow,mode,profile,notify,onSaved,onClose}:{flow:Flow
  const [forceVisual,setForceVisual]=useState(false);
  const [testing,setTesting]=useState<Flow|null>(null);
  const kind=mode==='timer'?'timer':'comando';
- const editor=mode==='flow'||editing.actions.length>1||forceVisual||editing.actions.some(a=>!['chat','ai'].includes(a.kind));
+ const hasFn=!!editing.fnId;
+ const deviated=hasFn&&!templateMatches(editing);
+ const editor=mode==='flow'||(!hasFn&&(editing.actions.length>1||editing.actions.some(a=>!['chat','ai'].includes(a.kind))))||forceVisual||deviated;
  const intro=mode!=='flow'&&(forceVisual||editing.actions.length>1)?'Ao salvar, este '+kind+' mantém o mesmo nome, gatilho e ativação.':'';
  const title=mode==='flow'?'Editor de automação':mode==='timer'?'Configurar timer':'Configurar comando';
  async function save(next:Flow){
@@ -50,7 +53,7 @@ export function FlowDialog({flow,mode,profile,notify,onSaved,onClose}:{flow:Flow
  return <>
  <Modal wide={editor} title={title} onClose={onClose}>
   {!editing.enabled&&<p className="help"><strong>Esta automação está desativada</strong>: ela não dispara na live até você ativá-la na lista. As alterações aqui continuam valendo.</p>}
- {editor?<FlowEditor flow={editing} platform={profile.platform} ai={profile.ai} onSave={save} onTest={f=>setTesting(f)} intro={intro}/>:<form className="form-pad" onSubmit={e=>{e.preventDefault();save(editing).catch(err=>notify(friendlyMessage(err)))}}>
+ {hasFn&&!forceVisual&&!deviated?<><FunctionForm flow={editing} onChange={setEditing} onAdvanced={()=>setForceVisual(true)}/><footer className="form-footer"><span className="help">As alterações valem ao salvar.</span><button type="button" data-test-flow onClick={()=>setTesting(editing)}><Play size={15}/>Testar comando</button><button className="primary" onClick={()=>void save(editing)}><Save size={16}/>Salvar comando</button></footer></>:editor?<><p className="help"><strong>{FN_LABELS[editing.fnId||'']||'Este comando'}</strong> foi personalizado no editor avançado. O formulário simples não representa mais tudo — continue por aqui; nada é descartado. Para voltar ao formulário, desfaça as etapas extras.</p><FlowEditor flow={editing} platform={profile.platform} ai={profile.ai} onSave={save} onTest={f=>setTesting(f)} intro={intro}/></>:<form className="form-pad" onSubmit={e=>{e.preventDefault();save(editing).catch(err=>notify(friendlyMessage(err)))}}>
   <div className="form-grid">
    <Field label="Nome"><input required value={editing.name} onChange={e=>setEditing({...editing,name:e.target.value})}/></Field>
    {mode!=='timer'&&<Field label="Comando" hint="Variações com vírgula valem aqui: !whislist, !whishlist — quem erra o comando também dispara."><input required pattern="!\S+(\s*,\s*!\S+)*" title="Comece com ! e separe variações com vírgula, sem espaços dentro de cada um." value={editing.trigger.pattern} onChange={e=>setEditing({...editing,trigger:{...editing.trigger,pattern:e.target.value}})}/></Field>}

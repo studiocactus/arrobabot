@@ -457,7 +457,14 @@ async fn action(rt:&Arc<Runtime>,p:&Profile,e:&Event,a:&Action,variables:&mut cr
   emotes:crate::emotes::list(&rt.db,&p.id),
  };
  let (output,success)=match ai::conversation(&rt.http,&rt.base,p,e,&text,history,&opts).await{
- Ok(answer)=>(answer,true),Err(err)=>{ai::save_response(variables,rt,p,e,a,"",false)?;return Err(err)}
+  Ok(answer)=>(answer,true),Err(err)=>{
+   let fallback=a.ai_fallback.trim();
+   if fallback.is_empty(){ai::save_response(variables,rt,p,e,a,"",false)?;return Err(err)}
+   // Resposta de reserva: os dados verificados já foram consultados antes; a
+   // frase determinística segue adiante e o motivo real fica no Histórico.
+   rt.log(&p.id,"ai",&format!("{} · IA indisponível: resposta de reserva usada ({err})",f.name),"warn");
+   (fallback.to_owned(),false)
+  }
  };
  if blocked(&output,p){return Err("Resposta bloqueada pelas restrições do perfil".into())}
  ai::save_response(variables,rt,p,e,a,&output,success)?;
