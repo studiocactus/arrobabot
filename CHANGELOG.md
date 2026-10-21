@@ -1,5 +1,36 @@
 # Histórico de atualizações
 
+# BotLive 0.20.7
+
+## O que mudou
+
+**A resposta do Tempo de follow passa a ser do ArrobaSrv: os dados reais da Twitch, apresentados por uma frase da IA falando com quem pediu.**
+
+- O modelo agora tem três etapas: **consulta real** (data da Twitch), **Gerar resposta da IA** e **Enviar mensagem**. Um único caminho cobre os dois casos: quando dá certo, a frase celebra o tempo de follow citando tempo e data **exatamente** como vieram; quando não dá, repassa o aviso fiel (ex.: reautorizar em Perfis) com humor — sem inventar dados, prazos ou números.
+- A instrução da IA (**Como o ArrobaSrv deve responder**) fica editável dentro do comando pronto, para ajustar o tom quando quiser.
+- Confirmação de comportamento do chat: o bot **ignora as próprias mensagens** — teste sempre de conta diferente da conta do bot (foi o que escondeu o comando nesta rodada). Nada disso muda: é proteção contra auto-resposta.
+- **Regressão permanente:** o alias (`!followage`) dispara o fluxo inteiro e autorização recusada **nunca** vira "não segue" — testado no caminho de produção.
+
+## Como usar
+
+1. **Reautorize a conta do canal em Perfis** — esta é a parte que faltava: a permissão de ler seguidores (`moderator:read:followers`) só chega com a autorização nova. Importante: antes de clicar em autorizar, **entre no navegador como a conta do canal (Thenees)**, senão a autorização fica da conta errada.
+2. Atualize o BotLive (v0.20.7) e teste `!followers` de uma conta diferente do bot.
+3. Para mudar o tom da resposta, edite o comando → **Como o ArrobaSrv deve responder**.
+
+## Validação
+
+- Testes Rust (`cargo test`, src-tauri): **387 aprovados**, incluindo o teste novo que dispara o comando pelo alias no caminho de produção e exige que cada desfecho tenha sua resposta (autorização recusada nunca vira "não segue").
+- Testes de interface (`vitest`): **159 aprovados**, com o modelo de três etapas e o texto padrão da IA.
+- Testes de tela (`playwright`): **93 aprovados** na suíte completa; build e verificação de tipos limpos.
+
+## Limitações
+
+- A frase depende da IA configurada: se o provedor falhar, o fluxo para e o Histórico explica (contrato documentado das etapas de IA).
+- A leitura de seguidores continua exigindo a conta do canal reautorizada — sem isso, o bot responde com o aviso fiel pedindo a reautorização.
+- O bot segue ignorando as próprias mensagens por segurança.
+
+---
+
 # BotLive 0.20.6
 
 ## O que mudou

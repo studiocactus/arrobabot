@@ -56,32 +56,29 @@ describe('comando pronto de clipadores',()=>{
  });
 });
 import {describe,it,expect} from 'vitest';
-import {FOLLOW_OK_DEFAULT,FOLLOW_WARN_DEFAULT,commandConflict,followAgeFlow,followersCountFlow,nowPlayingFlow} from './commandModels';
+import {FOLLOW_ASK_DEFAULT,commandConflict,followAgeFlow,followersCountFlow,nowPlayingFlow} from './commandModels';
 
 describe('modelo Tempo de follow',()=>{
- it('monta a consulta real da Twitch com os dois desfechos respondidos',()=>{
-  const f=followAgeFlow('p1',{command:'!followers',alias:'!followage',mention:true,ok:'',warn:''});
+ it('monta a consulta real e a resposta da IA no jeito do bot',()=>{
+  const f=followAgeFlow('p1',{command:'!followers',alias:'!followage',mention:true,ok:''});
   expect(f.trigger.kind).toBe('command');
   expect(f.trigger.pattern).toBe('!followers, !followage');
   expect(f.trigger.permission).toBe('everyone');
-  // consulta → confere se deu certo → resposta → confere se não deu → aviso
-  expect(f.actions.map(a=>a.kind)).toEqual(['followAge','condition','chat','condition','chat']);
+  // consulta real → frase da IA com os dados → mensagem
+  expect(f.actions.map(a=>a.kind)).toEqual(['followAge','ai.generate','chat']);
   expect(f.actions[0].target).toBe('mention');
-  expect(f.actions[1].condVar).toBe('local.followResult');
-  expect(f.actions[1].condOp).toBe('equals');
-  expect(f.actions[1].condValue).toBe('ok');
-  expect(f.actions[1].condFalse).toBe('skip');
-  expect(f.actions[2].text).toBe(FOLLOW_OK_DEFAULT);
-  expect(f.actions[3].condOp).toBe('not_equals');
-  expect(f.actions[4].text).toBe(FOLLOW_WARN_DEFAULT);
+  expect(f.actions[1].target).toBe('local.aiResponse');
+  expect(f.actions[1].text).toBe(FOLLOW_ASK_DEFAULT);
+  expect(f.actions[1].text).toContain('{{local.followAge}}');
+  expect(f.actions[1].text).toContain('{{local.followNote}}');
+  expect(f.actions[2].text).toBe('{{local.aiResponse}}');
   expect(f.enabled).toBe(true);
  });
- it('sem @nome consulta quem enviou e aceita resposta própria',()=>{
-  const f=followAgeFlow('p1',{command:'!followage',alias:'',mention:false,ok:'Olha, {{user}}: {{local.followAge}}!',warn:'Deu ruim: {{local.followNote}}'});
+ it('sem @nome consulta quem enviou e aceita instrução própria',()=>{
+  const f=followAgeFlow('p1',{command:'!followage',alias:'',mention:false,ok:'Responda {{user}} com humor sobre {{local.followSince}}.'});
   expect(f.trigger.pattern).toBe('!followage');
   expect(f.actions[0].target).toBe('sender');
-  expect(f.actions[2].text).toBe('Olha, {{user}}: {{local.followAge}}!');
-  expect(f.actions[4].text).toBe('Deu ruim: {{local.followNote}}');
+  expect(f.actions[1].text).toBe('Responda {{user}} com humor sobre {{local.followSince}}.');
  });
 });
 

@@ -445,6 +445,29 @@ fn variavel_sem_nome_aponta_o_campo(){
  g.actions=vec![Action{kind:"variable.set".into(),text:"1".into(),target:"".into(),value:0,condition:"".into(),..Default::default()}];
  assert!(model::validate_flow(&g).unwrap_err().contains("escopo.nome"),"o formato é dito na mensagem");
 }
+/// O alias do tempo de follow dispara o fluxo inteiro, e o desfecho sem
+/// permissão vira aviso — autorização recusada nunca vira "não segue".
+#[tokio::test]
+async fn o_alias_do_tempo_de_follow_dispara_e_responde_o_que_falta(){
+ let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().join("app")).unwrap();let p=profile("Follow");rt.db.save_profile(&p).unwrap();
+ let mut f=flow(&p);f.name="Tempo de follow".into();
+ f.trigger=Trigger{kind:"command".into(),pattern:"!followers, !followage".into(),permission:"everyone".into(),cooldown:0,user_cooldown:0,..Default::default()};
+ f.actions=vec![
+  Action{kind:"followAge".into(),text:"".into(),target:"sender".into(),value:0,condition:"".into(),..Default::default()},
+  Action{kind:"condition".into(),text:"".into(),target:"".into(),value:0,condition:"".into(),cond_var:"local.followResult".into(),cond_op:"equals".into(),cond_value:"ok".into(),cond_false:"skip".into(),..Default::default()},
+  Action{kind:"chat".into(),text:"{{user}} segue {{channel}} há {{local.followAge}}.".into(),target:"".into(),value:0,condition:"".into(),..Default::default()},
+  Action{kind:"condition".into(),text:"".into(),target:"".into(),value:0,condition:"".into(),cond_var:"local.followResult".into(),cond_op:"not_equals".into(),cond_value:"ok".into(),cond_false:"skip".into(),..Default::default()},
+  Action{kind:"chat".into(),text:"{{user}}, {{local.followNote}}".into(),target:"".into(),value:0,condition:"".into(),..Default::default()},
+ ];
+ rt.db.save_flow(&f).unwrap();
+ engine::process(rt.clone(),Event{id:uuid::Uuid::new_v4().to_string(),profile_id:p.id.clone(),kind:"chat".into(),user:"Ana".into(),user_id:"ana".into(),role:"everyone".into(),message:"!followage".into(),data:Value::Null,simulated:true,rehearsal:true}).await;
+ let logs=rt.db.logs(&p.id).unwrap();
+ assert!(logs.iter().any(|l|l.message.contains("Tempo de follow")),"o alias dispara o fluxo: {:?}",logs.iter().map(|l|&l.message).collect::<Vec<_>>());
+ let avisos:Vec<String>=logs.iter().filter(|l|l.message.contains("[Simulação]")).map(|l|l.message.clone()).collect();
+ assert!(avisos.iter().any(|m|!m.contains("há .")&&!m.contains("segue {{")), "o desfecho responde algo");
+ assert!(avisos.iter().any(|m|m.contains("Perfis")||m.contains("não segue")||m.contains("não encontrei")), "cada desfecho tem sua resposta: {:?}",avisos);
+}
+
 #[test]
 fn legacy_dollar_markers_migrate_when_saved_and_read(){
  let dir=tempfile::tempdir().unwrap();let path=dir.path().join("vars.sqlite");let p=profile("P");

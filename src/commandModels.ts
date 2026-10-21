@@ -59,12 +59,11 @@ export function clippersCommandIssue(command:string):string{
 }
 
 /** Textos padrão do Tempo de follow: prontos para usar e editáveis. */
-export const FOLLOW_OK_DEFAULT='{{user}} segue {{channel}} há {{local.followAge}}, desde {{local.followSince}}.';
-export const FOLLOW_WARN_DEFAULT='{{user}}, {{local.followNote}}';
+export const FOLLOW_ASK_DEFAULT='Você é o ArrobaSrv, um bot brasileiro bem-humorado respondendo {{user}} no chat. Se {{local.followResult}} for "ok", escreva uma frase engraçada (máximo 160 caracteres) dizendo que {{user}} segue {{channel}} há {{local.followAge}}, desde {{local.followSince}} — cite o tempo e a data exatamente como vieram. Se não for "ok", escreva uma frase engraçada curta repassando {{local.followNote}} com fidelidade: a orientação importante (como reautorizar em Perfis) precisa ficar clara. Nunca invente dados nem prazos. Varie a cada resposta.';
 export const FOLLOW_COUNT_DEFAULT='{{user}}, o canal tem {{followerCount}} seguidores agora.';
 export const FOLLOW_SONG_DEFAULT='{{user}}, agora está tocando {{nowplaying.musica|default:nada}} — {{nowplaying.artista|default:sem artista}}.';
 
-export type FollowAgeFields={command:string;alias:string;mention:boolean;ok:string;warn:string};
+export type FollowAgeFields={command:string;alias:string;mention:boolean;ok:string};
 
 /** Tempo de follow: a data vem da Twitch (followed_at de
  *  /helix/channels/followers), então vale para follows anteriores à instalação.
@@ -75,12 +74,10 @@ export function followAgeFlow(profileId:string,f:FollowAgeFields):Flow{
  const primary=command.split(',')[0].trim()||'!followers';
  const pattern=[command,f.alias.trim()].filter(Boolean).join(', ');
  const consult:Action={...newAction('followAge'),target:f.mention?'mention':'sender'};
- const checkOk:Action={...newAction('condition'),condVar:'local.followResult',condOp:'equals',condValue:'ok',condFalse:'skip'};
- const sayOk:Action={...newAction('chat'),text:f.ok.trim()||FOLLOW_OK_DEFAULT};
- const checkWarn:Action={...newAction('condition'),condVar:'local.followResult',condOp:'not_equals',condValue:'ok',condFalse:'skip'};
- const sayWarn:Action={...newAction('chat'),text:f.warn.trim()||FOLLOW_WARN_DEFAULT};
+ const ask:Action={...newAction('ai.generate'),text:f.ok.trim()||FOLLOW_ASK_DEFAULT,target:'local.aiResponse'};
+ const say:Action={...newAction('chat'),text:'{{local.aiResponse}}'};
  const flow=newFlow(profileId);
- return {...flow,name:`Tempo de follow (${primary})`,trigger:{...flow.trigger,kind:'command',pattern,permission:'everyone'},actions:[consult,checkOk,sayOk,checkWarn,sayWarn]};
+ return {...flow,name:`Tempo de follow (${primary})`,trigger:{...flow.trigger,kind:'command',pattern,permission:'everyone'},actions:[consult,ask,say]};
 }
 
 export type SimpleCommandFields={command:string;text:string};

@@ -64,6 +64,8 @@ Como funciona por dentro: a etapa **Consultar tempo de follow** chama `GET /heli
 
 Regras cumpridas: serve para follows anteriores à instalação (a data vem da Twitch); não usa primeira mensagem, não começa contador agora, não usa IA para inventar nada e não promete histórico de refollows. Falha de autorização **nunca** vira "você não segue o canal" — cada caso tem sua mensagem e o Histórico mostra o motivo real.
 
+**A fala é do ArrobaSrv.** Os dados entram exatamente como a Twitch informou; a frase que os apresenta é escrita pela IA, no jeito do bot e falando com quem pediu — inclusive quando o assunto é um aviso (ex.: "reautorize a conta do canal em Perfis"), que é repassado fiel e com humor. A instrução fica em **Como o ArrobaSrv deve responder**, dentro do comando pronto, para ajustar o tom.
+
 ## 5. Catálogo
 
 | Modelo | Status | Origem do dado |
