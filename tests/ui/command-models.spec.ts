@@ -2,8 +2,9 @@ import {test,expect,type Page} from '@playwright/test';
 import {join} from 'path';
 import {OUT} from './ux-helpers';
 
-/** Modelos de comando: Link de doação e Clipadores. Os dois nascem prontos e
- *  ativados; o dos clipadores ainda conta por pessoa em {{user.clips}}. */
+/** Experiência unificada de comandos: Comandos prontos cria o comando completo
+ *  numa tela só — sem abrir o editor de automações nem criar variáveis — e
+ *  nomes repetidos são recusados, nunca sobrescritos. */
 async function mockDesktop(page:Page){
  await page.addInitScript(()=>{
   const flows:Record<string,unknown>=JSON.parse(sessionStorage.getItem('flows')||'{}');
@@ -22,24 +23,36 @@ async function mockDesktop(page:Page){
  });
 }
 
-test('modelos de comando criam !pix e os clipadores prontos para usar',async({page})=>{
+test('Comandos prontos cria Tempo de follow em uma tela só e recusa nome repetido',async({page})=>{
  const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
  await mockDesktop(page);
  await page.setViewportSize({width:1100,height:860});
  await page.goto('/');
  await page.locator('.sidebar').getByRole('button',{name:'Comandos',exact:true}).click();
- await page.getByRole('button',{name:'Modelos',exact:true}).click();
- const dialog=page.getByRole('dialog');
- await expect(dialog.getByRole('heading',{name:'Link de doação'})).toBeVisible();
- await expect(dialog.getByRole('heading',{name:'Clipadores (!clip)'})).toBeVisible();
- await dialog.getByLabel('Seu link de doação',{exact:true}).fill('livepix.gg/thenees');
- await page.screenshot({path:join(OUT,'modelos-comandos.png'),fullPage:true});
 
- // O dos clipadores nasce pronto: clipe na hora, contagem por pessoa e aviso.
- await dialog.getByLabel('Comando',{exact:true}).nth(1).fill('!clip, !clipe');
- await dialog.getByRole('button',{name:'Criar comando',exact:true}).nth(1).click();
+ // Caminho de aceitação: Comandos → Comandos prontos → Tempo de follow → salvar.
+ await page.getByRole('button',{name:'Comandos prontos',exact:true}).click();
+ const dialog=page.getByRole('dialog');
+ await expect(dialog.getByText('Escolha a função, confira o nome e a resposta e salve')).toBeVisible();
+ await expect(dialog.getByLabel('Função')).toHaveValue('followAge');
+ await expect(dialog.getByLabel('Comando',{exact:true})).toHaveValue('!followers');
+ await expect(dialog.getByLabel('Alias (opcional)')).toHaveValue('!followage');
+ await page.screenshot({path:join(OUT,'comandos-prontos-followage.png'),fullPage:true});
+ await dialog.getByRole('button',{name:'Salvar e ativar',exact:true}).click();
+
+ // Nasce pronto e ativado, sem abrir o editor de automações.
  await expect(page.getByText(/criado e ativado/)).toBeVisible();
- await expect(page.getByText('Clipadores (!clip)')).toBeVisible();
- await page.screenshot({path:join(OUT,'modelos-clipadores-criado.png'),fullPage:true});
+ await expect(page.getByText('Tempo de follow (!followers)')).toBeVisible();
+ await expect(page.getByRole('dialog')).toHaveCount(0);
+ await page.screenshot({path:join(OUT,'comandos-prontos-criado.png'),fullPage:true});
+
+ // Nome repetido é recusado e nada é sobrescrito.
+ await page.getByRole('button',{name:'Comandos prontos',exact:true}).click();
+ await page.getByRole('dialog').getByRole('button',{name:'Salvar e ativar',exact:true}).click();
+ await expect(page.getByText(/Já existe o comando/)).toBeVisible();
+ await page.getByRole('dialog').getByRole('button',{name:'Cancelar',exact:true}).click();
+
+ await page.setViewportSize({width:1600,height:900});
+ await page.screenshot({path:join(OUT,'comandos-prontos-larga.png'),fullPage:true});
  expect(errors).toEqual([]);
 });

@@ -48,13 +48,13 @@ test('comando aceita variações separadas por vírgula e explica nos dois edito
  await page.getByRole('button',{name:'Salvar perfil',exact:true}).click();
  await page.getByRole('dialog').getByRole('button',{name:'Fechar',exact:true}).click();
  await page.getByRole('button',{name:'Comandos',exact:true}).click();
- await page.getByRole('button',{name:'Novo comando',exact:true}).click();
+ await page.getByRole('button',{name:'Criar comando personalizado',exact:true}).click();
  await expect(page.getByText('Variações com vírgula valem aqui: !whislist, !whishlist — quem erra o comando também dispara.',{exact:true})).toBeVisible();
  await page.getByLabel('Nome',{exact:true}).fill('Whishlist');
  await page.getByLabel('Comando',{exact:true}).fill('!whislist, !whishlist, !wishlist');
  await page.getByRole('textbox',{name:'Resposta',exact:true}).fill('Lista atualizada!');
  await page.getByRole('button',{name:'Salvar comando',exact:true}).click();
- await expect(page.getByText('Automação salva.',{exact:true})).toBeVisible();
+ await expect(page.getByText('Comando salvo.',{exact:true})).toBeVisible();
 
  // o editor visual mostra a mesma orientação no gatilho
  await page.getByRole('button',{name:'Editar Whishlist',exact:true}).click();
@@ -72,7 +72,7 @@ test('resposta com variável local sem origem avisa no editor e some com texto a
  await page.getByRole('button',{name:'Salvar perfil',exact:true}).click();
  await page.getByRole('dialog').getByRole('button',{name:'Fechar',exact:true}).click();
  await page.getByRole('button',{name:'Comandos',exact:true}).click();
- await page.getByRole('button',{name:'Novo comando',exact:true}).click();
+ await page.getByRole('button',{name:'Criar comando personalizado',exact:true}).click();
  const dialog=page.getByRole('dialog');
  const resposta=dialog.getByRole('textbox',{name:'Resposta',exact:true});
  await resposta.fill('A IA disse {{local.aiResponse}}.');

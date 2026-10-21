@@ -27,6 +27,9 @@ export const variableCatalog:VariableChoice[]=[
  {key:'profileId',label:'Identificador do perfil',group:'Canal'},
  {key:'date',label:'Data de hoje',group:'Data e hora',example:'2026-09-23'},
  {key:'time',label:'Horário',group:'Data e hora',example:'19:30:00'},
+  {key:'local.followAge',label:'Tempo seguindo',group:'Tempo de follow',example:'2 anos, 3 meses e 5 dias'},
+  {key:'local.followSince',label:'Data do follow',group:'Tempo de follow',example:'14 de março de 2026, às 21:05:09'},
+  {key:'local.followNote',label:'Aviso quando não der',group:'Tempo de follow',example:'não segue o canal.'},
  {key:'unixtime',label:'Instante Unix',group:'Data e hora'},
  {key:'time.timestamp',label:'Instante Unix (ponto)',group:'Data e hora'},
  {key:'eventType',label:'Tipo do evento',group:'Execução'},
@@ -115,6 +118,7 @@ export function missingLocals(text:string,actions:{kind:string;target:string;twO
  const defined=new Set<string>();
  for(const a of actions.slice(0,Math.max(0,at))){
   if(a.kind==='ai'||a.kind==='ai.generate'){defined.add('local.aiResponse');defined.add('local.aiSuccess')}
+  if(a.kind==='followAge'){defined.add('local.followResult');defined.add('local.followSince');defined.add('local.followAge');defined.add('local.followNote')}
   if(a.kind==='punish'){defined.add('local.punished')}
   if(a.kind==='twitch'){
    if(a.twOp==='game'){defined.add('local.twitchGame');defined.add('local.twitchGameId')}

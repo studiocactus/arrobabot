@@ -57,3 +57,58 @@ export function clippersFlow(profileId:string,{command}:ClippersFields):Flow{
 export function clippersCommandIssue(command:string):string{
  return command.trim()?'':'Escreva o comando que dispara, como !clip.';
 }
+
+/** Textos padrão do Tempo de follow: prontos para usar e editáveis. */
+export const FOLLOW_OK_DEFAULT='{{user}} segue {{channel}} há {{local.followAge}}, desde {{local.followSince}}.';
+export const FOLLOW_WARN_DEFAULT='{{user}}, {{local.followNote}}';
+export const FOLLOW_COUNT_DEFAULT='{{user}}, o canal tem {{followerCount}} seguidores agora.';
+export const FOLLOW_SONG_DEFAULT='{{user}}, agora está tocando {{nowplaying.musica|default:nada}} — {{nowplaying.artista|default:sem artista}}.';
+
+export type FollowAgeFields={command:string;alias:string;mention:boolean;ok:string;warn:string};
+
+/** Tempo de follow: a data vem da Twitch (followed_at de
+ *  /helix/channels/followers), então vale para follows anteriores à instalação.
+ *  A consulta guarda tempo, data e o aviso de quando não der — e a resposta
+ *  nunca transforma falha de permissão em "não segue". */
+export function followAgeFlow(profileId:string,f:FollowAgeFields):Flow{
+ const command=f.command.trim();
+ const primary=command.split(',')[0].trim()||'!followers';
+ const pattern=[command,f.alias.trim()].filter(Boolean).join(', ');
+ const consult:Action={...newAction('followAge'),target:f.mention?'mention':'sender'};
+ const checkOk:Action={...newAction('condition'),condVar:'local.followResult',condOp:'equals',condValue:'ok',condFalse:'skip'};
+ const sayOk:Action={...newAction('chat'),text:f.ok.trim()||FOLLOW_OK_DEFAULT};
+ const checkWarn:Action={...newAction('condition'),condVar:'local.followResult',condOp:'not_equals',condValue:'ok',condFalse:'skip'};
+ const sayWarn:Action={...newAction('chat'),text:f.warn.trim()||FOLLOW_WARN_DEFAULT};
+ const flow=newFlow(profileId);
+ return {...flow,name:`Tempo de follow (${primary})`,trigger:{...flow.trigger,kind:'command',pattern,permission:'everyone'},actions:[consult,checkOk,sayOk,checkWarn,sayWarn]};
+}
+
+export type SimpleCommandFields={command:string;text:string};
+
+/** Total de seguidores: o número vem do canal na própria execução. */
+export function followersCountFlow(profileId:string,f:SimpleCommandFields):Flow{
+ const command=f.command.trim();
+ const primary=command.split(',')[0].trim()||'!seguidores';
+ const flow=newFlow(profileId);
+ return {...flow,name:`Seguidores (${primary})`,trigger:{...flow.trigger,kind:'command',pattern:command,permission:'everyone'},actions:[{...newAction('chat'),text:f.text.trim()||FOLLOW_COUNT_DEFAULT}]};
+}
+
+/** Música atual: usa a integração do Spotify, quando conectada. */
+export function nowPlayingFlow(profileId:string,f:SimpleCommandFields):Flow{
+ const command=f.command.trim();
+ const primary=command.split(',')[0].trim()||'!musica';
+ const flow=newFlow(profileId);
+ return {...flow,name:`Música atual (${primary})`,trigger:{...flow.trigger,kind:'command',pattern:command,permission:'everyone'},actions:[{...newAction('chat'),text:f.text.trim()||FOLLOW_SONG_DEFAULT}]};
+}
+
+/** Comando já existe? Compara as variações separadas por vírgula, sem
+ *  diferenciar maiúsculas — nada de sobrescrever o que a pessoa já tem. */
+export function commandConflict(flows:{name:string;trigger:{kind:string;pattern:string}}[],pattern:string):string|null{
+ const want=pattern.split(',').map(s=>s.trim().toLowerCase()).filter(Boolean);
+ if(!want.length)return null;
+ for(const f of flows){
+  const have=f.trigger.pattern.split(',').map(s=>s.trim().toLowerCase()).filter(Boolean);
+  if(have.some(h=>want.includes(h)))return f.name;
+ }
+ return null;
+}

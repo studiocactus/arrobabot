@@ -57,7 +57,7 @@ test('onboarding, comando, isolamento, memórias e navegação',async({page})=>{
  await page.getByRole('dialog').getByRole('button',{name:'Fechar',exact:true}).click();
  await expect(page.locator('.sidebar .brand')).toContainText('BotLive');
  await page.getByRole('button',{name:'Comandos',exact:true}).click();
- await page.getByRole('button',{name:'Novo comando',exact:true}).click();
+ await page.getByRole('button',{name:'Criar comando personalizado',exact:true}).click();
  await page.getByLabel('Nome',{exact:true}).fill('Saudação');
  await page.getByLabel('Comando',{exact:true}).fill('!ola');
  await page.getByRole('textbox',{name:'Resposta',exact:true}).fill('Olá, {{user}}. Bem-vindo à comunidade!');
@@ -160,7 +160,7 @@ test('catálogo de variáveis insere marcador e informa limite da prévia web',a
  await page.getByRole('button',{name:'Salvar perfil',exact:true}).click();
  await page.getByRole('dialog').getByRole('button',{name:'Fechar',exact:true}).click();
  await page.getByRole('button',{name:'Comandos',exact:true}).click();
- await page.getByRole('button',{name:'Novo comando',exact:true}).click();
+ await page.getByRole('button',{name:'Criar comando personalizado',exact:true}).click();
  const response=page.getByRole('textbox',{name:'Resposta',exact:true});
  await response.fill('Olá, convidado!');await response.press('Home');
  for(let i=0;i<5;i++)await response.press('ArrowRight');
@@ -211,7 +211,7 @@ test('fichas do catálogo têm tamanho padrão, nada vaza da caixa e o clique in
  await page.getByRole('button',{name:'Salvar perfil',exact:true}).click();
  await page.getByRole('dialog').getByRole('button',{name:'Fechar',exact:true}).click();
  await page.getByRole('button',{name:'Comandos',exact:true}).click();
- await page.getByRole('button',{name:'Novo comando',exact:true}).click();
+ await page.getByRole('button',{name:'Criar comando personalizado',exact:true}).click();
  const response=page.getByRole('textbox',{name:'Resposta',exact:true});
  await response.fill('Boa live, ');
  await page.getByText('Inserir variável e testar mensagem',{exact:true}).click();
@@ -311,7 +311,7 @@ test('comando escolhe como enviar na Twitch e oferece o áudio do disparo',async
  await page.getByRole('button',{name:'Salvar perfil',exact:true}).click();
  await page.getByRole('dialog').getByRole('button',{name:'Fechar',exact:true}).click();
  await page.getByRole('button',{name:'Comandos',exact:true}).click();
- await page.getByRole('button',{name:'Novo comando',exact:true}).click();
+ await page.getByRole('button',{name:'Criar comando personalizado',exact:true}).click();
  await page.getByLabel('Nome',{exact:true}).fill('ifood');
  await page.getByLabel('Comando',{exact:true}).fill('!ifood');
  await page.getByRole('textbox',{name:'Resposta',exact:true}).fill('O ifood já passou a milhão na rua 12 vezes!');

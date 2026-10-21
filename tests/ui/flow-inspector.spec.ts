@@ -51,7 +51,7 @@ test('editor de automações agrupa campos em seções, oferece a ajuda compacta
 
  // comando simples pode ser aberto no editor visual, com a nota de preservação na ajuda
  await page.getByRole('button',{name:'Comandos',exact:true}).click();
- await page.getByRole('button',{name:'Novo comando',exact:true}).click();
+ await page.getByRole('button',{name:'Criar comando personalizado',exact:true}).click();
  await page.getByLabel('Nome',{exact:true}).fill('Alô');
  await page.getByLabel('Comando',{exact:true}).fill('!alo');
  await page.getByRole('textbox',{name:'Resposta',exact:true}).fill('Oi, {{user}}!');
@@ -64,7 +64,7 @@ test('editor de automações agrupa campos em seções, oferece a ajuda compacta
  await expect(page.locator('.flow-help')).toHaveCount(0);
  await expect(page.locator('.react-flow__node')).toHaveCount(2);
  await page.getByRole('button',{name:'Salvar fluxo',exact:true}).click();
- await expect(page.getByText('Automação salva.',{exact:true})).toBeVisible();
+ await expect(page.getByText('Comando salvo.',{exact:true})).toBeVisible();
 
  // salvar no visual não muda o comando: ele continua abrindo no modo simples
  await page.getByRole('button',{name:'Editar Alô',exact:true}).click();

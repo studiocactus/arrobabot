@@ -6,7 +6,7 @@ test('ficha Número sorteado insere a faixa e explica as casas decimais em Opç�
   await page.getByRole('button',{name:'Salvar perfil',exact:true}).click();
   await page.getByRole('dialog').getByRole('button',{name:'Fechar',exact:true}).click();
   await page.getByRole('button',{name:'Comandos',exact:true}).click();
-  await page.getByRole('button',{name:'Novo comando',exact:true}).click();
+  await page.getByRole('button',{name:'Criar comando personalizado',exact:true}).click();
   const response=page.getByRole('textbox',{name:'Resposta',exact:true});
   await response.fill('O número é ');
   await page.getByText('Inserir variável e testar mensagem',{exact:true}).click();
@@ -79,7 +79,7 @@ test('comando simples também oferece a resposta a quem enviou e a guarda',async
   await page.getByRole('button',{name:'Salvar perfil',exact:true}).click();
   await page.getByRole('dialog').getByRole('button',{name:'Fechar',exact:true}).click();
   await page.getByRole('button',{name:'Comandos',exact:true}).click();
-  await page.getByRole('button',{name:'Novo comando',exact:true}).click();
+  await page.getByRole('button',{name:'Criar comando personalizado',exact:true}).click();
   await page.getByLabel('Nome',{exact:true}).fill('Valeu');
   await page.getByLabel('Comando',{exact:true}).fill('!valeu');
   await page.getByRole('textbox',{name:'Resposta',exact:true}).fill('Valeu, {{user}}!');
@@ -87,7 +87,7 @@ test('comando simples também oferece a resposta a quem enviou e a guarda',async
   await expect(reply).toBeVisible();
   await reply.click();
   await page.getByRole('button',{name:'Salvar comando',exact:true}).click();
-  await expect(page.getByText('Automação salva.',{exact:true})).toBeVisible();
+  await expect(page.getByText('Comando salvo.',{exact:true})).toBeVisible();
   await page.getByRole('button',{name:'Editar Valeu',exact:true}).click();
   await expect(page.getByRole('switch',{name:'Responder à pessoa que enviou',exact:true})).toHaveAttribute('aria-checked','true');
 });

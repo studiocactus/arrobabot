@@ -495,6 +495,31 @@ async fn action(rt:&Arc<Runtime>,p:&Profile,e:&Event,a:&Action,variables:&mut cr
  let reply=engine.eval_with_scope::<String>(&mut scope,&a.text).map_err(|_|"O script falhou ou ultrapassou os limites")?;
  rt.send_with(p,e,&reply,Some(f)).await
  },
+ "followAge"=>{
+  // Consulta real da Twitch (followed_at): serve para follows anteriores à
+  // instalação e não inventa nada. O alvo é quem enviou, ou o @nome citado —
+  // com volta para quem enviou quando não há citação. Cada desfecho vira uma
+  // variável local: autorização recusada nunca vira "não segue".
+  let mention=a.target.trim()=="mention";
+  let mut login=e.user.clone();
+  let mut uid=e.user_id.clone();
+  if mention{
+   for w in e.message.split_whitespace(){
+    if let Some(l)=w.strip_prefix('@'){
+     let cleaned=l.trim_matches(|c:char|!c.is_alphanumeric()&&c!='_').to_lowercase();
+     if cleaned.len()>1{login=cleaned;uid=String::new();break}
+    }
+   }
+  }
+  let info=crate::twitch_ops::follow_age(rt,p,&login,&uid).await;
+  variables.change(&rt.db,p,e,"local.followResult","set",json!(info.result.clone()))?;
+  variables.change(&rt.db,p,e,"local.followSince","set",json!(info.since.clone()))?;
+  variables.change(&rt.db,p,e,"local.followAge","set",json!(info.age.clone()))?;
+  variables.change(&rt.db,p,e,"local.followNote","set",json!(info.note.clone()))?;
+  let detail=if info.result=="ok"{format!("{} segue há {} (desde {})",login,info.age,info.since)}else{format!("{}: {}",login,info.note)};
+  rt.log(&p.id,"followAge",&format!("{} · {}",f.name,detail),if info.result=="ok"{"success"}else{"warn"});
+  Ok(())
+ },
  "voiceFx"=>{
  let raw=if a.target.trim().is_empty(){a.text.clone()}else{a.target.clone()};
  let raw=raw.trim().to_owned();

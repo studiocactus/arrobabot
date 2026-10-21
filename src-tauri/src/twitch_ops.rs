@@ -167,6 +167,7 @@ fn required_scopes(op:&str)->&'static [&'static str]{
   "vip"|"unvip"=>&["channel:manage:vips"],
   "slow"|"slowoff"|"followers"|"followersoff"|"subsonly"|"subsonlyoff"|"emoteonly"|"emoteonlyoff"=>&["moderator:manage:chat_settings"],
   "clip"=>&["clips:edit"],
+  "followage"=>&["moderator:read:followers"],
   _=>&[],
  }
 }
@@ -448,6 +449,144 @@ pub async fn run(rt:&Arc<Runtime>,p:&Profile,e:&Event,a:&Action,text:&str,trigge
   _=>Err("Ação na Twitch: escolha uma operação válida".into())
  }
 }
+// ---- Tempo de follow (consulta real da Twitch) ----
+
+/// Desfecho da consulta de tempo de follow. Só `ok` traz `since`/`age`; os
+/// demais trazem `note` com o próximo passo. Autorização recusada nunca vira
+/// "não segue", e consulta falhada nunca vira "segue há zero dias".
+#[derive(Clone)]
+pub struct FollowInfo { pub result: String, pub note: String, pub since: String, pub age: String }
+
+fn follow_fail(result:&str,note:String)->FollowInfo { FollowInfo{result:result.into(),note,since:String::new(),age:String::new()} }
+
+use chrono::{Datelike,Timelike};
+fn month_pt(m:u32)->&'static str { match m {1=>"janeiro",2=>"fevereiro",3=>"março",4=>"abril",5=>"maio",6=>"junho",7=>"julho",8=>"agosto",9=>"setembro",10=>"outubro",11=>"novembro",_=>"dezembro"} }
+
+/// Data como se fala: "14 de março de 2026, às 21:05:09".
+pub fn date_pt(y:i32,mo:u32,d:u32,h:u32,mi:u32,s:u32)->String { format!("{d} de {} de {y}, às {h:02}:{mi:02}:{s:02}",month_pt(mo)) }
+
+fn plural(n:i32,one:&str,many:&str)->String { format!("{n} {}",if n==1{one}else{many}) }
+
+fn days_in_month(y:i32,m:u32)->i32 {
+ let first=chrono::NaiveDate::from_ymd_opt(y,m,1);
+ let (ny,nm)=if m==12 {(y+1,1)} else {(y,m+1)};
+ match (first,chrono::NaiveDate::from_ymd_opt(ny,nm,1)) {(Some(a),Some(b))=>(b-a).num_days() as i32,_=>30}
+}
+
+/// Tempo decorrido em português, com plural certo: "2 anos, 3 meses e 5 dias",
+/// "1 mês e 2 dias", "3 horas e 12 minutos", "menos de um minuto".
+pub fn span_pt(start:chrono::NaiveDateTime,end:chrono::NaiveDateTime)->String {
+ if end<=start {return "menos de um minuto".into()}
+ let sd=start.date();let ed=end.date();
+ let total_days=(ed-sd).num_days();
+ if total_days==0 {
+  let secs=(end-start).num_seconds();
+  let (h,mi)=(secs/3600,(secs%3600)/60);
+  if h>0 {return format!("{} e {}",plural(h as i32,"hora","horas"),plural(mi as i32,"minuto","minutos"))}
+  if mi>0 {return plural(mi as i32,"minuto","minutos")}
+  return "menos de um minuto".into();
+ }
+ let (sy,sm,sd_)=(sd.year(),sd.month(),sd.day());
+ let (ey,em,ed_)=(ed.year(),ed.month(),ed.day());
+ let mut y=ey-sy;let mut m=em as i32-sm as i32;let mut d=ed_ as i32-sd_ as i32;
+ if d<0 {m-=1;d+=days_in_month(sy,sm)}
+ if m<0 {y-=1;m+=12}
+ let mut parts:Vec<String>=Vec::new();
+ if y>0 {parts.push(plural(y,"ano","anos"))}
+ if m>0 {parts.push(plural(m,"mês","meses"))}
+ if d>0 {parts.push(plural(d,"dia","dias"))}
+ if parts.is_empty(){return "menos de um dia".into()}
+ let last=parts.pop().unwrap();
+ if parts.is_empty(){last}else{format!("{} e {}",parts.join(", "),last)}
+}
+
+/// Resposta de GET /users?login= → Some((id, nome para exibição)).
+pub fn user_from_payload(body:&str)->Option<(String,String)> {
+ let v:Value=serde_json::from_str(body).ok()?;
+ let u=v.get("data")?.as_array()?.first()?;
+ let id=u.get("id")?.as_str()?.to_owned();
+ let name=u.get("display_name").or_else(||u.get("login"))?.as_str()?.to_owned();
+ Some((id,name))
+}
+
+/// Resposta de GET /channels/followers para um usuário: Ok(Some(data)) segue,
+/// Ok(None) não segue, Err é resposta inutilizável (nunca vira "zero dias").
+pub fn followed_at_from_payload(body:&str)->Result<Option<String>,()> {
+ let v:Value=serde_json::from_str(body).map_err(|_|())?;
+ let arr=v.get("data").and_then(|d|d.as_array()).ok_or(())?;
+ let Some(first)=arr.first() else {return Ok(None)};
+ Ok(Some(first.get("followed_at").and_then(|s|s.as_str()).unwrap_or("").to_owned()))
+}
+
+/// Data ISO da Twitch → (data falada, campos para cálculo).
+fn parse_iso(s:&str)->Option<chrono::DateTime<chrono::Utc>> {
+ chrono::DateTime::parse_from_rfc3339(s).ok().map(|d|d.with_timezone(&chrono::Utc))
+}
+
+fn follow_cache()->&'static std::sync::Mutex<std::collections::HashMap<String,(std::time::Instant,FollowInfo)>> {
+ static CACHE:std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<String,(std::time::Instant,FollowInfo)>>> = std::sync::OnceLock::new();
+ CACHE.get_or_init(||std::sync::Mutex::new(std::collections::HashMap::new()))
+}
+
+/// Tempo de follow consultado na Twitch: `followed_at` de
+/// GET /channels/followers, com o token da conta do canal (moderator:read:followers).
+/// Serve para follows anteriores à instalação — a data vem da Twitch, não de
+/// histórico local. Consultas repetidas de mesmo canal e usuário usam cache
+/// curto, sem esconder mudanças por muito tempo.
+pub async fn follow_age(rt:&Arc<Runtime>,p:&Profile,target_login:&str,target_id:&str)->FollowInfo {
+ let key=format!("{}\u{0}{}\u{0}{}",p.id,target_id,target_login.to_lowercase());
+ if let Some(hit)=follow_cache().lock().unwrap().get(&key) {
+  if hit.0.elapsed().as_secs()<60 {return hit.1.clone()}
+ }
+ let info=fetch_follow_age(rt,p,target_login,target_id).await;
+ let mut cache=follow_cache().lock().unwrap();
+ if cache.len()>512 {cache.clear()}
+ cache.insert(key,(std::time::Instant::now(),info.clone()));
+ info
+}
+
+async fn fetch_follow_age(rt:&Arc<Runtime>,p:&Profile,target_login:&str,target_id:&str)->FollowInfo {
+ let mut uid=target_id.trim().to_owned();
+ let mut name=target_login.trim().to_owned();
+ let token=match channel_creds(rt,p).await {Ok(t)=>t,Err(e)=>{return follow_fail("unauthorized",e)}};
+ if let Err(err)=require_scopes(rt,p,"do canal","followage",&token).await {return follow_fail("unauthorized",err)}
+ // 1) Identidade: o ID do evento de chat já resolve; só falta buscar quando a
+ //    consulta é de um nome citado (API oficial, nunca palpite).
+ if uid.is_empty() {
+  if name.is_empty() {return follow_fail("invalid","Não entendi quem consultar.".into())}
+  let login=name.trim_start_matches('@').to_lowercase();
+  let res=rt.http.get("https://api.twitch.tv/helix/users").query(&[("login",login.as_str())]).bearer_auth(&token).send().await;
+  let res=match res {Ok(r)=>r,Err(_)=>{return follow_fail("unavailable","A Twitch não respondeu agora — tente em instantes.".into())}};
+  let status=res.status().as_u16();
+  if status==401||status==403 {return follow_fail("unauthorized","A conta do canal não tem permissão para consultar — reautorize a conta do canal em Perfis.".into())}
+  if status==429 {return follow_fail("rate_limited","A Twitch limitou as consultas agora — tente em instantes.".into())}
+  let body=res.text().await.unwrap_or_default();
+  match user_from_payload(&body) {
+   Some((id,nm))=>{uid=id;name=nm;},
+   None=>{return follow_fail("not_found","não encontrei essa pessoa na Twitch.".into())}
+  }
+ }
+ // 2) A consulta que importa: o vínculo atual de follow e a data da Twitch.
+ let res=rt.http.get("https://api.twitch.tv/helix/channels/followers").query(&[("broadcaster_id",p.channel_id.as_str()),("user_id",uid.as_str())]).bearer_auth(&token).send().await;
+ let res=match res {Ok(r)=>r,Err(_)=>{return follow_fail("unavailable","A Twitch não respondeu agora — tente em instantes.".into())}};
+ let status=res.status().as_u16();
+ if status==401||status==403 {return follow_fail("unauthorized","A conta do canal não tem permissão para consultar seguidores — reautorize a conta do canal em Perfis.".into())}
+ if status==429 {return follow_fail("rate_limited","A Twitch limitou as consultas agora — tente em instantes.".into())}
+ if status<200||status>=300 {return follow_fail("unavailable","A Twitch não respondeu agora — tente em instantes.".into())}
+ let body=res.text().await.unwrap_or_default();
+ match followed_at_from_payload(&body) {
+  Ok(None)=>follow_fail("not_following","não segue o canal.".into()),
+  Ok(Some(at))=>{
+   let Some(start)=parse_iso(&at) else {return follow_fail("invalid","a Twitch não informou a data do follow.".into())};
+   let local=start.with_timezone(&chrono::Local);
+   let now=chrono::Local::now();
+   FollowInfo{result:"ok".into(),note:String::new(),since:date_pt(local.year(),local.month(),local.day(),local.hour(),local.minute(),local.second()),age:span_pt(start.naive_utc(),now.with_timezone(&chrono::Utc).naive_utc())}
+  },
+  Err(_)=>follow_fail("invalid","a Twitch devolveu uma resposta que não dá para ler.".into()),
+ }
+}
+
+
 #[cfg(test)] mod tests {
  use super::*;
  #[test] fn a_limpeza_acha_nomes_na_fala(){
@@ -482,6 +621,32 @@ pub async fn run(rt:&Arc<Runtime>,p:&Profile,e:&Event,a:&Action,text:&str,trigge
  #[test] fn o_link_do_clipe_usa_o_id_da_twitch(){
   assert_eq!(clip_url("AbC123xYz"),"https://clips.twitch.tv/AbC123xYz");
  }
+ /// Datas e durações faladas em português, com os segundos que o pedido exige.
+ #[test] fn data_e_tempo_do_follow_falam_portugues(){
+  assert_eq!(date_pt(2026,3,14,21,5,9),"14 de março de 2026, às 21:05:09");
+  let start=chrono::NaiveDate::from_ymd_opt(2024,1,10).unwrap().and_hms_opt(0,0,0).unwrap();
+  let anos=chrono::NaiveDate::from_ymd_opt(2026,3,14).unwrap().and_hms_opt(21,5,9).unwrap();
+  assert_eq!(span_pt(start,anos),"2 anos, 2 meses e 4 dias");
+  let mes=chrono::NaiveDate::from_ymd_opt(2024,2,12).unwrap().and_hms_opt(0,0,0).unwrap();
+  assert_eq!(span_pt(start,mes),"1 mês e 2 dias");
+  let um_ano=chrono::NaiveDate::from_ymd_opt(2025,1,10).unwrap().and_hms_opt(0,0,0).unwrap();
+  assert_eq!(span_pt(start,um_ano),"1 ano");
+  let horas=chrono::NaiveDate::from_ymd_opt(2024,1,10).unwrap().and_hms_opt(3,12,0).unwrap();
+  assert_eq!(span_pt(start,horas),"3 horas e 12 minutos");
+  assert_eq!(span_pt(anos,start),"menos de um minuto");
+ }
+
+ /// Cada resposta da Twitch vira o desfecho certo: seguir, não seguir, ilegível
+ /// e data ausente nunca se confundem entre si.
+ #[test] fn resposta_da_twitch_para_o_tempo_de_follow_e_interpretada_por_caso(){
+  assert_eq!(followed_at_from_payload(r#"{"data":[{"user_id":"1","followed_at":"2020-01-01T00:00:00Z"}],"total":1}"#).unwrap().unwrap(),"2020-01-01T00:00:00Z");
+  assert_eq!(followed_at_from_payload(r#"{"data":[],"total":3}"#).unwrap(),None,"lista vazia é não seguir (a permissão já foi validada antes)");
+  assert!(followed_at_from_payload("isto não é json").is_err(),"resposta ilegível nunca vira data nem zero dias");
+  assert_eq!(followed_at_from_payload(r#"{"data":[{"user_id":"1"}],"total":1}"#).unwrap().unwrap(),"","data ausente fica vazia e vira erro explicado");
+  assert_eq!(user_from_payload(r#"{"data":[{"id":"123","login":"ana","display_name":"Ana"}]}"#).unwrap(),("123".to_string(),"Ana".to_string()));
+  assert_eq!(user_from_payload(r#"{"data":[]}"#),None,"login inexistente é não encontrado");
+ }
+
  /// O alvo do clipe nunca é a conta do bot: o canal errado faria a Twitch
  /// responder "Channel offline" de quem não está ao vivo.
  #[test] fn o_alvo_do_clipe_nunca_e_a_conta_do_bot(){

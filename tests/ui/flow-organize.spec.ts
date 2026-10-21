@@ -218,7 +218,7 @@ test('ajuda compacta no lugar do banner: teclado, Escape e tela pequena',async({
  await page.getByRole('button',{name:'Salvar perfil',exact:true}).click();
  await page.getByRole('dialog').getByRole('button',{name:'Fechar',exact:true}).click();
  await page.getByRole('button',{name:'Comandos',exact:true}).click();
- await page.getByRole('button',{name:'Novo comando',exact:true}).click();
+ await page.getByRole('button',{name:'Criar comando personalizado',exact:true}).click();
  await page.getByLabel('Nome',{exact:true}).fill('Alô');
  await page.getByLabel('Comando',{exact:true}).fill('!alohelp');
  await page.getByRole('textbox',{name:'Resposta',exact:true}).fill('Oi, {{user}}!');

@@ -1,4 +1,3 @@
-import {describe,it,expect} from 'vitest';
 import {DONATION_PROMPT,clippersCommandIssue,clippersFlow,donationCommandIssue,donationFlow,donationLinkIssue} from './commandModels';
 
 describe('comando pronto de doação',()=>{
@@ -54,5 +53,54 @@ describe('comando pronto de clipadores',()=>{
   const outro=clippersFlow('p1',{command:'!cortar'});
   expect(outro.name).toBe('Clipadores (!cortar)');
   expect(outro.trigger.pattern).toBe('!cortar');
+ });
+});
+import {describe,it,expect} from 'vitest';
+import {FOLLOW_OK_DEFAULT,FOLLOW_WARN_DEFAULT,commandConflict,followAgeFlow,followersCountFlow,nowPlayingFlow} from './commandModels';
+
+describe('modelo Tempo de follow',()=>{
+ it('monta a consulta real da Twitch com os dois desfechos respondidos',()=>{
+  const f=followAgeFlow('p1',{command:'!followers',alias:'!followage',mention:true,ok:'',warn:''});
+  expect(f.trigger.kind).toBe('command');
+  expect(f.trigger.pattern).toBe('!followers, !followage');
+  expect(f.trigger.permission).toBe('everyone');
+  // consulta → confere se deu certo → resposta → confere se não deu → aviso
+  expect(f.actions.map(a=>a.kind)).toEqual(['followAge','condition','chat','condition','chat']);
+  expect(f.actions[0].target).toBe('mention');
+  expect(f.actions[1].condVar).toBe('local.followResult');
+  expect(f.actions[1].condOp).toBe('equals');
+  expect(f.actions[1].condValue).toBe('ok');
+  expect(f.actions[1].condFalse).toBe('skip');
+  expect(f.actions[2].text).toBe(FOLLOW_OK_DEFAULT);
+  expect(f.actions[3].condOp).toBe('not_equals');
+  expect(f.actions[4].text).toBe(FOLLOW_WARN_DEFAULT);
+  expect(f.enabled).toBe(true);
+ });
+ it('sem @nome consulta quem enviou e aceita resposta própria',()=>{
+  const f=followAgeFlow('p1',{command:'!followage',alias:'',mention:false,ok:'Olha, {{user}}: {{local.followAge}}!',warn:'Deu ruim: {{local.followNote}}'});
+  expect(f.trigger.pattern).toBe('!followage');
+  expect(f.actions[0].target).toBe('sender');
+  expect(f.actions[2].text).toBe('Olha, {{user}}: {{local.followAge}}!');
+  expect(f.actions[4].text).toBe('Deu ruim: {{local.followNote}}');
+ });
+});
+
+describe('modelos simples de dados reais',()=>{
+ it('seguidores usa a contagem do canal e música usa a integração',()=>{
+  const s=followersCountFlow('p1',{command:'!seguidores',text:''});
+  expect(s.actions).toHaveLength(1);
+  expect(s.actions[0].text).toContain('{{followerCount}}');
+  const m=nowPlayingFlow('p1',{command:'!musica',text:''});
+  expect(m.actions[0].text).toContain('{{nowplaying.musica');
+ });
+});
+
+describe('conflitos de nomes',()=>{
+ const flows=[{name:'Meu !followers antigo',trigger:{kind:'command',pattern:'!followers, !fa'}},{name:'Outro',trigger:{kind:'command',pattern:'!oi'}}];
+ it('encontra o comando que já existe, sem diferenciar maiúsculas',()=>{
+  expect(commandConflict(flows,'!Followers')).toBe('Meu !followers antigo');
+  expect(commandConflict(flows,'!seguidores, !fa')).toBe('Meu !followers antigo');
+  expect(commandConflict(flows,'!seguidores')).toBeNull();
+  expect(commandConflict(flows,'')).toBeNull();
  });
 });

@@ -44,7 +44,7 @@ export function FlowDialog({flow,mode,profile,notify,onSaved,onClose}:{flow:Flow
  async function save(next:Flow){
   await saveFlow(next);
   await onSaved();
-  notify('Automação salva.');
+  notify(mode==='command'?'Comando salvo.':mode==='timer'?'Timer salvo.':'Automação salva.');
   onClose();
  }
  return <>
