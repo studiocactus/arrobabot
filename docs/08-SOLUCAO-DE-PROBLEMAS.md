@@ -119,7 +119,7 @@ Erros HTTP são indícios, não diagnósticos completos. Verifique também o pai
 | Palavra de ativação não dispara | A palavra deve aparecer **exata** (sem pontuação) na transcrição; confira **Histórico** para ver o texto reconhecido; sem palavra cadastrada, toda fala dispara (pode gerar muitos gatilhos) |
 | Overlay aguarda BotLive | Confira instância aberta, porta e token da sessão atual |
 | Overlay de outro perfil | Preencha o UUID correto no parâmetro profile |
-| Meta da LivePix parada, com aviso de acesso recusado | Salve as credenciais novamente na tela LivePix (Meta de doações) para renovar o token; até lá, o contador para e o aviso aparece uma vez no Histórico |
+| Meta da LivePix parada, com aviso de acesso recusado | Salve as credenciais na tela Meta (Client ID e o Client Secret novo — deixar o campo vazio mantém o segredo antigo) e use **Conferir agora**: salvar já limpa o aviso antigo e renova o token; se o acesso ainda falhar, o aviso volta com o motivo |
 | Discord falha (webhook) | Confira webhook salvo, módulo ativo, permissões do canal e erro HTTP |
 | Convite !discord inválido | Use convite HTTPS de discord.gg ou discord.com |
 | Bot do Discord não conecta | Token de bot (não de aplicativo), servidor escolhido, **Ativar o bot do Discord** ligado e o motivo no Histórico |

@@ -105,6 +105,18 @@ export default function LivePix({profileId,notify}:{profileId:string;notify:(s:s
   setBusy(false);
  };
 
+ /** Conferir agora: valida o acesso na hora — sem esperar o ciclo de 15 s nem
+  *  precisar de meta ativa — e o aviso sai quando a consulta passa. */
+ const conferir=async()=>{
+  setBusy(true);setError('');
+  try{
+   const d=await api<{last_error?:string}>('livepix.check',{profileId});
+   await load();
+   notify(d?.last_error?('Conferência encontrou: '+d.last_error):'Acesso à LivePix conferido.');
+  }catch(e){setError(errorText(e))}
+  setBusy(false);
+ };
+
  const saveCreds=async()=>{
   setBusy(true);setError('');
   try{
@@ -200,9 +212,12 @@ export default function LivePix({profileId,notify}:{profileId:string;notify:(s:s
 
    <div className="list-row" style={{marginTop:16}}>
     <div><strong>Estado</strong><small>{config?.enabled?'Integração ativa':'Integração desativada'}</small></div>
-    {config?.enabled
-     ?<button className="danger" disabled={busy} onClick={()=>void call('livepix.disable',{})}><Square size={15}/>Desativar</button>
-     :<button className="primary" disabled={busy} onClick={()=>void enable()}><Play size={15}/>Ativar</button>}
+    <div className="row">
+     <button disabled={busy} onClick={()=>void conferir()}><RefreshCw size={15}/>Conferir agora</button>
+     {config?.enabled
+      ?<button className="danger" disabled={busy} onClick={()=>void call('livepix.disable',{})}><Square size={15}/>Desativar</button>
+      :<button className="primary" disabled={busy} onClick={()=>void enable()}><Play size={15}/>Ativar</button>}
+    </div>
    </div>
 
    {activeGoal&&data&&<div style={{margin:'12px 0'}}>

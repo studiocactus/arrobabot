@@ -314,63 +314,74 @@ fn note_error(rt: &Runtime, p: &str, msg: &str, level: &str) {
     }
 }
 
+/// Uma consulta completa agora: renova o acesso, lê os pagamentos e atualiza
+/// o estado. É o que o ciclo faz a cada 15 s com a meta ativa — e o que o
+/// botão "Conferir agora" dispara na hora, mesmo sem meta escolhida. Quando a
+/// consulta passa, o aviso antigo de acesso perde o sentido e sai da tela.
+async fn refresh(rt: &Arc<Runtime>, profile: &Profile, goal: Option<GoalDef>) {
+    let cfg = config(rt, &profile.id);
+    let token = match fetch_token(rt, &profile.id).await {
+        Ok(t) => t,
+        Err(e) => { note_error(rt, &profile.id, &format!("Não foi possível renovar o acesso da LivePix ({e}). Confira as credenciais na tela LivePix (Meta de doações)."), "warn"); return; }
+    };
+    let url = format!("https://api.livepix.gg/v2/payments?limit=100&currency=BRL");
+    let resp = rt.http.get(&url).bearer_auth(&token).timeout(Duration::from_secs(20)).send().await;
+    let resp = match resp { Ok(r) => r, Err(e) => { note_error(rt, &profile.id, &format!("A API da LivePix não respondeu ({e})."), "error"); return; } };
+    if resp.status().as_u16() == 401 {
+        forget_token(&profile.id);
+        note_error(rt, &profile.id, "O acesso da LivePix foi recusado. Salve as credenciais novamente na tela LivePix (Meta de doações) para renovar — o contador para enquanto isso.", "warn");
+        return;
+    }
+    let body: Value = match resp.json().await { Ok(b) => b, Err(_) => return };
+    let arr = body.get("data").and_then(|d| d.as_array()).cloned().unwrap_or_default();
+    let start_ts = cfg.start_timestamp;
+    let total: i64 = arr.iter().filter_map(|p| {
+        let amount = p.get("amount").and_then(|a| a.as_i64())?;
+        let created = p.get("createdAt").and_then(|c| c.as_str()).and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok()).map(|d| d.timestamp());
+        if start_ts == 0 || created.map_or(false, |c| c >= start_ts) { Some(amount) } else { None }
+    }).sum();
+    let mut d = data(rt, &profile.id);
+    let old = d["current"].as_i64().unwrap_or(0);
+    let new = old.max(total);
+    // Consulta ok: o aviso antigo de acesso perde o sentido.
+    d.as_object_mut().map(|o| { o.remove("last_error"); o.remove("last_error_at"); });
+    d["current"] = json!(new);
+    d["updated_at"] = json!(now_seconds());
+    if !cfg.active_goal.is_empty() { d["active_goal"] = json!(&cfg.active_goal); }
+    if d["start_timestamp"].is_null() || d["start_timestamp"].as_i64().unwrap_or(0) == 0 {
+        d["start_timestamp"] = json!(now_seconds());
+    }
+    save_data(rt, &profile.id, &d);
+    let Some(goal) = goal else { return };
+    let pct = if goal.target > 0 { ((new * 100) / goal.target).clamp(0, 100) } else { 0 };
+    let celebrate = goal.target > 0 && old > 0 && old < goal.target && new >= goal.target;
+    let _ = rt.broadcast.send(json!({
+        "type": "goal",
+        "payload": {
+            "profileId": profile.id,
+            "title": goal.title,
+            "current": new,
+            "target": goal.target,
+            "font_family": goal.font_family,
+            "percent": pct,
+            "celebrate": celebrate,
+        }
+    }));
+    // Sons da Meta: o broadcast acima é só visual (overlay/estúdio).
+    goal_sound(rt, &profile, goal_sound_key(celebrate, new > old));
+    // Explosão de emotes da Meta: o mesmo efeito dos subs, no mesmo overlay.
+    if celebrate { crate::emote_burst::maybe(rt, &profile, "meta"); }
+}
+
 pub async fn tick(rt: &Arc<Runtime>) {
     for profile in rt.db.profiles().unwrap_or_default() {
         let cfg = config(rt, &profile.id);
         if !cfg.enabled || cfg.active_goal.is_empty() { continue; }
-        let goal = match cfg.goals.get(&cfg.active_goal) { Some(g) => g.clone(), None => continue };
-        let token = match fetch_token(rt, &profile.id).await {
-            Ok(t) => t,
-            Err(e) => { note_error(rt, &profile.id, &format!("Não foi possível renovar o acesso da LivePix ({e}). Confira as credenciais na tela LivePix (Meta de doações)."), "warn"); continue; }
-        };
-        let url = format!("https://api.livepix.gg/v2/payments?limit=100&currency=BRL");
-        let resp = rt.http.get(&url).bearer_auth(&token).timeout(Duration::from_secs(20)).send().await;
-        let resp = match resp { Ok(r) => r, Err(e) => { note_error(rt, &profile.id, &format!("A API da LivePix não respondeu ({e})."), "error"); continue; } };
-        if resp.status().as_u16() == 401 {
-            forget_token(&profile.id);
-            note_error(rt, &profile.id, "O acesso da LivePix foi recusado. Salve as credenciais novamente na tela LivePix (Meta de doações) para renovar — o contador para enquanto isso.", "warn");
-            continue;
-        }
-        let body: Value = match resp.json().await { Ok(b) => b, Err(_) => continue };
-        let arr = body.get("data").and_then(|d| d.as_array()).cloned().unwrap_or_default();
-        let start_ts = cfg.start_timestamp;
-        let total: i64 = arr.iter().filter_map(|p| {
-            let amount = p.get("amount").and_then(|a| a.as_i64())?;
-            let created = p.get("createdAt").and_then(|c| c.as_str()).and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok()).map(|d| d.timestamp());
-            if start_ts == 0 || created.map_or(false, |c| c >= start_ts) { Some(amount) } else { None }
-        }).sum();
-        let mut d = data(rt, &profile.id);
-        let old = d["current"].as_i64().unwrap_or(0);
-        let new = old.max(total);
-        // Pagamento chegou: o aviso antigo de acesso perde o sentido.
-        d.as_object_mut().map(|o| { o.remove("last_error"); o.remove("last_error_at"); });
-        d["current"] = json!(new);
-        d["updated_at"] = json!(now_seconds());
-        d["active_goal"] = json!(&cfg.active_goal);
-        if d["start_timestamp"].is_null() || d["start_timestamp"].as_i64().unwrap_or(0) == 0 {
-            d["start_timestamp"] = json!(now_seconds());
-        }
-        save_data(rt, &profile.id, &d);
-        let pct = if goal.target > 0 { ((new * 100) / goal.target).clamp(0, 100) } else { 0 };
-        let celebrate = goal.target > 0 && old > 0 && old < goal.target && new >= goal.target;
-        let _ = rt.broadcast.send(json!({
-            "type": "goal",
-            "payload": {
-                "profileId": profile.id,
-                "title": goal.title,
-                "current": new,
-                "target": goal.target,
-                "font_family": goal.font_family,
-                "percent": pct,
-                "celebrate": celebrate,
-            }
-        }));
-        // Sons da Meta: o broadcast acima é só visual (overlay/estúdio).
-        goal_sound(rt, &profile, goal_sound_key(celebrate, new > old));
-        // Explosão de emotes da Meta: o mesmo efeito dos subs, no mesmo overlay.
-        if celebrate { crate::emote_burst::maybe(rt, &profile, "meta"); }
+        let goal = cfg.goals.get(&cfg.active_goal).cloned();
+        refresh(rt, &profile, goal).await;
     }
 }
+
 
 // ---- RPC -----
 
@@ -387,8 +398,25 @@ pub async fn operation(rt: &Arc<Runtime>, p: &str, op: &str, args: &Value) -> Re
             if let Some(sec) = args["clientSecret"].as_str().filter(|s| !s.trim().is_empty()) {
                 secrets::set(p, "client_secret", sec.trim())?;
             }
+            // Credencial nova invalida o aviso antigo e o token em memória: o
+            // próximo ciclo — ou o "Conferir agora" — renova já com o que foi
+            // salvo. Se o novo acesso falhar, o motivo volta na hora certa.
+            forget_token(p);
+            let mut d = data(rt, p);
+            d.as_object_mut().map(|o| { o.remove("last_error"); o.remove("last_error_at"); });
+            save_data(rt, p, &d);
             rt.log(p, "livepix", "Credenciais da LivePix atualizadas.", "info");
             Ok(Value::Null)
+        }
+        "livepix.check" => {
+            // Conferir agora: valida o acesso na hora — token novo, pagamentos e
+            // estado — mesmo sem meta ativa. Consulta ok limpa o aviso; senão, o
+            // motivo fica na própria tela.
+            forget_token(p);
+            let cfg = config(rt, p);
+            let goal = cfg.goals.get(&cfg.active_goal).cloned();
+            refresh(rt, &profile, goal).await;
+            Ok(data(rt, p))
         }
         "livepix.enable" => {
             let goals: Vec<Value> = args["goals"].as_array().cloned().unwrap_or_default();
@@ -694,6 +722,32 @@ mod tests {
         assert_eq!(logs.iter().filter(|l| l.message == "Acesso recusado.").count(), 1, "o mesmo aviso entra uma vez");
         assert_eq!(logs.iter().filter(|l| l.message == "Outro problema.").count(), 1, "problema diferente entra de novo");
         assert_eq!(data(&rt, &p.id)["last_error"], json!("Outro problema."), "a tela continua vendo o problema atual");
+    }
+
+    /// Salvar credenciais novas apaga o aviso antigo de acesso: ele fala de um
+    /// segredo que não existe mais. Se o novo acesso falhar, o motivo volta.
+    #[tokio::test]
+    async fn salvar_credenciais_limpa_o_aviso_antigo_de_acesso() {
+        let dir = tempfile::tempdir().unwrap();
+        let rt = Runtime::new(dir.path().into()).unwrap();
+        let p = profile("P");
+        rt.db.save_profile(&p).unwrap();
+        rt.db.set_module(&p.id, DATA, &json!({"current":10,"last_error":"O acesso da LivePix foi recusado.","last_error_at":1})).unwrap();
+        operation(&rt, &p.id, "livepix.save_credentials", &json!({"clientId":"abc","clientSecret":"segredo novo"})).await.unwrap();
+        assert!(data(&rt, &p.id)["last_error"].is_null(), "o aviso antigo não fica preso na tela");
+    }
+
+    /// O "Conferir agora" funciona sem meta ativa e aponta o motivo quando o
+    /// acesso ainda não renova — nada de aviso solto sem próximo passo.
+    #[tokio::test]
+    async fn conferir_agora_aponta_o_motivo_quando_o_acesso_nao_renova() {
+        let dir = tempfile::tempdir().unwrap();
+        let rt = Runtime::new(dir.path().into()).unwrap();
+        let p = profile("P");
+        rt.db.save_profile(&p).unwrap();
+        let out = operation(&rt, &p.id, "livepix.check", &json!({})).await.unwrap();
+        let motivo = out["last_error"].as_str().unwrap_or_default();
+        assert!(motivo.contains("Confira as credenciais"), "sem credencial o motivo traz o próximo passo: {motivo}");
     }
 
     #[tokio::test]
