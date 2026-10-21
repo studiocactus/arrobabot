@@ -164,6 +164,9 @@ function move(dir:-1|1){try{const ns=nodes.map(n=>({id:n.id,position:{x:n.positi
  function changeTrigger(t:Trigger){setTrigger(t);setNodes(ns=>ns.map(n=>n.id==='trigger'?{...n,data:{...n.data,label:triggerLabel(t)}}:n))}
 function switchKind(current:Action,next:string){const base:Action={...current,kind:next};
   if(next==='ai.generate'&&!base.target.startsWith('local.'))base.target='local.aiResponse';
+  // Variável nasce com nome válido: "Nome do valor" nunca deve começar vazio,
+  // senão o salvamento recusa sem dizer qual campo falta.
+  if(next.startsWith('variable.')&&!base.target.includes('.'))base.target='local.valor';
   if(next==='punish'){if(!['sender','first','random'].includes(base.target))base.target='sender';if(!base.punish)base.punish='timeout';if(base.value<1)base.value=60}
   if(next==='condition'){if(!base.condOp)base.condOp='equals';if(!['stop','skip'].includes(base.condFalse||''))base.condFalse='stop'}
   if(next==='twitch'){if(!base.twOp)base.twOp='game';if(base.value<1)base.value=60}
@@ -227,11 +230,12 @@ function switchKind(current:Action,next:string){const base:Action={...current,ki
  {action.kind==='wait'&&<WaitEditor value={action.value||0} onChange={value=>update({...action,value})}/>}
  <div className="row"><StepMenu canUp={bounds.up} canDown={bounds.down} canInsert={insertable} onMove={move} onInsert={insertStep}/></div>
  {action.kind==='condition'&&<CondEditor action={action} update={update} issue={issue}/>}
+ {action.kind.startsWith('variable.')&&<VariableTarget value={action.target} onChange={target=>update({...action,target})}/>}
  {action.kind==='script'?<Field label="Script Rhai (retorna texto)">
  <textarea rows={5} value={action.text} onChange={e=>update({...action,text:e.target.value})}/>
  </Field>:action.kind==='variable.delete'?<p className="help">Escolha o valor que será apagado.</p>:action.kind==='twitch'&&(action.twOp||'game')==='clip'?<p className="help">Esta operação não usa texto: o clipe é criado e o link fica em <code>{'{{local.clipUrl}}'}</code> para a próxima etapa.</p>:action.kind==='twitch'&&!['game','title','timeout','ban','warn','mention'].includes(action.twOp||'game')?<p className="help">Esta operação não usa texto: o alvo e a duração vêm da fala ou dos campos abaixo.</p>:action.kind==='voiceFx'?<p className="help">Esta etapa não usa texto: escolha a voz e a duração acima.</p>:<MessageEditor key={selected} profileId={flow.profileId} label={action.kind.startsWith('ai')?'Como a IA deve responder':action.kind==='variable.increment'?'Quanto somar':action.kind==='punish'?'Motivo (vai para a Twitch e para o Histórico)':action.kind==='twitch'?((action.twOp||'game')==='game'?'Nome do jogo fixo (vazio usa o que você falou)':(action.twOp||'game')==='title'?'Novo título fixo (vazio usa o que você falou, até 140 caracteres)':(action.twOp||'game')==='mention'?'Mensagem (o bot marca @alvo na frente)':'Motivo (vai para a Twitch e para o Histórico)'):'Mensagem / conteúdo'} value={action.text} onChange={text=>update({...action,text})} at={stepIndex>=0?stepIndex:undefined} flow={{...flow,name,trigger,actions:orderedSteps}}/>}{ai&&<AIActionOptions action={action} ai={ai} onChange={update}/>}{action.kind==='ai.generate'&&<Field label="Nome da resposta" hint="Disponível somente nesta execução; evita misturar respostas entre pessoas.">
  <input value={(action.target||'local.aiResponse').replace(/^local\./,'')} onChange={e=>update({...action,target:'local.'+e.target.value})}/>
- </Field>}{action.kind.startsWith('variable.')&&<VariableTarget value={action.target} onChange={target=>update({...action,target})}/>}{['memory','webhook'].includes(action.kind)&&<Field label={action.kind==='memory'?'Arquivo no vault':'Endereço HTTPS'}>
+ </Field>}{['memory','webhook'].includes(action.kind)&&<Field label={action.kind==='memory'?'Arquivo no vault':'Endereço HTTPS'}>
  <input value={action.target} onChange={e=>update({...action,target:e.target.value})}/>
  </Field>}{['delay','points'].includes(action.kind)&&<Field label={action.kind==='delay'?'Espera em milissegundos (máx. 30000)':'Quantidade de pontos'}>
  <input type="number" value={action.value} onChange={e=>update({...action,value:+e.target.value})}/>

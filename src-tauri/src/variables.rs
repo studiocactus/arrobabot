@@ -11,7 +11,7 @@ pub fn valid_name(name: &str) -> bool {
 }
 pub fn target(target: &str) -> R<(&str, &str)> {
     let (scope, name) = target.split_once('.').ok_or("Use escopo.nome, por exemplo local.resposta ou global.contador")?;
-    if !["local", "global", "user", "session", "sessionUser"].contains(&scope) || !valid_name(name) { return Err("Escopo ou nome de variável inválido".into()); }
+    if !["local", "global", "user", "session", "sessionUser"].contains(&scope) || !valid_name(name) { return Err("Escopo ou nome de variável inválido. Preencha Nome do valor com letras sem acentos, números e sublinhado (ex.: seguindoDesde).".into()); }
     Ok((scope, name))
 }
 fn table(scope: &str) -> &'static str { if scope.starts_with("session") { "session_variables" } else { "variables" } }

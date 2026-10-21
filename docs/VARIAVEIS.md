@@ -137,7 +137,7 @@ Editar preenche os campos para uma nova gravação. Apagar pede confirmação e 
 
 ## Ações de variável
 
-No editor visual, escolha **Definir variável**, **Incrementar variável** ou **Apagar variável**. Em **Guardar o valor**, escolha a duração e o compartilhamento; em **Nome do valor**, digite apenas contador, por exemplo. Para guardar global.contador, selecione Salva no perfil e escreva contador. O destino é um nome fixo; não recebe interpolação.
+No editor visual, escolha **Definir variável**, **Incrementar variável** ou **Apagar variável**. Em **Guardar o valor**, escolha a duração e o compartilhamento; em **Nome do valor**, digite apenas contador, por exemplo. Os dois campos aparecem **antes** do conteúdo da etapa e o nome já nasce preenchido (`valor`) — sem nome válido, o salvamento é recusado apontando o campo que falta. Para guardar global.contador, selecione Salva no perfil e escreva contador. O destino é um nome fixo; não recebe interpolação.
 
 No conteúdo das ações Definir/Incrementar, a interpretação continua sendo texto ou JSON: 10 é número, true é booleano e texto comum é uma string. Para preservar um número como texto nesse campo, escreva-o entre aspas. A seleção explícita de tipo fica no gerenciador **Variáveis do perfil**.
 

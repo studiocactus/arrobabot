@@ -431,6 +431,20 @@ async fn variable_templates_are_single_pass_bounded_and_typed(){
  assert!(c.render("R$ {{random:3.0,3.0}}").unwrap().starts_with("R$ 3,0"),"centavos em vírgula no meio da frase");
  assert!(c.render(&"x".repeat(65537)).is_err());
 }
+/// Nome de valor vazio é recusado apontando o campo certo — nada de erro
+/// solto sem dizer o que preencher.
+#[test]
+fn variavel_sem_nome_aponta_o_campo(){
+ let p=profile("V");
+ let mut f=flow(&p);
+ f.actions=vec![Action{kind:"variable.set".into(),text:"1".into(),target:"local.".into(),value:0,condition:"".into(),..Default::default()}];
+ let err=model::validate_flow(&f).unwrap_err();
+ assert!(err.contains("Nome do valor"),"o motivo aponta o campo: {err}");
+ // Sem escopo nenhum, o erro explica o formato.
+ let mut g=flow(&p);
+ g.actions=vec![Action{kind:"variable.set".into(),text:"1".into(),target:"".into(),value:0,condition:"".into(),..Default::default()}];
+ assert!(model::validate_flow(&g).unwrap_err().contains("escopo.nome"),"o formato é dito na mensagem");
+}
 #[test]
 fn legacy_dollar_markers_migrate_when_saved_and_read(){
  let dir=tempfile::tempdir().unwrap();let path=dir.path().join("vars.sqlite");let p=profile("P");
