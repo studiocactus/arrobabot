@@ -1,4 +1,5 @@
 import {DONATION_PROMPT,clippersCommandIssue,clippersFlow,donationCommandIssue,donationFlow,donationLinkIssue} from './commandModels';
+import {guessFn,templateMatches} from './FunctionForm';
 
 describe('comando pronto de doação',()=>{
  it('monta o !pix com resposta de IA variada e o link no fim',()=>{
@@ -104,5 +105,18 @@ describe('conflitos de nomes',()=>{
   expect(commandConflict(flows,'!seguidores, !fa')).toBe('Meu !followers antigo');
   expect(commandConflict(flows,'!seguidores')).toBeNull();
   expect(commandConflict(flows,'')).toBeNull();
+ });
+});
+
+describe('adoção de comandos antigos pelo formato',()=>{
+ it('reconhece o formato de uma função e não decide por nome',()=>{
+  const f=followAgeFlow('p1',{command:'!seguindo',alias:'',mention:false,ai:false,ok:''});
+  const antigo={...f,fnId:undefined,fnVersion:undefined,name:'Qualquer nome',trigger:{...f.trigger,pattern:'!qualquercoisa'}};
+  expect(guessFn(antigo)).toBe('tempo-de-follow');
+  expect(templateMatches({...antigo,fnId:'tempo-de-follow'})).toBe(true);
+  // formato fora do modelo não é reconhecido — nada de forçar formulário
+  const desviado={...antigo,actions:[...f.actions,f.actions[2]]};
+  expect(guessFn(desviado)).toBeNull();
+  expect(templateMatches({...desviado,fnId:'tempo-de-follow'})).toBe(false);
  });
 });

@@ -25,7 +25,7 @@ export default function Commands({profile,visual,notify,onChanged,createToken,on
  const [mCommand,setMCommand]=useState('!followers');
  const [mAlias,setMAlias]=useState('!followage');
  const [mMention,setMMention]=useState(true);
- const [mAI,setMAI]=useState(false);
+ const [mAI,setMAI]=useState(true);
  const [voiceCmds,setVoiceCmds]=useState<{command:string;label:string}[]>([]);
  useEffect(()=>{if(!desktop)return;api<{config?:{bindings?:{kind:string;command:string;rewardName?:string}[]}}>('voiceResgate.get',{profileId:profile.id}).then(r=>setVoiceCmds((r?.config?.bindings||[]).filter(b=>b.kind==='command'&&b.command).map(b=>({command:b.command.trim(),label:b.rewardName||'Troca de voz'})))).catch(()=>{})},[profile.id]);
  const moduleCmds:Record<string,string[]>={points:['!pontos','!ranking','!transferir','!loja','!resgatar'],songs:['!musica','!minhamusica','!removermusica','!musicas'],raffles:['!ticket'],games:['!roleta','!duelo','!aceitar','!bingo']};
@@ -61,7 +61,7 @@ export default function Commands({profile,visual,notify,onChanged,createToken,on
  /** Padrões de cada função: nasce pronto, editável antes de salvar. */
  function pickModel(kind:string){
   setMKind(kind);
-  if(kind==='followAge'){setMCommand('!followers');setMAlias('!followage');setMMention(true);setMAI(false);setMText(FOLLOW_ASK_DEFAULT)}
+  if(kind==='followAge'){setMCommand('!followers');setMAlias('!followage');setMMention(true);setMAI(true);setMText(FOLLOW_ASK_DEFAULT)}
   if(kind==='followers'){setMCommand('!seguidores');setMAlias('');setMText(FOLLOW_COUNT_DEFAULT)}
   if(kind==='song'){setMCommand('!musica');setMAlias('');setMText(FOLLOW_SONG_DEFAULT)}
   if(kind==='donation'){setMCommand('!pix');setMAlias('')}

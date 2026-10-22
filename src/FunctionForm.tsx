@@ -18,6 +18,17 @@ export const FN_LABELS:Record<string,string>={'tempo-de-follow':'Tempo de follow
 
 /** O fluxo ainda tem o formato da função? Se foi personalizado no editor
  *  avançado, o formulário não representa mais tudo — e nada é descartado. */
+/** Qual função este formato representa? Baseado só no formato das etapas —
+ *  nome e textos nunca decidem. Serve para adotar comandos antigos no
+ *  formulário certo, com confirmação da pessoa. */
+export function guessFn(flow:Flow):string|null{
+ const kinds=flow.actions.map(a=>a.kind);
+ for(const [fn,formats] of Object.entries(FORMATS)){
+  if(!flow.fnId&&formats.some(f=>f.length===kinds.length&&f.every((k,i)=>k===kinds[i])))return fn;
+ }
+ return null;
+}
+
 export function templateMatches(flow:Flow):boolean{
  const formats=FORMATS[flow.fnId||''];
  if(!formats)return false;

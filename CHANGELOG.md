@@ -1,5 +1,34 @@
 # Histórico de atualizações
 
+# BotLive 0.20.11
+
+## O que mudou
+
+**O Tempo de follow passa a nascer no jeito do ArrobaSrv — e os comandos antigos ganham o formulário com um clique.**
+
+- **Persona por padrão.** O modelo Tempo de follow agora nasce com **"Escrever com IA no meu jeito" ligado**: a resposta sai engraçada, variada e falando com quem pediu — como você imaginou. A **resposta de reserva** continua preenchida com os dados reais, então se a IA falhar o comando responde do mesmo jeito (só sem a piada). Dá para desligar a IA quando quiser texto pronto.
+- **Migração revisável dos comandos antigos.** Um comando criado antes desta versão, mas com o formato de uma função pronta, ganha o aviso **"Este comando tem o formato de Tempo de follow"** com o botão **Abrir no formulário dessa função** — um clique e ele vira o formulário (comando, alias, resposta e o interruptor de IA). Nada muda sem você pedir; quem preferir continua no editor atual.
+
+## Como usar
+
+1. Atualize o BotLive (v0.20.11).
+2. Para o seu `!followage` atual: **Comandos → Editar** → clique **Abrir no formulário dessa função** → confira **Escrever com IA no meu jeito** ligado → **Salvar comando**.
+3. Comandos novos já nascem assim: **Comandos prontos → Tempo de follow → Salvar e ativar**.
+
+## Validação
+
+- Testes de interface (`vitest`): **161 aprovados**, incluindo o reconhecimento por formato (nome e textos nunca decidem) e a recusa quando as etapas foram personalizadas.
+- Testes de tela (`playwright`): **94 aprovados** na suíte completa.
+- Testes Rust (`cargo test`): **387** inalterados nesta versão.
+- Evidência real na sua máquina (distinta dos testes): o `!followage` respondeu com o follow de **9 de novembro de 2020** — dado anterior à instalação, vindo direto da Twitch ✓.
+
+## Limitações
+
+- A persona depende do provedor de IA; sem ele, responde a reserva determinística (os dados continuam corretos).
+- A adoção pelo formato vale para os modelos conhecidos; fluxos muito personalizados continuam no editor avançado (por escolha, preservando tudo).
+
+---
+
 # BotLive 0.20.10
 
 ## O que mudou

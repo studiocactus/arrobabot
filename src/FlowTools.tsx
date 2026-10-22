@@ -8,7 +8,7 @@ import TestFlowDialog,{focusTestButton} from './TestFlow';
 import FlowEditor from './FlowEditor';
 import MessageEditor from './MessageEditor';
 import {SendPicker,AudioPicker} from './FlowOptions';
-import {FN_LABELS,FunctionForm,templateMatches} from './FunctionForm';
+import {FN_LABELS,FunctionForm,guessFn,templateMatches} from './FunctionForm';
 import CommandOptions from './CommandOptions';
 
 export type FlowMode='command'|'timer'|'flow';
@@ -39,6 +39,7 @@ export function FlowDialog({flow,mode,profile,notify,onSaved,onClose}:{flow:Flow
  const [forceVisual,setForceVisual]=useState(false);
  const [testing,setTesting]=useState<Flow|null>(null);
  const kind=mode==='timer'?'timer':'comando';
+ const adotavel=!editing.fnId?guessFn(editing):null;
  const hasFn=!!editing.fnId;
  const deviated=hasFn&&!templateMatches(editing);
  const editor=mode==='flow'||(!hasFn&&(editing.actions.length>1||editing.actions.some(a=>!['chat','ai'].includes(a.kind))))||forceVisual||deviated;
@@ -53,6 +54,7 @@ export function FlowDialog({flow,mode,profile,notify,onSaved,onClose}:{flow:Flow
  return <>
  <Modal wide={editor} title={title} onClose={onClose}>
   {!editing.enabled&&<p className="help"><strong>Esta automação está desativada</strong>: ela não dispara na live até você ativá-la na lista. As alterações aqui continuam valendo.</p>}
+  {adotavel&&<p className="help"><strong>Este comando tem o formato de {FN_LABELS[adotavel]||'uma função pronta'}.</strong> <button type="button" onClick={()=>setEditing({...editing,fnId:adotavel,fnVersion:1})}>Abrir no formulário dessa função</button> — ou continue no editor atual; nada é alterado sem você pedir.</p>}
  {hasFn&&!forceVisual&&!deviated?<><FunctionForm flow={editing} onChange={setEditing} onAdvanced={()=>setForceVisual(true)}/><footer className="form-footer"><span className="help">As alterações valem ao salvar.</span><button type="button" data-test-flow onClick={()=>setTesting(editing)}><Play size={15}/>Testar comando</button><button className="primary" onClick={()=>void save(editing)}><Save size={16}/>Salvar comando</button></footer></>:editor?<><p className="help"><strong>{FN_LABELS[editing.fnId||'']||'Este comando'}</strong> foi personalizado no editor avançado. O formulário simples não representa mais tudo — continue por aqui; nada é descartado. Para voltar ao formulário, desfaça as etapas extras.</p><FlowEditor flow={editing} platform={profile.platform} ai={profile.ai} onSave={save} onTest={f=>setTesting(f)} intro={intro}/></>:<form className="form-pad" onSubmit={e=>{e.preventDefault();save(editing).catch(err=>notify(friendlyMessage(err)))}}>
   <div className="form-grid">
    <Field label="Nome"><input required value={editing.name} onChange={e=>setEditing({...editing,name:e.target.value})}/></Field>
