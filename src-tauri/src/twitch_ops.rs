@@ -555,7 +555,7 @@ async fn fetch_follow_age(rt:&Arc<Runtime>,p:&Profile,target_login:&str,target_i
  if uid.is_empty() {
   if name.is_empty() {return follow_fail("invalid","Não entendi quem consultar.".into())}
   let login=name.trim_start_matches('@').to_lowercase();
-  let res=rt.http.get("https://api.twitch.tv/helix/users").query(&[("login",login.as_str())]).bearer_auth(&token).send().await;
+  let res=crate::helix::get(&rt.http,p,&token,"users",&[("login",login.as_str())]).send().await;
   let res=match res {Ok(r)=>r,Err(_)=>{return follow_fail("unavailable","A Twitch não respondeu agora — tente em instantes.".into())}};
   let status=res.status().as_u16();
   if status==401||status==403 {return follow_fail("unauthorized","A conta do canal não tem permissão para consultar — reautorize a conta do canal em Perfis.".into())}
@@ -567,12 +567,12 @@ async fn fetch_follow_age(rt:&Arc<Runtime>,p:&Profile,target_login:&str,target_i
   }
  }
  // 2) A consulta que importa: o vínculo atual de follow e a data da Twitch.
- let res=rt.http.get("https://api.twitch.tv/helix/channels/followers").query(&[("broadcaster_id",p.channel_id.as_str()),("user_id",uid.as_str())]).bearer_auth(&token).send().await;
+ let res=crate::helix::get(&rt.http,p,&token,"channels/followers",&[("broadcaster_id",p.channel_id.as_str()),("user_id",uid.as_str())]).send().await;
  let res=match res {Ok(r)=>r,Err(_)=>{return follow_fail("unavailable","A Twitch não respondeu agora — tente em instantes.".into())}};
  let status=res.status().as_u16();
- if status==401||status==403 {return follow_fail("unauthorized","A conta do canal não tem permissão para consultar seguidores — reautorize a conta do canal em Perfis.".into())}
+ if status==401||status==403 {return follow_fail("unauthorized",format!("A conta do canal não tem permissão para consultar seguidores — reautorize a conta do canal em Perfis. (HTTP {status}.)"))}
  if status==429 {return follow_fail("rate_limited","A Twitch limitou as consultas agora — tente em instantes.".into())}
- if status<200||status>=300 {return follow_fail("unavailable","A Twitch não respondeu agora — tente em instantes.".into())}
+ if status<200||status>=300 {return follow_fail("unavailable",format!("A Twitch não respondeu agora (HTTP {status}) — tente em instantes."))}
  let body=res.text().await.unwrap_or_default();
  match followed_at_from_payload(&body) {
   Ok(None)=>follow_fail("not_following","não segue o canal.".into()),

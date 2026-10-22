@@ -1,5 +1,36 @@
 # Histórico de atualizações
 
+# BotLive 0.20.9
+
+## O que mudou
+
+**O Tempo de follow consulta a Twitch de verdade: as duas consultas passaram a mandar o cabeçalho obrigatório que estava faltando.**
+
+- **Causa raiz encontrada.** A consulta de seguidores e a de identidade (`@nome`) eram montadas fora do lugar único que envia os cabeçalhos da Helix — sem o `Client-Id`, a Twitch recusa **qualquer** consulta (HTTP 401). Por isso reautorizar as contas não mudava nada: o token estava certo, o pedido é que saía incompleto.
+- Agora as duas consultas usam o mesmo caminho de todos os outros pedidos à Twitch (Client-Id + token num só lugar) — nada mais monta requisição pelas bordas.
+- **Diagnóstico visível:** quando a Twitch recusa, o aviso agora traz o **código HTTP** ("HTTP 401…") — nunca mais um erro genérico sem o que fazer.
+- O restante continua igual: a data vem do `followed_at` da Twitch (vale para follows anteriores à instalação), a frase é do ArrobaSrv (IA opcional com reserva determinística) e falha de autorização nunca vira "não segue".
+
+## Como usar
+
+1. Atualize o BotLive (v0.20.9).
+2. Digite `!followage` (ou `!followers`) de uma conta diferente do bot.
+
+Se aparecer aviso de novo, ele agora diz o HTTP exato — me mande o print que o próximo passo é imediato.
+
+## Validação
+
+- Testes Rust (`cargo test`): **387 aprovados** — e todas as chamadas da Helix agora passam pelo caminho único de cabeçalhos (conferido no código: nenhum pedido restou montado fora).
+- Testes de interface (`vitest`): **160 aprovados**.
+- Testes de tela (`playwright`): **94 aprovados** na última execução completa (nenhuma tela mudou nesta versão).
+
+## Limitações
+
+- A consulta real depende das suas credenciais; aqui ela é validada por respostas controladas e pela estrutura dos pedidos.
+- A resposta da Twitch para "quem não segue" continua sendo a lista vazia — tratada como "não segue" **somente** depois de a permissão estar confirmada.
+
+---
+
 # BotLive 0.20.8
 
 ## O que mudou
