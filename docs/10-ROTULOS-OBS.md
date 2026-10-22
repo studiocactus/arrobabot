@@ -37,6 +37,6 @@ Enquanto o perfil está conectado, quem está com o chat aberto soma tempo a cad
 
 ## Quem está no chat agora
 
-O cartão **Quem está no chat agora** lista quem está com o chat aberto, mesmo em silêncio, com o total. Clique em **Atualizar** para ver a lista. Exige o bot como moderador do canal e **autorizar novamente a conta do bot** no perfil (a permissão de leitura de chatters é nova). Recentes e horas continuam mesmo sem essa permissão; só a lista e a soma por presença param, com aviso no Histórico.
+O cartão **Quem está no chat agora** lista quem está com o chat aberto, mesmo em silêncio, com o total. Clique em **Atualizar** para ver a lista. O mesmo painel vive na **Visão geral**: números e nomes, atualizando sozinho a cada 30 segundos, e **some quando a live termina** — fora do ar, não faz sentido mostrar quem está no chat. Exige o bot como moderador do canal e **autorizar novamente a conta do bot** no perfil (a permissão de leitura de chatters é nova). Recentes e horas continuam mesmo sem essa permissão; só a lista e a soma por presença param, com aviso no Histórico.
 
 Além disso, enquanto o perfil está conectado, a **presença de chat fica visível no topo do aplicativo**: um indicador mostra quantas pessoas estão no chat e, ao clicar, a lista inteira, que se atualiza sozinha a cada 30 segundos. É a mesma informação do cartão acima, agora sempre à mão sem abrir a tela de Rótulos.
