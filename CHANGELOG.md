@@ -1,5 +1,31 @@
 # Histórico de atualizações
 
+# BotLive 0.20.10
+
+## O que mudou
+
+**Resposta de reserva em qualquer etapa de IA e a publicação que não reclama mais de uma release já no ar.**
+
+- **Resposta de reserva (se a IA falhar)** agora é editável em toda etapa de IA, no editor avançado em **Como esta ação responde**. Com ela preenchida, quando o provedor não responde o texto pronto vai ao chat — o comando nunca fica mudo; vazia, mantém o comportamento antigo (a falha interrompe as próximas etapas).
+- **Publicação em dobro vira no-op.** O passo de publicação que conferia o rascunho depois de já ter publicado acusava erro numa release inteira e certa: agora, se a release já está publicada e completa, ele apenas avisa e sai — sem nunca reescrever uma release publicada (a regra continua de pé).
+
+## Como usar
+
+- Em qualquer comando com IA: edite a etapa → **Como esta ação responde** → **Resposta de reserva (se a IA falhar)** → escreva o texto pronto (os dados reais já consultados entram nele).
+- Modelos novos já nascem com a reserva preenchida; os comandos antigos ganham o campo ao serem editados.
+
+## Validação
+
+- Testes de infraestrutura (`test:updates`): **9 aprovados**.
+- Build e verificação de tipos limpos; testes Rust (**387**) e de interface (**160**) inalterados nesta versão — nenhuma tela mudou.
+
+## Limitações
+
+- A reserva cobre a falha da IA; se a consulta de dados falhar, o próprio aviso com o motivo segue sendo a resposta (por design — nada é inventado).
+- A correção da publicação vale a partir desta versão; a release v0.20.9 já está publicada e completa (manifesto, instaladores, notas e manual conferidos).
+
+---
+
 # BotLive 0.20.9
 
 ## O que mudou

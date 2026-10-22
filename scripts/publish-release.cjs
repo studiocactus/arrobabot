@@ -8,6 +8,13 @@ gh('release','download',tag,'--pattern','latest.json','--dir',temp);
 const manifest=JSON.parse(fs.readFileSync(path.join(temp,'latest.json'),'utf8'));
 const {databaseId}=JSON.parse(gh('release','view',tag,'--json','databaseId'));
 const release=JSON.parse(gh('api','repos/'+repo+'/releases/'+databaseId));
+if(!release.draft){
+ const nomes=(release.assets||[]).map(a=>a.name);
+ const falta=['latest.json','MANUAL.html'].filter(n=>!nomes.includes(n));
+ if(falta.length)throw Error('Release '+tag+' já publicada sem '+falta.join(', ')+': não reescrevo releases publicadas.');
+ console.log('Release '+tag+' já publicada e completa — nada a fazer (releases publicadas não são reescritas).');
+ process.exit(0);
+}
 fs.writeFileSync(path.join(temp,'latest.json'),JSON.stringify(publicManifest(manifest,release,v,repo),null,2)+'\n');
 gh('release','upload',tag,path.join(temp,'latest.json'),'--clobber');
 gh('release','upload',tag,'docs/MANUAL.html#Manual do BotLive','updates/'+v+'.md#Notas da atualização','--clobber');
