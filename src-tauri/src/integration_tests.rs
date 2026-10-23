@@ -468,6 +468,28 @@ async fn o_alias_do_tempo_de_follow_dispara_e_responde_o_que_falta(){
  assert!(avisos.iter().any(|m|m.contains("Perfis")||m.contains("não segue")||m.contains("não encontrei")), "cada desfecho tem sua resposta: {:?}",avisos);
 }
 
+/// Raid recebida dispara a regra de raid exatamente uma vez — a reentrega do
+/// EventSub (mesmo id) não duplica a resposta — e o Histórico correlaciona a
+/// execução ao evento, para responder "qual evento gerou isto".
+#[tokio::test]
+async fn raid_dispara_o_fluxo_de_raid_uma_vez_so(){
+ let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().join("app")).unwrap();let p=profile("Raid");rt.db.save_profile(&p).unwrap();
+ let mut f=flow(&p);f.name="Agradecer raid".into();
+ f.trigger=Trigger{kind:"raid".into(),pattern:String::new(),permission:"everyone".into(),cooldown:0,user_cooldown:0,..Default::default()};
+ f.actions=vec![Action{kind:"chat".into(),text:"Valeu a raid, {{user}}!".into(),target:"".into(),value:0,condition:"".into(),..Default::default()}];
+ rt.db.save_flow(&f).unwrap();
+ let ev=Event{id:"raid-msg-1".into(),profile_id:p.id.clone(),kind:"raid".into(),user:"RaidMan".into(),user_id:"78".into(),role:"everyone".into(),message:String::new(),data:json!({"from_broadcaster_user_login":"raidman","from_broadcaster_user_name":"RaidMan","viewers":42}),simulated:true,rehearsal:true};
+ rt.submit(ev.clone()).await.unwrap();
+ rt.submit(ev).await.unwrap();
+ // o submit despacha a execução: dá o tempo da tarefa rodar antes de olhar
+ tokio::time::sleep(std::time::Duration::from_millis(600)).await;
+ let logs=rt.db.logs(&p.id).unwrap();
+ let inicios=logs.iter().filter(|l|l.message.contains("iniciada (Agradecer raid")).count();
+ assert_eq!(inicios,1,"a reentrega do EventSub não dispara duas vezes: {:?}",logs.iter().map(|l|&l.message).collect::<Vec<_>>());
+ assert!(logs.iter().any(|l|l.message.contains("evento raid-msg")),"o Histórico correlaciona a execução ao evento");
+ assert!(logs.iter().any(|l|l.message.contains("Valeu a raid, RaidMan!")),"a resposta usa quem mandou a raid");
+}
+
 #[test]
 fn legacy_dollar_markers_migrate_when_saved_and_read(){
  let dir=tempfile::tempdir().unwrap();let path=dir.path().join("vars.sqlite");let p=profile("P");

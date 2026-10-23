@@ -214,8 +214,8 @@ pub async fn process(rt:Arc<Runtime>,e:Event){
        Err(err)=>{let _=rt.send(&p,&e,&err).await;}
       }
      }
+     return;
     }
-    return;
    }
   }
  }
@@ -227,7 +227,7 @@ pub async fn process(rt:Arc<Runtime>,e:Event){
   let cfg=crate::listen::Config::read(&rt.db,&p.id);
   let talk=crate::natural::parse(&e.message,&cfg.activation);
   match crate::intents::dispatch(&rt,&p,&e,crate::intents::Origin::Chat,talk).await{
-   Ok(handled)=>{if handled{return}}
+   Ok(handled)=>{if handled{rt.log(&p.id,"module","Comando natural foi tratado antes das automações.","info");return}}
    Err(err)=>{let _=rt.send(&p,&e,&err).await;return}
   }
  }
@@ -237,7 +237,7 @@ pub async fn process(rt:Arc<Runtime>,e:Event){
   let cfg=crate::listen::Config::read(&rt.db,&p.id);
   let talk=crate::natural::parse(&e.message,&cfg.activation);
   match crate::intents::dispatch(&rt,&p,&e,crate::intents::Origin::Voice,talk).await{
-   Ok(handled)=>{if handled{return}}
+   Ok(handled)=>{if handled{rt.log(&p.id,"module","Comando natural foi tratado antes das automações.","info");return}}
    Err(err)=>{rt.log(&p.id,"voice",&err,"error");return}
   }
  }
@@ -268,10 +268,10 @@ pub async fn process(rt:Arc<Runtime>,e:Event){
  let history=rt.conversation.lock().unwrap().receive(&e);
  rt.live.record(&p.id,&e);
  crate::chat_extras::sound(&rt,&p,&e);
- match crate::chat_extras::response(&rt,&p,&e){Ok(Some((text,reply)))=>{let f=Flow{reply_to:reply,profile_id:p.id.clone(),name:"Resposta TXT".into(),trigger:Trigger{kind:"chat".into(),..Default::default()},actions:vec![],..Default::default()};if let Err(err)=rt.send_with(&p,&e,&text,Some(&f)).await{rt.log(&p.id,"txt",&err,"error");}return},Err(err)=>{rt.log(&p.id,"txt",&err,"error");return},_=>{}}
+ match crate::chat_extras::response(&rt,&p,&e){Ok(Some((text,reply)))=>{let f=Flow{reply_to:reply,profile_id:p.id.clone(),name:"Resposta TXT".into(),trigger:Trigger{kind:"chat".into(),..Default::default()},actions:vec![],..Default::default()};if let Err(err)=rt.send_with(&p,&e,&text,Some(&f)).await{rt.log(&p.id,"txt",&err,"error");}rt.log(&p.id,"txt","Regra por palavra respondeu; automações não processaram esta mensagem.","info");return},Err(err)=>{rt.log(&p.id,"txt",&err,"error");return},_=>{}}
  if e.kind=="chat" {
  match modules::chat(&rt,&p,&e) {
- Ok(Some(reply))=>{if let Err(err)=rt.send(&p,&e,&reply).await{rt.log(&p.id,"module",&err,"error");}return},
+ Ok(Some(reply))=>{if let Err(err)=rt.send(&p,&e,&reply).await{rt.log(&p.id,"module",&err,"error");}rt.log(&p.id,"module","Comando do módulo respondeu; automações não processaram esta mensagem.","info");return},
  Err(err)=>{rt.log(&p.id,"module",&err,"error");return},_=>{}
  }
  }
@@ -299,6 +299,9 @@ pub async fn process(rt:Arc<Runtime>,e:Event){
  };
  if !allowed{rt.log(&p.id,"cooldown",&format!("{} está em intervalo",f.name),"info");continue}
  ready.push(f);
+ }
+ if ready.is_empty()&&e.kind=="chat"&&!e.simulated&&e.message.starts_with('!'){
+  rt.log(&p.id,"flow",&format!("Nenhuma automação ativa casou com {}",e.message.split_whitespace().next().unwrap_or("")),"info");
  }
  let publisher=responder(&ready);
  // Totais do canal uma vez por alerta, para {{followerCount}} e {{subCount}}.
@@ -335,7 +338,7 @@ pub async fn process(rt:Arc<Runtime>,e:Event){
  pub async fn execute_flow_with_run(rt:&Arc<Runtime>,p:&Profile,e:&Event,f:&Flow,answers:bool,history:&[Value],counts:Option<&(Option<i64>,Option<i64>)>,test:bool,test_vars:Option<Value>,exec:String)->bool{
   let short=rt.runs.short_of(&exec);
   let testing=test||e.rehearsal||e.data["botliveTest"]==true;
-  rt.log(&p.id,"run",&format!("Execução {short} iniciada ({} · {})",f.name,e.kind),"info");
+  rt.log(&p.id,"run",&format!("Execução {short} iniciada ({} · {} · evento {})",f.name,e.kind,e.id.chars().take(8).collect::<String>()),"info");
   let mut ev=e.clone();ev.data["botliveTest"]=json!(testing);ev.data["execId"]=json!(exec.clone());
   let e=&ev;
   let mut completed=true;

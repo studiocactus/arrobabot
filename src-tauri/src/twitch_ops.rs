@@ -119,6 +119,11 @@ pub fn clip_url(id:&str)->String{format!("https://clips.twitch.tv/{id}")}
 fn first_number(message:&str)->Option<i64>{message.split_whitespace().filter_map(|w|w.parse::<i64>().ok()).find(|n|*n>=0)}
 async fn user_id(rt:&Runtime,p:&Profile,login:&str)->Result<String,String>{crate::moderation::twitch_user_id(rt,p,login).await}
 /// Resolve quem sofre a ação: @menção, nome visto no chat, alvo fixo do editor.
+/// Quem causou o evento de plataforma (raid: o streamer que mandou a raid).
+/// Só existe em eventos que trazem a pessoa — nada é presumido de nomes.
+pub fn event_actor_login(e:&Event)->Option<String>{
+ e.data["from_broadcaster_user_login"].as_str().map(str::trim).filter(|s|!s.is_empty()).map(|s|s.to_lowercase())
+}
 async fn resolve_login(rt:&Runtime,p:&Profile,e:&Event,a:&Action)->Result<(String,String),String>{
  let words:Vec<&str>=e.message.split_whitespace().collect();
  for w in &words{
@@ -167,6 +172,7 @@ fn required_scopes(op:&str)->&'static [&'static str]{
   "vip"|"unvip"=>&["channel:manage:vips"],
   "slow"|"slowoff"|"followers"|"followersoff"|"subsonly"|"subsonlyoff"|"emoteonly"|"emoteonlyoff"=>&["moderator:manage:chat_settings"],
   "clip"=>&["clips:edit"],
+  "shoutout"=>&["moderator:manage:shoutouts"],
   "followage"=>&["moderator:read:followers"],
   _=>&[],
  }
@@ -414,7 +420,11 @@ pub async fn run(rt:&Arc<Runtime>,p:&Profile,e:&Event,a:&Action,text:&str,trigge
    rt.log(&p.id,"twitch",&done,"success");Ok(done)
   }
   "shoutout"=>{
-   let (login,_)=resolve_login(rt,p,e,a).await?;
+   // Raid: o destaque é para quem chegou — o login vem do próprio evento, do
+   // canal de origem (nunca do canal atual). Menção explícita continua vencendo.
+   let raider=event_actor_login(e);
+   let explicit=e.message.split_whitespace().any(|w|w.starts_with('@')&&w.len()>1);
+   let login=if let (false,Some(login))=(explicit,raider){login}else{resolve_login(rt,p,e,a).await?.0};
    crate::platforms::shoutout(rt,p,&login).await?;
    let done=format!("Destaque para @{login} pelo bot");
    remember(&mut variables,rt,p,e,"local.twitchTarget",json!(login));
@@ -610,7 +620,7 @@ async fn fetch_follow_age(rt:&Arc<Runtime>,p:&Profile,target_login:&str,target_i
   assert_eq!(required_scopes("slow"),&["moderator:manage:chat_settings"]);
   assert_eq!(required_scopes("clip"),&["clips:edit"]);
   assert!(required_scopes("mention").is_empty());
-  assert!(required_scopes("shoutout").is_empty());
+  assert_eq!(required_scopes("shoutout"),&["moderator:manage:shoutouts"],"destaque nativo cobra a permissão de destaque");
  }
  #[test] fn comandos_nativos_separam_operacao_e_texto(){
   assert_eq!(builtin_command("!setgame Valorant"),Some(("game","Valorant")));
@@ -645,6 +655,17 @@ async fn fetch_follow_age(rt:&Arc<Runtime>,p:&Profile,target_login:&str,target_i
   assert_eq!(followed_at_from_payload(r#"{"data":[{"user_id":"1"}],"total":1}"#).unwrap().unwrap(),"","data ausente fica vazia e vira erro explicado");
   assert_eq!(user_from_payload(r#"{"data":[{"id":"123","login":"ana","display_name":"Ana"}]}"#).unwrap(),("123".to_string(),"Ana".to_string()));
   assert_eq!(user_from_payload(r#"{"data":[]}"#),None,"login inexistente é não encontrado");
+ }
+
+ /// A raid traz o canal de origem no evento: o destaque é para quem chegou,
+ /// nunca para o canal atual — e o nome não é presumido de lugar nenhum.
+ #[test] fn o_destaque_da_raid_usa_quem_mandou_a_raid(){
+  let p=Profile{id:"p".into(),name:"P".into(),platform:"twitch".into(),channel:"canal".into(),channel_id:"1".into(),bot_id:"2".into(),client_id:String::new(),blocklist:vec![],topics:vec![],editors:vec![],ai:Default::default(),modules:json!({})};
+  let mut e=Event{id:"m1".into(),profile_id:"p".into(),kind:"raid".into(),user:"RaidMan".into(),user_id:"78".into(),role:"everyone".into(),message:String::new(),data:json!({"from_broadcaster_user_login":"raidman","from_broadcaster_user_name":"RaidMan","viewers":42}),simulated:false,rehearsal:false};
+  assert_eq!(event_actor_login(&e).as_deref(),Some("raidman"));
+  e.kind="chat".into();e.data=json!({"message_id":"m1"});
+  assert_eq!(event_actor_login(&e),None,"sem ator no evento, nada é presumido");
+  let _=p;
  }
 
  /// O alvo do clipe nunca é a conta do bot: o canal errado faria a Twitch
