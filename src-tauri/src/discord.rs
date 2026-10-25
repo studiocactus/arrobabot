@@ -1,4 +1,4 @@
-use crate::{engine::Runtime,model::*,moderation};
+use crate::{engine::Runtime,model::*};
 use serde_json::{json,Value};
 use std::{collections::HashMap,sync::Arc,time::{Duration,Instant}};
 use futures_util::{StreamExt,SinkExt};
@@ -194,6 +194,7 @@ async fn session(rt:&Arc<Runtime>,p:&Profile,token:&str,st:&mut State,url:&str)-
   if step.is_err(){
    if !acked{return Err(Fail::Transient("O Discord não confirmou o heartbeat".into()))}
    ws.send(Message::Text(heartbeat(st).to_string().into())).await.map_err(|_|Fail::Transient("Falha ao manter a conexão com o Discord".into()))?;
+   acked=false;
    next_heartbeat=Instant::now()+interval;continue;
   }
   let msg=step.map_err(|_|Fail::Transient("Conexão com o Discord interrompida".into()))?.ok_or_else(||Fail::Transient("Conexão com o Discord encerrada".into()))?.map_err(|_|Fail::Transient("Conexão com o Discord interrompida".into()))?;
@@ -218,7 +219,7 @@ async fn session(rt:&Arc<Runtime>,p:&Profile,token:&str,st:&mut State,url:&str)-
     ws.send(Message::Text(payload.to_string().into())).await.map_err(|_|Fail::Transient("Não foi possível se identificar no Discord".into()))?;
    },
    11=>{acked=true},
-   1=>{ws.send(Message::Text(heartbeat(st).to_string().into())).await.map_err(|_|Fail::Transient("Falha de conexão".into()))?;},
+   1=>{ws.send(Message::Text(heartbeat(st).to_string().into())).await.map_err(|_|Fail::Transient("Falha de conexão".into()))?;acked=false;},
    0=>{
     if let Some(s)=v["s"].as_u64(){st.seq=s}
     let kind=v["t"].as_str().unwrap_or("").to_owned();
@@ -297,6 +298,20 @@ fn map_role(cfg:&Value,member:&Value)->String{
  if perms&P_ADMINISTRATOR!=0||perms&P_MANAGE_MESSAGES_BIT!=0{return "moderator".into()}
  "everyone".into()
 }
+fn discord_reason(rt:&Runtime,p:&Profile,cfg:&Value,text:&str,uid:&str,role:&str)->Option<&'static str>{
+ if permitted("moderator",role){return None}
+ let rules=&cfg["automod"];
+ if rules["blocklist"]!=false&&blocked(text,p){return Some("expressão proibida")}
+ if rules["links"]!=false&&["http://","https://","www."].iter().any(|s|text.to_lowercase().contains(s)){return Some("link não autorizado")}
+ if rules["repeats"]!=false{
+  let mut seen=rt.cooldowns.lock().unwrap();
+  let key=format!("discord-spam:{}:{}:{}",p.id,uid,text.to_lowercase());
+  let repeated=seen.get(&key).is_some_and(|t|t.elapsed()<Duration::from_secs(15));
+  seen.insert(key,Instant::now());
+  if repeated{return Some("mensagem repetida")}
+ }
+ None
+}
 async fn on_message(rt:&Arc<Runtime>,p:&Profile,st:&State,d:&Value){
  let cfg=config(rt,&p.id);
  if cfg["enabled"]!=true{return}
@@ -314,7 +329,7 @@ async fn on_message(rt:&Arc<Runtime>,p:&Profile,st:&State,d:&Value){
  let user=member["nick"].as_str().or_else(||author["global_name"].as_str()).or_else(||author["username"].as_str()).unwrap_or("espectador").to_owned();
  // Auto-moderation reuses the same blocklist, link and spam rules as Twitch.
  if cfg["automod"]["enabled"]==true {
- if let Some(reason)=moderation::reasons(rt,p,&content,uid,&role) {
+ if let Some(reason)=discord_reason(rt,p,&cfg,&content,uid,&role) {
   if let Err(err)=crate::discord_admin::delete_message(rt,p,channel,d["id"].as_str().unwrap_or("")).await{
    rt.log(&p.id,"discord",&err,"error");
   } else {
@@ -369,9 +384,10 @@ fn schedule_counter(rt:&Arc<Runtime>,p:&Profile,cfg:&Value,delta:i64){
  let rt2=rt.clone();let p2=p.clone();let cfg2=cfg.clone();
  tokio::spawn(async move{update_counter(&rt2,&p2,&cfg2,delta).await});
 }
+fn member_id(d:&Value)->&str{d["user"]["id"].as_str().unwrap_or("")}
 fn on_member_join(rt:&Arc<Runtime>,p:&Profile,d:&Value){
  let cfg=config(rt,&p.id);if cfg["enabled"]!=true{return}
- let uid=d["id"].as_str().unwrap_or("");if uid.is_empty(){return}
+ let uid=member_id(d);if uid.is_empty(){return}
  let name=d["user"]["global_name"].as_str().or(d["user"]["username"].as_str()).unwrap_or(uid).to_owned();
  let guild=cfg["guildId"].as_str().unwrap_or("");
  if !guild.is_empty()&&d["guild_id"].as_str()!=Some(guild){return}
@@ -407,7 +423,7 @@ fn on_member_join(rt:&Arc<Runtime>,p:&Profile,d:&Value){
 }
 fn on_member_leave(rt:&Arc<Runtime>,p:&Profile,d:&Value){
  let cfg=config(rt,&p.id);if cfg["enabled"]!=true{return}
- let uid=d["id"].as_str().unwrap_or("");if uid.is_empty(){return}
+ let uid=member_id(d);if uid.is_empty(){return}
  let name=d["user"]["global_name"].as_str().or(d["user"]["username"].as_str()).unwrap_or(uid).to_owned();
  if cfg["goodbye"]["enabled"]==true{
   let channel=cfg["goodbye"]["channelId"].as_str().unwrap_or("");
@@ -622,6 +638,12 @@ mod tests {
  assert!(permissions()&P_MODERATE==P_MODERATE,"o bot precisa de Moderate Members");
  assert!(permissions()&P_MANAGE_ROLES==P_MANAGE_ROLES);
  let guild=invite_url("1","9");assert!(guild.contains("&guild_id=9"));
+ }
+ #[test]
+ fn gateway_member_events_read_the_user_id(){
+  let event=json!({"guild_id":"guild","user":{"id":"123","username":"Teste"}});
+  assert_eq!(member_id(&event),"123");
+  assert_eq!(member_id(&json!({"id":"123"})),"");
  }
  #[test]
  fn role_mapping_prefers_configured_roles() {

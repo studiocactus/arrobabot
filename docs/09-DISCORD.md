@@ -28,6 +28,8 @@ O token é salvo no cofre do sistema e sai da gravação em texto: ele não apar
 7. No Discord, em **Configurações do servidor → Cargos**, coloque o cargo do bot acima dos cargos que ele deve moderar ou atribuir. Confira também as permissões dos canais privados.
 8. Clique em **Conectar** no BotLive e aguarde **Conectado**. Depois, clique em **Registrar comandos slash**. O aplicativo precisa permanecer aberto para receber eventos e moderar.
 
+Depois da primeira configuração, perfis com o bot ativado e token salvo se conectam automaticamente quando o BotLive abre. Se a rede cair, o Gateway tenta reconectar. Salvar uma alteração de servidor ou intents reinicia a conexão para aplicar esses valores; outras alterações passam a valer sem interromper a sessão. O estado da conexão aparece em tempo real na tela.
+
 **Se a conexão falhar:** confirme que o token é de bot e não de aplicativo OAuth, que o servidor foi informado e que as intents privilegiadas estão ligadas. Os motivos aparecem no **Histórico**, com a categoria `discord`.
 
 ## Servidor, canais e cargos
@@ -69,6 +71,8 @@ As listas de canais e cargos só aparecem depois de **Descobrir servidor e canai
 - O **contador de membros** é um canal cujo nome acompanha o total. Ao entrar, sair ou ao conectar, o BotLive lê `member_count` do servidor e reescreve o nome.
 - O **cargo automático** é enviado em paralelo; se falhar, o erro entra no **Histórico** sem impedir a mensagem de boas-vindas.
 
+Para conferir cargos em alguém que já está no servidor, procure o membro em **Moderação no servidor**, escolha um cargo e use **Atribuir cargo** ou **Remover cargo**. A ação entra na auditoria e pode ser desfeita. O cargo automático é aplicado somente nas novas entradas.
+
 O contador depende do intent de membros. Com o intent desligado, o total fica congelado no valor lido ao conectar.
 
 ## Espelho do chat e notificações
@@ -95,6 +99,8 @@ O interruptor **Auto-moderação do Discord** usa exatamente as mesmas regras da
 - Lista de expressões bloqueadas do perfil.
 - Bloqueio de links.
 - Bloqueio de repetição em sequência.
+
+Cada regra pode ser ligada ou desligada separadamente na tela Discord. A lista de expressões continua compartilhada com a Comunidade; os registros de repetição são independentes dos da Twitch. Moderadores reconhecidos pelo mapeamento de cargos ou pela permissão de gerenciar mensagens não recebem essas remoções automáticas.
 
 A mensagem violadora é apagada pelo Discord e a entrada entra na auditoria. Quando existe vínculo de identidade, o aviso também é contado para quem falou na Twitch.
 
@@ -129,6 +135,7 @@ Com o vínculo, o bot reconhece a mesma pessoa nas duas casas: aviso, punição,
 - **Sorteios:** informe canal, prêmio, minutos e quantidade de vencedores. A inscrição acontece reagindo com 🎉. **Encerrar** sorteia os vencedores; **Sortear de novo** refaz o sorteio sem repetir quem já ganhou.
 - **XP e níveis:** quem conversa no Discord ganha XP a cada mensagem, com intervalo de um minuto por membro. O ranking mostra posição, nível e XP, e a linha também informa quanto falta para o próximo nível.
 - **Aniversariantes:** registre o ID e a data em `DD/MM` ou `DD/MM/AAAA`. O BotLive comemora no dia, com a idade calculada a partir do ano informado. Com **Pedir a data na entrada** ligado, quem entra no servidor sem data registrada recebe um pedido com o comando `/aniversario` no canal dos aniversários.
+- O dia do aniversário segue o fuso horário local do computador que executa o BotLive. Datas impossíveis, como `31/04`, são recusadas.
 
 Todos os três têm interruptor próprio e canal próprio, para você ligar só o que usa.
 

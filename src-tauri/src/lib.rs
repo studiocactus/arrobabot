@@ -235,6 +235,13 @@ pub fn run(){
  let rt=tauri::async_runtime::block_on(async{Runtime::new(base)})?;
  for name in command_counter::migrate_counters(&rt.db){rt.log("","counter",&format!("Contagem ligada em \"{name}\": a resposta usa {{commandCount}}"),"info");}
  *rt.app.lock().unwrap()=Some(app.handle().clone());app.manage(rt.clone());
+ let discord_rt=rt.clone();tauri::async_runtime::spawn(async move{
+  for profile in discord_rt.db.profiles().unwrap_or_default(){
+   if discord::config(&discord_rt,&profile.id)["enabled"]==true{
+    if let Err(err)=discord_admin::restore(&discord_rt,&profile.id){discord_rt.log(&profile.id,"discord",&err,"error")}
+   }
+  }
+ });
  let timer_rt=rt.clone();tauri::async_runtime::spawn(timers::run(timer_rt));
  let scheduler_rt=rt.clone();tauri::async_runtime::spawn(scheduler::run(scheduler_rt));
  let spotify_rt=rt.clone();tauri::async_runtime::spawn(spotify::run(spotify_rt));

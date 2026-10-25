@@ -6,6 +6,14 @@ Abra **Comunidade**, confira o perfil e ligue a chave do módulo desejado. Cliqu
 
 Os comandos dos participantes funcionam no chat real. A simulação de fluxos não executa jogos, apostas ou concessão de pontos.
 
+## Shoutout e ganks
+
+Em **Comunidade → Shoutout e ganks**, ative o módulo para criar uma automação de raid. Escolha se o BotLive faz o destaque nativo do canal de origem e se a mensagem sai como anúncio da Twitch ou fala normal. O texto pode ser fixo, com `{{raider.name}}` e `{{raid.viewers}}`, ou gerado pela IA no momento da raid; nesse caso, configure uma resposta de reserva para quando a IA falhar.
+
+O painel salva um fluxo em **Avançado → Automações**, onde é possível testá-lo e fazer ajustes adicionais. Se você acrescentar passos ou condições no editor avançado, continue editando por lá: o formulário simples bloqueia a gravação para preservar esses ajustes. Desativar o módulo pausa o fluxo criado pelo painel. Se já houver outra automação de raid ativa, confira ambas para evitar duas respostas ao mesmo evento. O destaque nativo requer a permissão `moderator:manage:shoutouts` e que a conta do bot seja moderadora do canal.
+
+O teste no painel simula o fluxo e não publica uma raid real. Confira o resultado em uma transmissão de teste antes de usar ao vivo.
+
 ## Pontos e loja
 
 Ao ativar **Pontos & loja**, uma loja vazia recebe três exemplos: Escolher o próximo desafio, Mensagem em destaque e Jogar com o streamer.

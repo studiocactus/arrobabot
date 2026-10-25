@@ -95,13 +95,14 @@ pub fn parse_date(raw: &str) -> Option<(u32, u32, Option<i32>)> {
 	}
 	let day = parts[0].trim().parse().ok()?;
 	let month = parts[1].trim().parse().ok()?;
-	if day == 0 || day > 31 || month == 0 || month > 12 {
+	let year = if parts.len() == 3 { parts[2].trim().parse().ok() } else { None };
+	if chrono::NaiveDate::from_ymd_opt(year.unwrap_or(2000), month, day).is_none()
+		|| year.is_some_and(|y| y < 1900 || y > chrono::Local::now().year()) {
 		return None;
 	}
-	let year = if parts.len() == 3 { parts[2].trim().parse().ok() } else { None };
 	Some((day, month, year))
 }
-pub fn is_today(day: u32, month: u32, now: &chrono::DateTime<chrono::Utc>) -> bool {
+pub fn is_today<Tz: chrono::TimeZone>(day: u32, month: u32, now: &chrono::DateTime<Tz>) -> bool {
 	now.day() == day && now.month() == month
 }
 
@@ -198,7 +199,7 @@ pub async fn tick(rt: &Arc<Runtime>, p: &Profile) {
 	if cfg["enabled"] != true {
 		return;
 	}
-	let now = chrono::Utc::now();
+	let now = chrono::Local::now();
 	// Birthdays
 	if cfg["birthday"]["enabled"] == true
 		&& cfg["birthday"]["channelId"].as_str().is_some_and(|c| !c.is_empty())
@@ -299,7 +300,7 @@ pub async fn action(
 			match act {
 				"birthdayList" => return Ok(Value::Array(list)),
 				"birthdayToday" => {
-					let now = chrono::Utc::now();
+					let now = chrono::Local::now();
 					let today: Vec<Value> = list
 						.into_iter()
 						.filter(|b| is_today(b["day"].as_u64().unwrap_or(0) as u32, b["month"].as_u64().unwrap_or(0) as u32, &now))
@@ -797,6 +798,9 @@ mod tests {
 		assert_eq!(parse_date("25-12"), None);
 		assert_eq!(parse_date("32/01"), None);
 		assert_eq!(parse_date("01/13"), None);
+		assert_eq!(parse_date("31/04"), None);
+		assert_eq!(parse_date("29/02/2025"), None);
+		assert_eq!(parse_date("29/02/2024"), Some((29, 2, Some(2024))));
 		assert_eq!(parse_date(""), None);
 	}
 

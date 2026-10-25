@@ -26,6 +26,9 @@ test('tela do Discord configura servidor, canais, engajamento e auditoria',async
  await page.getByRole('button',{name:'Salvar configuração',exact:true}).click();
  await expect(page.getByText('Configuração do Discord salva.',{exact:true})).toBeVisible();
  await page.screenshot({path:'artifacts/discord-018.png',fullPage:true});
+ await page.setViewportSize({width:1100,height:900});
+ await page.screenshot({path:'artifacts/discord-1100.png',fullPage:true});
+ await page.setViewportSize({width:1440,height:1000});
 
  await page.reload();await nav('Discord').click();
  await expect(page.getByRole('combobox',{name:'Servidor do Discord',exact:true})).toHaveValue('123456789012345678');
@@ -33,11 +36,16 @@ test('tela do Discord configura servidor, canais, engajamento e auditoria',async
  await expect(page.getByRole('combobox',{name:'Canal de boas-vindas',exact:true})).toHaveValue('222222222222222222');
  await expect(page.getByRole('switch',{name:'Ativar bot do Discord',exact:true})).toHaveAttribute('aria-checked','true');
  await expect(page.getByRole('switch',{name:'Auto-moderação do Discord',exact:true})).toHaveAttribute('aria-checked','true');
+ await page.getByRole('switch',{name:'Bloquear links no Discord',exact:true}).click();
+ await expect(page.getByRole('switch',{name:'Bloquear links no Discord',exact:true})).toHaveAttribute('aria-checked','false');
 
  await page.getByLabel('Buscar membro no Discord',{exact:true}).fill('apoiador');
  await page.getByRole('button',{name:'Buscar',exact:true}).click();
  await page.getByRole('button',{name:'Apoiador · 999999999999999999',exact:true}).click();
  await page.getByLabel('Motivo registrado na auditoria',{exact:true}).fill('Prova de auditoria');
+ await page.getByRole('combobox',{name:'Cargo do membro selecionado',exact:true}).selectOption({label:'Moderador'});
+ await page.getByRole('button',{name:'Atribuir cargo',exact:true}).click();
+ await expect(page.getByText('Cargo atribuído.',{exact:true})).toBeVisible();
  await page.getByRole('button',{name:'Avisar nos dois chats',exact:true}).click();
  await expect(page.getByText('Aviso registrado nas duas casas.',{exact:true})).toBeVisible();
  await page.getByRole('button',{name:'Ver avisos',exact:true}).click();

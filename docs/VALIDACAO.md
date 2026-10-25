@@ -1,5 +1,11 @@
 # Registro de validação
 
+## Atualização 0.20.14
+
+Discord: conexão automática ao abrir para perfis ativados, reconexão por heartbeat, evento de membro corrigido, controles de cargo na tela, regras de moderação separadas e aniversário pelo horário local. Shoutout e ganks: painel de raid com destaque, mensagem fixa ou IA e correção da duplicação do fluxo ao salvar após ativar. O diagnóstico detalhado do Discord está em [Auditoria Discord](AUDITORIA-DISCORD.md).
+
+`npm run check` e `npm test` passaram; Vitest registrou 170 testes. `cargo test --manifest-path src-tauri/Cargo.toml --locked --lib -j 1` registrou 390 aprovados e 2 ignorados. A suíte completa Playwright aprovou 97 telas, inclusive Discord, Shoutout e catálogo de variáveis. Os nove testes dos scripts de atualização passaram; `npm run docs` gerou o manual com 30 capítulos e `npm run update:check` passou. A compilação release local gerou o executável e instaladores MSI/NSIS. A assinatura do atualizador será feita pelo workflow de publicação; a etapa local foi interrompida quando pediu a senha da chave. As integrações reais com Discord e Twitch continuam pendentes de validação nas contas do proprietário.
+
 ## Atualização 0.1.18
 
 Compilação TypeScript/Vite, 29 testes Vitest, 22 cenários Playwright, 98 testes Rust e oito testes dos scripts de atualização aprovados. A entrega tem seis partes independentes: uma única resposta quando vários fluxos casam na mesma mensagem, contador `{{commandCount}}` ligado sozinho ao gravar (com migração dos comandos antigos), backup diário em pasta escolhida com retenção de dia/semana/mês e extensão `.botlivebak`, ação **Punir na Twitch** com alvo configurável, aviso de variável local sem origem no editor (corrige o timer Donate) e variações de comando separadas por vírgula.

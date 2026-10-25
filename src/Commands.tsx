@@ -69,7 +69,7 @@ export default function Commands({profile,visual,notify,onChanged,createToken,on
  }
  const visible=flows.filter(f=>{
   if(f.trigger.kind==='timer')return false;
-  if(!visual&&!(f.trigger.kind==='command'||f.actions.some(a=>a.kind==='ai.generate')))return false;
+  if(!visual&&!(f.trigger.kind==='command'||(f.actions.some(a=>a.kind==='ai.generate')&&['chat','contains','mention'].includes(f.trigger.kind))))return false;
   return (f.name+' '+f.trigger.pattern).toLowerCase().includes(query.toLowerCase());
  });
  return <>

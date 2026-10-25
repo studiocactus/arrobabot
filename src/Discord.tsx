@@ -1,6 +1,7 @@
 import {useCallback,useEffect,useState} from 'react';
+import {listen} from '@tauri-apps/api/event';
 import {RefreshCw,Save,Search,Download,Plug,Power,Gift,Cake,Link2,Terminal,ShieldAlert,Undo2,Send,Unlink,Users} from 'lucide-react';
-import {api,errorText} from './api';
+import {api,desktop,errorText} from './api';
 import {minutesToSeconds,secondsToMinutes} from './types';
 import {Card,Field,Tag,Toggle,Busy,Empty,AccordionItem,ItemStack,ListTools} from './components';
 
@@ -8,7 +9,7 @@ type Any=Record<string,any>;
 type Opt={id:string;label:string};
 type Status={status:string;running:boolean;enabled:boolean;hasToken:boolean;config:Any;guilds:Any[];guildId:string;channels:Any[];roles:Any[];moduleEnabled:boolean;platform:string;auditCount:number};
 
-const blank:Any={enabled:false,guildId:'',logChannelId:'',autoroleId:'',counterChannelId:'',counterLabel:'membros',appId:'',slowmodeSeconds:0,roleMap:{moderator:'',subscriber:''},intents:{members:true,content:true},automod:{enabled:false},mirror:{enabled:false,toDiscord:true,toTwitch:true,channelId:''},welcome:{enabled:false,channelId:'',text:''},goodbye:{enabled:false,channelId:'',text:''},notify:{enabled:false,channelId:''},birthday:{enabled:false,channelId:'',text:'',askOnJoin:false},xp:{enabled:false,perMessage:15},giveaway:{enabled:false,minutes:10}};
+const blank:Any={enabled:false,guildId:'',logChannelId:'',autoroleId:'',counterChannelId:'',counterLabel:'membros',appId:'',slowmodeSeconds:0,roleMap:{moderator:'',subscriber:''},intents:{members:true,content:true},automod:{enabled:false,blocklist:true,links:true,repeats:true},mirror:{enabled:false,toDiscord:true,toTwitch:true,channelId:''},welcome:{enabled:false,channelId:'',text:''},goodbye:{enabled:false,channelId:'',text:''},notify:{enabled:false,channelId:''},birthday:{enabled:false,channelId:'',text:'',askOnJoin:false},xp:{enabled:false,perMessage:15},giveaway:{enabled:false,minutes:10}};
 
 const merge=(base:Any,over:Any|undefined):Any=>{
  const out:Any={...base,...(over||{})};
@@ -44,6 +45,7 @@ export default function Discord({profileId,blocklist,notify}:{profileId:string;b
  const [q,setQ]=useState('');
  const [target,setTarget]=useState<Any|null>(null);
  const [reason,setReason]=useState('');
+ const [selectedRole,setSelectedRole]=useState('');
  const [warns,setWarns]=useState<Any[]>([]);
  const [audit,setAudit]=useState<Any[]>([]);
  const [rank,setRank]=useState<Any[]>([]);
@@ -82,6 +84,14 @@ export default function Discord({profileId,blocklist,notify}:{profileId:string;b
  },[call]);
 
  useEffect(()=>{void refresh();void loadLists();},[refresh,loadLists]);
+ useEffect(()=>{
+  if(!desktop)return;
+  let active=true;
+  const unlisten=listen<{profileId:string;status:string}>('discord-connection',e=>{
+   if(active&&e.payload.profileId===profileId)setSt(s=>s?{...s,status:e.payload.status,running:e.payload.status!=='offline'}:s);
+  });
+  return ()=>{active=false;void unlisten.then(stop=>stop());};
+ },[profileId]);
 
  const channels:Opt[]=texts(arr(st&&st.channels)).map(c=>({id:String(c.id),label:'#'+String(c.name)}));
  const allChannels:Opt[]=arr(st&&st.channels).map(c=>({id:String(c.id),label:'#'+String(c.name)+(Number(c.type)===2?' (voz)':'')}));
@@ -106,6 +116,11 @@ export default function Discord({profileId,blocklist,notify}:{profileId:string;b
  async function punish(act:string){
   if(!target)return notify('Escolha um membro primeiro.');
   await action({action:act,target:String(target.user.id),targetName:nameOf(target),reason},'Ação aplicada e registrada na auditoria.');
+  await loadLists();
+ }
+ async function changeRole(act:'roleAdd'|'roleRemove'){
+  if(!target||!selectedRole)return notify('Escolha o membro e o cargo.');
+  await action({action:act,target:String(target.user.id),targetName:nameOf(target),role:selectedRole,reason},act==='roleAdd'?'Cargo atribuído.':'Cargo removido.');
   await loadLists();
  }
  async function warnMember(){
@@ -228,6 +243,9 @@ export default function Discord({profileId,blocklist,notify}:{profileId:string;b
  <div className="two-columns">
   <Card title="Moderação em dupla">
    <div className="list-row"><div><strong>Auto-moderação do Discord</strong><small>Mesmas regras da Twitch: {blocklist.length} expressões bloqueadas, anti-link e anti-repetição.</small></div><Toggle label="Auto-moderação do Discord" checked={sub('automod').enabled===true} onChange={v=>nest('automod','enabled',v)}/></div>
+   <div className="list-row"><div><strong>Expressões bloqueadas</strong><small>Usa a lista configurada em Comunidade.</small></div><Toggle label="Expressões bloqueadas no Discord" checked={sub('automod').blocklist!==false} onChange={v=>nest('automod','blocklist',v)}/></div>
+   <div className="list-row"><div><strong>Links</strong><small>Remove mensagens com endereços da web.</small></div><Toggle label="Bloquear links no Discord" checked={sub('automod').links!==false} onChange={v=>nest('automod','links',v)}/></div>
+   <div className="list-row"><div><strong>Repetição</strong><small>Remove a mesma mensagem enviada em menos de 15 segundos.</small></div><Toggle label="Bloquear repetição no Discord" checked={sub('automod').repeats!==false} onChange={v=>nest('automod','repeats',v)}/></div>
    <p className="help">A mensagem violadora é apagada e registrada na auditoria. O aviso, o timeout e o banimento continuam saindo pela página Comunidade e valem nas duas casas quando a identidade está vinculada. As entradas e saídas vão para o canal de logs escolhido no cartão “Servidor e canais”.</p>
    <Field label="Modo lento do servidor (minutos)" hint="0 desativa; o máximo é 360 minutos (6 horas)."><input type="number" min={0} max={360} step="any" value={secondsToMinutes(Number(cfg.slowmodeSeconds)||0)} onChange={e=>set('slowmodeSeconds',minutesToSeconds(Number(e.target.value)||0))}/></Field>
   </Card>
@@ -323,6 +341,8 @@ export default function Discord({profileId,blocklist,notify}:{profileId:string;b
    <button disabled={!target} onClick={loadWarns}>Ver avisos</button>
   </div>
   {warns.length>0&&warns.map((w,i)=><div className="list-row" key={i}><div><span>Aviso de {String(w.targetName||w.target)}</span><small>{String(w.reason||'sem motivo')}</small></div><Tag color="gray">{String(w.date||'')}</Tag></div>)}
+  <Field label="Cargo do membro selecionado"><select value={selectedRole} onChange={e=>setSelectedRole(e.target.value)}><option value="">— escolha um cargo —</option>{roleOptions.map(o=><option key={o.id} value={o.id}>{o.label}</option>)}</select></Field>
+  <div className="row"><button disabled={!target||!selectedRole} onClick={()=>{void changeRole('roleAdd')}}>Atribuir cargo</button><button disabled={!target||!selectedRole} onClick={()=>{void changeRole('roleRemove')}}>Remover cargo</button></div>
  </Card>
 
  <Card title="Auditoria única" action={<div className="row"><button onClick={exportAudit}><Download size={15}/>Exportar CSV</button><button onClick={()=>{void loadLists()}}><RefreshCw size={15}/>Atualizar</button></div>}>

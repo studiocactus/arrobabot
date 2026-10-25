@@ -51,7 +51,18 @@ pub async fn operation(rt:&Arc<Runtime>,p:&str,op:&str,args:&Value)->Result<Valu
  "discord.status"=>status_payload(rt,p).await,
  "discord.connect"=>connect(rt,p).await,
  "discord.disconnect"=>{stop(rt,p);Ok(Value::Null)},
- "discord.save"=>{rt.db.profile(p)?;if !valid_config(&args["config"]){return Err("Configuração do Discord inválida. Confira o servidor e os canais informados.".into())}rt.db.set_module(p,discord::MODULE,&args["config"])?;Ok(Value::Null)},
+ "discord.save"=>{
+  rt.db.profile(p)?;
+  let next=&args["config"];
+  if !valid_config(next){return Err("Configuração do Discord inválida. Confira o servidor e os canais informados.".into())}
+  let previous=discord::config(rt,p);
+  rt.db.set_module(p,discord::MODULE,next)?;
+  if next["enabled"]==true&&crate::secrets::get(p,"discord_token").is_ok(){
+   let running=rt.discord_tasks.lock().unwrap().get(p).is_some_and(|task|!task.is_finished());
+   if !running||previous["guildId"]!=next["guildId"]||previous["intents"]!=next["intents"]{restore(rt,p)?;}
+  }else{stop(rt,p)}
+  Ok(json!({"saved":true}))
+ },
  "discord.discover"=>discover(rt,p).await,
  "discord.action"=>action(rt,p,args).await,
  _=>Err("Operação do Discord desconhecida".into())
@@ -60,7 +71,7 @@ pub async fn operation(rt:&Arc<Runtime>,p:&str,op:&str,args:&Value)->Result<Valu
 async fn status_payload(rt:&Arc<Runtime>,p:&str)->Result<Value,String>{
  let profile=rt.db.profile(p)?;
  let cfg=discord::config(rt,p);
- let running=rt.discord_tasks.lock().unwrap().contains_key(p);
+ let running=rt.discord_tasks.lock().unwrap().get(p).is_some_and(|task|!task.is_finished());
  let live=rt.discord_status.lock().unwrap().get(p).cloned().unwrap_or_else(||"offline".into());
  let cache=discord::cache(rt,p);
  Ok(json!({
@@ -80,21 +91,32 @@ async fn status_payload(rt:&Arc<Runtime>,p:&str)->Result<Value,String>{
 }
 async fn connect(rt:&Arc<Runtime>,p:&str)->Result<Value,String>{
  let profile=rt.db.profile(p)?;
- stop(rt,p);
  let cfg=discord::config(rt,p);
  if cfg["enabled"]!=true{return Err("Ative o bot do Discord antes de conectar".into())}
  if cfg["guildId"].as_str().unwrap_or("").is_empty(){return Err("Informe o ID do servidor (guild) do Discord".into())}
  crate::secrets::get(p,"discord_token").map_err(|_|"Salve o token do bot antes de conectar".to_string())?;
  let me=discord::identity(rt,&profile).await.map_err(|e|format!("Não foi possível validar o token: {e}"))?;
+ start_gateway(rt,p,profile);
+ Ok(json!({"identity":me,"status":"connecting"}))
+}
+fn start_gateway(rt:&Arc<Runtime>,p:&str,profile:Profile){
+ stop(rt,p);
  discord::status(rt,p,"connecting");
- let rt2=rt.clone();let p2=profile.clone();
+ let rt2=rt.clone();let p2=profile;
  let task=tokio::spawn(async move{
   if let Err(err)=discord::run(rt2.clone(),p2.clone()).await{
    rt2.log(&p2.id,"discord",&err,"error");discord::status(&rt2,&p2.id,"offline");
   }
  });
  rt.discord_tasks.lock().unwrap().insert(p.to_owned(),task);
- Ok(json!({"identity":me,"status":"connecting"}))
+}
+pub fn restore(rt:&Arc<Runtime>,p:&str)->Result<(),String>{
+ let profile=rt.db.profile(p)?;
+ let cfg=discord::config(rt,p);
+ if cfg["enabled"]!=true||cfg["guildId"].as_str().unwrap_or("").is_empty(){return Ok(())}
+ if crate::secrets::get(p,"discord_token").is_err(){return Err("Salve o token do bot antes de conectar".into())}
+ start_gateway(rt,p,profile);
+ Ok(())
 }
 async fn discover(rt:&Arc<Runtime>,p:&str)->Result<Value,String>{
  let profile=rt.db.profile(p)?;

@@ -11,9 +11,11 @@ Esta matriz acompanha as fases dos documentos originais em ../documentação. "I
 | 5 | Interface | Dashboard, roteiro de configuração, modo simples, editor de nós, temas claro/escuro, atalhos e adaptação à janela | Teste de primeiro uso com pessoa externa e acessibilidade completa com leitor de tela |
 | 6 | Presets | JSON versionado, biblioteca, filtros, prévia, conflitos, dados de perfil sem contas, configurações de módulos, tema claro/escuro e cor personalizada | Importação entre dois computadores |
 | 7 | Distribuição | Configuração Tauri, pipeline Windows/macOS/Linux, atualizador com verificação de assinatura | Executável e instaladores Windows gerados; faltam teste em máquina limpa, builds macOS/Linux, certificados e feed publicado |
-| 8 | Discord nativo | Gateway v10 e API REST sem terceiros; token no cofre; servidor, canais e cargos; entrada, saída, autorole e contador de membros; espelho de chat; notificações da Twitch; auto-moderação com as regras da Twitch; auditoria única com desfazer e exportação; sorteios, XP, aniversários, vínculo de identidade e comandos slash | Conectar um bot real a um servidor Discord, conferir intents privilegiadas, permissões de cargo e limites de requisição |
+| 8 | Discord nativo | Gateway v10 e API REST sem terceiros; token no cofre; conexão automática nos perfis ativados; servidor, canais e cargos; entrada, saída, autorole e contador de membros; espelho de chat; notificações da Twitch; regras de auto-moderação individuais; auditoria única com desfazer e exportação; sorteios, XP, aniversários, vínculo de identidade e comandos slash | Conectar um bot real a um servidor Discord, conferir intents privilegiadas, permissões de cargo e limites de requisição |
 
 ## Módulos adicionais
+
+- Shoutout e ganks: painel que cria um fluxo de raid com destaque nativo opcional, mensagem fixa ou IA com reserva e envio como anúncio ou chat. Aceite com uma raid real ainda necessário.
 
 - Pontos por participação, multiplicador para assinantes, nome da moeda, loja, ranking e transferências. Contagem de tempo de espectadores silenciosos e multiplicadores específicos por evento não implementados.
 - Sorteio por palavra-chave ou bilhetes, peso de assinantes e reembolso ao cancelar. Modalidade "primeiro a digitar" não implementada.
