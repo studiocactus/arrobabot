@@ -132,3 +132,8 @@ Antes da live: conferir perfil, conexão, fluxo ativo, contexto de memória, sal
 Durante: acompanhar erros e evitar alterar a plataforma/Client ID de um perfil em uso. Confirmar resultados de previsões com cuidado, pois não há desfazer automático.
 
 Depois: resolver operações abertas, desconectar, salvar notas e fechar antes do backup. Ao atualizar o programa, conserve a cópia anterior até verificar os dados na nova versão.
+
+
+## Limite do pré-voo
+
+O pré-voo confere as configurações que conhece. Um resultado sem achados não confirma conexão ativa, chegada do som ao OBS nem qualidade da voz. Antes da live, teste as conexões e ouça uma gravação local, incluindo as vozes usadas em resgates. Veja [qualidade de áudio](13-AUDIO.md).

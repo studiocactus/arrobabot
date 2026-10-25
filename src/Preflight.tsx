@@ -23,7 +23,7 @@ export default function PreflightCard({profileId,onGo,labelOf}:{profileId:string
  const body=items===null
   ? <p className="help">Antes de ir ao ar, o pré-voo confere o que só quebraria na live: alertas e chat desligados, sons apagados e ações sem módulo ou autorização. Nada é alterado.</p>
   : items.length===0
-   ? <p className="preflight-ok"><CheckCircle2 size={17}/> Tudo pronto para a live: nada encontrado no perfil selecionado.</p>
+   ? <p className="preflight-ok"><CheckCircle2 size={17}/> Nenhum problema encontrado nas configurações verificadas. Confira também as conexões e uma gravação de áudio antes da live.</p>
    : <ul className="preflight-list">{items.map((it,i)=><li key={i}><span>{it.message}</span><button type="button" onClick={()=>onGo(it.page)}>Ir para {labelOf(it.page)}<ArrowRight size={14}/></button></li>)}</ul>;
  return <Card title="Pré-voo da live">
   {error&&<p role="alert" className="inline-error">{error}</p>}

@@ -79,11 +79,11 @@ test('pré-voo acusa o que só quebraria e cada item leva à tela de conserto',a
  expect(errors).toEqual([]);
 });
 
-test('pré-voo sem problemas avisa que está tudo pronto; falha orienta sem quebrar o painel',async({page})=>{
+test('pré-voo sem problemas delimita a conferência; falha orienta sem quebrar o painel',async({page})=>{
  await mock(page,[]);
  const card=page.locator('.card').filter({hasText:'Pré-voo da live'});
  await card.getByRole('button',{name:'Rodar pré-voo',exact:true}).click();
- await expect(card.getByText('Tudo pronto para a live: nada encontrado no perfil selecionado.',{exact:true})).toBeVisible();
+ await expect(card.getByText('Nenhum problema encontrado nas configurações verificadas. Confira também as conexões e uma gravação de áudio antes da live.',{exact:true})).toBeVisible();
  await expect(card.getByRole('button',{name:'Verificar de novo',exact:true})).toBeVisible();
 
  // falha de comunicação: o aviso aparece e o botão permite tentar de novo
@@ -93,5 +93,5 @@ test('pré-voo sem problemas avisa que está tudo pronto; falha orienta sem queb
  await expect(card.getByRole('alert')).toContainText('Falha do pré-voo simulada');
  await page.evaluate(()=>{(window as unknown as {__st:St}).__st.fail=false});
  await card.getByRole('button',{name:'Verificar de novo',exact:true}).click();
- await expect(card.getByText('Tudo pronto para a live: nada encontrado no perfil selecionado.',{exact:true})).toBeVisible();
+ await expect(card.getByText('Nenhum problema encontrado nas configurações verificadas. Confira também as conexões e uma gravação de áudio antes da live.',{exact:true})).toBeVisible();
 });

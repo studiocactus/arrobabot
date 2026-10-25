@@ -85,3 +85,23 @@ O **VB-Cable pode continuar instalado** se você usa a voz com efeitos internos;
 - Um som interrompido no meio (mute da fonte, troca de cena com a fonte desligada, **Parar todos os sons**) não retoma de onde parou; ele é encerrado e a fila segue.
 - Sons de outras origens (áudio do Discord, efeitos do próprio OBS, música tocada em outro programa) não passam por esta saída; cada fonte continua com seu áudio.
 - A homologação com OBS, Voicemod e microfone reais não foi executada nesta entrega (ver notas da versão): a validação automatizada cobre o caminho completo — incluindo a geração **real** de TTS pelo Windows nesta máquina —, mas não substitui um teste com OBS aberto na sua live.
+
+
+## Qualidade da voz e resgates — revisão v0.20.15
+
+Na **Etapa 2**, abra **Preparar áudio limpo antes da live**. Esse roteiro não aplica filtros nem muda dispositivos automaticamente. O áudio segue microfone físico → Voicemod → microfone virtual → OBS; a Control API do BotLive controla efeitos e não transporta amostras de áudio.
+
+Para voz robótica, estalos ou atraso, grave uma referência sem efeito e compare com cada voz utilizada nos resgates. Confira 48.000 Hz nos dispositivos compatíveis e no OBS; compare sem supressões/gates/melhorias empilhadas e com menos processamento simultâneo. Mude uma coisa de cada vez. Se o problema existir sem efeito, investigue a captura, o cabo, drivers e a carga de CPU; se aparecer apenas com um efeito, investigue essa voz antes de habilitá-la na live.
+
+Como referência inicial de regulagem (não um preset universal), procure picos de fala entre −12 e −6 dBFS no OBS. Reduza ganho na origem caso sature. Um limiter ao final, por exemplo em −1 dB, contém picos finais, mas não recupera áudio já distorcido. Compare filtros ligados/desligados ouvindo também fala baixa e silêncio; gates fortes podem mutilar a voz alterada.
+
+Grave voz natural, cada efeito, dois pedidos consecutivos e restauração. Verifique volume, sílabas, estalos, duplicação e atraso em relação à imagem. Só depois marque **Ouvi minha voz no OBS**. Repita após mudar equipamento, efeito ou filtros: a marca é manual e não certifica a configuração atual.
+
+Falha de restauração de **teste** agora aparece mesmo após o teste terminar: reconecte, abra **Durante a live** e use **Recuperar restauração**. A tela distingue recuperação de teste e de resgate. O contador do teste usa o instante da atualização do próprio teste, independente da fila.
+
+Referências: [estalos e frequência no Voicemod](https://support.voicemod.net/hc/en-us/articles/360013422519-I-can-hear-crackling-sounds), [configuração de voz e supressão](https://support.voicemod.net/hc/en-us/articles/14351281991954-HOW-TO-USE-Voicemod), [limiter no OBS](https://obsproject.com/kb/limiter-filter). As orientações são ponto de partida; esta versão não certifica qualidade de estúdio sem gravação e audição do equipamento real.
+
+
+Se a próxima voz da fila falhar, os pedidos restantes são descartados para não reaparecerem atrasados; a origem fica guardada como restauração pendente. Use **Recuperar restauração**. Restaurar só é considerado sucesso quando a voz e o estado anterior do modificador foram confirmados; recusa ao desligar o modificador mantém a pendência. Pedidos descartados não são marcados como cumpridos pelo BotLive, e eventuais estornos continuam sob responsabilidade da Twitch.
+
+O [estudo de QA de 25/10/2026](QA-2026-10-25.md) reúne achados, testes de falha e matriz de homologação.

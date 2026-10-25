@@ -1,5 +1,28 @@
 # Histórico de atualizações
 
+# BotLive 0.20.15
+
+## O que mudou
+Revisão de QA da v0.20.14 com prioridade para qualidade da voz e usabilidade, documentada em docs/QA-2026-10-25.md. A tela Voicemod mostra falhas de restauração mesmo após o teste terminar e encaminha recuperação ao serviço correto. O teste usa relógio próprio, independente da fila, e armazena a resposta real do início.
+A restauração de resgates agora confirma voz e estado do modificador em fim de efeito, cancelamento e recuperação: falhas de toggle mantêm pendência em vez de sucesso parcial. Falha na próxima voz preserva origem para recuperação, retira o efeito ativo sem temporizador e descarta pedidos restantes, sem replay. Novos pedidos não sobrescrevem a origem enquanto houver restauração pendente.
+A Etapa 2 ganhou preparação de áudio com comparação de voz natural/alterada, frequência, filtros, ganho e sequência de resgates. O pré-voo limita sua mensagem ao que realmente confere. Rodapés reservam linha própria para texto de apoio, sem coluna estreita compartilhada com botões. Recursos existentes foram preservados. Capítulos de áudio e operação atualizados.
+
+## Como usar
+Em Voicemod → Etapa 2, abra Preparar áudio limpo antes da live. Compare gravação sem efeito e com cada voz usada, incluindo fala baixa/forte, silêncio, dois pedidos e restauração. Para estalos, robótica ou atraso, confira frequência e processamento com uma alteração por vez; a orientação não aplica filtros nem altera Windows/OBS automaticamente.
+Se teste ou resgate ficar com restauração não confirmada, reconecte e use Durante a live → Recuperar restauração. Falha do próximo efeito interrompe a fila: pedidos restantes não serão reproduzidos depois nem marcados como cumpridos. Eventuais estornos são pela Twitch.
+
+## Validação
+Executados: npm test (170 testes aprovados), npm run check, npm run docs (30 capítulos) e suíte Rust completa via runtime local (392 aprovados, 2 ignorados), incluindo duas regressões novas para toggle recusado e próximo efeito recusado.
+Primeira rodada de navegador: 15 testes aprovados, com áudio, pré-voo, Voicemod e auditoria de layout em cinco larguras. Após ajuste compartilhado dos rodapés, suíte completa de navegador aprovada: 99 testes, incluindo auditoria em cinco larguras e regressão geométrica do texto de ajuda separado dos botões. Na v0.20.15, os 23 testes de resgates foram reaprovados após a proteção adicional da origem pendente; os 9 testes de atualização/publicação passaram com acesso ao repositório temporário.
+As primeiras tentativas restritas falharam em sockets locais; foram substituídas por execução com acesso local. Um teste de publicação restrito falhou ao criar .git/config temporário; a execução com acesso liberado passou. Uma tentativa concorrente de Rust falhou no linker porque o executável de teste anterior estava em uso; a execução sequencial posterior passou.
+Capturas finais de 1100 e 1600 px também validadas e inspecionadas com npm run dev: um teste aprovado usando configuração temporária de QA que limita descoberta ao index.html e exclui ferramentas/target do observador. A configuração padrão ficou presa na carga inicial; não houve alteração da configuração de produção. Build de produção executado pelos testes e novamente na v0.20.15; mantém aviso de chunk acima de 500 kB. Rust mantém warning preexistente de atribuição não utilizada em twitch_ops.rs. Capturas ficam fora do Git, em %TEMP%/botlive-ux.
+
+## Limitações
+Sem gravação ou audição do microfone real, Voicemod e OBS nesta sessão. Não foi confirmada a causa do áudio robótico/estalos/atraso da última live e não há promessa de qualidade de estúdio nem homologação acústica. O BotLive controla efeitos por API, não transporta o áudio desse microfone: dispositivos, processamento do Voicemod, drivers e filtros do OBS exigem comparação real.
+A marca Ouvi minha voz no OBS continua manual; precisa ser refeita após mudanças. Ainda há backlog de erros de carregamento por seção e expansão da matriz de falhas, documentado no estudo. Não houve live, resgate com pontos ou mensagem pública. A publicação Windows assinada e a atualização instalada dependem da CI após push; assinatura existente preservada.
+
+---
+
 # BotLive 0.20.14
 
 ## O que mudou

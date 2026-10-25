@@ -1370,6 +1370,8 @@ pub(crate) mod testkit {
  pub struct Mock {
   pub key_ok: Arc<std::sync::atomic::AtomicBool>,
   pub silent: Arc<std::sync::atomic::AtomicBool>,
+  pub refuse_toggle: Arc<AtomicBool>,
+  pub refuse_voice: Arc<Mutex<String>>,
   pub omit_ids: Arc<std::sync::atomic::AtomicBool>,
   pub raw: Arc<Mutex<Option<String>>>,
   pub registers: Arc<std::sync::atomic::AtomicU64>,
@@ -1388,6 +1390,8 @@ pub(crate) mod testkit {
    Self {
     key_ok: Arc::new(std::sync::atomic::AtomicBool::new(true)),
     silent: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+    refuse_toggle: Arc::new(AtomicBool::new(false)),
+    refuse_voice: Arc::new(Mutex::new(String::new())),
     omit_ids: Arc::new(std::sync::atomic::AtomicBool::new(false)),
     raw: Arc::new(Mutex::new(None)),
     registers: Arc::new(std::sync::atomic::AtomicU64::new(0)),
@@ -1449,6 +1453,7 @@ pub(crate) mod testkit {
    "getHearMyselfStatus" => vec![tagged(m, json!({"actionType":"toggleHearMyVoice","actionObject":{"value":*m.hear.lock().unwrap()}}), id).to_string()],
    "getUserLicense" => vec![tagged(m, json!({"actionType":"getUserLicense","actionObject":{"licenseType":m.license.lock().unwrap().clone()}}), id).to_string()],
    "toggleVoiceChanger" => {
+    if m.refuse_toggle.load(Ordering::SeqCst) { return vec![]; }
     let now = {
      let mut g = m.changer.lock().unwrap();
      *g = !*g;
@@ -1461,7 +1466,7 @@ pub(crate) mod testkit {
     let target = v["payload"]["voiceID"].as_str().unwrap_or("").to_owned();
     m.loads.lock().unwrap().push(target.clone());
     let known = m.voices.lock().unwrap().iter().any(|x| x["id"].as_str() == Some(target.as_str()));
-    if !known {
+    if !known || *m.refuse_voice.lock().unwrap() == target {
      return vec![];
     }
     *m.voice.lock().unwrap() = target.clone();

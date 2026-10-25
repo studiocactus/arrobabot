@@ -79,7 +79,7 @@ test('escuta contínua abre o microfone, manda lotes de áudio e desliga quando 
 });
 
 /** Mock desktop da tela Voicemod: conexão, vozes reais e regras. */
-async function mockVoicemod(page:Page,opts:{legacy?:boolean;rules?:unknown[]}={}){
+async function mockVoicemod(page:Page,opts:{legacy?:boolean;rules?:unknown[];pendingTest?:boolean}={}){
  await page.addInitScript((p)=>{
   Object.assign(window,{isTauri:true,__TAURI_EVENT_PLUGIN_INTERNALS__:{registerListener:()=>{},unregisterListener:()=>{}},
    __TAURI_INTERNALS__:{transformCallback:()=>1,unregisterCallback:()=>{},invoke:async(cmd:string,payload:{op:string;args?:Record<string,unknown>})=>{
@@ -89,15 +89,16 @@ async function mockVoicemod(page:Page,opts:{legacy?:boolean;rules?:unknown[]}={}
     if(op==='flows')return [];
     if(op==='command.counters')return {};
     if(op==='settings.get')return {theme:'dark',apiPort:9876,apiToken:'',updateEndpoint:'',updatePublicKey:'',autoUpdate:false};
-    if(op==='voicemod.get')return {status:{phase:'connected',message:'Conectado nesta máquina',port:59129,voices:[{voiceID:'robot',name:'Robô'},{voiceID:'alien',name:'Alien'}],currentVoice:'nofx',currentName:'Efeito desligado',voiceChanger:true,hearMyself:false,license:'Pro',attempts:1},test:{active:false,phase:'',voiceId:'',voiceName:'',seconds:10,remainingMs:0,interrupted:false,manual:false},outcome:{kind:'',detail:''},defaultSecs:10,minSecs:5,maxSecs:60,hasKey:true,keyLen:24};
+    if(op==='voicemod.get')return {status:{phase:'connected',message:'Conectado nesta máquina',port:59129,voices:[{voiceID:'robot',name:'Robô'},{voiceID:'alien',name:'Alien'}],currentVoice:'nofx',currentName:'Efeito desligado',voiceChanger:true,hearMyself:false,license:'Pro',attempts:1},test:{active:false,phase:'',voiceId:'',voiceName:'',seconds:10,remainingMs:0,interrupted:false,manual:false},outcome:p.pendingTest?{kind:'unconfirmed',detail:'Restauração do teste não confirmada'}:{kind:'',detail:''},defaultSecs:10,minSecs:5,maxSecs:60,hasKey:true,keyLen:24};
     if(op==='voiceResgate.get')return {queue:{active:null,upcoming:[],last:'',lastKind:'',pendingRestore:false,busy:false},config:{enabled:true,queueLimit:3,bindings:p.rules,legacyMap:{},obsChecked:false}};
     if(op==='twitch.rewards')return {channel:'cactus',rewards:[{id:'r1',title:'Voz de robô',cost:100,enabled:true},{id:'r2',title:'Voz alienígena',cost:200,enabled:true}]};
     if(op==='voiceFx.get')return {phase:p.legacy?'running':'off',message:'',input:'',output:'',gate_db:-45};
     if(op==='voiceFx.selection')return p.legacy?{input:'Microfone (Realtek)',output:'CABLE Input (VB-Audio Virtual Cable)',gateDb:-45,mode:'internal'}:{gateDb:-45};
+    if(op==='voicemod.recover'||op==='voiceResgate.recover'){sessionStorage.setItem('recoveryOp',op);return null}
     if(op==='voiceResgate.save'){sessionStorage.setItem('rulesSaved',JSON.stringify(args.config));return null}
     return null;
    }}});
- },{profile,rules:opts.rules??[{kind:'reward',rewardId:'r1',rewardName:'Voz de robô',command:'',permission:'moderator',enabled:true,voiceId:'robot',voiceName:'Robô',durationSec:30,cooldownSec:0,concurrency:'queue'}],legacy:!!opts.legacy});
+ },{profile,rules:opts.rules??[{kind:'reward',rewardId:'r1',rewardName:'Voz de robô',command:'',permission:'moderator',enabled:true,voiceId:'robot',voiceName:'Robô',durationSec:30,cooldownSec:0,concurrency:'queue'}],legacy:!!opts.legacy,pendingTest:!!opts.pendingTest});
 }
 
 test('tela Voicemod tem as três etapas, um caminho só e nada de VB-Cable no caminho principal',async({page})=>{
@@ -184,4 +185,34 @@ test('a área de migração dos efeitos internos saiu da tela Voicemod',async({p
  await page.screenshot({path:join(OUT,'voicemod-sem-migracao.png'),fullPage:true});
  await page.setViewportSize({width:1600,height:900});
  await page.screenshot({path:join(OUT,'voicemod-sem-migracao-larga.png'),fullPage:true});
+});
+
+test('restauração pendente de teste usa a recuperação do teste e mostra o motivo',async({page})=>{
+ await mockVoicemod(page,{pendingTest:true});
+ await page.goto('/');
+ await page.locator('.sidebar').getByRole('button',{name:'Voicemod',exact:true}).click();
+ await expect(page.getByText('Restauração do teste não confirmada',{exact:true})).toBeVisible();
+ await page.getByRole('button',{name:/Durante a live/}).click();
+ await page.getByRole('button',{name:'Recuperar restauração',exact:true}).click();
+ await expect.poll(()=>page.evaluate(()=>sessionStorage.getItem('recoveryOp'))).toBe('voicemod.recover');
+});
+
+test('preparação de áudio orienta a comparar efeitos e não estoura a tela',async({page})=>{
+ await mockVoicemod(page);
+ await page.goto('/');
+ await page.locator('.sidebar').getByRole('button',{name:'Voicemod',exact:true}).click();
+ await page.getByRole('button',{name:/Etapa 2 · Ouvir minha voz no OBS/}).click();
+ await page.getByText('Preparar áudio limpo antes da live',{exact:true}).click();
+ await expect(page.getByText(/ela não mede a qualidade do áudio/)).toBeVisible();
+ for(const width of [1100,1600]){
+  await page.setViewportSize({width,height:1000});
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  const footer=page.locator('.form-footer').filter({has:page.getByRole('button',{name:'Testar voz',exact:true})});
+  const help=await footer.locator('.help').boundingBox();
+  const button=await footer.getByRole('button',{name:'Testar voz',exact:true}).boundingBox();
+  expect(help).not.toBeNull();expect(button).not.toBeNull();
+  expect(button!.y).toBeGreaterThanOrEqual(help!.y+help!.height);
+
+  await page.screenshot({path:join(OUT,`qa-audio-${width}.png`),fullPage:true});
+ }
 });

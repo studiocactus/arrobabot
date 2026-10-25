@@ -589,12 +589,19 @@ fn fail(rt: &Runtime, p: &Profile, item: &Queued, msg: &str) {
 /// origem: continuações herdam a mesma, senão a restauração devolveria a voz
 /// de um efeito, não a de antes.
 async fn apply_locked(rt: &Arc<Runtime>, p: &Profile, item: &Queued) -> R<()> {
+ if rt.voice_resgates.state.lock().unwrap().interrupted.is_some() {
+  let err = "Há restauração pendente: use Recuperar antes de aplicar outra voz.";
+  fail(rt, p, item, err);
+  return Err(err.into());
+ }
+
  // Origem: só a primeira troca captura. Continuações herdam a mesma origem,
  // senão a restauração devolveria a voz de um efeito, não a de antes.
  let inherited = {
   let st = rt.voice_resgates.state.lock().unwrap();
   st.active.as_ref().map(|a| (a.origin_voice.clone(), a.origin_name.clone(), a.origin_changer))
  };
+ let continuing = inherited.is_some();
  let (origin_voice, origin_name, origin_changer) = match inherited {
   Some(t) => t,
   None => {
@@ -611,7 +618,7 @@ async fn apply_locked(rt: &Arc<Runtime>, p: &Profile, item: &Queued) -> R<()> {
   changed_changer = true;
  }
  if let Err(err) = vm::load_confirmed(rt, &item.voice_id).await {
-  if changed_changer {
+  if changed_changer && !continuing {
    vm::set_changer(rt, false).await.ok();
   }
   fail(rt, p, item, &err);
@@ -680,6 +687,17 @@ fn when(secs: u64) -> String {
  else { format!("{secs}s") }
 }
 
+/// Restauração completa: só confirma sucesso após voz e modificador.
+async fn restore_origin(rt: &Arc<Runtime>, active: &Active) -> R<()> {
+ vm::load_confirmed(rt, &active.origin_voice).await?;
+ if active.changed_changer {
+  if let Some(want) = active.origin_changer {
+   vm::set_changer(rt, want).await?;
+  }
+ }
+ Ok(())
+}
+
 /// Fim do efeito: devolve a voz de antes, respeita troca manual do usuário e
 /// segue a fila quando houver. Sempre com o portão em mãos e geração conferida.
 /// O futuro vem caixado de propósito: `finish` e `apply_locked` se chamam uma
@@ -731,19 +749,31 @@ fn finish(rt: Arc<Runtime>, profile_id: String) -> std::pin::Pin<Box<dyn std::fu
     let mut st = rt.voice_resgates.state.lock().unwrap();
     st.active = Some(active.clone());
    }
-   let p_profile = match rt.db.profile(profile_id) { Ok(p) => p, Err(_) => return };
-   let _ = apply_locked(rt, &p_profile, &item).await;
+   let result = match rt.db.profile(profile_id) {
+    Ok(p) => apply_locked(rt, &p, &item).await,
+    Err(err) => Err(err),
+   };
+   if let Err(err) = result {
+    // A origem continua guardada; sem temporizador novo, não deixe um efeito
+    // antigo preso como ativo nem repita pedidos depois da recuperação.
+    let msg = format!("A próxima voz falhou: {err}. Fila interrompida; use Recuperar para devolver a voz de antes.");
+    {
+     let mut st = rt.voice_resgates.state.lock().unwrap();
+     st.active = None;
+     st.interrupted = Some(active);
+     st.upcoming.clear();
+     st.last = msg.clone();
+     st.last_kind = "error".into();
+    }
+    rt.log(profile_id, KIND, &msg, "error");
+    publish(rt);
+   }
    return;
   }
   // Fim da fila: devolve a voz de antes, com confirmação.
-  let restore = vm::load_confirmed(rt, &active.origin_voice).await;
+  let restore = restore_origin(rt, &active).await;
   match restore {
    Ok(()) => {
-    if active.changed_changer {
-     if let Some(false) = active.origin_changer {
-      vm::set_changer(rt, false).await.ok();
-     }
-    }
     rt.voicemod.forget_applied();
     let msg = if active.origin_voice == vm::NORMAL_VOICE {
      format!("Efeito encerrado: voz normal restaurada ({}).", active.origin_name)
@@ -822,13 +852,8 @@ pub async fn cancel_all(rt: &Arc<Runtime>, p: &Profile) -> R<Value> {
     rt.log(&p.id, KIND, &msg, "error");
     note(rt, p, &msg, "error");
    } else {
-    match vm::load_confirmed(rt, &active.origin_voice).await {
+    match restore_origin(rt, &active).await {
      Ok(()) => {
-      if active.changed_changer {
-       if let Some(false) = active.origin_changer {
-        vm::set_changer(rt, false).await.ok();
-       }
-      }
       rt.voicemod.forget_applied();
       let msg = if active.origin_voice == vm::NORMAL_VOICE {
        "Efeitos encerrados: voz sem efeito restaurada.".to_owned()
@@ -866,13 +891,8 @@ pub async fn recover(rt: &Arc<Runtime>, p: &Profile) -> R<Value> {
   return Err("O Voicemod continua desconectado. Abra o aplicativo, clique em Conectar e tente de novo.".into());
  }
  let _gate = rt.voice_resgates.gate.lock().await;
- match vm::load_confirmed(rt, &pending.origin_voice).await {
+ match restore_origin(rt, &pending).await {
   Ok(()) => {
-   if pending.changed_changer {
-    if let Some(false) = pending.origin_changer {
-     vm::set_changer(rt, false).await.ok();
-    }
-   }
    rt.voicemod.forget_applied();
    {
     let mut st = rt.voice_resgates.state.lock().unwrap();
@@ -1013,6 +1033,51 @@ mod tests {
  }
  async fn setup_with(rt: &Runtime, p: &Profile, cfg: Value) {
   crate::voice_redemptions::save(rt, p, &cfg).unwrap();
+ }
+
+ #[tokio::test]
+ async fn refused_modifier_restore_stays_pending_until_confirmed_recovery() {
+  let (_dir, rt, p, m) = connected_runtime().await;
+  apply_manual(&rt, &p, "robot", "QA", 60, "tester").await.unwrap();
+  assert!(m.changer());
+  m.refuse_toggle.store(true, Ordering::SeqCst);
+  assert!(cancel_all(&rt, &p).await.is_err(), "não pode declarar restauração completa");
+  assert_eq!(view(&rt, &p)["queue"]["pendingRestore"], json!(true));
+  assert!(m.changer(), "modificador recusou desligar");
+  assert!(recover(&rt, &p).await.is_err(), "recuperação também exige confirmação");
+  assert_eq!(view(&rt, &p)["queue"]["pendingRestore"], json!(true));
+  m.refuse_toggle.store(false, Ordering::SeqCst);
+  recover(&rt, &p).await.unwrap();
+  assert!(!m.changer());
+  assert_eq!(view(&rt, &p)["queue"]["pendingRestore"], json!(false));
+  leave(&rt, &p).await;
+ }
+
+ #[tokio::test]
+ async fn failed_next_voice_preserves_origin_and_does_not_leave_a_stuck_active_effect() {
+  let (_dir, rt, p, m) = connected_runtime().await;
+  apply_manual(&rt, &p, "robot", "QA", 60, "tester").await.unwrap();
+  apply_manual(&rt, &p, "alien", "QA", 60, "tester").await.unwrap();
+  apply_manual(&rt, &p, "robot", "QA", 60, "tester").await.unwrap();
+  *m.refuse_voice.lock().unwrap() = "alien".into();
+  {
+   let _gate = rt.voice_resgates.gate.lock().await;
+   finish(rt.clone(), p.id.clone()).await;
+  }
+  let v = view(&rt, &p);
+  assert_eq!(v["queue"]["pendingRestore"], json!(true));
+  assert!(v["queue"]["active"].is_null());
+  assert!(v["queue"]["upcoming"].as_array().unwrap().is_empty());
+  assert_eq!(m.voice(), "robot");
+  assert!(m.changer(), "não deve desligar o efeito anterior durante continuação falha");
+  assert!(apply_manual(&rt, &p, "robot", "QA", 60, "tester").await.is_err(),
+   "pedido novo não pode sobrescrever a origem pendente");
+  assert_eq!(view(&rt, &p)["queue"]["pendingRestore"], json!(true));
+  recover(&rt, &p).await.unwrap();
+  assert_eq!(m.voice(), "nofx");
+  assert!(!m.changer());
+  assert_eq!(view(&rt, &p)["queue"]["pendingRestore"], json!(false));
+  leave(&rt, &p).await;
  }
 
  #[tokio::test]

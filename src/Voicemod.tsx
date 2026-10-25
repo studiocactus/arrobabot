@@ -49,6 +49,8 @@ export default function Voicemod({profileId,notify}:{profileId:string;notify:(s:
  const [now,setNow]=useState(Date.now());
  const timer=useRef<number|null>(null);
  const gotAt=useRef(Date.now());
+ const testGotAt=useRef(Date.now());
+ useEffect(()=>{testGotAt.current=Date.now()},[snap?.test]);
  // O backend confirma começo e fim; aqui só o relógio visível anda, para o
  // tempo restante acompanhar sem prometer nada por conta própria.
  useEffect(()=>{gotAt.current=Date.now()},[queue]);
@@ -69,7 +71,7 @@ export default function Voicemod({profileId,notify}:{profileId:string;notify:(s:
  useEffect(()=>{
   if(!desktop)return;
   const unsubs=[
-   listen<{status?:VmStatus;test?:VmTest}>('voicemod',e=>setSnap(s=>s?{...s,...e.payload}:{status:e.payload.status as VmStatus,test:e.payload.test as VmTest,outcome:{kind:'',detail:''},defaultSecs:10,minSecs:5,maxSecs:60,hasKey:false,keyLen:0})),
+   listen<{status?:VmStatus;test?:VmTest;outcome?:VmSnapshot['outcome']}>('voicemod',e=>setSnap(s=>s?{...s,...e.payload}:{status:e.payload.status as VmStatus,test:e.payload.test as VmTest,outcome:{kind:'',detail:''},defaultSecs:10,minSecs:5,maxSecs:60,hasKey:false,keyLen:0})),
    listen<QueueView>('voiceResgate',e=>setQueue(e.payload)),
   ];
   return()=>{void Promise.all(unsubs).then(list=>list.forEach(u=>u()))};
@@ -110,7 +112,8 @@ export default function Voicemod({profileId,notify}:{profileId:string;notify:(s:
  });
  const startTest=()=>run(async()=>{
   if(!testVoice)throw new Error('Escolha uma voz para o teste.');
-  await api('voicemod.testStart',{profileId,voiceId:testVoice,seconds:testSecs});
+  const test=await api<VmTest>('voicemod.testStart',{profileId,voiceId:testVoice,seconds:testSecs});
+  setSnap(s=>s?{...s,test,outcome:{kind:'',detail:''}}:s);
   notify('Teste no ar: fale agora e confira sua voz no OBS. A voz de antes volta sozinha.');
  });
  const stopTest=()=>run(async()=>{await api('voicemod.testStop',{profileId});await load()});
@@ -120,7 +123,7 @@ export default function Voicemod({profileId,notify}:{profileId:string;notify:(s:
   await load();
  });
  const recover=()=>run(async()=>{
-  await api('voiceResgate.recover',{profileId});
+  await api(testPending?'voicemod.recover':'voiceResgate.recover',{profileId});
   notify('Recuperação pedida ao Voicemod.');
   await load();
  });
@@ -140,7 +143,8 @@ export default function Voicemod({profileId,notify}:{profileId:string;notify:(s:
  const changer=snap?.status?.voiceChanger??null;
  const voices=(snap?.status?.voices||[]).filter(v=>v.enabled!==false);
  const qActive=queue?.active||null;
- const pending=!!queue?.pendingRestore;
+ const testPending=snap?.outcome?.kind==='unconfirmed';
+ const pending=!!queue?.pendingRestore||testPending;
  const rulesOn=cfg?cfg.bindings.filter(b=>b.enabled).length:0;
  const rulesOff=cfg?cfg.bindings.filter(b=>!b.enabled).length:0;
  const fxRunning=fx?.status?.phase==='running';
@@ -222,6 +226,19 @@ export default function Voicemod({profileId,notify}:{profileId:string;notify:(s:
 
    <AccordionItem id="etapa2" title="Etapa 2 · Ouvir minha voz no OBS" meta={[cfg?.obsChecked?'CONFERIDO NO OBS':'A CONFERIR']} open={openSection==='etapa2'} onToggle={()=>setOpenSection(openSection==='etapa2'?'':'etapa2')}>
    <p className="help">No OBS, edite a fonte de áudio da <strong>sua voz</strong> e escolha <strong>Voicemod Microphone</strong> como dispositivo de entrada. Evite captura duplicada: se uma fonte já pega o microfone físico, não pegue o mesmo áudio em outra — a voz entraria em dobro. Nada aqui muda seus dispositivos do Windows nem mexe nas suas cenas.</p>
+   <details>
+    <summary>Preparar áudio limpo antes da live</summary>
+    <p className="help">A conexão controla a troca de voz; ela não mede a qualidade do áudio. Faça estes ajustes e compare uma gravação sem efeito com outra usando cada voz dos resgates.</p>
+    <p className="help"><strong>Voz robótica, estalos ou atraso?</strong> Compare primeiro sem efeito. Se o defeito já existir, confira frequência, cabo e carga de CPU. Se aparecer só com uma voz, compare esse efeito isolado e reduza processamentos simultâneos. Ajuste um item por vez e grave novamente.</p>
+    <ol>
+     <li><strong>Uma entrada, um caminho.</strong> No Voicemod, selecione o microfone físico. No OBS, capture apenas o microfone virtual do Voicemod para sua voz. Evite capturá-lo também em Mic/Aux ou monitorar de volta para a entrada.</li>
+     <li><strong>Mesma frequência.</strong> Confira 48.000 Hz no microfone, no dispositivo virtual e no OBS, quando os aparelhos suportarem. Prefira microfone USB ou com fio se o Bluetooth perder qualidade ao ligar a captura.</li>
+     <li><strong>Sem filtros empilhados.</strong> Compare com supressão de ruído, gate e melhorias do Windows desligados; reative um por vez se precisar. Filtros fortes podem cortar sílabas e partes da voz alterada.</li>
+     <li><strong>Volume com folga.</strong> Como ponto de partida, fale com picos entre −12 e −6 dBFS no OBS. Se distorcer, reduza o ganho antes do Voicemod: baixar só o fader não recupera uma entrada já saturada.</li>
+     <li><strong>Proteção na saída.</strong> Um limiter no fim dos filtros do OBS (por exemplo, −1 dB) pode conter picos finais. Ajuste cada efeito ouvindo a gravação; ele não conserta distorção que já veio do microfone.</li>
+    </ol>
+    <p className="help">Grave voz normal, efeito, dois resgates em sequência e retorno à voz anterior. Inclua fala baixa, forte e alguns segundos de silêncio. Só marque “Ouvi minha voz no OBS” depois de ouvir esse resultado. Repita após trocar microfone, filtros ou vozes.</p>
+   </details>
    <div className="form-grid">
     <Field label="Voz para o teste" hint="Lista real do Voicemod, com as vozes da sua licença.">
      <select value={testVoice} disabled={!connected||busy} onChange={e=>setTestVoice(e.target.value)}>
@@ -234,14 +251,14 @@ export default function Voicemod({profileId,notify}:{profileId:string;notify:(s:
     </Field>
    </div>
    <div className="form-footer">
-    <span className="help">{snap?.test?.active?`Teste no ar: fale agora (${secsLabel(Math.max(0,(snap.test.remainingMs||0)-(now-gotAt.current)))}). A voz de antes volta sozinha ao terminar.`:'Um único teste cobre o caminho todo: aplicar temporariamente e restaurar. Fale durante o teste — é a sua voz que o OBS precisa ouvir.'}</span>
+    <span className="help">{snap?.test?.active?`Teste no ar: fale agora (${secsLabel(Math.max(0,(snap.test.remainingMs||0)-(now-testGotAt.current)))}). A voz de antes volta sozinha ao terminar.`:'Um único teste cobre o caminho todo: aplicar temporariamente e restaurar. Fale durante o teste — é a sua voz que o OBS precisa ouvir.'}</span>
     <div className="row">
      {!snap?.test?.active
       ?<button className="primary" disabled={!connected||busy||!testVoice} onClick={()=>void startTest()}><Play size={14}/> Testar voz</button>
-      :<button className="secondary" disabled={busy} onClick={()=>void stopTest()}><Square size={14}/> Parar teste ({secsLabel(Math.max(0,(snap?.test?.remainingMs||0)-(now-gotAt.current)))})</button>}
+      :<button className="secondary" disabled={busy} onClick={()=>void stopTest()}><Square size={14}/> Parar teste ({secsLabel(Math.max(0,(snap?.test?.remainingMs||0)-(now-testGotAt.current)))})</button>}
     </div>
    </div>
-   {snap?.test?.interrupted&&<p role="alert" className="inline-error">O teste terminou sem confirmação da restauração. Conecte de novo e use <strong>Recuperar restauração</strong> na seção “Durante a live”.</p>}
+   {(snap?.test?.interrupted||testPending)&&<p role="alert" className="inline-error">O teste terminou sem confirmação da restauração. Conecte de novo e use <strong>Recuperar restauração</strong> na seção “Durante a live”.</p>}
    <div className="list-row">
     <div><strong>Voicemod conectado</strong><small>{connected?'A API respondeu e autorizou.':'Ainda não.'}</small></div>
     <span className={connected?'status-pill on':'status-pill off'}><span className="status-dot" aria-hidden="true"></span><span>{connected?'Sim':'Não'}</span></span>
@@ -274,6 +291,7 @@ export default function Voicemod({profileId,notify}:{profileId:string;notify:(s:
   </ItemStack>
 
   {!desktop&&<div className="notice"><strong>Prévia no navegador.</strong><p className="help">O Voicemod é um aplicativo desta máquina: conexão, vozes e testes só existem no aplicativo desktop. Nada aqui finge conexão real.</p></div>}
+  {snap?.outcome?.detail&&<p role={testPending?'alert':'status'} className={testPending?'inline-error':'help'}>{snap.outcome.detail}</p>}
   {error&&<p role="alert" className="inline-error">{error}</p>}
  </div>;
 }
