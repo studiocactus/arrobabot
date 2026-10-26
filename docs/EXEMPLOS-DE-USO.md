@@ -62,7 +62,7 @@ Veja limites de arquivos, intervalos, permissões e diagnóstico em [Respostas T
 
 ### Resenha relacionada à jogada
 
-**Onde:** configure e teste o provedor em Inteligência artificial; depois abra Comandos → Resenha com IA.
+**Onde:** configure e teste o provedor em Inteligência artificial; depois abra Comandos → Receitas prontas → Resenha com IA → Configurar receita.
 
 Trecho que dispara: **amassando**. Orientação: **Responda em uma frase, com humor leve sobre a jogada mencionada. Use apenas fatos presentes na conversa ou nas memórias.**
 

@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{
  collections::HashMap,
- sync::{Arc, Mutex},
+ sync::{Arc, Mutex, Weak},
  time::Duration,
 };
 use futures_util::{SinkExt, StreamExt};
@@ -38,14 +38,54 @@ pub fn config(rt: &Runtime, p: &str) -> Config {
  }
  c
 }
-/// Trava de recurso temporário com contagem: o estado anterior só volta
-/// quando o último efeito ativo expirar. Mesma trava, mesmo desejo soma;
-/// desejo diferente com trava ativa é recusado com aviso.
+/// Um portão por destino OBS; efeitos temporários compartilham a origem.
 #[derive(Default)]
-pub struct Locks(Mutex<HashMap<String, Lock>>);
+pub struct Locks {
+ active:Mutex<HashMap<String,Lock>>,
+ gates:Mutex<HashMap<String,Weak<Gate>>>,
+}
+struct Gate {serial:Arc<tokio::sync::Mutex<()>>,slots:Arc<tokio::sync::Semaphore>}
+impl Default for Gate {fn default()->Self{Self{serial:Arc::new(tokio::sync::Mutex::new(())),slots:Arc::new(tokio::sync::Semaphore::new(9))}}}
+impl Locks {
+ fn gate(&self,key:&str)->Arc<Gate>{
+  let mut gates=self.gates.lock().unwrap();gates.retain(|_,v|v.strong_count()>0);
+  if let Some(g)=gates.get(key).and_then(Weak::upgrade){return g}
+  let gate=Arc::new(Gate::default());gates.insert(key.into(),Arc::downgrade(&gate));gate
+ }
+}
+#[derive(Clone)]
 struct Lock {
- desired: String,
- count: u32,
+ desired:String,count:u32,previous:String,expected:String,generation:String,
+ profile:Profile,config:Config,pinned:Option<(String,i64)>,op:String,target:String,
+ gate:Arc<Gate>,
+}
+struct Release {rt:Arc<Runtime>,key:String,generation:String,seconds:u64,gate:Arc<Gate>}
+impl Drop for Release {
+ fn drop(&mut self){let (rt,key,generation,seconds,gate)=(self.rt.clone(),self.key.clone(),self.generation.clone(),self.seconds,self.gate.clone());
+  tokio::spawn(async move{tokio::time::sleep(Duration::from_secs(seconds)).await;release_temporary(rt,key,generation,gate).await;});
+ }
+}
+fn endpoint(c:&Config)->String {let (host,port)=c.addr();let host=host.to_ascii_lowercase();let host=if host=="localhost"||host=="::1"{"127.0.0.1"}else{&host};format!("{host}:{port}")}
+async fn cancelled(rt:&Runtime,run:Option<&str>){
+ if let Some(id)=run{loop{if rt.runs.cancelled(id){return}tokio::time::sleep(Duration::from_millis(25)).await;}}
+ else{std::future::pending::<()>().await}
+}
+async fn admit(gate:&Arc<Gate>,rt:&Runtime,run:Option<&str>)->Result<(tokio::sync::OwnedSemaphorePermit,tokio::sync::OwnedMutexGuard<()>),String>{
+ admit_with_timeout(gate,rt,run,Duration::from_secs(10)).await
+}
+async fn admit_with_timeout(gate:&Arc<Gate>,rt:&Runtime,run:Option<&str>,wait:Duration)->Result<(tokio::sync::OwnedSemaphorePermit,tokio::sync::OwnedMutexGuard<()>),String>{
+ let slot=gate.slots.clone().try_acquire_owned().map_err(|_|"Fila do OBS cheia: há oito pedidos aguardando".to_string())?;
+ let guard=tokio::select!{
+  result=tokio::time::timeout(wait,gate.serial.clone().lock_owned())=>result.map_err(|_|"Pedido ao OBS excedeu 10 segundos na fila; não foi enviado".to_string())?,
+  _=cancelled(rt,run)=>return Err("Execução cancelada".into()),
+ };
+ if run.is_some_and(|id|rt.runs.cancelled(id)){return Err("Execução cancelada".into())}
+ Ok((slot,guard))
+}
+pub fn health(rt:&Runtime,p:&str)->Value {
+ let prefix=format!("{}|",endpoint(&config(rt,p)));let all=rt.obs.active.lock().unwrap();
+ let entries=all.iter().filter(|(key,_)|key.starts_with(&prefix)).map(|(_,v)|v).collect::<Vec<_>>();
+ json!({"temporary":entries.iter().filter(|v|v.count>0).count(),"pendingRestore":entries.iter().filter(|v|v.count==0).count()})
 }
 /// Autenticação oficial do protocolo 5.x: base64(sha256(base64(sha256(senha+salt))+challenge)).
 pub fn auth_string(password: &str, salt: &str, challenge: &str) -> String {
@@ -60,8 +100,12 @@ type Ws = tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<t
 struct Conn {
  ws: Ws,
  seq: u64,
+ pinned:Option<(String,i64)>,
 }
-async fn next_text(ws: &mut Ws) -> Result<String, String> {
+async fn next_text(ws:&mut Ws)->Result<String,String>{
+ tokio::time::timeout(Duration::from_secs(10),next_text_inner(ws)).await.map_err(|_|"OBS demorou a responder".to_string())?
+}
+async fn next_text_inner(ws: &mut Ws) -> Result<String, String> {
  loop {
   let msg = tokio::time::timeout(Duration::from_secs(10), ws.next())
    .await
@@ -75,7 +119,10 @@ async fn next_text(ws: &mut Ws) -> Result<String, String> {
   }
  }
 }
-async fn call(conn: &mut Conn, request_type: &str, data: Value) -> Result<Value, String> {
+async fn call(conn:&mut Conn,request_type:&str,data:Value)->Result<Value,String>{
+ tokio::time::timeout(Duration::from_secs(10),call_inner(conn,request_type,data)).await.map_err(|_|"OBS demorou a confirmar o pedido".to_string())?
+}
+async fn call_inner(conn: &mut Conn, request_type: &str, data: Value) -> Result<Value, String> {
  conn.seq += 1;
  let id = format!("botlive-{}", conn.seq);
  let msg = json!({"op": 6, "d": {"requestType": request_type, "requestId": id, "requestData": data}}).to_string();
@@ -96,7 +143,9 @@ async fn call(conn: &mut Conn, request_type: &str, data: Value) -> Result<Value,
  }
 }
 async fn connect(rt: &Arc<Runtime>, p: &Profile) -> Result<Conn, String> {
- let c = config(rt, &p.id);
+ let c = config(rt, &p.id);connect_to(p,&c).await
+}
+async fn connect_to(p:&Profile,c:&Config)->Result<Conn,String>{
  if !c.enabled {
   return Err("Ative a integração OBS na tela OBS Studio".into());
  }
@@ -122,7 +171,7 @@ async fn connect(rt: &Arc<Runtime>, p: &Profile) -> Result<Conn, String> {
  if identified["op"].as_i64() != Some(2) {
   return Err("O OBS recusou a identificação. Confira a senha.".into());
  }
- Ok(Conn { ws, seq: 0 })
+ Ok(Conn { ws, seq: 0, pinned:None })
 }
 async fn close(mut conn: Conn) {
  let _ = conn.ws.send(tokio_tungstenite::tungstenite::Message::Close(None)).await;
@@ -151,8 +200,12 @@ async fn find_item(conn: &mut Conn, scene: &str, source: &str) -> Result<i64, St
   .map(|(_, id)| id)
   .ok_or_else(|| format!("Fonte {source} não encontrada na cena {scene}"))
 }
-fn lock_key(profile: &str, resource: &str) -> String {
- format!("{profile}:{resource}")
+async fn item(conn:&mut Conn,target:&str)->Result<(String,i64),String>{
+ if let Some((scene,id))=conn.pinned.clone(){
+  if scene_items(conn,&scene).await?.iter().any(|(name,n)|*n==id&&name.eq_ignore_ascii_case(target)){return Ok((scene,id))}
+  return Err("A fonte original do efeito não existe mais; nenhuma outra fonte foi alterada".into())
+ }
+ let scene=program_scene(conn).await?;let id=find_item(conn,&scene,target).await?;Ok((scene,id))
 }
 /// Aplica a operação (efeito imediato). Devolve texto para o Histórico.
 async fn apply(conn: &mut Conn, op: &str, target: &str, num: f64) -> Result<String, String> {
@@ -174,8 +227,7 @@ async fn apply(conn: &mut Conn, op: &str, target: &str, num: f64) -> Result<Stri
    Ok(format!("volume de {} em {} dB", target, num))
   }
   "show" | "hide" | "toggle_item" => {
-   let scene = program_scene(conn).await?;
-   let id = find_item(conn, &scene, target).await?;
+   let (scene,id)=item(conn,target).await?;
    if op == "toggle_item" {
     let cur = current_enabled(conn, &scene, id).await?;
     call(conn, "SetSceneItemEnabled", json!({"sceneName": scene, "sceneItemId": id, "sceneItemEnabled": !cur})).await?;
@@ -199,22 +251,22 @@ async fn apply(conn: &mut Conn, op: &str, target: &str, num: f64) -> Result<Stri
 }
 async fn current_enabled(conn: &mut Conn, scene: &str, id: i64) -> Result<bool, String> {
  let v = call(conn, "GetSceneItemEnabled", json!({"sceneName": scene, "sceneItemId": id})).await?;
- Ok(v["sceneItemEnabled"].as_bool().unwrap_or(true))
+ v["sceneItemEnabled"].as_bool().ok_or("OBS não informou a visibilidade da fonte".into())
 }
 /// Lê o estado anterior para restaurar depois (só operações temporárias).
 async fn previous(conn: &mut Conn, op: &str, target: &str) -> Result<String, String> {
  match op {
   "mute" | "unmute" => {
    let v = call(conn, "GetInputMute", json!({"inputName": target})).await?;
-   Ok(if v["inputMuted"] == true { "muted".into() } else { "unmuted".into() })
+   let muted=v["inputMuted"].as_bool().ok_or("OBS não informou o estado de mudo")?;
+   Ok(if muted { "muted".into() } else { "unmuted".into() })
   }
   "volume" => {
    let v = call(conn, "GetInputVolume", json!({"inputName": target})).await?;
-   Ok(v["inputVolumeDb"].as_f64().unwrap_or(0.0).to_string())
+   Ok(v["inputVolumeDb"].as_f64().filter(|n|n.is_finite()).ok_or("OBS não informou o volume anterior")?.to_string())
   }
   "show" | "hide" => {
-   let scene = program_scene(conn).await?;
-   let id = find_item(conn, &scene, target).await?;
+   let (scene,id)=item(conn,target).await?;
    Ok(if current_enabled(conn, &scene, id).await? { "shown".into() } else { "hidden".into() })
   }
   _ => Err("Operação sem modo temporário".into()),
@@ -231,8 +283,7 @@ async fn restore(conn: &mut Conn, op: &str, target: &str, prev: &str) -> Result<
    call(conn, "SetInputVolume", json!({"inputName": target, "inputVolumeDb": db})).await?;
   }
   "show" | "hide" => {
-   let scene = program_scene(conn).await?;
-   let id = find_item(conn, &scene, target).await?;
+   let (scene,id)=item(conn,target).await?;
    call(conn, "SetSceneItemEnabled", json!({"sceneName": scene, "sceneItemId": id, "sceneItemEnabled": prev == "shown"})).await?;
   }
   _ => {}
@@ -247,84 +298,73 @@ fn resource_of(op: &str, target: &str) -> String {
   _ => format!("other:{target}"),
  }
 }
-/// Executa a ação do fluxo (efeito imediato ou temporário com restauração).
-/// Temporário nunca bloqueia: aplica, agenda a restauração e devolve na hora.
-pub async fn execute_action(rt: &Arc<Runtime>, p: &Profile, op: &str, target: &str, num: f64, secs: u64) -> Result<String, String> {
- if !OPS.contains(&op) {
-  return Err("Ação do OBS desconhecida".into());
- }
- if target.trim().is_empty() {
-  return Err("Escolha o alvo da ação do OBS".into());
- }
- if secs > 0 && !temp_ok(op) {
-  return Err("Duração temporária vale para mutar, volume, mostrar e esconder".into());
- }
- let resource = resource_of(op, target);
- let desired = format!("{op}:{num}");
- if secs > 0 {
-  let key = lock_key(&p.id, &resource);
-  {
-   let mut locks = rt.obs.0.lock().unwrap();
-   if let Some(lock) = locks.get_mut(&key) {
-    if lock.desired != desired {
-     return Err(format!("Recurso ocupado por outro efeito; aguarde liberar"));
-    }
-    lock.count += 1;
-   } else {
-    locks.insert(key.clone(), Lock { desired: desired.clone(), count: 1 });
-   }
+fn same_state(a:&str,b:&str,op:&str)->bool {
+ if op=="volume"{match (a.parse::<f64>(),b.parse::<f64>()){(Ok(a),Ok(b))=>(a-b).abs()<0.01,_=>false}}else{a==b}
+}
+async fn release_temporary(rt:Arc<Runtime>,key:String,generation:String,gate:Arc<Gate>){
+ let Ok(_slot)=gate.slots.clone().acquire_owned().await else{return};
+ let _guard=gate.serial.clone().lock_owned().await;
+ let lease={let mut all=rt.obs.active.lock().unwrap();let Some(lock)=all.get_mut(&key) else{return};
+  if lock.generation!=generation{return}lock.count=lock.count.saturating_sub(1);if lock.count>0{return}lock.clone()};
+ let result=async {
+  let mut conn=connect_to(&lease.profile,&lease.config).await?;conn.pinned=lease.pinned.clone();
+  let current=previous(&mut conn,&lease.op,&lease.target).await?;
+  if !same_state(&current,&lease.expected,&lease.op){
+   close(conn).await;return Ok(false)
   }
-  let mut conn = connect(rt, p).await.map_err(|e| {
-   rt.obs.0.lock().unwrap().remove(&key);
-   e
-  })?;
-  let prev = previous(&mut conn, op, target).await.map_err(|e| {
-   rt.obs.0.lock().unwrap().remove(&key);
-   e
-  })?;
-  let done = apply(&mut conn, op, target, num).await.map_err(|e| {
-   rt.obs.0.lock().unwrap().remove(&key);
-   e
-  })?;
-  close(conn).await;
-  rt.log(&p.id, "obs", &format!("{done} por {secs}s"), "success");
-  let rt2 = rt.clone();
-  let p2 = p.clone();
-  let (op2, target2, prev2) = (op.to_owned(), target.to_owned(), prev);
-  tokio::spawn(async move {
-   tokio::time::sleep(Duration::from_secs(secs)).await;
-   let release = {
-    let mut locks = rt2.obs.0.lock().unwrap();
-    match locks.get_mut(&key) {
-     Some(lock) => {
-      lock.count = lock.count.saturating_sub(1);
-      lock.count == 0
-     }
-     None => false,
-    }
-   };
-   if !release {
-    return;
-   }
-   match connect(&rt2, &p2).await {
-    Ok(mut conn) => {
-     if let Err(err) = restore(&mut conn, &op2, &target2, &prev2).await {
-      rt2.log(&p2.id, "obs", &err, "error");
-     } else {
-      rt2.log(&p2.id, "obs", &format!("{target2} restaurado"), "success");
-     }
-     close(conn).await;
-    }
-    Err(err) => rt2.log(&p2.id, "obs", &err, "error"),
-   }
-   rt2.obs.0.lock().unwrap().remove(&key);
-  });
-  return Ok(format!("{done} por {secs}s"));
+  restore(&mut conn,&lease.op,&lease.target,&lease.previous).await?;
+  let confirmed=previous(&mut conn,&lease.op,&lease.target).await?;close(conn).await;
+  if !same_state(&confirmed,&lease.previous,&lease.op){return Err("OBS não confirmou o estado anterior".to_string())}Ok(true)
+ }.await;
+ match result {
+  Ok(restored)=>{rt.log(&lease.profile.id,"obs",&if restored{format!("{} restaurado com confirmação",lease.target)}else{format!("{} mudou fora do efeito; restauração não aplicada",lease.target)},"info");rt.obs.active.lock().unwrap().remove(&key);}
+  Err(err)=>rt.log(&lease.profile.id,"obs",&format!("Restauração não confirmada de {}: {err}. Estado anterior: {}. Confira no OBS antes de enviar outro efeito.",lease.target,lease.previous),"error"),
  }
- let mut conn = connect(rt, p).await?;
- let done = apply(&mut conn, op, target, num).await?;
- close(conn).await;
- Ok(done)
+}
+/// Mesma operação usada por testes manuais e automações; não há outro motor.
+pub async fn execute_action(rt:&Arc<Runtime>,p:&Profile,op:&str,target:&str,num:f64,secs:u64)->Result<String,String>{execute(rt,p,op,target,num,secs,None).await}
+pub async fn execute_for_run(rt:&Arc<Runtime>,p:&Profile,op:&str,target:&str,num:f64,secs:u64,run:&str,index:usize)->Result<String,String>{execute(rt,p,op,target,num,secs,Some((run,index))).await}
+async fn execute(rt:&Arc<Runtime>,p:&Profile,op:&str,target:&str,num:f64,secs:u64,run:Option<(&str,usize)>)->Result<String,String>{
+ if !OPS.contains(&op){return Err("Ação do OBS desconhecida".into())}
+ if target.trim().is_empty(){return Err("Escolha o alvo da ação do OBS".into())}
+ if secs>3600{return Err("Ação do OBS: duração de até 1 hora".into())}
+ if !num.is_finite(){return Err("Valor do OBS inválido".into())}
+ if secs>0&&!temp_ok(op){return Err("Duração temporária vale para mutar, volume, mostrar e esconder".into())}
+ let config=config(rt,&p.id);let endpoint=endpoint(&config);let gate=rt.obs.gate(&endpoint);
+ if let Some((id,index))=run{rt.runs.step(id,index,"WAITING");}
+ let (_slot,_guard)=admit(&gate,rt,run.map(|(id,_)|id)).await?;
+ if let Some((id,index))=run{rt.runs.step(id,index,"RUNNING");}
+ let mut conn=connect_to(p,&config).await?;
+ if matches!(op,"show"|"hide"|"toggle_item"){conn.pinned=Some(item(&mut conn,target).await?);}
+ let resource=if let Some((scene,id))=&conn.pinned{format!("item:{scene}:{id}")}else{resource_of(op,&target.to_lowercase())};
+ let key=format!("{endpoint}|{resource}");let desired=format!("{op}:{}",if op=="volume"{num}else{0.0});
+ let existing={rt.obs.active.lock().unwrap().get(&key).cloned()};
+ if let Some(lock)=existing {
+  if lock.count==0 {
+   let current=previous(&mut conn,&lock.op,&lock.target).await?;
+   if same_state(&current,&lock.previous,&lock.op){rt.obs.active.lock().unwrap().remove(&key);}
+   else{return Err(format!("Restauração pendente de {}. Devolva ao estado anterior ({}) no OBS antes de tentar novamente",lock.target,lock.previous))}
+  }else{
+   if secs==0||lock.desired!=desired{return Err("Recurso ocupado por outro efeito temporário; aguarde liberar".into())}
+   let current=previous(&mut conn,op,target).await?;
+   if !same_state(&current,&lock.expected,op){rt.obs.active.lock().unwrap().remove(&key);return Err("O alvo foi alterado fora do efeito; alteração preservada. Tente novamente para iniciar outro efeito".into())}
+   if run.is_some_and(|(id,_)|rt.runs.cancelled(id)){return Err("Execução cancelada".into())}
+   rt.obs.active.lock().unwrap().get_mut(&key).unwrap().count+=1;
+   let _release=Release{rt:rt.clone(),key,generation:lock.generation,seconds:secs,gate:lock.gate};
+   close(conn).await;return Ok(format!("Efeito de {target} compartilhado por mais {secs}s; origem preservada"))
+  }
+ }
+ if run.is_some_and(|(id,_)|rt.runs.cancelled(id)){return Err("Execução cancelada".into())}
+ if secs==0{let done=apply(&mut conn,op,target,num).await?;close(conn).await;return Ok(done)}
+ let prev=previous(&mut conn,op,target).await?;
+ let expected=match op{"mute"=>"muted".into(),"unmute"=>"unmuted".into(),"show"=>"shown".into(),"hide"=>"hidden".into(),_=>num.to_string()};
+ if run.is_some_and(|(id,_)|rt.runs.cancelled(id)){return Err("Execução cancelada".into())}
+ let generation=uuid::Uuid::new_v4().to_string();
+ rt.obs.active.lock().unwrap().insert(key.clone(),Lock{desired,count:1,previous:prev,expected,generation:generation.clone(),profile:p.clone(),config,pinned:conn.pinned.clone(),op:op.into(),target:target.into(),gate:gate.clone()});
+ // Drop também agenda recuperação se a tarefa for interrompida aguardando o OBS.
+ let mut release=Release{rt:rt.clone(),key,generation,seconds:0,gate};
+ let done=apply(&mut conn,op,target,num).await?;release.seconds=secs;drop(release);
+ close(conn).await;Ok(format!("{done} por {secs}s"))
 }
 /// Descoberta para os dropdowns: cenas, entradas de áudio e fontes da cena atual.
 pub async fn discover(rt: &Arc<Runtime>, p: &Profile) -> Result<Value, String> {
@@ -426,6 +466,126 @@ pub async fn operation(rt: &Arc<Runtime>, p: &str, op: &str, args: &Value) -> Re
 #[cfg(test)]
 mod tests {
  use super::*;
+
+ #[derive(Default)]
+ struct MockState {muted:bool,volume:f64,scene:String,a:bool,b:bool,sets:usize,drop_next_set:bool,reject_restore:bool,missing_state:bool}
+ struct MockObs {state:Arc<Mutex<MockState>>,port:u16,task:tokio::task::JoinHandle<()>}
+ impl Drop for MockObs{fn drop(&mut self){self.task.abort()}}
+ async fn mock_obs()->MockObs {
+  let tcp=tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();let port=tcp.local_addr().unwrap().port();
+  let state=Arc::new(Mutex::new(MockState{scene:"A".into(),a:true,b:true,..Default::default()}));let st=state.clone();
+  let task=tokio::spawn(async move{while let Ok((stream,_))=tcp.accept().await{let st=st.clone();tokio::spawn(async move{
+   let Ok(mut ws)=tokio_tungstenite::accept_async(stream).await else{return};
+   if ws.send(tokio_tungstenite::tungstenite::Message::Text(json!({"op":0,"d":{"rpcVersion":1}}).to_string().into())).await.is_err(){return}
+   while let Some(Ok(message))=ws.next().await {
+    let Ok(text)=message.to_text() else{continue};let Ok(v)=serde_json::from_str::<Value>(text) else{continue};
+    if v["op"]==1 {if ws.send(tokio_tungstenite::tungstenite::Message::Text(json!({"op":2,"d":{"negotiatedRpcVersion":1}}).to_string().into())).await.is_err(){break}continue}
+    let d=&v["d"];let kind=d["requestType"].as_str().unwrap_or("");let args=&d["requestData"];
+    let (data,ok,drop_connection)={let mut state=st.lock().unwrap();let mut ok=true;let mut drop_connection=false;
+     let data=match kind {
+      "GetInputMute"=>if state.missing_state{json!({})}else{json!({"inputMuted":state.muted})},"GetInputVolume"=>json!({"inputVolumeDb":state.volume}),
+      "SetInputMute"=>{if state.reject_restore&&args["inputMuted"]==false{ok=false}else{state.muted=args["inputMuted"]==true;state.sets+=1;drop_connection=state.drop_next_set;state.drop_next_set=false;}json!({})},
+      "SetInputVolume"=>{state.volume=args["inputVolumeDb"].as_f64().unwrap_or(0.0);state.sets+=1;json!({})},
+      "GetSceneList"=>json!({"currentProgramSceneName":state.scene}),
+      "GetSceneItemList"=>json!({"sceneItems":[{"sourceName":"Cam","sceneItemId":if args["sceneName"]=="A"{1}else{2}}]}),
+      "GetSceneItemEnabled"=>json!({"sceneItemEnabled":if args["sceneName"]=="A"{state.a}else{state.b}}),
+      "SetSceneItemEnabled"=>{if args["sceneName"]=="A"{state.a=args["sceneItemEnabled"]==true}else{state.b=args["sceneItemEnabled"]==true}state.sets+=1;json!({})},
+      "SetCurrentProgramScene"=>{state.scene=args["sceneName"].as_str().unwrap().into();json!({})},
+      _=>{ok=false;json!({})}
+     };(data,ok,drop_connection)};
+    if drop_connection{break}
+    let response=json!({"op":7,"d":{"requestId":d["requestId"],"requestStatus":{"result":ok,"comment":"Recusado no simulador"},"responseData":data}});
+    if ws.send(tokio_tungstenite::tungstenite::Message::Text(response.to_string().into())).await.is_err(){break}
+   }
+  });}});MockObs{state,port,task}
+ }
+ fn test_profile(rt:&Arc<Runtime>,port:u16)->Profile {
+  let p:Profile=serde_json::from_value(json!({"id":uuid::Uuid::new_v4().to_string(),"name":"QA OBS","platform":"twitch","channel":"qa"})).unwrap();rt.db.save_profile(&p).unwrap();
+  rt.db.set_module(&p.id,MODULE,&json!({"enabled":true,"host":"127.0.0.1","port":port})).unwrap();p
+ }
+ async fn expire(rt:&Arc<Runtime>){let (key,lock)=rt.obs.active.lock().unwrap().iter().next().map(|(k,v)|(k.clone(),v.clone())).unwrap();release_temporary(rt.clone(),key,lock.generation,lock.gate).await;}
+ #[tokio::test]
+ async fn shared_temporary_origin_is_preserved_across_profiles_and_conflicts_are_refused(){
+  let server=mock_obs().await;let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();let p=test_profile(&rt,server.port);let q=test_profile(&rt,server.port);
+  execute_action(&rt,&p,"mute","Mic",0.0,60).await.unwrap();execute_action(&rt,&q,"mute","Mic",0.0,60).await.unwrap();
+  assert_eq!(server.state.lock().unwrap().sets,1,"efeito igual não relê nem reaplica a origem");
+  assert!(execute_action(&rt,&q,"unmute","Mic",0.0,60).await.unwrap_err().contains("ocupado"));
+  assert!(execute_action(&rt,&q,"unmute","Mic",0.0,0).await.unwrap_err().contains("ocupado"));
+  expire(&rt).await;assert!(server.state.lock().unwrap().muted);expire(&rt).await;
+  assert!(!server.state.lock().unwrap().muted);assert!(rt.obs.active.lock().unwrap().is_empty());
+ }
+ #[tokio::test]
+ async fn concurrent_effects_restore_once_after_the_last_real_timer(){
+  let server=mock_obs().await;let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();let p=test_profile(&rt,server.port);let q=test_profile(&rt,server.port);
+  let (a,b)=tokio::join!(execute_action(&rt,&p,"mute","Mic",0.0,1),execute_action(&rt,&q,"mute","Mic",0.0,2));a.unwrap();b.unwrap();
+  assert_eq!(server.state.lock().unwrap().sets,1);
+  tokio::time::timeout(Duration::from_secs(4),async{loop{if rt.obs.active.lock().unwrap().is_empty(){break}tokio::time::sleep(Duration::from_millis(10)).await}}).await.unwrap();
+  assert!(!server.state.lock().unwrap().muted);assert_eq!(server.state.lock().unwrap().sets,2);
+ }
+ #[tokio::test]
+ async fn restore_keeps_original_scene_and_respects_manual_changes(){
+  let server=mock_obs().await;let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();let p=test_profile(&rt,server.port);
+  execute_action(&rt,&p,"hide","Cam",0.0,60).await.unwrap();server.state.lock().unwrap().scene="B".into();
+  expire(&rt).await;let state=server.state.lock().unwrap();assert!(state.a&&state.b);drop(state);
+  execute_action(&rt,&p,"volume","Mic",-10.0,60).await.unwrap();server.state.lock().unwrap().volume=-5.0;
+  expire(&rt).await;assert_eq!(server.state.lock().unwrap().volume,-5.0);assert!(rt.obs.active.lock().unwrap().is_empty());
+ }
+ #[tokio::test]
+ async fn old_timer_never_releases_a_new_generation_and_config_change_keeps_the_original_obs(){
+  let server=mock_obs().await;let other=mock_obs().await;let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();let p=test_profile(&rt,server.port);
+  execute_action(&rt,&p,"mute","Mic",0.0,60).await.unwrap();
+  let (key,old)=rt.obs.active.lock().unwrap().iter().next().map(|(k,v)|(k.clone(),v.clone())).unwrap();
+  server.state.lock().unwrap().muted=false;
+  assert!(execute_action(&rt,&p,"mute","Mic",0.0,60).await.unwrap_err().contains("alterado"));
+  execute_action(&rt,&p,"mute","Mic",0.0,60).await.unwrap();release_temporary(rt.clone(),key,old.generation,old.gate).await;assert!(server.state.lock().unwrap().muted);
+  rt.db.set_module(&p.id,MODULE,&json!({"enabled":true,"host":"127.0.0.1","port":other.port})).unwrap();
+  expire(&rt).await;assert!(!server.state.lock().unwrap().muted);assert_eq!(other.state.lock().unwrap().sets,0);
+ }
+ #[tokio::test]
+ async fn failed_restore_blocks_the_resource_until_manually_recovered(){
+  let server=mock_obs().await;let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();let p=test_profile(&rt,server.port);
+  execute_action(&rt,&p,"mute","Mic",0.0,60).await.unwrap();server.state.lock().unwrap().reject_restore=true;expire(&rt).await;
+  assert!(execute_action(&rt,&p,"mute","Mic",0.0,60).await.unwrap_err().contains("pendente"));
+  assert!(server.state.lock().unwrap().muted);server.state.lock().unwrap().muted=false;server.state.lock().unwrap().reject_restore=false;
+  execute_action(&rt,&p,"mute","Mic",0.0,60).await.unwrap();expire(&rt).await;assert!(!server.state.lock().unwrap().muted);
+ }
+ #[tokio::test]
+ async fn missing_previous_state_never_applies_a_temporary_effect(){
+  let server=mock_obs().await;let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();let p=test_profile(&rt,server.port);server.state.lock().unwrap().missing_state=true;
+  assert!(execute_action(&rt,&p,"mute","Mic",0.0,60).await.unwrap_err().contains("estado de mudo"));assert_eq!(server.state.lock().unwrap().sets,0);assert!(rt.obs.active.lock().unwrap().is_empty());
+ }
+ #[tokio::test]
+ async fn lost_ack_restores_the_state_instead_of_losing_the_origin(){
+  let server=mock_obs().await;let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();let p=test_profile(&rt,server.port);
+  server.state.lock().unwrap().drop_next_set=true;assert!(execute_action(&rt,&p,"mute","Mic",0.0,60).await.is_err());
+  tokio::time::timeout(Duration::from_secs(3),async{while !rt.obs.active.lock().unwrap().is_empty(){tokio::time::sleep(Duration::from_millis(10)).await}}).await.unwrap();
+  assert!(!server.state.lock().unwrap().muted);assert_eq!(server.state.lock().unwrap().sets,2);
+ }
+ #[tokio::test]
+ async fn queue_is_bounded_and_waiting_can_timeout_or_cancel_without_sending(){
+  let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();let p=test_profile(&rt,1);let gate=rt.obs.gate("queue");
+  let hold=gate.serial.clone().lock_owned().await;let full=gate.slots.clone().acquire_many_owned(9).await.unwrap();
+  assert!(admit(&gate,&rt,None).await.err().unwrap().contains("cheia"));drop(full);
+  assert!(admit_with_timeout(&gate,&rt,None,Duration::from_millis(10)).await.err().unwrap().contains("10 segundos"));
+  let run=rt.runs.start(&p.id,"f","Esperando",&[],true);rt.runs.cancel(&p.id,&run);
+  assert_eq!(admit(&gate,&rt,Some(&run)).await.err().unwrap(),"Execução cancelada");
+  assert_eq!(gate.slots.available_permits(),9);drop(hold);let _admitted=admit(&gate,&rt,None).await.unwrap();
+  assert_eq!(rt.obs.gates.lock().unwrap().len(),1);
+ }
+ #[tokio::test]
+ async fn cancelled_flow_never_applies_obs_after_waiting(){
+  let server=mock_obs().await;let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();let p=test_profile(&rt,server.port);
+  let gate=rt.obs.gate(&endpoint(&config(&rt,&p.id)));let hold=gate.serial.clone().lock_owned().await;
+  let run=rt.runs.start(&p.id,"f","Fila",&["obs".into()],true);let (rt2,p2,run2)=(rt.clone(),p.clone(),run.clone());
+  let task=tokio::spawn(async move{execute_for_run(&rt2,&p2,"mute","Mic",0.0,0,&run2,0).await});
+  tokio::time::timeout(Duration::from_secs(2),async{while rt.runs.get(&run).unwrap().steps[0].status!="WAITING"{tokio::time::sleep(Duration::from_millis(5)).await}}).await.unwrap();
+  rt.runs.cancel(&p.id,&run);drop(hold);assert_eq!(task.await.unwrap().unwrap_err(),"Execução cancelada");assert_eq!(server.state.lock().unwrap().sets,0);
+ }
+ #[test]
+ fn endpoint_aliases_and_volume_comparison_are_stable(){
+  let a=Config{host:"localhost".into(),port:4455,enabled:true};let b=Config{host:"127.0.0.1".into(),..a.clone()};assert_eq!(endpoint(&a),endpoint(&b));
+  assert!(same_state("-10.00001","-10","volume"));assert!(!same_state("-5","-10","volume"));
+ }
  #[test]
  fn auth_matches_the_official_vector_shape() {
   let a = auth_string("supersecretpassword", "saltsalt1234", "challenge5678");

@@ -374,6 +374,9 @@ fn set_outcome(rt: &Runtime, outcome: Outcome, log: &str) {
  }
 }
 
+pub fn health(rt:&Runtime)->Value {
+ let state=rt.voicemod.state.lock().unwrap();json!({"phase":state.status.phase,"restorePending":state.pending.is_some(),"testActive":state.test.is_some()})
+}
 fn snapshot_json(rt: &Runtime) -> Value {
  let (s, t, o) = rt.voicemod.snapshot();
  json!({

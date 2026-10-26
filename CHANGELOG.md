@@ -1,5 +1,47 @@
 # Histórico de atualizações
 
+# BotLive 0.20.16
+
+## O que mudou
+
+- Navegação por finalidade, busca por tarefas e roteiro por objetivos preservando as telas existentes.
+- Formulários com opções secundárias recolhidas, erros persistentes e regras de salvamento visíveis. Regras de voz usam rascunho e Salvar trocas de voz, com confirmação ao sair sem salvar.
+- Receitas prontas substitui Comandos prontos e o botão separado de Resenha com IA. Doze opções reutilizam editores e painéis atuais; configurações equivalentes são abertas para edição e novas receitas começam desativadas.
+- Histórico reúne execuções estruturadas e Eventos gerais. Tempos e contexto mínimo vêm do núcleo; cancelamento aguarda confirmação e respeita o perfil. Até 30 finalizações por perfil e execuções ativas são preservadas no banco; registros sem confirmação final viram Interrompida, sem replay.
+- O serviço OBS substitui as travas antigas por admissão limitada ao destino, origem única dos temporários entre perfis, proteção contra conflitos e temporizadores antigos e restauração confirmada na cena original. Estado anterior ausente não é presumido. Perda de confirmação preserva a origem; falha na restauração exige conferência manual.
+- Etapas individuais reutilizáveis ficam no mesmo inspetor. Atualizar um original vale para referências do perfil nos próximos disparos; a preparação congela o conteúdo antes dos efeitos. Presets exportados incluem cópias independentes, e a biblioteca acompanha o backup do perfil.
+- Central da live substitui o cartão repetido Comece por aqui após criar perfil, mostrando canal, áudio, Voicemod, fila, OBS e execuções com última leitura e atalhos às telas atuais. Consultar não conecta nem repete serviços.
+
+## Como usar
+
+Na Visão geral, escolha um objetivo ou use Ctrl+K para buscar uma tarefa. Em Comandos, abra Receitas prontas e configure pelo editor apresentado. Nas regras de voz, revise o rascunho e use Salvar trocas de voz.
+
+Em Histórico, escolha Execuções, filtre e selecione um registro para ver etapas, duração e origem. Cancelar execução solicita parada cooperativa; efeitos concluídos não são desfeitos. Interrompida indica ausência de confirmação final após encerrar o app, sem retomada automática. Eventos gerais preserva a busca dos registros anteriores.
+
+No editor de automações, configure uma etapa e use Guardar etapa reutilizável → Salvar e vincular etapa; depois salve o fluxo. Em outro fluxo, escolha Etapa reutilizável e o original. Para editar o original, carregue uma cópia no inspetor, ajuste e guarde escolhendo Atualizar. Excluir é recusado enquanto houver referências em fluxos salvos.
+
+Na Central da live, confira o instante da leitura e use os atalhos para corrigir o serviço na tela existente. Para restauração não confirmada do OBS, confira o alvo e o estado anterior no Histórico e devolva esse estado manualmente antes de pedir outro efeito.
+
+## Validação
+
+177 testes frontend e 412 testes Rust da v0.20.16 aprovados; dois testes Rust ignorados. Nove testes de atualização e manifesto aprovados; a primeira tentativa do teste de Git temporário foi bloqueada pelo sandbox e passou com as permissões adequadas.
+
+A suíte completa de navegador executou 120 cenários: 119 aprovados e um achado de desalinhamento dos cartões da Visão geral na auditoria visual. O CSS foi corrigido e a repetição dirigida em npm run dev aprovou os quatro cenários de auditoria e novas jornadas. Não se declara uma segunda execução local completa sem falhas. Capturas de 1100 e 1600 px inspecionadas. Build de produção com verificação de tipos executado pela suíte; manual de 30 capítulos gerado; update:check e diff --check aprovados.
+
+Os testes de serviços usam servidores locais simulados e dados temporários, sem ações públicas. A assinatura Windows e a publicação são verificadas pelo workflow antes de disponibilizar a release. A configuração Tauri foi comparada com a anterior: somente a versão mudou, preservando a configuração de assinatura e atualização. Nenhuma chave privada foi lida ou alterada.
+
+## Limitações
+
+O teste acústico prolongado foi adiado pelo usuário após não perceber mais atraso no teste isolado; isso não certifica áudio de estúdio, ausência de estalos sob carga ou resgates consecutivos reais. A Central informa estados conhecidos e não comprova emissão de áudio.
+
+Etapas reutilizáveis são individuais, até 64 por perfil, sem grupos, aninhamento ou parâmetros próprios; usam variáveis e condições do fluxo. Atualizações simultâneas do original seguem a última gravação. Campos de exemplo do teste rápido continuam baseados no fluxo aberto, podendo não listar variáveis citadas somente dentro do original.
+
+O histórico detalhado é diagnóstico local limitado e não entra no pacote .botlivebak; Eventos gerais e a biblioteca de etapas continuam no backup. Um fechamento com falha de disco pode perder o último estado não gravado. Não há replay de efeitos externos. Cancelamento é cooperativo.
+
+A fila limitada desta etapa é do OBS, com até oito aguardando por até dez segundos. Travas e temporários do OBS não retomam após reiniciar; confira o OBS se encerrar o app com efeito ativo. Restauração pendente é manual. Aliases DNS arbitrários e substituição de coleções de cenas não são reconciliados. Persistem avisos de build sobre chunk grande e uma atribuição não utilizada já existente em twitch_ops.rs.
+
+---
+
 # BotLive 0.20.15
 
 ## O que mudou

@@ -79,7 +79,7 @@ test('escuta contínua abre o microfone, manda lotes de áudio e desliga quando 
 });
 
 /** Mock desktop da tela Voicemod: conexão, vozes reais e regras. */
-async function mockVoicemod(page:Page,opts:{legacy?:boolean;rules?:unknown[];pendingTest?:boolean}={}){
+async function mockVoicemod(page:Page,opts:{legacy?:boolean;rules?:unknown[];pendingTest?:boolean;saveFailures?:number}={}){
  await page.addInitScript((p)=>{
   Object.assign(window,{isTauri:true,__TAURI_EVENT_PLUGIN_INTERNALS__:{registerListener:()=>{},unregisterListener:()=>{}},
    __TAURI_INTERNALS__:{transformCallback:()=>1,unregisterCallback:()=>{},invoke:async(cmd:string,payload:{op:string;args?:Record<string,unknown>})=>{
@@ -90,15 +90,15 @@ async function mockVoicemod(page:Page,opts:{legacy?:boolean;rules?:unknown[];pen
     if(op==='command.counters')return {};
     if(op==='settings.get')return {theme:'dark',apiPort:9876,apiToken:'',updateEndpoint:'',updatePublicKey:'',autoUpdate:false};
     if(op==='voicemod.get')return {status:{phase:'connected',message:'Conectado nesta máquina',port:59129,voices:[{voiceID:'robot',name:'Robô'},{voiceID:'alien',name:'Alien'}],currentVoice:'nofx',currentName:'Efeito desligado',voiceChanger:true,hearMyself:false,license:'Pro',attempts:1},test:{active:false,phase:'',voiceId:'',voiceName:'',seconds:10,remainingMs:0,interrupted:false,manual:false},outcome:p.pendingTest?{kind:'unconfirmed',detail:'Restauração do teste não confirmada'}:{kind:'',detail:''},defaultSecs:10,minSecs:5,maxSecs:60,hasKey:true,keyLen:24};
-    if(op==='voiceResgate.get')return {queue:{active:null,upcoming:[],last:'',lastKind:'',pendingRestore:false,busy:false},config:{enabled:true,queueLimit:3,bindings:p.rules,legacyMap:{},obsChecked:false}};
+    if(op==='voiceResgate.get')return {queue:{active:null,upcoming:[],last:'',lastKind:'',pendingRestore:false,busy:false},config:{enabled:true,queueLimit:Number(sessionStorage.getItem('currentQueueLimit')||3),bindings:p.rules,legacyMap:{},obsChecked:false}};
     if(op==='twitch.rewards')return {channel:'cactus',rewards:[{id:'r1',title:'Voz de robô',cost:100,enabled:true},{id:'r2',title:'Voz alienígena',cost:200,enabled:true}]};
     if(op==='voiceFx.get')return {phase:p.legacy?'running':'off',message:'',input:'',output:'',gate_db:-45};
     if(op==='voiceFx.selection')return p.legacy?{input:'Microfone (Realtek)',output:'CABLE Input (VB-Audio Virtual Cable)',gateDb:-45,mode:'internal'}:{gateDb:-45};
     if(op==='voicemod.recover'||op==='voiceResgate.recover'){sessionStorage.setItem('recoveryOp',op);return null}
-    if(op==='voiceResgate.save'){sessionStorage.setItem('rulesSaved',JSON.stringify(args.config));return null}
+    if(op==='voiceResgate.save'){const count=Number(sessionStorage.getItem('ruleSaveAttempts')||0)+1;sessionStorage.setItem('ruleSaveAttempts',String(count));if(count<=p.saveFailures)throw Error('Falha ao salvar regras de voz');sessionStorage.setItem('rulesSaved',JSON.stringify(args.config));return {config:args.config}}
     return null;
    }}});
- },{profile,rules:opts.rules??[{kind:'reward',rewardId:'r1',rewardName:'Voz de robô',command:'',permission:'moderator',enabled:true,voiceId:'robot',voiceName:'Robô',durationSec:30,cooldownSec:0,concurrency:'queue'}],legacy:!!opts.legacy,pendingTest:!!opts.pendingTest});
+ },{profile,rules:opts.rules??[{kind:'reward',rewardId:'r1',rewardName:'Voz de robô',command:'',permission:'moderator',enabled:true,voiceId:'robot',voiceName:'Robô',durationSec:30,cooldownSec:0,concurrency:'queue'}],legacy:!!opts.legacy,pendingTest:!!opts.pendingTest,saveFailures:opts.saveFailures||0});
 }
 
 test('tela Voicemod tem as três etapas, um caminho só e nada de VB-Cable no caminho principal',async({page})=>{
@@ -215,4 +215,52 @@ test('preparação de áudio orienta a comparar efeitos e não estoura a tela',a
 
   await page.screenshot({path:join(OUT,`qa-audio-${width}.png`),fullPage:true});
  }
+});
+
+
+test('regra de voz permite digitar sem salvar a cada tecla e preserva rascunho após falha',async({page})=>{
+ await mockVoicemod(page,{saveFailures:1});
+ await page.goto('/');
+ await page.locator('.sidebar').getByRole('button',{name:'Voicemod',exact:true}).click();
+ await page.getByRole('button',{name:/Etapa 3 · Escolher/}).click();
+ const card=page.locator('.voice-rules section.card').first();
+ await card.getByLabel('Acionamento da troca de voz').selectOption('command');
+ const command=card.getByRole('textbox',{name:'Comando do chat',exact:true});
+ await command.fill('');
+ await command.pressSequentially('!robocompleto');
+ await expect(command).toHaveValue('!robocompleto');
+ expect(await page.evaluate(()=>sessionStorage.getItem('ruleSaveAttempts'))).toBeNull();
+ await expect(page.locator('.voice-rules').getByRole('status')).toHaveText('Alterações não salvas');
+ await page.getByRole('button',{name:'Salvar trocas de voz',exact:true}).click();
+ await expect(page.getByRole('alert').filter({hasText:'Falha ao salvar regras de voz'})).toBeVisible();
+ await expect(command).toHaveValue('!robocompleto');
+ await page.evaluate(()=>sessionStorage.setItem('currentQueueLimit','7'));
+ await page.getByRole('button',{name:'Salvar trocas de voz',exact:true}).dblclick();
+ await expect(page.locator('.voice-rules').getByRole('status')).toHaveText('Regras salvas');
+ const saved=JSON.parse(await page.evaluate(()=>sessionStorage.getItem('rulesSaved')||'{}'));
+ expect(saved.bindings[0].command).toBe('!robocompleto');
+ expect(saved.queueLimit).toBe(7);
+ expect(await page.evaluate(()=>sessionStorage.getItem('ruleSaveAttempts'))).toBe('2');
+ if(await page.getByRole('button',{name:'Fechar aviso',exact:true}).isVisible())await page.getByRole('button',{name:'Fechar aviso',exact:true}).click();
+ for(const width of [1100,1600]){
+  await page.setViewportSize({width,height:1000});
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  await page.evaluate(()=>window.scrollTo(0,0));
+  await page.screenshot({path:join(OUT,`formulario-voz-${width}.png`),fullPage:true});
+ }
+
+});
+
+test('rascunho de voz pede descarte antes de navegar e mantém valor ao cancelar',async({page})=>{
+ await mockVoicemod(page);await page.goto('/');
+ await page.locator('.sidebar').getByRole('button',{name:'Voicemod',exact:true}).click();
+ await page.getByRole('button',{name:/Etapa 3 · Escolher/}).click();
+ await page.getByLabel('Duração do efeito em segundos').fill('42');
+ page.once('dialog',dialog=>dialog.dismiss());
+ await page.locator('.sidebar').getByRole('button',{name:'Timers',exact:true}).click();
+ await expect(page.locator('main h1')).toHaveText('Voicemod');
+ await expect(page.getByLabel('Duração do efeito em segundos')).toHaveValue('42');
+ page.once('dialog',dialog=>dialog.accept());
+ await page.locator('.sidebar').getByRole('button',{name:'Timers',exact:true}).click();
+ await expect(page.locator('main h1')).toHaveText('Timers');
 });

@@ -66,6 +66,8 @@ export async function mock(page:Page){
      switch(op){
       case 'snapshot':return {profiles:[arg.profile],logs:arg.logs,statuses:{p1:'connected'},theme:'dark',accent:'',apiPort:0,dataDir:'C:/dados'};
       case 'flows':return arg.flows;
+      case 'actionLibrary.list':return [];
+      case 'liveConsole.get':return {channel:'offline',audio:{clients:0},voice:{phase:'off',restorePending:false,testActive:false},voiceQueue:{activeName:null,waiting:0,pendingRestore:false},obs:{temporary:0,pendingRestore:0},running:0,issues:0};
       case 'command.counters':return {c:{v:12}};
       case 'module.config.get':return {};
       case 'spotify.get':return {config:{},connected:false,now:null,overlay:{token:'preview-token',port:9876,url:'http://127.0.0.1:9876/overlay#token=preview-token&profile=p1'}};

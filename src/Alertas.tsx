@@ -10,6 +10,7 @@ import {
 import {applyCode} from './codeMode';
 import {CodeTabs} from './CodeTabs';
 import './overlay-studio.css';
+import FormWorkflow from './FormWorkflow';
 
 type Sound={id:string;name:string};
 type OverlayInfo={token:string;port:number;url:string};
@@ -47,6 +48,8 @@ export default function Alertas({profileId,notify}:{profileId:string;notify:(s:s
  // Acordeão das configurações: só "Este evento" abre por padrão (é o que se edita).
  const [openGroups,setOpenGroups]=useState({event:true,panel:false,colors:false,fonts:false,fx:false});
  const hydrated=useRef(false);
+ const [loadPhase,setLoadPhase]=useState<'loading'|'ready'|'error'>(desktop?'loading':'ready');
+ const [saveRevision,setSaveRevision]=useState(0);
  const lastSaved=useRef('');
  const frame=useRef<HTMLDivElement>(null);
  const stage=useRef<HTMLDivElement>(null);
@@ -60,6 +63,7 @@ export default function Alertas({profileId,notify}:{profileId:string;notify:(s:s
 
  const load=useCallback(async()=>{
   if(!desktop)return;
+  hydrated.current=false;setLoadPhase('loading');
   try{
    const g=await api<GetResult>('alerts.get',{profileId});
    const normalized=normalizeAlerts(g.config);
@@ -69,8 +73,8 @@ export default function Alertas({profileId,notify}:{profileId:string;notify:(s:s
    setInfo(g.overlay&&g.overlay.token?g.overlay:null);
    const b=normalizeBurst(await api<Partial<BurstCfg>>('module.config.get',{profileId,key:'emoteBurst'}));
    setBurst(b);lastBurst.current=JSON.stringify(b);
-  }catch{}
-  hydrated.current=true;
+   hydrated.current=true;setLoadPhase('ready');setSaveError('');
+  }catch(e){setSaveError(errorText(e));setLoadPhase('error')}
  },[profileId,desktop]);
  useEffect(()=>{if(desktop)void load()},[load]);
 
@@ -80,7 +84,7 @@ export default function Alertas({profileId,notify}:{profileId:string;notify:(s:s
   fit();
   const ro=new ResizeObserver(fit);ro.observe(el);
   return()=>ro.disconnect();
- },[]);
+ },[loadPhase]);
 
  // Prévia parada redesenhada quando nenhum alerta está animando — depois o
  // modo código se reencaixa por cima (o redesenho substitui os filhos).
@@ -88,7 +92,7 @@ export default function Alertas({profileId,notify}:{profileId:string;notify:(s:s
   if(animating||!stage.current)return;
   renderStatic(stage.current,cfg,sel,sampleVars(sel));
   applyCode(stage.current,cfg.code,'alerts');
- },[cfg,sel,animating]);
+ },[cfg,sel,animating,loadPhase]);
 
  // Autosave curto: o backend valida e retransmite a config ao OBS na hora.
  useEffect(()=>{
@@ -101,11 +105,11 @@ export default function Alertas({profileId,notify}:{profileId:string;notify:(s:s
    try{
     await api('module.config',{profileId,key:'alerts',value:cfg});
     lastSaved.current=key;
-    if(!cancelled)setSaveState('saved');
+    if(!cancelled){setSaveState('saved');setSaveError('')}
    }catch(e){if(!cancelled){setSaveState('error');setSaveError(errorText(e))}}
   },700);
   return()=>{cancelled=true;clearTimeout(timer)};
- },[cfg,profileId,desktop]);
+ },[cfg,profileId,desktop,saveRevision]);
 
  // A explosão de emotes salva sozinha pelo mesmo ritmo dos alertas.
  useEffect(()=>{
@@ -148,6 +152,7 @@ export default function Alertas({profileId,notify}:{profileId:string;notify:(s:s
 
  const test=async()=>{
   if(testing)return;
+  if(desktop&&JSON.stringify(cfg)!==lastSaved.current){notify('Aguarde salvar os alertas antes de testar. Se houver erro, tente salvar novamente.');return}
   setTesting(true);
   try{
    // Mesmo caminho do evento real: o evento entra pelo motor e o OBS toca
@@ -189,6 +194,7 @@ export default function Alertas({profileId,notify}:{profileId:string;notify:(s:s
  /** Endereço da camada de alertas: mesma base do overlay com mode=alerts. */
  const layerUrl=()=>info?info.url+'&mode=alerts':'';
 
+ if(desktop&&loadPhase!=='ready')return <div className="notice"><p role={loadPhase==='error'?'alert':'status'}>{loadPhase==='error'?saveError:'Carregando alertas…'}</p>{loadPhase==='error'&&<button type="button" onClick={()=>void load()}>Tentar carregar alertas novamente</button>}</div>;
  return <div>
   <Card title="Alertas da live" action={<span className={'status-pill '+(cfg.enabled?'on':'off')}><span className="status-dot" aria-hidden="true"></span>{cfg.enabled?'Ligados':'Desligados'}</span>}>
    <p className="help">Follows, subs, presentes, bits e raids viram painéis animados na sua fonte de navegador. A camada de alertas tem um <strong>endereço próprio</strong> (com <code>mode=alerts</code>): crie uma Fonte de navegador só para ela e ajuste posição e tamanho sem mexer na meta nem no chat.</p>
@@ -196,9 +202,10 @@ export default function Alertas({profileId,notify}:{profileId:string;notify:(s:s
     <div><strong>Alertas no overlay</strong><small>{cfg.enabled?'Eventos reais tocam no OBS':'Nada toca até você ligar; o teste avisa o que está desligado'}</small></div>
     <Toggle label="Ligar alertas no overlay" checked={cfg.enabled} onChange={v=>set({enabled:v})}/>
    </div>
-   {saveError&&<p role="alert" className="inline-error">{saveError}</p>}
+   {saveError&&<div><p role="alert" className="inline-error">{saveError}</p><button type="button" disabled={saveState==='saving'} onClick={()=>setSaveRevision(v=>v+1)}>Tentar salvar alertas novamente</button></div>}
   </Card>
 
+  <FormWorkflow save={desktop?"Os alertas salvam automaticamente após uma breve pausa na edição. Aguarde a indicação Salvo; se aparecer Não salvou, confira o erro.":"Prévia no navegador: os ajustes são temporários. Use o aplicativo desktop para salvar os alertas."} test="Escolha o evento e use Testar. O ensaio também pode aparecer na fonte de alertas conectada ao OBS." requirements="Alertas e evento ligados, fonte de navegador configurada no OBS e conexão da plataforma para eventos reais."/>
   <Card title="Estúdio de alertas" action={<span className={'lp-save lp-save--'+saveState}>{saveState==='saving'?'Salvando…':saveState==='saved'?'Salvo':saveState==='error'?'Não salvou':'Alterações salvam sozinhas'}</span>}>
    <p className="help">Escolha o evento, edite os textos e toque em <strong>Testar</strong>: a prévia roda a mesma animação que o OBS desenha e o teste segue o caminho do evento real. Se a chave ou o interruptor do evento estiverem desligados, ele avisa qual falta ligar — é assim que a live se comportaria.</p>
 
@@ -210,7 +217,7 @@ export default function Alertas({profileId,notify}:{profileId:string;notify:(s:s
         {ALERT_LABELS[k]}{!cfg.events[k].on&&<span className="al-pill-off" title="Desligado">•</span>}
        </button>)}
       </div>
-      <button type="button" className="lp-seg" disabled={testing} onClick={()=>void test()}><Play size={13}/> Testar {ALERT_LABELS[sel].toLowerCase()}</button>
+      <button type="button" className="lp-seg" disabled={testing||saveState==='saving'||saveState==='error'} onClick={()=>void test()}><Play size={13}/> Testar {ALERT_LABELS[sel].toLowerCase()}</button>
      </div>
 
      <div className="lp-frame" data-bg="dark" ref={frame}>

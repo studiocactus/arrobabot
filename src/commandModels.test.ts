@@ -1,3 +1,4 @@
+import {newFlow,newTimer} from './types';
 import {DONATION_PROMPT,clippersCommandIssue,clippersFlow,donationCommandIssue,donationFlow,donationLinkIssue} from './commandModels';
 import {guessFn,templateMatches} from './FunctionForm';
 
@@ -118,5 +119,13 @@ describe('adoção de comandos antigos pelo formato',()=>{
   const desviado={...antigo,actions:[...f.actions,f.actions[2]]};
   expect(guessFn(desviado)).toBeNull();
   expect(templateMatches({...desviado,fnId:'tempo-de-follow'})).toBe(false);
+ });
+});
+
+
+describe('sugestões de função sem ambiguidade',()=>{
+ it('não sugere seguidores para mensagem simples nem converte timer em comando',()=>{
+  expect(guessFn(newFlow('p1'))).toBeNull();
+  expect(guessFn(newTimer('p1'))).toBeNull();
  });
 });

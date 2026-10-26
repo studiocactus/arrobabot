@@ -12,6 +12,7 @@ test('histórico mostra a hora dos registros e nunca Invalid Date',async({page})
  await expect(page.getByText(/^\d{2}:\d{2}:\d{2}$/).first()).toBeVisible();
 
  await page.locator('.sidebar').getByRole('button',{name:'Histórico',exact:true}).click();
+ await page.getByRole('button',{name:'Eventos gerais',exact:true}).click();
  await expect(page.getByText('Fonte mutada')).toBeVisible();
  await expect(page.getByText('Invalid Date')).toHaveCount(0);
  await expect(page.getByText(/^\d{2}:\d{2}:\d{2}$/).first()).toBeVisible();

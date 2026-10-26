@@ -107,3 +107,12 @@ O contador mede usos aceitos, não mensagens entregues com sucesso. Para ter um 
 Simule o comando com um papel autorizado, leia a resposta no Histórico e confirme que o total real na lista não mudou. Depois, teste no chat com outra conta autorizada: as mensagens da própria conta do bot são ignoradas.
 
 Para o timer, comece com 0,5 minuto em um canal de teste, confira uma publicação e pause. Depois ajuste para o intervalo da live. A simulação não comprova autorização ou entrega na plataforma.
+
+
+## Formulário essencial e opções
+
+O formulário de timer mantém nome, resposta e intervalo visíveis. **Avançado do timer** reúne envio, som, categoria, prioridade, respostas alternadas e regras inteligentes. Recolher a seção não apaga valores.
+
+Comandos personalizados reúnem envio, som e contagem em **Opções de envio, som e contagem**. Permissões continuam visíveis no formulário. **Salvar comando** e **Salvar timer** aplicam as alterações; testar usa os valores em edição sem salvar. Erros de gravação aparecem no formulário e preservam os campos para nova tentativa. Durante a gravação, um segundo clique não cria outro pedido simultâneo.
+
+A indicação de alterações pendentes se refere ao formulário simples; ela não certifica execução na live. O editor visual continua disponível para personalização.

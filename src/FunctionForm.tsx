@@ -22,11 +22,12 @@ export const FN_LABELS:Record<string,string>={'tempo-de-follow':'Tempo de follow
  *  nome e textos nunca decidem. Serve para adotar comandos antigos no
  *  formulário certo, com confirmação da pessoa. */
 export function guessFn(flow:Flow):string|null{
+ if(flow.trigger.kind!=='command'||flow.fnId)return null;
  const kinds=flow.actions.map(a=>a.kind);
- for(const [fn,formats] of Object.entries(FORMATS)){
-  if(!flow.fnId&&formats.some(f=>f.length===kinds.length&&f.every((k,i)=>k===kinds[i])))return fn;
- }
- return null;
+ const matches=Object.entries(FORMATS).filter(([,formats])=>formats.some(f=>f.length===kinds.length&&f.every((k,i)=>k===kinds[i])));
+ // Uma mensagem simples serve a várias funções. Não sugira uma conversão
+ // arbitrária; timers e formatos ambíguos continuam em seus próprios editores.
+ return matches.length===1?matches[0][0]:null;
 }
 
 export function templateMatches(flow:Flow):boolean{

@@ -115,6 +115,7 @@ pub fn check(rt: &Runtime, p: &Profile) -> Value {
     let module = |key: &str| p.modules[key] == Value::Bool(true);
     let mut gaps: [Option<String>; 5] = Default::default();
     for f in rt.db.flows(&p.id).unwrap_or_default().iter().filter(|f| f.enabled) {
+        let f=match crate::action_library::resolve(&rt.db,f){Ok(f)=>f,Err(error)=>{items.push(item(format!("A automação {} tem uma etapa reutilizável inválida: {error}",f.name),"flows"));continue}};
         if file_gone(rt, &p.id, &f.audio, "sound") {
             items.push(item(
                 format!("O áudio de “{}” foi apagado de Sons de Live.", f.name),

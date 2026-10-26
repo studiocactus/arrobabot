@@ -300,3 +300,25 @@ test('explosão de emotes: interruptores por evento, origem, teste e persistênc
  await expect(page.getByRole('combobox',{name:'Emotes usados',exact:true})).toHaveValue('top');
  await expect(page.getByLabel('Quantidade',{exact:true})).toHaveValue('60');
 });
+
+
+test('falha do autosave mantém a edição e permite tentar salvar novamente antes de testar',async({page})=>{
+ await setup(page);
+ await page.evaluate(()=>{
+  const w=window as unknown as {__TAURI_INTERNALS__:{invoke:(cmd:string,payload:{op:string;args?:Record<string,unknown>})=>Promise<unknown>}};
+  const original=w.__TAURI_INTERNALS__.invoke;
+  let fail=true;
+  w.__TAURI_INTERNALS__.invoke=async(cmd,payload)=>{
+   if(payload?.op==='module.config'&&payload.args?.key==='alerts'&&fail){fail=false;throw Error('Falha controlada ao salvar alerta')}
+   return original(cmd,payload);
+  };
+ });
+ await page.getByLabel('Linha grande',{exact:true}).fill('ALERTA EDITADO');
+ await expect(page.getByRole('alert').filter({hasText:'Falha controlada ao salvar alerta'})).toBeVisible();
+ await expect(page.getByLabel('Linha grande',{exact:true})).toHaveValue('ALERTA EDITADO');
+ await expect(page.getByRole('button',{name:/Testar seguidor/})).toBeDisabled();
+ await page.getByRole('button',{name:'Tentar salvar alertas novamente',exact:true}).click();
+ await expect.poll(async()=>(await saved(page))?.value?.events?.follow?.big).toBe('ALERTA EDITADO');
+ await expect(page.getByRole('alert').filter({hasText:'Falha controlada ao salvar alerta'})).toHaveCount(0);
+ await expect(page.getByRole('button',{name:/Testar seguidor/})).toBeEnabled();
+});

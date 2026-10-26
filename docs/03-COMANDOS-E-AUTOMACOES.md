@@ -22,7 +22,7 @@ A imagem mostra a interface de teste. Nomes e conteúdos são exemplos.
 
 ## Comando simples
 
-Para responder ao assunto da conversa com humor, use **Resenha com IA**. Escolha um trecho da mensagem e o tom; o aplicativo monta a geração contextual e o envio em sequência. Edite o fluxo depois para mudar os intervalos ou reutilizar a resposta em voz e overlay. A receita completa e o teste sem publicação estão no [capítulo de IA e memória](04-IA-E-MEMORIA.md).
+Para responder ao assunto da conversa com humor, use **Receitas prontas → Resenha com IA → Configurar receita**. Escolha um trecho da mensagem e o tom; o aplicativo monta a geração contextual e o envio em sequência. Edite o fluxo depois para mudar os intervalos ou reutilizar a resposta em voz e overlay. A receita completa e o teste sem publicação estão no [capítulo de IA e memória](04-IA-E-MEMORIA.md).
 
 Abra **Comandos** e clique em **Novo comando**. Preencha nome, comando, resposta, permissão e intervalos. Salve e confira se está ativo.
 
@@ -239,3 +239,27 @@ Os comandos prontos de Comunidade são processados antes dos fluxos. Evite criar
 ## Variáveis avançadas
 
 Além dos marcadores tradicionais, o editor oferece catálogo, prévia e as ações Definir variável, Incrementar variável e Apagar variável. Consulte [Variáveis do BotLive](VARIAVEIS.md) para parâmetros de comando, dados do evento, persistência por perfil/pessoa e exemplos completos.
+
+
+## Concorrência das ações do OBS
+
+Comandos, automações e testes manuais usam o mesmo serviço do OBS. Pedidos ao mesmo endereço/porta são enviados um de cada vez; até oito podem aguardar, por no máximo dez segundos. Fila cheia ou espera vencida retorna erro sem enviar aquele pedido. Uma execução de fluxo aparece Em espera durante a admissão e volta a Executando ao ser atendida. Cancelar enquanto aguarda impede o envio; depois de enviado, o efeito externo pode já ter ocorrido.
+
+Efeitos temporários iguais no mesmo recurso compartilham a primeira origem e não reaplicam a mudança; a restauração ocorre depois que o último período terminar. Pedidos conflitantes, inclusive imediatos, são recusados enquanto houver um temporário no recurso. Dois perfis apontando para o mesmo OBS compartilham essa proteção. Use o mesmo endereço nos perfis: localhost e 127.0.0.1 são reconhecidos como o mesmo destino; aliases DNS arbitrários não são reconciliados.
+
+Uma fonte temporária é restaurada na cena e no item identificados quando começou, mesmo que a cena de programa mude depois. Antes de restaurar, o BotLive confere o estado atual: se ele mudou fora do efeito, preserva a alteração e registra o motivo. O estado restaurado é lido novamente para confirmar. Mudanças manuais que terminem exatamente no mesmo valor do efeito não são distinguíveis somente por essa conferência.
+
+Se a confirmação do pedido se perder, o BotLive conserva a origem e tenta restaurar após liberar o pedido em andamento. Falha de restauração fica no Histórico como **Restauração não confirmada**, com o estado anterior; não é anunciada como sucesso. O recurso fica bloqueado para novos efeitos até você conferir e devolver esse estado manualmente no OBS. Ao tentar novamente, o BotLive verifica o estado antes de liberar. Não há botão de recuperação automática nesta etapa.
+
+Limites: os prazos dos temporários não incluem o tempo de rede necessário à confirmação da restauração; ela pode terminar depois. As travas e os temporizadores são desta sessão e não retomam ao reiniciar o aplicativo. Após encerrar o BotLive com um efeito ativo, confira o OBS manualmente. Não troque a coleção de cenas, remova ou renomeie os alvos durante um temporário; a identificação preserva cena/item/nome, não reconcilia coleções substituídas. Ações reutilizáveis e políticas configuráveis de filas gerais ainda não fazem parte desta entrega.
+
+
+## Etapas reutilizáveis
+
+No editor de automações, configure uma etapa normal e use **Guardar etapa reutilizável**. Dê um nome e confirme **Salvar e vincular etapa**. O original é guardado na biblioteca do perfil e o bloco passa a referenciá-lo; salve o fluxo para guardar esse vínculo. Para usar em outro fluxo, adicione um bloco e escolha **Etapa reutilizável → Etapa da biblioteca**.
+
+Para atualizar um original, escolha **Editar uma cópia no inspetor**, faça os ajustes nos campos habituais e use Guardar etapa reutilizável → Guardar como → Atualizar o original desejado. O aviso explica que todas as referências desse perfil usarão a nova configuração nos próximos disparos. A execução em andamento usa o retrato preparado quando começou. Você também pode manter a cópia como etapa independente ao salvar o fluxo sem voltar a vinculá-la.
+
+A biblioteca guarda até 64 etapas individuais por perfil. Referências não chamam outras referências: não há aninhamento nem ciclos. Variáveis locais, mensagem, pessoa e condições usam o contexto do fluxo que chamou a etapa. Configure a condição no original; a referência só escolhe o original e sua ativação. Se um vínculo ativo não existir, o fluxo falha na preparação, antes de sons, contadores ou ações. Uma referência desativada é pulada.
+
+Excluir um original exige confirmação e é recusado enquanto fluxos salvos ainda o usarem. Os backups do perfil incluem a biblioteca, pelo estado dos módulos. Ao exportar um preset, o BotLive materializa as referências em cópias independentes, preservando os blocos e posições: o arquivo não depende de uma biblioteca de outro perfil. Esta versão não oferece grupos de etapas nem parâmetros próprios; o contrato de valores continua sendo o contexto e as variáveis do fluxo.

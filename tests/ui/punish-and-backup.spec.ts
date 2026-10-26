@@ -76,10 +76,10 @@ test('resposta com variável local sem origem avisa no editor e some com texto a
  const dialog=page.getByRole('dialog');
  const resposta=dialog.getByRole('textbox',{name:'Resposta',exact:true});
  await resposta.fill('A IA disse {{local.aiResponse}}.');
- await expect(dialog.getByRole('status')).toContainText('local.aiResponse');
- await expect(dialog.getByRole('status')).toContainText('Variável ausente');
+ await expect(dialog.getByRole('status').filter({hasText:'Variável ausente'})).toContainText('local.aiResponse');
+ await expect(dialog.getByRole('status').filter({hasText:'Variável ausente'})).toBeVisible();
  await resposta.fill('A IA disse {{local.aiResponse|default:0}}.');
- await expect(dialog.getByRole('status')).toHaveCount(0);
+ await expect(dialog.getByRole('status').filter({hasText:'Variável ausente'})).toHaveCount(0);
  await page.getByRole('dialog').getByRole('button',{name:'Fechar',exact:true}).click();
  expect(errors).toEqual([]);
 });

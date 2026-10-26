@@ -41,7 +41,7 @@ Problemas encontrados: campos essenciais da etapa de variável fora da área vis
 
 Em **Comandos**:
 
-- **Comandos prontos** — escolher a função, conferir nome e resposta, **Salvar e ativar**. Nasce pronto e ativado, sem abrir o editor de automações nem criar variáveis.
+- **Receitas prontas** — substitui a criação antiga de Comandos prontos e reúne Resenha com IA. Escolha o resultado, confira os requisitos e abra o editor da própria função. Configurações novas começam desativadas; as equivalentes já existentes são abertas para edição, preservando os ajustes.
 - **Criar comando personalizado** — o editor simples (nome, comando+alias, resposta, permissão, intervalos, áudio, contador) com **Testar fluxo** (resultado visível) e **Abrir no editor visual** quando precisar de mais.
 - **Edição avançada opcional** — o editor visual continua existindo para etapas extras; nada do que já existia é descartado.
 
@@ -51,7 +51,7 @@ Conflitos: ao salvar um comando pronto, nomes e alias repetidos são **recusados
 
 ## 4. Tempo de follow (`!followers`)
 
-Modelo: **Comandos prontos → Tempo de follow**. Padrão: `!followers` com alias `!followage`; sem argumento consulta quem enviou; com `@usuario` (quando a opção está ligada) consulta a pessoa citada.
+Modelo: **Receitas prontas → Tempo de follow → Configurar receita**. Padrão: `!followers` com alias `!followage`; sem argumento consulta quem enviou; com `@usuario` (quando a opção está ligada) consulta a pessoa citada.
 
 Como funciona por dentro: a etapa **Consultar tempo de follow** chama `GET /helix/channels/followers` com o `broadcaster_id` do perfil e o `user_id` consultado, usando o token da **conta do canal** (com `moderator:read:followers`). A resposta guarda quatro campos:
 
@@ -110,3 +110,20 @@ Limitações reais:
 2. Lista de comandos (leitura dos comandos ativos do perfil).
 3. Social/doação como campos do perfil, sem texto solto.
 4. Teste de leitura real na sua conta (só leitura) como evidência separada dos mocks.
+
+
+## Receitas prontas — criação unificada
+
+O catálogo em **Comandos** e **Automações** substitui o formulário antigo de Comandos prontos e o botão separado de Resenha com IA. Os comandos antigos continuam editáveis; as funções conhecidas usam o mesmo formulário ao criar e editar.
+
+Receitas disponíveis: boas-vindas por comando, tempo de follow, total de seguidores, música atual, doação, clipadores, contador de mortes, resenha com IA, lembrete de água, som por resgate, agradecimento de raid e voz por resgate.
+
+Escolher uma receita não salva nem executa ações. Revise o gatilho, resultado e requisitos. Ao salvar uma configuração nova, ela fica desativada até você ativá-la na lista. Configurações existentes mantêm seu estado de ativação, nome e passos personalizados.
+
+Tempo de follow vem sem IA por padrão, com a opção preservada no formulário. Doação exige seu link. O som por resgate exige uma recompensa específica e um som; a receita não permite salvar como Qualquer resgate. Seus sons continuam na mesma fonte Áudio do BotLive.
+
+Raid abre **Comunidade → Shoutout e ganks**; voz abre **Voicemod → Etapa 3**. Não há outro editor nem outra fila para essas funções. Lembrete de água usa o formulário de timer e aparece em Timers após salvar.
+
+Receitas novas guardam identidade para serem reconhecidas mesmo após renomear. Para configurações antigas, funções com identidade e comandos com aliases iguais são reaproveitados; um timer antigo sem identidade só é identificado pelo nome e tipo. Não há migração ou exclusão automática dos seus dados. Comandos em conflito são recusados no salvamento.
+
+Biblioteca de presets continua destinada aos pacotes que você salva, importa ou compartilha; não foi criado outro gerenciador de pacotes.

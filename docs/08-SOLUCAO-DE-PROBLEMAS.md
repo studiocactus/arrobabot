@@ -161,3 +161,27 @@ Retire tokens, chaves, webhooks privados e informações pessoais de qualquer ma
 - Punição num timer não executa: a ação **Punir na Twitch** depende de uma pessoa na mensagem; num timer não há quem enviar. Use a punição em gatilhos de chat.
 - Contador aumentou, mas não respondeu: a contagem ocorre antes das ações; confira falha de envio no Histórico. Ajuste o total pela lista se necessário.
 - Exemplos completos: [Timers e contadores](TIMERS-E-CONTADORES.md) e [Receitas por função](EXEMPLOS-DE-USO.md).
+
+
+## Investigar uma execução
+
+Em **Histórico → Execuções**, escolha um registro para conferir o resultado de cada etapa e o erro informado pelo motor. Busque pelo nome ou identificador e use os filtros de falhas, andamento ou testes. Parada por condição é um resultado da regra, não uma falha técnica.
+
+A consulta se atualiza a cada dois segundos e não repete ações. Se a atualização falhar, a tela avisa que os dados anteriores podem estar desatualizados e oferece nova tentativa. **Eventos gerais** preserva a busca anterior de mensagens, conexões e demais serviços.
+
+O acompanhamento conserva até 30 execuções finalizadas por perfil no banco local, além das que estiverem em andamento. Reiniciar não apaga esses registros. O início, o tempo total e o tempo de cada etapa são informados pelo motor; etapas não iniciadas não têm duração registrada. A medição inclui esperas e fica congelada ao terminar. A origem exibe tipo de evento, modo (live, teste, ensaio ou simulação) e uma referência reduzida que permite relacionar execuções do mesmo evento dentro do perfil. A busca aceita essa referência e o tipo do evento. O contexto inclui somente esses metadados: não copia mensagens, nomes, identificadores de pessoas, payloads ou credenciais. A referência é derivada do identificador e do perfil, sem expor o identificador original; não é uma garantia de anonimização. Eventos sem identificador mostram referência indisponível. Registros anteriores sem contexto são indicados como origem não registrada. Se o aplicativo encerrar sem confirmar o resultado final, o registro aparece como **Interrompida** na próxima abertura. Isso não significa falha nem sucesso da ação externa: ela pode ter ocorrido. Os tempos são os do último registro salvo, sem incluir o período fechado. Etapas que ainda não tinham começado aparecem como Não iniciada. Não há retomada nem repetição automática. O filtro Falhas e interrupções reúne os casos para investigação.
+
+Esse histórico de diagnóstico fica no banco local e não entra nos pacotes de backup do bot; os Eventos gerais continuam incluídos nos backups. Restaurar um backup substitui os dados anteriores e limpa o acompanhamento em memória para não misturar execuções das duas bases. Excluir um perfil também remove seus registros. Falha ao consultar ou gravar o histórico é exibida pela central, com nova tentativa; não é tratada como lista vazia.
+
+Para uma execução em andamento, use **Cancelar execução** e confira o nome antes de confirmar. O pedido não desfaz efeitos já concluídos. A tela aguarda o estado final do motor; a ação atual pode continuar até concluir ou atingir seu limite. O cancelamento impede as próximas etapas e vale somente para o perfil ativo. Se a ação final já estiver concluindo, o resultado pode ser Concluída, não Cancelada. Falha ao enviar o pedido aparece no diálogo e permite nova tentativa. Falhas de dispositivos de áudio exigem diagnóstico no equipamento real.
+
+
+## OBS: fila, recurso ocupado e restauração pendente
+
+- **Fila cheia / dez segundos de espera:** o pedido não foi enviado. Confira a conexão do OBS antes de repetir manualmente; não há replay automático desse pedido.
+- **Recurso ocupado:** aguarde o temporário terminar. Um pedido conflitante, mesmo imediato, não substitui silenciosamente a origem.
+- **Restauração não confirmada:** leia no Histórico o alvo e o estado anterior. Confira o OBS e devolva esse estado manualmente. A próxima tentativa confere a correção antes de aceitar outro efeito no recurso.
+- **Alterado fora do efeito:** a alteração foi preservada; a restauração antiga não é aplicada por cima dela.
+- **Troca de OBS nas configurações:** um temporário em andamento continua associado ao destino original; não é enviado ao novo endereço para restaurar outro OBS.
+
+Essas verificações usam o estado informado pelo OBS. Não substituem gravação e audição para validar áudio real.

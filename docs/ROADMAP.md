@@ -2,6 +2,22 @@
 
 O que já está no BotLive e o que está planejado. Este documento é a referência central de direção; o histórico de entregas continua em [Atualizações e commits](ATUALIZACOES.md).
 
+## Direção atual — organização, configuração e operação
+
+A prioridade escolhida em 25/10/2026 é **organizar telas e facilitar configuração**. O [estudo comparativo com StreamElements, Streamlabs e Streamer.bot](ESTUDO-REFERENCIAS-PRODUTO.md) define as etapas A–F: organização; formulários consistentes; receitas; central de execuções; filas/ações reutilizáveis; central da live.
+
+A v0.20.16 reúne a primeira entrega consolidada desse roteiro:
+
+- A/B: navegação por finalidade, busca por tarefa, roteiro e formulários com salvamento explícito e recuperação de falhas.
+- C: Receitas prontas substitui os caminhos duplicados e reutiliza editores e painéis.
+- D: central de execuções com etapas, tempos, origem mínima, cancelamento por perfil, retenção local e interrupções sem replay.
+- E: proteção e fila limitada do OBS, origem única dos temporários e etapas individuais reutilizáveis no inspetor atual.
+- F: primeira Central da live com estados locais, atualização e atalhos às telas de recuperação existentes.
+
+Grupos de etapas, parâmetros próprios, políticas gerais configuráveis de filas e recuperação automática dos temporários do OBS após reiniciar ficam para evoluções futuras. O teste acústico prolongado foi adiado pelo usuário; não há certificação de qualidade de estúdio. A publicação Windows depende das verificações e da assinatura pelo workflow da versão.
+
+O histórico abaixo mantém decisões de versões anteriores; não é inventário atual completo.
+
 ## Entregue
 
 - **0.7 — Áudio em linha única e Overlays do OBS (0.7.0)** — dez ajustes de feedback dos usuários. A tela **Áudio** passa a ter uma **saída única** para todos os sons do bot (espectador, comandos, timers, automações, resgates e alertas): um aparelho só, uma Fonte de áudio no OBS para o bot inteiro, sem interruptores por origem e sem caminho pelo navegador; a voz da live e o TTS seguem com seus caminhos próprios. **Respostas TXT** viram tela própria, cada regra com um **som opcional** da biblioteca; os **sons por espectador** saem de Respostas e vão para **Sons de Live** (biblioteca + pessoas + reiniciar sessão). **Alertas, Chat no OBS e Meta (LivePix)** ficam no grupo **Overlays do OBS**, cada um com **endereço de camada próprio** via parâmetro `mode` na URL, para Fontes de navegador separadas. A **presença de chat** visível no topo mostra quantas pessoas estão no chat e a lista, a cada 30s. **LivePix**: meta persiste ao desligar/religar, dá para **editar a meta**, **reiniciar contador**, aceita valor com **vírgula**, pede **confirmação ao excluir** e mostra erros de integração visíveis. **Rótulos OBS** e as telas de Alertas/Chat ganharam **rótulos em acordeão, toggles rotulados e dicas** de uso. Ver [Saída de áudio](13-AUDIO.md), [Respostas TXT e sons](RESPOSTAS-E-SONS.md) e [Camadas do overlay](API-LOCAL.md).

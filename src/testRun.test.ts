@@ -3,13 +3,13 @@ import {type Action} from './types';
 import {stepLabel} from './stepLabel';
 import {variableLabel} from './variableCatalog';
 import {testVarKeys} from './flow';
-import {isTerminalRun,runStatusLabel,stepStatusLabel,stepIcon,conditionNote,initialSamples,TERMINAL_RUNS} from './testRun';
+import {isTerminalRun,runStatusLabel,stepStatusLabel,stepIcon,conditionNote,initialSamples,TERMINAL_RUNS,runModeLabel,eventKindLabel} from './testRun';
 
 const action=(a:Partial<Action>):Action=>({kind:'chat',text:'',target:'',value:0,condition:'',aiAnchor:'',aiKnowledge:'',aiLength:'',aiStyle:'',aiNoRepeat:null,...a});
 
 describe('estados do acompanhamento',()=>{
  it('para o polling em todo estado final, inclusive parada por condição',()=>{
-  expect(TERMINAL_RUNS).toEqual(['COMPLETED','FAILED','CANCELLED','STOPPED_BY_CONDITION']);
+  expect(TERMINAL_RUNS).toEqual(['COMPLETED','FAILED','CANCELLED','STOPPED_BY_CONDITION','INTERRUPTED']);
   for(const s of TERMINAL_RUNS)expect(isTerminalRun(s),s).toBe(true);
   for(const s of ['RUNNING','WAITING',''])expect(isTerminalRun(s),s).toBe(false);
  });
@@ -67,3 +67,13 @@ describe('valores de exemplo',()=>{
   expect(initialSamples([])).toEqual({});
  });
 });
+
+ it('distingue a origem real, ensaio, simulação e registros antigos sem contexto',()=>{
+  const run={id:'r',flow:'F',status:'COMPLETED',test:false,steps:[]};
+  expect(runModeLabel(run)).toBe('Execução da live');
+  expect(runModeLabel({...run,test:true})).toBe('Teste');
+  for(const [mode,label] of [['rehearsal','Ensaio'],['simulation','Simulação'],['test','Teste'],['live','Execução da live']]){
+   expect(runModeLabel({...run,context:{eventKind:'chat',eventRef:null,mode}})).toBe(label);
+  }
+  expect(eventKindLabel('secret-unknown')).toBe('Outro evento');
+ });

@@ -33,7 +33,7 @@ const PHASE:{[k:string]:{cls:string;text:string}}={
 
 const secsLabel=(ms:number)=>`${Math.max(0,Math.round(ms/1000))}s`;
 
-export default function Voicemod({profileId,notify}:{profileId:string;notify:(s:string)=>void}){
+export default function Voicemod({profileId,notify,initialSection}:{profileId:string;notify:(s:string)=>void;initialSection?:string}){
  const [snap,setSnap]=useState<VmSnapshot|null>(null);
  const [queue,setQueue]=useState<QueueView|null>(null);
  const [cfg,setCfg]=useState<RulesConfig|null>(null);
@@ -42,7 +42,7 @@ export default function Voicemod({profileId,notify}:{profileId:string;notify:(s:
  const [busy,setBusy]=useState(false);
  // Acordeão das etapas: uma seção aberta por vez — a tela cresce sem virar
  // parede de texto. Começa na Etapa 1.
- const [openSection,setOpenSection]=useState<string>(()=>'etapa1');
+ const [openSection,setOpenSection]=useState<string>(()=>initialSection||'etapa1');
  const [error,setError]=useState('');
  const [testVoice,setTestVoice]=useState('');
  const [testSecs,setTestSecs]=useState(10);

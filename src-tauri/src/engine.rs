@@ -10,7 +10,7 @@ use tauri::Emitter;
   kind.replace('.', "-")
  }
 pub struct Runtime {
- pub db:Db,pub base:PathBuf,pub http:reqwest::Client,
+ pub db:Arc<Db>,pub base:PathBuf,pub http:reqwest::Client,
  pub tx:mpsc::Sender<Event>,pub broadcast:broadcast::Sender<Value>,
  pub app:Mutex<Option<tauri::AppHandle>>,
  pub connections:Mutex<HashMap<String,tokio::task::JoinHandle<()>>>,
@@ -45,11 +45,12 @@ pub struct Runtime {
 impl Runtime {
  pub fn new(base:PathBuf)->Result<Arc<Self>,String>{
  std::fs::create_dir_all(&base).map_err(|e|e.to_string())?;
- let db=Db::open(&base.join("botlive.sqlite"))?;
+ let db=Arc::new(Db::open(&base.join("botlive.sqlite"))?);
+ let runs=crate::runs::Runs::open(db.clone())?;
  let (tx,rx)=mpsc::channel(512);let (broadcast,_)=broadcast::channel(512);
  let http=reqwest::Client::builder().timeout(Duration::from_secs(30)).redirect(reqwest::redirect::Policy::none()).build().map_err(|e|e.to_string())?;
  let actor=if db.get("accessEnabled")==true{"locked"}else{"owner"}.to_owned();
- let rt=Arc::new(Self{actor:Mutex::new(actor),db,base,http,tx,broadcast,app:Mutex::new(None),connections:Mutex::new(HashMap::new()),statuses:Mutex::new(HashMap::new()),discord_tasks:Mutex::new(HashMap::new()),discord_status:Mutex::new(HashMap::new()),discord_cache:Mutex::new(HashMap::new()),timer_pending:Mutex::new(std::collections::HashSet::new()),cooldowns:Mutex::new(HashMap::new()),conversation:Mutex::new(crate::conversation::History::default()),live:crate::live_state::LiveStates::default(),spotify:crate::spotify::States::default(),listen:crate::listen::Sessions::default(),chat_extras:Mutex::new(crate::chat_extras::State::default()),bot_sent:Mutex::new(std::collections::VecDeque::new()),runs:crate::runs::Runs::default(),obs:crate::obs::Locks::default(),voice_fx:crate::voice_fx::Fx::default(),voicemod:crate::voicemod::Voice::default(),voice_resgates:crate::voice_redemptions::Engine::default(),intents:crate::intents::Intents::default(),audio:crate::audio::Sinks::default(),seen:Mutex::new(HashMap::new()),seen_chatters:Mutex::new(HashMap::new()),chat_seen:Mutex::new(HashMap::new()),emote_counts:Mutex::new(HashMap::new()),module_lock:Mutex::new(()),vault_lock:Mutex::new(()),send_locks:Mutex::new(HashMap::new()),api_token:format!("{}{}",uuid::Uuid::new_v4().simple(),uuid::Uuid::new_v4().simple()),api_port:Mutex::new(0)});
+ let rt=Arc::new(Self{actor:Mutex::new(actor),db,base,http,tx,broadcast,app:Mutex::new(None),connections:Mutex::new(HashMap::new()),statuses:Mutex::new(HashMap::new()),discord_tasks:Mutex::new(HashMap::new()),discord_status:Mutex::new(HashMap::new()),discord_cache:Mutex::new(HashMap::new()),timer_pending:Mutex::new(std::collections::HashSet::new()),cooldowns:Mutex::new(HashMap::new()),conversation:Mutex::new(crate::conversation::History::default()),live:crate::live_state::LiveStates::default(),spotify:crate::spotify::States::default(),listen:crate::listen::Sessions::default(),chat_extras:Mutex::new(crate::chat_extras::State::default()),bot_sent:Mutex::new(std::collections::VecDeque::new()),runs,obs:crate::obs::Locks::default(),voice_fx:crate::voice_fx::Fx::default(),voicemod:crate::voicemod::Voice::default(),voice_resgates:crate::voice_redemptions::Engine::default(),intents:crate::intents::Intents::default(),audio:crate::audio::Sinks::default(),seen:Mutex::new(HashMap::new()),seen_chatters:Mutex::new(HashMap::new()),chat_seen:Mutex::new(HashMap::new()),emote_counts:Mutex::new(HashMap::new()),module_lock:Mutex::new(()),vault_lock:Mutex::new(()),send_locks:Mutex::new(HashMap::new()),api_token:format!("{}{}",uuid::Uuid::new_v4().simple(),uuid::Uuid::new_v4().simple()),api_port:Mutex::new(0)});
  tokio::spawn(worker(rt.clone(),rx));Ok(rt)
  }
  pub fn emit(&self,kind:&str,payload:Value){
@@ -298,6 +299,9 @@ pub async fn process(rt:Arc<Runtime>,e:Event){
  if !blocked{cd.insert(global,Instant::now());cd.insert(user,Instant::now());} !blocked
  };
  if !allowed{rt.log(&p.id,"cooldown",&format!("{} está em intervalo",f.name),"info");continue}
+ let f=match crate::action_library::resolve(&rt.db,&f){Ok(f)=>f,Err(err)=>{
+  let kinds=f.actions.iter().map(|a|a.kind.clone()).collect::<Vec<_>>();let id=rt.runs.start(&p.id,&f.id,&f.name,&kinds,false);rt.runs.attach_event(&id,&e,false);rt.runs.fail(&id,None,&err);rt.runs.finish(&id,"FAILED");rt.log(&p.id,"run",&err,"error");continue
+ }};
  ready.push(f);
  }
  if ready.is_empty()&&e.kind=="chat"&&!e.simulated&&e.message.starts_with('!'){
@@ -336,6 +340,10 @@ pub async fn process(rt:Arc<Runtime>,e:Event){
  /// antes de responder justamente para devolver o mesmo id que o motor vai usar;
  /// sem isto a tela acompanharia um registro parado e o cancelamento miraria outro.
  pub async fn execute_flow_with_run(rt:&Arc<Runtime>,p:&Profile,e:&Event,f:&Flow,answers:bool,history:&[Value],counts:Option<&(Option<i64>,Option<i64>)>,test:bool,test_vars:Option<Value>,exec:String)->bool{
+  if rt.runs.cancelled(&exec){rt.runs.finish(&exec,"CANCELLED");return false}
+  rt.runs.attach_event(&exec,e,test);
+  let prepared=match crate::action_library::resolve(&rt.db,f){Ok(flow)=>flow,Err(err)=>{rt.runs.fail(&exec,None,&err);rt.runs.finish(&exec,"FAILED");rt.log(&p.id,"run",&err,"error");return false}};
+  let f=&prepared;rt.runs.prepared_steps(&exec,&f.actions.iter().map(|a|a.kind.clone()).collect::<Vec<_>>());
   let short=rt.runs.short_of(&exec);
   let testing=test||e.rehearsal||e.data["botliveTest"]==true;
   rt.log(&p.id,"run",&format!("Execução {short} iniciada ({} · {} · evento {})",f.name,e.kind,e.id.chars().take(8).collect::<String>()),"info");
@@ -448,7 +456,7 @@ async fn action(rt:&Arc<Runtime>,p:&Profile,e:&Event,a:&Action,variables:&mut cr
  match a.kind.as_str(){
  "punish"=>crate::moderation::punish(rt,p,e,a,&text,Some(&mut *variables)).await,
  "twitch"=>crate::twitch_ops::run(rt,p,e,a,&text,&f.trigger.pattern,Some(variables)).await.map(|_|()),
- "obs"=>{let num=a.text.trim().parse::<f64>().unwrap_or(0.0);match crate::obs::execute_action(rt,p,&a.obs_op,&a.obs_target,num,a.obs_duration).await{Ok(done)=>{rt.log(&p.id,"obs",&done,"success");Ok(())}Err(err)=>Err(err)}}
+ "obs"=>{let num=a.text.trim().parse::<f64>().unwrap_or(0.0);match crate::obs::execute_for_run(rt,p,&a.obs_op,&a.obs_target,num,a.obs_duration,exec,step).await{Ok(done)=>{rt.log(&p.id,"obs",&done,"success");Ok(())}Err(err)=>Err(err)}}
  "chat"=>rt.send_with(p,e,&text,Some(f)).await,
  "ai"|"ai.generate"=>{
  let opts=crate::ai::Options{

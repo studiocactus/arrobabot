@@ -2,9 +2,7 @@ import {test,expect,type Page} from '@playwright/test';
 import {join} from 'path';
 import {OUT} from './ux-helpers';
 
-/** Experiência unificada de comandos: Comandos prontos cria o comando completo
- *  numa tela só — sem abrir o editor de automações nem criar variáveis — e
- *  nomes repetidos são recusados, nunca sobrescritos. */
+/** Receitas reutilizam os editores e preservam configurações existentes. */
 async function mockDesktop(page:Page){
  await page.addInitScript(()=>{
   const flows:Record<string,unknown>=JSON.parse(sessionStorage.getItem('flows')||'{}');
@@ -23,55 +21,58 @@ async function mockDesktop(page:Page){
  });
 }
 
-test('Comandos prontos cria Tempo de follow em uma tela só e recusa nome repetido',async({page})=>{
- const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
- await mockDesktop(page);
- await page.setViewportSize({width:1100,height:860});
- await page.goto('/');
- await page.locator('.sidebar').getByRole('button',{name:'Comandos',exact:true}).click();
 
- // Caminho de aceitação: Comandos → Comandos prontos → Tempo de follow → salvar.
- await page.getByRole('button',{name:'Comandos prontos',exact:true}).click();
- const dialog=page.getByRole('dialog');
- await expect(dialog.getByText('Escolha a função, confira o nome e a resposta e salve')).toBeVisible();
- await expect(dialog.getByLabel('Função')).toHaveValue('followAge');
+const openFollowRecipe=async(page:Page)=>{
+ await page.getByRole('button',{name:'Receitas prontas',exact:true}).click();
+ await page.getByRole('button',{name:'Tempo de follow',exact:true}).click();
+ await page.getByRole('button',{name:/Configurar receita|Editar configuração existente/,exact:true}).click();
+};
+
+test('receitas substituem Comandos prontos e reabrem o existente sem duplicar',async({page})=>{
+ await mockDesktop(page);await page.setViewportSize({width:1100,height:950});await page.goto('/');
+ await page.locator('.sidebar').getByRole('button',{name:'Comandos',exact:true}).click();
+ await expect(page.getByRole('button',{name:'Comandos prontos',exact:true})).toHaveCount(0);
+ await expect(page.getByRole('button',{name:'Resenha com IA',exact:true})).toHaveCount(0);
+ await openFollowRecipe(page);
+ const dialog=page.getByRole('dialog',{name:'Configurar comando',exact:true});
  await expect(dialog.getByLabel('Comando',{exact:true})).toHaveValue('!followers');
  await expect(dialog.getByLabel('Alias (opcional)')).toHaveValue('!followage');
- await page.screenshot({path:join(OUT,'comandos-prontos-followage.png'),fullPage:true});
- await dialog.getByRole('button',{name:'Salvar e ativar',exact:true}).click();
-
- // Nasce pronto e ativado, sem abrir o editor de automações.
- await expect(page.getByText(/criado e ativado/)).toBeVisible();
- await expect(page.getByText('Tempo de follow (!followers)')).toBeVisible();
- await expect(page.getByRole('dialog')).toHaveCount(0);
- await page.screenshot({path:join(OUT,'comandos-prontos-criado.png'),fullPage:true});
-
- // Nome repetido é recusado e nada é sobrescrito.
- await page.getByRole('button',{name:'Comandos prontos',exact:true}).click();
- await page.getByRole('dialog').getByRole('button',{name:'Salvar e ativar',exact:true}).click();
- await expect(page.getByText(/Já existe o comando/)).toBeVisible();
- await page.getByRole('dialog').getByRole('button',{name:'Cancelar',exact:true}).click();
-
- await page.setViewportSize({width:1600,height:900});
- await page.screenshot({path:join(OUT,'comandos-prontos-larga.png'),fullPage:true});
- expect(errors).toEqual([]);
+ await expect(dialog.getByRole('switch',{name:'Escrever com IA no meu jeito'})).toHaveAttribute('aria-checked','false');
+ await expect(page.locator('.react-flow')).toHaveCount(0);
+ await dialog.getByRole('button',{name:'Salvar comando',exact:true}).click();
+ await expect(page.getByText('Comando salvo.',{exact:true})).toBeVisible();
+ const before=await page.evaluate(()=>sessionStorage.getItem('flows'));
+ const saved=Object.values(JSON.parse(before||'{}')) as {enabled:boolean}[];
+ expect(saved).toHaveLength(1);expect(saved[0].enabled).toBe(false);
+ await openFollowRecipe(page);
+ await expect(dialog.getByLabel('Comando',{exact:true})).toHaveValue('!followers');
+ expect(await page.evaluate(()=>sessionStorage.getItem('flows'))).toBe(before);
+ await dialog.getByRole('button',{name:'Fechar',exact:true}).click();
 });
 
-test('editar a função pronta abre o formulário dela, sem grafo',async({page})=>{
- await mockDesktop(page);
- await page.goto('/');
+test('a receita e a edição da função usam o mesmo formulário',async({page})=>{
+ await mockDesktop(page);await page.goto('/');
  await page.locator('.sidebar').getByRole('button',{name:'Comandos',exact:true}).click();
- await page.getByRole('button',{name:'Comandos prontos',exact:true}).click();
- await page.getByRole('dialog').getByRole('button',{name:'Salvar e ativar',exact:true}).click();
- await expect(page.getByText(/criado e ativado/)).toBeVisible();
- // Editar reabre o formulário da função — nada de grafo técnico.
- await page.getByRole('button',{name:/Editar/}).click();
- await expect(page.getByLabel('Comando',{exact:true})).toHaveValue('!followers');
+ await openFollowRecipe(page);
+ await page.getByRole('button',{name:'Salvar comando',exact:true}).click();
+ await page.getByRole('button',{name:/Editar Tempo de follow/}).click();
  await expect(page.getByText('Personalizar no editor avançado')).toBeVisible();
  await expect(page.locator('.react-flow')).toHaveCount(0);
- await page.screenshot({path:join(OUT,'funcao-editor-simples.png'),fullPage:true});
- // Ajusta a resposta pronta e salva; a edição continua simples.
- await page.locator('.form-pad textarea').first().fill('{{user}} tá no time desde {{local.followSince}}!');
+ await page.getByRole('textbox',{name:'Resposta',exact:true}).fill('{{user}} tá no time desde {{local.followSince}}!');
  await page.getByRole('button',{name:'Salvar comando',exact:true}).click();
- await expect(page.getByText('Comando salvo.')).toBeVisible();
+ const saved=Object.values(JSON.parse(await page.evaluate(()=>sessionStorage.getItem('flows'))||'{}')) as {actions:{text:string}[]}[];
+ expect(saved).toHaveLength(1);expect(saved[0].actions.some(action=>action.text.includes('tá no time'))).toBe(true);
+});
+
+test('conflito de comando é recusado no formulário sem sobrescrever o existente',async({page})=>{
+ await mockDesktop(page);await page.goto('/');
+ await page.locator('.sidebar').getByRole('button',{name:'Comandos',exact:true}).click();
+ await page.getByRole('button',{name:'Criar comando personalizado',exact:true}).click();
+ await page.getByRole('button',{name:'Salvar comando',exact:true}).click();
+ const before=await page.evaluate(()=>sessionStorage.getItem('flows'));
+ await openFollowRecipe(page);
+ await page.getByLabel('Comando',{exact:true}).fill('!oi');
+ await page.getByRole('button',{name:'Salvar comando',exact:true}).click();
+ await expect(page.getByRole('alert')).toContainText('Já existe o comando');
+ expect(await page.evaluate(()=>sessionStorage.getItem('flows'))).toBe(before);
 });

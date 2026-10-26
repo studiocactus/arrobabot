@@ -14,6 +14,8 @@ impl Db {
  CREATE TABLE IF NOT EXISTS command_counters(flow_id TEXT PRIMARY KEY REFERENCES flows(id) ON DELETE CASCADE,value INTEGER NOT NULL DEFAULT 0 CHECK(value>=0));
  CREATE TABLE IF NOT EXISTS logs(id INTEGER PRIMARY KEY AUTOINCREMENT,profile_id TEXT NOT NULL,timestamp TEXT NOT NULL,kind TEXT NOT NULL,message TEXT NOT NULL,status TEXT NOT NULL);
  CREATE INDEX IF NOT EXISTS logs_profile ON logs(profile_id,id);
+ CREATE TABLE IF NOT EXISTS execution_history(id TEXT PRIMARY KEY,profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,started_at INTEGER NOT NULL,status TEXT NOT NULL,data TEXT NOT NULL);
+ CREATE INDEX IF NOT EXISTS execution_history_profile ON execution_history(profile_id,started_at);
  CREATE TABLE IF NOT EXISTS presets(id TEXT PRIMARY KEY,data TEXT NOT NULL);
  CREATE TABLE IF NOT EXISTS kv(key TEXT PRIMARY KEY,data TEXT NOT NULL);
  CREATE TABLE IF NOT EXISTS module_state(profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,key TEXT NOT NULL,data TEXT NOT NULL,PRIMARY KEY(profile_id,key));
@@ -23,7 +25,7 @@ impl Db {
  CREATE TABLE IF NOT EXISTS watch_time(profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,user_login TEXT NOT NULL,seconds INTEGER NOT NULL DEFAULT 0 CHECK(seconds>=0),PRIMARY KEY(profile_id,user_login));
  CREATE TABLE IF NOT EXISTS variables(profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,scope TEXT NOT NULL,user_id TEXT NOT NULL,name TEXT NOT NULL,data TEXT NOT NULL,PRIMARY KEY(profile_id,scope,user_id,name));
  CREATE TEMP TABLE session_variables(profile_id TEXT NOT NULL,scope TEXT NOT NULL,user_id TEXT NOT NULL,name TEXT NOT NULL,data TEXT NOT NULL,PRIMARY KEY(profile_id,scope,user_id,name));
- PRAGMA user_version=3;").map_err(|e|e.to_string())?;
+ PRAGMA user_version=4;").map_err(|e|e.to_string())?;
  Ok(Self(Mutex::new(c)))
  }
  pub fn profiles(&self)->R<Vec<Profile>> {

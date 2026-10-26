@@ -137,3 +137,8 @@ Depois: resolver operações abertas, desconectar, salvar notas e fechar antes d
 ## Limite do pré-voo
 
 O pré-voo confere as configurações que conhece. Um resultado sem achados não confirma conexão ativa, chegada do som ao OBS nem qualidade da voz. Antes da live, teste as conexões e ouça uma gravação local, incluindo as vozes usadas em resgates. Veja [qualidade de áudio](13-AUDIO.md).
+
+
+### Histórico de execuções
+
+Os detalhes recentes de execução são diagnósticos locais, limitados a 30 finalizações por perfil mais as execuções ativas, preservados ao reiniciar. Não entram no pacote .botlivebak; o Histórico de Eventos gerais continua no backup e alimenta as estatísticas. Restaurar um pacote substitui os dados e descarta o acompanhamento em memória da base anterior. Nenhum registro importado é usado para reexecutar uma ação. Efeitos externos que já ocorreram não são desfeitos por uma importação.

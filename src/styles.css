@@ -251,3 +251,44 @@ td.actions-right.row{justify-content:flex-end}
 .save-state.dirty{color:#f0c674;border-color:#f0c67444;background:#f0c67412}
 .save-state.saved{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 35%,var(--border))}
 [data-theme=light] .save-state.dirty{color:#8a5f10;border-color:#8a5f1044;background:#8a5f1012}
+
+/* Configuração por objetivo: destinos existentes, sem estados de conclusão presumidos. */
+.setup-hub{margin-bottom:24px}.setup-hub>.tag{margin-bottom:12px}
+.setup-journeys{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:12px;margin-top:18px}
+.setup-journeys>button{height:auto!important;white-space:normal!important;display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-start;text-align:left;padding:16px;gap:8px;min-width:0}
+.setup-journeys>button>span{font-size:12px;line-height:1.6;color:var(--muted);font-weight:400}
+.setup-journeys>button[aria-pressed=true]{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 8%,var(--surface))}
+.setup-journey-detail{margin-top:20px;border-top:1px solid var(--border);padding-top:20px}
+.setup-journey-detail>p{margin-top:8px}
+.setup-journey-detail ol{list-style:none;padding:0;display:grid;gap:8px}
+.setup-journey-detail li{min-width:0}
+.setup-journey-detail li button{width:100%;height:auto!important;white-space:normal!important;justify-content:space-between;text-align:left;line-height:1.6}
+.setup-journey-detail li button span{min-width:0;overflow-wrap:anywhere}
+
+.form-workflow{padding:14px 18px;margin:12px 0 18px;border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface2)}
+.form-workflow p{font-size:12px;line-height:1.7;color:var(--muted);overflow-wrap:anywhere}
+.form-workflow p+p{margin-top:6px}.form-workflow strong{color:var(--text)}
+.form-edit-state{padding:0 20px}
+
+.form-fields{margin:0;padding:0;border:0;min-width:0}
+
+.recipe-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:10px;margin:16px 0}
+.recipe-grid>button{height:auto!important;white-space:normal!important;align-items:flex-start;flex-direction:column;text-align:left;padding:14px;min-width:0;line-height:1.5}
+.recipe-grid>button>span{color:var(--muted);font-size:11px;font-weight:400}
+.recipe-grid>button[aria-pressed=true]{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 8%,var(--surface))}
+.recipe-summary{border-top:1px solid var(--border);padding-top:18px}
+.recipe-summary h3{margin-bottom:10px}
+.recipe-summary p{font-size:12px;line-height:1.7;overflow-wrap:anywhere;margin-top:6px}
+
+.execution-layout{display:grid;grid-template-columns:minmax(240px,1fr) minmax(320px,1.5fr);gap:20px;align-items:start}
+.execution-filters{align-items:end;flex-wrap:wrap}.execution-filters label{display:grid;gap:8px;min-width:240px;flex:1}
+.execution-list{display:grid;padding:12px;gap:8px}.execution-list button{display:grid;text-align:left;justify-content:stretch;justify-items:start;height:auto;min-height:96px;padding:14px;gap:7px;min-width:0;width:100%;white-space:normal;overflow-wrap:anywhere}
+.execution-list button[aria-pressed=true]{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 8%,var(--surface))}
+.execution-list small,.execution-id{overflow-wrap:anywhere}.execution-steps{padding-left:24px}.execution-steps li{padding:12px 0}.execution-steps span{display:block;margin-top:5px}
+@media(max-width:1200px){.execution-layout{grid-template-columns:minmax(0,1fr)}}
+
+.execution-context{padding:16px;border:1px solid var(--border);border-radius:12px;margin:16px 0;overflow-wrap:anywhere}.execution-context small{display:block;line-height:1.6}
+
+.live-console-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(240px,100%),1fr));gap:18px;padding:20px}.live-console-grid>div{min-width:0;overflow-wrap:anywhere}.live-console-grid button{height:auto;min-height:38px;white-space:normal;margin-top:10px}.live-console-grid small{display:block;line-height:1.6}
+
+.dashboard-columns:has(.live-console){grid-template-columns:minmax(240px,.75fr) minmax(0,1.5fr);align-items:stretch}@media(max-width:1200px){.dashboard-columns:has(.live-console){grid-template-columns:minmax(0,1fr)}}

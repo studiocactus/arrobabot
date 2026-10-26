@@ -83,12 +83,14 @@ test('comando simples também oferece a resposta a quem enviou e a guarda',async
   await page.getByLabel('Nome',{exact:true}).fill('Valeu');
   await page.getByLabel('Comando',{exact:true}).fill('!valeu');
   await page.getByRole('textbox',{name:'Resposta',exact:true}).fill('Valeu, {{user}}!');
+  await page.getByText('Opções de envio, som e contagem',{exact:true}).click();
   const reply=page.getByRole('switch',{name:'Responder à pessoa que enviou',exact:true});
   await expect(reply).toBeVisible();
   await reply.click();
   await page.getByRole('button',{name:'Salvar comando',exact:true}).click();
   await expect(page.getByText('Comando salvo.',{exact:true})).toBeVisible();
   await page.getByRole('button',{name:'Editar Valeu',exact:true}).click();
+  await page.getByText('Opções de envio, som e contagem',{exact:true}).click();
   await expect(page.getByRole('switch',{name:'Responder à pessoa que enviou',exact:true})).toHaveAttribute('aria-checked','true');
 });
 
@@ -99,7 +101,9 @@ test('quadro de instrução da IA cresce com o texto e para no teto de 42vh',asy
   await page.getByRole('button',{name:'Salvar perfil',exact:true}).click();
   await page.getByRole('dialog').getByRole('button',{name:'Fechar',exact:true}).click();
   await page.getByRole('button',{name:'Comandos',exact:true}).click();
+  await page.getByRole('button',{name:'Receitas prontas',exact:true}).click();
   await page.getByRole('button',{name:'Resenha com IA',exact:true}).click();
+  await page.getByRole('button',{name:'Configurar receita',exact:true}).click();
   const box=page.getByRole('textbox',{name:'Como a IA deve responder',exact:true});
   const heightOf=()=>box.evaluate(el=>({auto:el.style.height,box:el.clientHeight}));
   const start=await heightOf();

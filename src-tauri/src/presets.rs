@@ -4,6 +4,7 @@ use rusqlite::params;
 pub fn export(rt:&Runtime,p:&str,kind:&str,name:&str,ids:Vec<String>)->Result<Value,String>{
  let mut profile=rt.db.profile(p)?;profile.channel.clear();profile.channel_id.clear();profile.bot_id.clear();profile.client_id.clear();profile.editors.clear();
  let flows:Vec<_>=rt.db.flows(p)?.into_iter().filter(|f|(ids.is_empty()||ids.contains(&f.id))&&(kind!="command"||f.trigger.kind=="command")).collect();
+ let flows=flows.iter().map(|f|crate::action_library::resolve(&rt.db,f)).collect::<Result<Vec<_>,_>>()?;
  let data=match kind{
  "profile"=>json!({"profile":profile,"flows":flows,"theme":rt.db.get("theme").as_str().unwrap_or("dark"),"accent":rt.db.get("accent").as_str().unwrap_or(""),"moduleConfigs":{"points":rt.db.module(p,"points"),"songs":rt.db.module(p,"songs"),"tts":rt.db.module(p,"tts"),"moderation":rt.db.module(p,"moderation"),"discord":rt.db.module(p,"discord"),"games":rt.db.module(p,"games")}}),
  "flow"|"command"=>json!({"flows":flows}),
@@ -27,7 +28,7 @@ pub fn validate(v:&Value)->Result<(),String>{
  if v.to_string().len()>2_000_000{return Err("Preset excede 2 MB".into())}
  if !["profile","flow","command","personality","theme"].contains(&v["kind"].as_str().unwrap_or("")){return Err("Tipo de preset inválido".into())}
  inspect(&v["data"])?;
- if let Some(flows)=v["data"]["flows"].as_array(){for f in flows{validate_flow(&serde_json::from_value(f.clone()).map_err(|_|"Fluxo inválido no preset")?)?;}}
+ if let Some(flows)=v["data"]["flows"].as_array(){for f in flows{let flow:Flow=serde_json::from_value(f.clone()).map_err(|_|"Fluxo inválido no preset")?;if flow.actions.iter().any(|a|a.kind=="action.ref"){return Err("Exporte as etapas reutilizáveis pelo BotLive para incluir uma cópia independente no preset".into())}validate_flow(&flow)?;}}
  Ok(())
 }
 pub fn preview(rt:&Runtime,p:&str,v:&Value)->Result<Value,String>{

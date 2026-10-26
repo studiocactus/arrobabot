@@ -30,7 +30,9 @@ test('resenha com IA cria geração antes do envio e variável por nome',async({
  await page.getByRole('button',{name:'Salvar perfil',exact:true}).click();
  await page.getByRole('dialog').getByRole('button',{name:'Fechar',exact:true}).click();
  await page.getByRole('button',{name:'Comandos',exact:true}).click();
+ await page.getByRole('button',{name:'Receitas prontas',exact:true}).click();
  await page.getByRole('button',{name:'Resenha com IA',exact:true}).click();
+ await page.getByRole('button',{name:'Configurar receita',exact:true}).click();
  await page.getByText('Testar resposta contextual',{exact:true}).click();
  await expect(page.getByRole('textbox',{name:'Mensagem da pessoa',exact:true})).toHaveValue('O Thenees hoje está amassando na play');
  await expect(page.getByRole('button',{name:'Gerar resposta de teste',exact:true})).toBeDisabled();
@@ -133,7 +135,7 @@ test('amostras de tema e de cor aplicam na hora e persistem',async({page})=>{
 test('tons derivados do menu e das tags seguem a cor de destaque nos dois temas',async({page})=>{
  await page.goto('/');
  const nav=page.locator('.nav-item.active');
- const eyebrow=page.locator('.hero-copy .tag');
+ const eyebrow=page.locator('.setup-hub .tag');
  const escuroPadrao={nav:await nav.evaluate(el=>getComputedStyle(el).color),tag:await eyebrow.evaluate(el=>getComputedStyle(el).color)};
  await page.getByRole('button',{name:'Configurações',exact:true}).click();
  await page.getByRole('button',{name:'Cor de destaque: Violeta',exact:true}).click();
@@ -281,7 +283,9 @@ test('tela de IA oferece base de conhecimento, padrões e controle por ação',a
  await page.screenshot({path:'artifacts/ai-knowledge-small.png',fullPage:true});
  await page.setViewportSize({width:1440,height:1000});
  await page.locator('.sidebar').getByRole('button',{name:'Comandos',exact:true}).click();
+ await page.getByRole('button',{name:'Receitas prontas',exact:true}).click();
  await page.getByRole('button',{name:'Resenha com IA',exact:true}).click();
+ await page.getByRole('button',{name:'Configurar receita',exact:true}).click();
  await page.getByRole('button',{name:'Salvar resenha do chat',exact:true}).click();
  await page.getByRole('button',{name:'Editar Resenha do chat',exact:true}).click();
  await page.locator('.react-flow__node').filter({hasText:'Gerar resposta da IA (variável)'}).click();
@@ -315,6 +319,7 @@ test('comando escolhe como enviar na Twitch e oferece o áudio do disparo',async
  await page.getByLabel('Nome',{exact:true}).fill('ifood');
  await page.getByLabel('Comando',{exact:true}).fill('!ifood');
  await page.getByRole('textbox',{name:'Resposta',exact:true}).fill('O ifood já passou a milhão na rua 12 vezes!');
+ await page.getByText('Opções de envio, som e contagem',{exact:true}).click();
  const send=page.getByRole('combobox',{name:'Como enviar na Twitch',exact:true});
  await expect(send).toBeVisible();
  await expect(send).toHaveValue('chat');

@@ -80,3 +80,12 @@ A explosão respeita a **camada** da fonte do OBS: a camada de alertas recebe as
 - A explosão de emotes usa os emotes da Twitch (canal + globais); emotes de terceiros (7TV, BTTV, FFZ) ficam para uma próxima versão, e a contagem de mais usados começa quando a explosão é ligada, sem histórico retroativo.
 - **Testar explosão** dispara mesmo com a explosão desligada — é para conferir o efeito antes da live; o interruptor mestre e os por evento valem para os eventos de verdade.
 - As fontes do Google exigem internet no computador que roda o OBS; fontes do sistema funcionam offline.
+
+
+## Salvar e testar
+
+Os ajustes do Estúdio salvam automaticamente após uma breve pausa na edição. Aguarde **Salvo**. Se ocorrer falha, a edição permanece e **Tentar salvar alertas novamente** repete a gravação; o erro desaparece após a confirmação.
+
+O botão de teste aguarda as alterações serem salvas para usar a configuração correta. O ensaio pode aparecer também na fonte conectada ao OBS: não é uma prévia exclusivamente local. Alertas e evento precisam estar ligados; eventos reais dependem da conexão da plataforma.
+
+Se as configurações não puderem ser carregadas ao abrir, o editor mostra o erro e permite tentar carregar novamente. Ele não oferece os valores padrão como se fossem as configurações salvas.

@@ -849,6 +849,9 @@ async fn flow_test_returns_the_execution_it_actually_runs(){
  let api=dispatch(rt.clone(),"flow.runs",json!({"profileId":p.id})).await.unwrap();
  let entry=api.as_array().unwrap().iter().find(|r|r["id"]==id).cloned().expect("a tela encontra a execução pelo id");
  assert_eq!(entry["error"],Value::Null);
+ assert_eq!(entry["context"]["eventKind"],"manual");
+ assert_eq!(entry["context"]["mode"],"test");
+ assert!(entry["context"]["eventRef"].as_str().unwrap().starts_with("evt-"));
  assert_eq!(entry["steps"][0]["status"].as_str(),Some("SKIPPED"));
 }
 /// A prévia só prova lógica: espera, condição e variável local rodam; nada de fora acontece.
@@ -920,11 +923,20 @@ async fn flow_test_cancel_stops_the_execution_it_returned(){
   assert!(tokio::time::Instant::now()<deadline,"a execução nem começou a rodar");
   tokio::time::sleep(std::time::Duration::from_millis(20)).await;
  }
+ let other=profile("Outro perfil");rt.db.save_profile(&other).unwrap();
+ assert!(dispatch(rt.clone(),"flow.cancel",json!({"profileId":other.id,"executionId":id})).await.is_err());
+ assert!(!rt.runs.cancelled(&id),"outro perfil não cancela");
  let mut rx=rt.broadcast.subscribe();
  dispatch(rt.clone(),"flow.cancel",json!({"profileId":p.id,"executionId":id})).await.expect("cancelar a execução em andamento");
  let run=finished_run(&rt,&id).await;
  assert_eq!(run.status,"CANCELLED","o estado final vem do motor, não do clique");
  assert!(run.steps.iter().any(|s|s.status=="CANCELLED"));
+ assert!(run.finished.is_some());
+ let api_runs=dispatch(rt.clone(),"flow.runs",json!({"profileId":p.id})).await.unwrap();
+ let entry=api_runs.as_array().unwrap().iter().find(|r|r["id"]==id).unwrap();
+ assert!(entry["startedAt"].as_u64().unwrap()>0);
+ assert!(entry["durationMs"].is_u64());
+ assert!(entry["steps"][0]["durationMs"].is_u64());
  let again=dispatch(rt.clone(),"flow.cancel",json!({"profileId":p.id,"executionId":id})).await;
  assert_eq!(again.unwrap_err(),"Execução não encontrada ou já terminada","já terminada não cancela de novo");
  tokio::time::sleep(std::time::Duration::from_millis(200)).await;
@@ -1812,4 +1824,29 @@ async fn ensaio_do_clipe_ensafia_a_mensagem_sem_variavel_ausente(){
  // O comando com variação "!clipe" também casa.
  engine::process(rt.clone(),Event{id:uuid::Uuid::new_v4().to_string(),profile_id:p.id.clone(),kind:"chat".into(),user:"Ana".into(),user_id:"ana".into(),role:"everyone".into(),message:"!clipe".into(),data:Value::Null,simulated:true,rehearsal:true}).await;
  assert!(rt.db.logs(&p.id).unwrap().iter().filter(|l|l.message.contains("clipe-de-teste")).count()>=2,"!clipe também dispara o mesmo fluxo");
+}
+
+
+#[tokio::test]
+async fn reusable_action_failure_is_atomic_and_live_console_is_read_only(){
+ let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();let p=profile("Reuso QA");rt.db.save_profile(&p).unwrap();let mut f=flow(&p);
+ f.actions=vec![Action{kind:"overlay".into(),text:"Não pode aparecer".into(),..Default::default()},Action{kind:"action.ref".into(),target:uuid::Uuid::new_v4().to_string(),..Default::default()}];
+ rt.db.save_flow(&f).unwrap();assert!(preflight::check(&rt,&p)["items"].as_array().unwrap().iter().any(|i|i["message"].as_str().unwrap_or("").contains("etapa reutilizável inválida")));
+ let mut rx=rt.broadcast.subscribe();assert!(!engine::execute_flow(&rt,&p,&event(&p,"!oi",false),&f,true,&[],None,false,None).await);
+ assert!(std::iter::from_fn(||rx.try_recv().ok()).all(|v|v["type"]!="overlay"));assert_eq!(rt.runs.list(&p.id)[0].status,"FAILED");
+ let status=dispatch(rt.clone(),"liveConsole.get",json!({"profileId":p.id})).await.unwrap();assert_eq!(status["running"],0);assert_eq!(status["issues"],1);assert_eq!(status["audio"]["clients"],0);assert!(!rt.voicemod.connected());
+ assert!(!status.to_string().contains("token"));assert!(rt.statuses.lock().unwrap().is_empty());
+ let q=profile("Outro");rt.db.save_profile(&q).unwrap();*rt.actor.lock().unwrap()="mod".into();assert!(dispatch(rt.clone(),"actionLibrary.list",json!({"profileId":q.id})).await.is_err());
+}
+#[tokio::test]
+async fn reusable_actions_share_context_and_export_without_external_references(){
+ let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();let p=profile("Biblioteca QA");rt.db.save_profile(&p).unwrap();
+ let entry=crate::action_library::Entry{id:uuid::Uuid::new_v4().to_string(),name:"Overlay".into(),action:Action{kind:"overlay".into(),text:"Resultado {{local.valor}}".into(),..Default::default()}};
+ dispatch(rt.clone(),"actionLibrary.save",json!({"profileId":p.id,"entry":entry})).await.unwrap();let mut f=flow(&p);
+ f.actions=vec![Action{kind:"variable.set".into(),target:"local.valor".into(),text:"42".into(),..Default::default()},Action{kind:"action.ref".into(),target:entry.id.clone(),..Default::default()}];
+ f.layout=json!({"nodes":[{"id":"shared","position":{"x":30,"y":50},"data":{"action":f.actions[1]}}]});rt.db.save_flow(&f).unwrap();let mut rx=rt.broadcast.subscribe();
+ assert!(engine::execute_flow(&rt,&p,&event(&p,"!oi",false),&f,true,&[],None,false,None).await);
+ assert!(std::iter::from_fn(||rx.try_recv().ok()).any(|v|v["type"]=="overlay"&&v["payload"]["text"]=="Resultado 42"));
+ let exported=presets::export(&rt,&p.id,"flow","Etapas",vec![f.id.clone()]).unwrap();assert_eq!(exported["data"]["flows"][0]["actions"][1]["kind"],"overlay");assert_eq!(exported["data"]["flows"][0]["layout"]["nodes"][0]["data"]["action"]["kind"],"overlay");
+ assert_eq!(rt.runs.list(&p.id)[0].steps[1].kind,"overlay");
 }

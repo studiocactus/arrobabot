@@ -17,6 +17,9 @@ export async function api<T=unknown>(op:string,args:Args={}):Promise<T>{
  case 'command.counters':result={};break;
   case 'backup.get':result={folder:'',auto:false,days:7,weeks:4,months:12,lastSuccess:0};break;
   case 'backup.list':result=[];break;
+ case 'actionLibrary.list':result=s.modules?.[`${id}:actionLibrary`]||[];break;
+ case 'actionLibrary.delete':{const key=`${id}:actionLibrary`;const previous=(s.modules?.[key]||[]) as unknown as {id:string}[];if(s.flows.some(f=>f.profileId===id&&f.actions.some(a=>a.kind==='action.ref'&&a.target===args.id)))throw Error('Esta etapa é usada por um fluxo salvo; remova as referências antes de excluir');s.modules={...(s.modules||{}),[key]:previous.filter(x=>x.id!==args.id) as unknown as Record<string,unknown>};break}
+ case 'actionLibrary.save':{const entry=args.entry as {id:string};const key=`${id}:actionLibrary`;const previous=(s.modules?.[key]||[]) as unknown as {id:string}[];s.modules={...(s.modules||{}),[key]:[...previous.filter(x=>x.id!==entry.id),entry] as unknown as Record<string,unknown>};result=entry;break}
  case 'flows':result=s.flows.filter(f=>f.profileId===id);break;
  case 'flow.save':{const f=args.flow as Flow;s.flows=s.flows.filter(x=>x.id!==f.id).concat(f);result=f;break}
  case 'flow.delete':s.flows=s.flows.filter(f=>f.id!==args.id||f.profileId!==id);break;

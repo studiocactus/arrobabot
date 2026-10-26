@@ -1,4 +1,4 @@
-import {useEffect,useState} from 'react';
+import {useEffect,useRef,useState} from 'react';
 import {Save,Play,Trash2,Pencil,Package,Workflow,Copy} from 'lucide-react';
 import {api,desktop} from './api';
 import {friendlyMessage} from './errors';
@@ -10,6 +10,8 @@ import MessageEditor from './MessageEditor';
 import {SendPicker,AudioPicker} from './FlowOptions';
 import {FN_LABELS,FunctionForm,guessFn,templateMatches} from './FunctionForm';
 import CommandOptions from './CommandOptions';
+import FormWorkflow from './FormWorkflow';
+import {commandConflict,donationLinkIssue} from './commandModels';
 
 export type FlowMode='command'|'timer'|'flow';
 type Notify=(s:string)=>void;
@@ -34,36 +36,70 @@ export function TimerVariants({variants,onChange}:{variants:string[];onChange:(v
  {variants.length<10&&<button type="button" onClick={()=>onChange([...variants,''])}>+ Adicionar resposta</button>}
  </div>;
 }
-export function FlowDialog({flow,mode,profile,notify,onSaved,onClose}:{flow:Flow;mode:FlowMode;profile:Profile;notify:Notify;onSaved:()=>Promise<void>|void;onClose:()=>void}){
+export function FlowDialog({flow,mode,profile,notify,onSaved,onClose,reservedCommands={},requireSoundReward=false,requireDonationLink=false}:{flow:Flow;mode:FlowMode;profile:Profile;notify:Notify;onSaved:()=>Promise<void>|void;onClose:()=>void;reservedCommands?:Record<string,string>;requireSoundReward?:boolean;requireDonationLink?:boolean}){
  const [editing,setEditing]=useState<Flow>(flow);
+ const [saving,setSaving]=useState(false);
+ const savingRef=useRef(false);
+ const [saveError,setSaveError]=useState('');
+ const dirty=JSON.stringify(editing)!==JSON.stringify(flow);
+ const close=()=>{if(!saving)onClose()};
  const [forceVisual,setForceVisual]=useState(false);
  const [testing,setTesting]=useState<Flow|null>(null);
  const kind=mode==='timer'?'timer':'comando';
  const adotavel=!editing.fnId?guessFn(editing):null;
- const hasFn=!!editing.fnId;
+ const hasFn=!!editing.fnId&&!editing.fnId.startsWith('recipe:');
  const deviated=hasFn&&!templateMatches(editing);
  const editor=mode==='flow'||(!hasFn&&(editing.actions.length>1||editing.actions.some(a=>!['chat','ai'].includes(a.kind))))||forceVisual||deviated;
  const intro=mode!=='flow'&&(forceVisual||editing.actions.length>1)?'Ao salvar, este '+kind+' mantém o mesmo nome, gatilho e ativação.':'';
  const title=mode==='flow'?'Editor de automação':mode==='timer'?'Configurar timer':'Configurar comando';
  async function save(next:Flow){
-  await saveFlow(next);
-  await onSaved();
-  notify(mode==='command'?'Comando salvo.':mode==='timer'?'Timer salvo.':'Automação salva.');
-  onClose();
+  if(savingRef.current)return;
+  savingRef.current=true;setSaving(true);setSaveError('');
+  try{
+   if(next.trigger.kind==='command'){
+    const latest=await api<Flow[]>('flows',{profileId:profile.id});
+    if(!Array.isArray(latest))throw new Error('Não foi possível conferir os comandos existentes.');
+    const conflict=commandConflict(latest.filter(item=>item.id!==next.id&&item.trigger.kind==='command'),next.trigger.pattern,reservedCommands);
+    if(conflict)throw new Error('Já existe o comando em “'+conflict+'”. Edite o existente ou escolha outro nome.');
+   }
+   if(requireDonationLink&&next.fnId==='doacao'){
+    const last=next.actions.find(item=>item.kind==='chat')?.text||'';
+    const issue=donationLinkIssue(last.replace('{{local.aiResponse}}','').replace('💜','').trim());
+    if(issue)throw new Error(issue);
+   }
+   if(requireSoundReward){
+    if(next.trigger.kind!=='redemption'||!next.trigger.pattern.trim())throw new Error('Escolha uma recompensa específica para esta receita.');
+    if(!next.audio)throw new Error('Escolha o som em Como sai antes de salvar esta receita.');
+    const latest=await api<Flow[]>('flows',{profileId:profile.id});
+    if(!Array.isArray(latest))throw new Error('Não foi possível conferir os resgates existentes.');
+    if(latest.some(item=>item.id!==next.id&&item.trigger.kind==='redemption'&&item.trigger.pattern===next.trigger.pattern&&!!item.audio))throw new Error('Já existe um som para esta recompensa. Edite a automação existente para evitar reprodução duplicada.');
+   }
+   await saveFlow(next);
+   await onSaved();
+   notify(mode==='command'?'Comando salvo.':mode==='timer'?'Timer salvo.':'Automação salva.');
+   onClose();
+  }catch(err){if(!editor)setSaveError(friendlyMessage(err));throw err}
+  finally{savingRef.current=false;setSaving(false)}
+
  }
  return <>
- <Modal wide={editor} title={title} onClose={onClose}>
+ <Modal wide={editor} title={title} onClose={close}>
+  {!editor&&<FormWorkflow save={'Use Salvar '+kind+'. Editar ou testar não salva as alterações.'} test="O teste usa os valores em edição e mostra o acompanhamento; confira os efeitos permitidos no painel antes de executar." requirements={mode==='timer'?'Timer ativado e perfil conectado; o primeiro envio aguarda o intervalo completo.':'Comando ativado, perfil conectado e contas com as permissões necessárias.'}/>}
+  {!editor&&<p role="status" aria-label="Estado de salvamento do formulário" className="help form-edit-state">{saving?'Salvando…':dirty?'Alterações não salvas':'Revise os campos e salve para aplicar'}</p>}
+  {saveError&&!editor&&<p role="alert" className="inline-error">{saveError}</p>}
   {!editing.enabled&&<p className="help"><strong>Esta automação está desativada</strong>: ela não dispara na live até você ativá-la na lista. As alterações aqui continuam valendo.</p>}
   {adotavel&&<p className="help"><strong>Este comando tem o formato de {FN_LABELS[adotavel]||'uma função pronta'}.</strong> <button type="button" onClick={()=>setEditing({...editing,fnId:adotavel,fnVersion:1})}>Abrir no formulário dessa função</button> — ou continue no editor atual; nada é alterado sem você pedir.</p>}
- {hasFn&&!forceVisual&&!deviated?<><FunctionForm flow={editing} onChange={setEditing} onAdvanced={()=>setForceVisual(true)}/><footer className="form-footer"><span className="help">As alterações valem ao salvar.</span><button type="button" data-test-flow onClick={()=>setTesting(editing)}><Play size={15}/>Testar comando</button><button className="primary" onClick={()=>void save(editing)}><Save size={16}/>Salvar comando</button></footer></>:editor?<><p className="help"><strong>{FN_LABELS[editing.fnId||'']||'Este comando'}</strong> foi personalizado no editor avançado. O formulário simples não representa mais tudo — continue por aqui; nada é descartado. Para voltar ao formulário, desfaça as etapas extras.</p><FlowEditor flow={editing} platform={profile.platform} ai={profile.ai} onSave={save} onTest={f=>setTesting(f)} intro={intro}/></>:<form className="form-pad" onSubmit={e=>{e.preventDefault();save(editing).catch(err=>notify(friendlyMessage(err)))}}>
+ {hasFn&&!forceVisual&&!deviated?<fieldset className="form-fields" disabled={saving}><FunctionForm flow={editing} onChange={setEditing} onAdvanced={()=>setForceVisual(true)}/><footer className="form-footer"><span className="help">As alterações valem ao salvar.</span><button type="button" data-test-flow onClick={()=>setTesting(editing)}><Play size={15}/>Testar comando</button><button className="primary" disabled={saving} onClick={()=>void save(editing).catch(()=>{})}><Save size={16}/>Salvar comando</button></footer></fieldset>:editor?<>{deviated&&<p className="help"><strong>{FN_LABELS[editing.fnId||'']||'Este comando'}</strong> foi personalizado no editor avançado. O formulário simples não representa mais tudo — continue por aqui; nada é descartado. Para voltar ao formulário, desfaça as etapas extras.</p>}<FlowEditor flow={editing} platform={profile.platform} ai={profile.ai} onSave={save} onTest={f=>setTesting(f)} intro={intro}/></>:<form className="form-pad" onSubmit={e=>{e.preventDefault();save(editing).catch(()=>{})}}><fieldset className="form-fields" disabled={saving}>
   <div className="form-grid">
    <Field label="Nome"><input required value={editing.name} onChange={e=>setEditing({...editing,name:e.target.value})}/></Field>
    {mode!=='timer'&&<Field label="Comando" hint="Variações com vírgula valem aqui: !whislist, !whishlist — quem erra o comando também dispara."><input required pattern="!\S+(\s*,\s*!\S+)*" title="Comece com ! e separe variações com vírgula, sem espaços dentro de cada um." value={editing.trigger.pattern} onChange={e=>setEditing({...editing,trigger:{...editing.trigger,pattern:e.target.value}})}/></Field>}
   </div>
   <MessageEditor profileId={profile.id} label="Resposta" required flow={editing} value={editing.actions[0].text} onChange={text=>setEditing({...editing,actions:[{...editing.actions[0],text}]})}/>
+  {mode==='timer'&&<CommandOptions timer seconds={editing.timerSeconds??300} counter={!!editing.counter} onSeconds={timerSeconds=>setEditing({...editing,timerSeconds})} onCounter={counter=>setEditing({...editing,counter})}/>}
+  <details className="form-advanced"><summary>{mode==='timer'?'Avançado do timer':'Opções de envio, som e contagem'}</summary>
   <SendPicker platform={profile.platform} value={editing.sendType||'chat'} color={editing.sendColor||'primary'} reply={!!editing.replyTo} onChange={sendType=>setEditing({...editing,sendType})} onColor={sendColor=>setEditing({...editing,sendColor})} onReply={replyTo=>setEditing({...editing,replyTo})}/>
   <AudioPicker profileId={profile.id} value={editing.audio||''} volume={editing.audioVolume??1} onChange={audio=>setEditing({...editing,audio})} onVolume={audioVolume=>setEditing({...editing,audioVolume})}/>
-  <CommandOptions timer={mode==='timer'} seconds={editing.timerSeconds??300} counter={!!editing.counter} onSeconds={timerSeconds=>setEditing({...editing,timerSeconds})} onCounter={counter=>setEditing({...editing,counter})}/>
+  {mode!=='timer'&&<CommandOptions timer={false} seconds={300} counter={!!editing.counter} onSeconds={()=>{}} onCounter={counter=>setEditing({...editing,counter})}/>}
   {mode==='timer'&&<div className="form-grid">
    <Field label="Categoria"><select value={editing.timerCategory||'personalizado'} onChange={e=>setEditing({...editing,timerCategory:e.target.value})}>{Object.entries(timerCategories).map(([k,n])=><option key={k} value={k}>{n}</option>)}</select></Field>
    <Field label="Prioridade" hint="Só decide entre timers elegíveis juntos."><select value={editing.timerPriority||'normal'} onChange={e=>setEditing({...editing,timerPriority:e.target.value})}>{Object.entries(timerPriorities).map(([k,n])=><option key={k} value={k}>{n}</option>)}</select></Field>
@@ -76,13 +112,14 @@ export function FlowDialog({flow,mode,profile,notify,onSaved,onClose}:{flow:Flow
    <Field label="Só após (minutos de live)" hint="0 libera desde o início."><input type="number" min="0" max="1440" step="any" value={secondsToMinutes(editing.timerStartDelaySecs??0)} onChange={e=>setEditing({...editing,timerStartDelaySecs:minutesToSeconds(Number(e.target.value)||0)})}/></Field>
   </div></details>}
   {editing.counter&&<button type="button" onClick={()=>setEditing({...editing,actions:[{...editing.actions[0],text:editing.actions[0].text+'{{commandCount}}'}]})}>+ Contagem do comando</button>}
+  </details>
   {mode!=='timer'&&<div className="form-grid">
    <Field label="Quem pode usar"><select value={editing.trigger.permission} onChange={e=>setEditing({...editing,trigger:{...editing.trigger,permission:e.target.value}})}><option value="everyone">Todo mundo</option><option value="subscriber">Assinantes</option><option value="moderator">Moderadores</option><option value="broadcaster">Só o streamer</option></select></Field>
    <Field label="Intervalo entre usos (segundos)" hint="60 = 1 minuto. 0 libera sem espera."><input type="number" min="0" max="86400" step="5" value={editing.trigger.cooldown} onChange={e=>setEditing({...editing,trigger:{...editing.trigger,cooldown:Number(e.target.value)||0}})}/></Field>
    <Field label="Intervalo por pessoa (segundos)" hint="60 = 1 minuto. Evita repetir na sequência."><input type="number" min="0" max="86400" step="5" value={editing.trigger.userCooldown} onChange={e=>setEditing({...editing,trigger:{...editing.trigger,userCooldown:Number(e.target.value)||0}})}/></Field>
   </div>}
-  <footer className="form-footer"><span className="help">{mode==='timer'?'Ao pausar, desconectar ou editar, o intervalo começa novamente.':'Vá para o editor visual quando quiser conectar várias ações em sequência.'}</span><button type="button" onClick={()=>setForceVisual(true)}><Workflow size={15}/>Abrir no editor visual</button><button type="button" data-test-flow onClick={()=>setTesting(editing)}><Play size={15}/>Testar fluxo</button><button className="primary"><Save size={16}/>{mode==='timer'?'Salvar timer':'Salvar comando'}</button></footer>
-  </form>}
+  <footer className="form-footer"><span className="help">{mode==='timer'?'Ao pausar, desconectar ou editar, o intervalo começa novamente.':'Vá para o editor visual quando quiser conectar várias ações em sequência.'}</span><button type="button" onClick={()=>setForceVisual(true)}><Workflow size={15}/>Abrir no editor visual</button><button type="button" data-test-flow onClick={()=>setTesting(editing)}><Play size={15}/>Testar fluxo</button><button className="primary" disabled={saving}><Save size={16}/>{mode==='timer'?'Salvar timer':'Salvar comando'}</button></footer>
+  </fieldset></form>}
  </Modal>
  {testing&&<TestFlowDialog flow={testing} profileId={profile.id} onClose={()=>{setTesting(null);focusTestButton()}}/>}
  </>;

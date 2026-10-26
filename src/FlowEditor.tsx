@@ -1,3 +1,4 @@
+import ActionLibrary from './ActionLibrary';
 import CommandOptions from './CommandOptions';
 import {useState,useCallback,useEffect,useRef,type ReactNode} from 'react';
 import {ReactFlow,Background,Controls,MiniMap,addEdge,useNodesState,useEdgesState,useReactFlow,useStore,type Connection,type Node,type Edge} from '@xyflow/react';
@@ -140,6 +141,7 @@ export default function FlowEditor({flow,platform='twitch',ai,onSave,onTest,intr
  const connect=useCallback((c:Connection)=>setEdges(e=>addEdge({...c,animated:true},e)),[setEdges]);
  /** Espelha as regras do backend (model.rs) para apontar etapa e campo antes de enviar. */
  function actionProblem(a:Action):{message:string}|null{
+  if(a.kind==='action.ref'&&!a.target)return {message:'Escolha uma etapa da biblioteca'};
   if(a.kind==='condition'&&!(a.condVar||'').trim())return {message:'Escolha uma variável'};
   if(a.kind==='obs'&&!(a.obsTarget||'').trim()){
    const op=a.obsOp||'mute';
@@ -162,7 +164,7 @@ function move(dir:-1|1){try{const ns=nodes.map(n=>({id:n.id,position:{x:n.positi
  /** Troca do gatilho com o rótulo do bloco sempre em dia: o canvas mostra o
   *  estado real salvo, nunca o nome do fluxo. */
  function changeTrigger(t:Trigger){setTrigger(t);setNodes(ns=>ns.map(n=>n.id==='trigger'?{...n,data:{...n.data,label:triggerLabel(t)}}:n))}
-function switchKind(current:Action,next:string){const base:Action={...current,kind:next};
+function switchKind(current:Action,next:string){if(next==='action.ref'){update(newAction('action.ref'));return}const base:Action={...current,kind:next};
   if(next==='ai.generate'&&!base.target.startsWith('local.'))base.target='local.aiResponse';
   // Variável nasce com nome válido: "Nome do valor" nunca deve começar vazio,
   // senão o salvamento recusa sem dizer qual campo falta.
@@ -223,16 +225,17 @@ function switchKind(current:Action,next:string){const base:Action={...current,ki
  </Section>}</>:action?<>
  <Section title="Configurar etapa" open>
  <Field label="Tipo de etapa">
- <select value={action.kind} onChange={e=>switchKind(action,e.target.value)}>{Object.entries(actions).map(([k,n])=>
+ <select aria-label="Tipo de etapa" value={action.kind} onChange={e=>switchKind(action,e.target.value)}>{Object.entries(actions).map(([k,n])=>
  <option key={k} value={k}>{n}</option>)}</select>
  </Field>
  <div className="list-row"><div><strong>Etapa ativa</strong><small>Desligada pula sem erro.</small></div><Toggle label="Etapa ativa" checked={action.enabled!==false} onChange={v=>update({...action,enabled:v})}/></div>
+ <ActionLibrary key={selected} profileId={flow.profileId} action={action} onChange={update}/>
  {action.kind==='followAge'&&<Field label="Consultar"><select value={action.target||'sender'} onChange={e=>update({...action,target:e.target.value})}><option value="sender">Quem enviou a mensagem</option><option value="mention">Quem foi citado com @nome (ou quem enviou)</option></select></Field>}
  {action.kind==='wait'&&<WaitEditor value={action.value||0} onChange={value=>update({...action,value})}/>}
  <div className="row"><StepMenu canUp={bounds.up} canDown={bounds.down} canInsert={insertable} onMove={move} onInsert={insertStep}/></div>
  {action.kind==='condition'&&<CondEditor action={action} update={update} issue={issue}/>}
  {action.kind.startsWith('variable.')&&<VariableTarget value={action.target} onChange={target=>update({...action,target})}/>}
- {action.kind==='script'?<Field label="Script Rhai (retorna texto)">
+ {action.kind==='action.ref'?null:action.kind==='script'?<Field label="Script Rhai (retorna texto)">
  <textarea rows={5} value={action.text} onChange={e=>update({...action,text:e.target.value})}/>
  </Field>:action.kind==='variable.delete'?<p className="help">Escolha o valor que será apagado.</p>:action.kind==='twitch'&&(action.twOp||'game')==='clip'?<p className="help">Esta operação não usa texto: o clipe é criado e o link fica em <code>{'{{local.clipUrl}}'}</code> para a próxima etapa.</p>:action.kind==='twitch'&&!['game','title','timeout','ban','warn','mention'].includes(action.twOp||'game')?<p className="help">Esta operação não usa texto: o alvo e a duração vêm da fala ou dos campos abaixo.</p>:action.kind==='voiceFx'?<p className="help">Esta etapa não usa texto: escolha a voz e a duração acima.</p>:action.kind==='followAge'?<p className="help">Consulta a Twitch (data real do follow) e guarda para a próxima etapa: <code>{'{{local.followAge}}'}</code> (tempo), <code>{'{{local.followSince}}'}</code> (data), <code>{'{{local.followNote}}'}</code> (aviso quando não der) e <code>{'{{local.followResult}}'}</code> (ok, not_following, not_found, unauthorized…).</p>:<MessageEditor key={selected} profileId={flow.profileId} label={action.kind.startsWith('ai')?'Como a IA deve responder':action.kind==='variable.increment'?'Quanto somar':action.kind==='punish'?'Motivo (vai para a Twitch e para o Histórico)':action.kind==='twitch'?((action.twOp||'game')==='game'?'Nome do jogo fixo (vazio usa o que você falou)':(action.twOp||'game')==='title'?'Novo título fixo (vazio usa o que você falou, até 140 caracteres)':(action.twOp||'game')==='mention'?'Mensagem (o bot marca @alvo na frente)':'Motivo (vai para a Twitch e para o Histórico)'):'Mensagem / conteúdo'} value={action.text} onChange={text=>update({...action,text})} at={stepIndex>=0?stepIndex:undefined} flow={{...flow,name,trigger,actions:orderedSteps}}/>}{ai&&<AIActionOptions action={action} ai={ai} onChange={update}/>}{action.kind==='ai.generate'&&<Field label="Nome da resposta" hint="Disponível somente nesta execução; evita misturar respostas entre pessoas.">
  <input value={(action.target||'local.aiResponse').replace(/^local\./,'')} onChange={e=>update({...action,target:'local.'+e.target.value})}/>
@@ -292,12 +295,12 @@ function switchKind(current:Action,next:string){const base:Action={...current,ki
   {action.kind.startsWith('ai')&&<AIResponseTest key={selected} profileId={flow.profileId} instruction={action.text}/>}
   {action.kind==='obs'&&<><div className="row"><button type="button" disabled={busy||!desktop} onClick={async()=>{setBusy(true);setObsTest('');try{const done=await api<string>('obs.execute',{profileId:flow.profileId,op:action.obsOp||'mute',target:action.obsTarget||'',num:action.obsOp==='volume'?Number(action.text)||0:0,secs:action.obsDuration??0});setObsTest(String(done))}catch(e){setObsTest('Falhou: '+friendlyMessage(e))}finally{setBusy(false)}}}><Play size={15}/>Testar no OBS</button></div>{obsTest&&<p className="help">{obsTest}</p>}</>}
   </Section>}
- <Section title="Comportamento">
+ {action.kind!=='action.ref'&&<Section title="Comportamento">
  <Field label="Executar só se a mensagem contiver">
  <input value={action.condition} onChange={e=>update({...action,condition:e.target.value})}/>
  </Field>
  <p className="help">A ação é pulada quando o texto não contém o trecho, sem diferenciar maiúsculas de minúsculas. As ações seguintes continuam normalmente.</p>
- </Section>
+ </Section>}
  <button className="danger" onClick={()=>{setNodes(ns=>ns.filter(n=>n.id!==selected));setEdges(es=>es.filter(e=>e.source!==selected&&e.target!==selected));setSelected('trigger')}}>
  <Trash2 size={15}/>Remover bloco</button>
  </>:<p>Selecione um bloco para editar.</p>}<p className="help">A ordem é a das setas entre os blocos, não a posição deles na tela: arraste de um ponto de conexão ao outro e mantenha uma única sequência começando no gatilho. Blocos desconectados ficam de fora e o salvamento avisa.</p>

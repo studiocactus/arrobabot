@@ -105,3 +105,17 @@ Referências: [estalos e frequência no Voicemod](https://support.voicemod.net/h
 Se a próxima voz da fila falhar, os pedidos restantes são descartados para não reaparecerem atrasados; a origem fica guardada como restauração pendente. Use **Recuperar restauração**. Restaurar só é considerado sucesso quando a voz e o estado anterior do modificador foram confirmados; recusa ao desligar o modificador mantém a pendência. Pedidos descartados não são marcados como cumpridos pelo BotLive, e eventuais estornos continuam sob responsabilidade da Twitch.
 
 O [estudo de QA de 25/10/2026](QA-2026-10-25.md) reúne achados, testes de falha e matriz de homologação.
+
+
+## Editar e salvar regras de voz
+
+Na Etapa 3, escolher acionamento, voz, duração e opções avançadas altera um **rascunho**. Use **Salvar trocas de voz** para aplicar o conjunto; digitar não envia uma regra parcial a cada tecla. O indicador distingue alterações pendentes de regras salvas.
+
+Se a gravação falhar, os campos mantêm o rascunho e mostram o erro. Corrija o necessário e tente salvar novamente. Ao navegar para outra tela ou trocar de perfil com alterações pendentes, o BotLive pede confirmação antes de descartá-las. Recarregar ou fechar a janela também pode exibir o aviso padrão do navegador.
+
+**Testar esta voz** aplica temporariamente a voz selecionada, sem salvar a regra, gastar pontos ou publicar mensagem; confira o áudio real no OBS. Uma regra salva ainda depende de Voicemod conectado, interruptor geral ligado e acionamento disponível. As opções de fila e a conferência do OBS feitas fora desse formulário são preservadas ao salvar as regras.
+
+
+### Situação do teste acústico prolongado
+
+Em 26/10/2026, a continuação dos testes acústicos foi adiada a pedido do usuário, que não percebeu mais o atraso no teste isolado. Isso não constitui homologação de estalos, estabilidade sob carga ou resgates consecutivos; essas verificações permanecem pendentes. Os testes automatizados da integração validam controle e restauração, não a qualidade sonora do equipamento real.
