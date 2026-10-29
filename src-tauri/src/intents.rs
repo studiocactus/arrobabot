@@ -67,8 +67,38 @@ pub async fn dispatch(rt: &Arc<Runtime>, p: &Profile, e: &Event, origin: Origin,
   rt.log(&p.id, KIND, "Comando administrativo recusado: a origem deste pedido não tem autorização.", "error");
   return Err("Este comando só sai do microfone do streamer ou do chat de quem modera.".into());
  }
+ let result = execute(rt, p, e, talk).await;
+ match result {
+  Ok(Some(text)) => respond(rt, p, e, &text).await,
+  Ok(None) => {},
+  Err(err) => {
+   respond(rt, p, e, &format!("Não consegui concluir o pedido: {err}")).await;
+   return Err(err);
+  }
+ }
+ Ok(true)
+}
+
+/// Chat e voz são entregas independentes: uma falha nunca repete a ação.
+async fn respond(rt: &Runtime, p: &Profile, e: &Event, text: &str) {
+ if let Err(err) = rt.send(p, e, text).await {
+  rt.log(&p.id, KIND, &format!("Resposta no chat não enviada: {err}"), "error");
+ }
+ let fresh = match rt.db.profile(&p.id) { Ok(p) => p, Err(_) => return };
+ if crate::model::blocked(text, &fresh) {
+  rt.log(&p.id, KIND, "Resposta por voz bloqueada pelas restrições do perfil.", "error");
+  return;
+ }
+ if rt.db.module(&p.id, "voice")["spokenReplies"] != false {
+  if let Err(err) = crate::tts::speak(rt, &p.id, text).await {
+   rt.log(&p.id, KIND, &format!("Resposta por voz não enviada; confira Texto para voz e Áudio do BotLive: {err}"), "error");
+  }
+ }
+}
+
+async fn execute(rt: &Arc<Runtime>, p: &Profile, e: &Event, talk: Talk) -> Result<Option<String>, String> {
  let reply = match talk {
-  Talk::Ignore => return Ok(false),
+  Talk::Ignore => return Ok(None),
   Talk::Incomplete(hint) => Some(hint.to_owned()),
   Talk::Title(title) => {
    let a = Action { kind: "twitch".into(), tw_op: "title".into(), ..Default::default() };
@@ -145,12 +175,7 @@ pub async fn dispatch(rt: &Arc<Runtime>, p: &Profile, e: &Event, origin: Origin,
   },
   Talk::VoiceNormal => Some(voice_normal(rt, p).await?),
  };
- if let Some(text) = reply {
-  if let Err(err) = rt.send(p, e, &text).await {
-   rt.log(&p.id, KIND, &err, "error");
-  }
- }
- Ok(true)
+ Ok(reply)
 }
 
 /// Login dito → login real da Twitch. Sem chute: quem não existe não é alvo.
@@ -217,6 +242,7 @@ mod tests {
   let rt = Runtime::new(dir.path().to_path_buf()).unwrap();
   let p = profile(&uuid::Uuid::new_v4().to_string());
   rt.db.save_profile(&p).unwrap();
+  rt.db.set_module(&p.id,"voice",&json!({"spokenReplies":false})).unwrap();
   (dir, rt, p)
  }
 
@@ -298,6 +324,42 @@ mod tests {
    m
   };
   assert!(expired.values().all(|(at, _, _)| at <= &now()), "fora do prazo não confirma");
+ }
+
+ #[tokio::test]
+ async fn erro_operacional_responde_sem_duplicar_a_acao() {
+  let (_d, rt, mut p) = rt_profile();
+  p.platform = "kick".into();
+  rt.db.save_profile(&p).unwrap();
+  let e = voice("arroba, mude o título para Teste");
+  assert!(dispatch(&rt, &p, &e, Origin::Voice, Talk::Title("Teste".into())).await.is_err());
+  let logs = rt.db.logs(&p.id).unwrap();
+  assert_eq!(logs.iter().filter(|l|l.message.contains("Resposta no chat não enviada")).count(), 1);
+  assert!(!logs.iter().any(|l|l.message.contains("Resposta por voz não enviada")), "opção desligada não chama o sintetizador");
+ }
+
+ /// Usa a voz real do Windows, mas não conecta nem envia mensagens à Twitch.
+ #[tokio::test]
+ #[ignore = "sintetiza voz real do Windows e entrega a uma fonte OBS simulada"]
+ async fn arroba_fala_pedido_incompleto_na_fonte_obs() {
+  let (_d, rt, p) = rt_profile();
+  rt.db.set_module(&p.id, "voice", &json!({})).unwrap();
+  let (tx, mut rx) = tokio::sync::mpsc::channel(8);
+  let _id = crate::audio::register(&rt, &p.id, tx);
+  let e = voice("arroba, mude a categoria");
+  assert!(dispatch(&rt, &p, &e, Origin::Voice, Talk::Incomplete("Qual categoria você quer? Escreva o nome do jogo.")).await.unwrap());
+  let mut delivered = false;
+  while let Ok(event) = rx.try_recv() {
+   if event["type"] == "audio.play" {
+    assert_eq!(event["payload"]["kind"], "tts");
+    let src = event["payload"]["src"].as_str().unwrap();
+    let id = src.rsplit("id=").next().unwrap();
+    let (bytes, _) = crate::tts::file(&rt, &p.id, id).unwrap();
+    assert!(bytes.len() > 10_000);
+    delivered = true;
+   }
+  }
+  assert!(delivered, "falha no chat não impede resposta falada no OBS");
  }
 
  #[test]

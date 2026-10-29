@@ -119,3 +119,23 @@ Se a gravação falhar, os campos mantêm o rascunho e mostram o erro. Corrija o
 ### Situação do teste acústico prolongado
 
 Em 26/10/2026, a continuação dos testes acústicos foi adiada a pedido do usuário, que não percebeu mais o atraso no teste isolado. Isso não constitui homologação de estalos, estabilidade sob carga ou resgates consecutivos; essas verificações permanecem pendentes. Os testes automatizados da integração validam controle e restauração, não a qualidade sonora do equipamento real.
+
+
+## Voz do Arroba nas solicitações da live
+
+O Arroba responde por voz e no chat aos pedidos administrativos reconhecidos, feitos pelo microfone do streamer ou pelo chat de streamer/moderadores. Em **Comunidade → Controle por voz**, configure a palavra de ativação `arroba` e mantenha **Respostas por voz do Arroba** ligada. Salve a configuração. Desligar a opção preserva a confirmação escrita.
+
+Escolha a voz instalada do Windows, a velocidade e o limite em **Comunidade → Texto para voz**, salve e use **Testar voz**. Essa escolha é compartilhada com as outras ações de texto para voz; não há uma segunda configuração de voz. O módulo de leitura de mensagens não precisa estar ativado para as confirmações administrativas. Para falar pelo microfone, a escuta contínua e o servidor local de transcrição precisam estar funcionando. Pedidos escritos não precisam da escuta.
+
+Em **Áudio do BotLive**, use o endereço da fonte de navegador no OBS. Confira se a fonte está conectada, sem mudo e incluída na faixa transmitida. Sem a fonte conectada, a fala sai pelo aplicativo e sua presença na transmissão depende da captura de áudio do OBS. Use fones e selecione o microfone físico na escuta, sem retorno do computador, para evitar que a própria resposta seja reconhecida como um novo pedido.
+
+Exemplos:
+
+- “Arroba, mude a categoria para Minecraft.” A categoria oficial encontrada é aplicada; depois o resultado é informado no chat e falado.
+- “Arroba, mude o título para Jogando com a comunidade.” O novo título é confirmado após a Twitch aceitar.
+- “Arroba, bana o usuario123.” O Arroba pede confirmação do banimento permanente, com prazo de 30 segundos. Só confirma quem fez o pedido.
+- “Arroba, altera a categoria do jogo pra mim.” Sem nome do jogo, ele explica como completar o pedido; não escolhe uma categoria por conta própria.
+
+Pedidos incompletos, cancelamentos e falhas operacionais também recebem resposta. Erro ao enviar ao chat não impede tentar a voz; erro na síntese não desfaz nem repete a ação já executada. Consulte o Histórico se uma entrega falhar. As restrições de conteúdo do perfil também valem para a voz. O limite de caracteres de Texto para voz pode cortar respostas longas.
+
+Esta etapa cobre os comandos administrativos já reconhecidos (categoria, título, timeout, banimento, desbanimento, confirmação, cancelamento e retorno à voz normal). Não interpreta qualquer pedido livre nem adiciona conversa geral por voz. A voz é a síntese local disponível no Windows, sem clonagem de voz e sem promessa de naturalidade de um serviço de voz neural. Uma fonte conectada não comprova que o OBS está transmitindo áudio: faça uma gravação curta para conferir.

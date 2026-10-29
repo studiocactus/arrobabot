@@ -271,13 +271,17 @@ pub fn parse(message:&str,activation:&str)->Talk{
   return Talk::Title(value.trim().to_owned())
  }
  let names:Vec<String>=split_ou(&value).into_iter().map(|piece|edge_trim(&piece)).filter(|n|!n.is_empty()).collect();
- if names.is_empty(){return Talk::Incomplete(HINT_CATEGORY)}
+ if names.is_empty()||names.iter().any(|n|matches!(folded(n).as_str(),"mim"|"mim por favor")){return Talk::Incomplete(HINT_CATEGORY)}
  if is_question(&names[0]){return Talk::Ignore}
  if names.iter().any(|n|n.chars().count()>120){return Talk::Ignore}
  Talk::Category(names)
 }
 #[cfg(test)] mod tests {
  use super::*;
+ #[test] fn pedido_de_categoria_pra_mim_ainda_precisa_do_jogo(){
+  assert_eq!(parse("arroba, altera a categoria do jogo pra mim","arroba"),Talk::Incomplete(HINT_CATEGORY));
+  assert_eq!(parse("arroba, altera a categoria pra mim por favor","arroba"),Talk::Incomplete(HINT_CATEGORY));
+ }
  #[test] fn o_exemplo_completo_vira_categoria_com_plano_b(){
   assert_eq!(parse("Arroba, altere a categoria do jogo para Minecraft ou AION2","arroba"),Talk::Category(vec!["Minecraft".into(),"AION2".into()]));
  }

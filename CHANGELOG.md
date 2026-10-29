@@ -1,5 +1,42 @@
 # Histórico de atualizações
 
+# BotLive 0.20.17
+
+## O que mudou
+
+- O Arroba responde por voz e no chat aos comandos administrativos reconhecidos, vindos do microfone local do streamer ou do chat de streamer/moderadores. Categoria, título, timeout, banimento, desbanimento, confirmação, cancelamento e retorno à voz normal usam a mesma resposta de resultado.
+- A resposta falada também informa pedidos incompletos e falhas operacionais. O pedido não é executado novamente se uma entrega falhar. O chat continua sendo tentado quando a voz estiver desligada.
+- Controle por voz ganhou Respostas por voz do Arroba, ligada por padrão, com preferência por perfil. A voz utiliza a configuração existente de Texto para voz e a fonte Áudio do BotLive, sem criar outro editor ou caminho de áudio.
+- O exemplo “arroba, altera a categoria do jogo pra mim” pede o nome do jogo, em vez de procurar “mim” na Twitch.
+- Restrições do perfil continuam valendo no chat e na voz. Espectadores, resgates, alertas e eventos simulados não recebem autorização administrativa. Banimento permanente mantém confirmação de 30 segundos.
+
+## Como usar
+
+Em Comunidade → Controle por voz, configure arroba em Palavras de ativação. Mantenha Respostas por voz do Arroba ligada e salve. Para falar com o bot, mantenha o módulo, o servidor local de transcrição e a escuta contínua funcionando. Para digitar no chat, a escuta não precisa estar ligada.
+
+Em Comunidade → Texto para voz, escolha a voz instalada do Windows, ajuste velocidade e limite, salve e use Testar voz. A escolha é compartilhada com as outras leituras do perfil. Configure no OBS a fonte indicada em Áudio do BotLive e confira sua faixa de transmissão. Use fones e o microfone físico sem retorno do computador na escuta.
+
+Diga ou escreva “arroba, mude a categoria para Minecraft” ou “arroba, mude o título para Jogando com a comunidade”. O resultado é anunciado após a Twitch aceitar a ação. Pedidos de banimento permanente precisam ser confirmados por quem pediu. Para manter apenas o texto, desligue Respostas por voz do Arroba e salve.
+
+O capítulo docs/13-AUDIO.md detalha configuração, exemplos e diagnóstico.
+
+## Validação
+
+- Verificação TypeScript e 177 testes frontend aprovados.
+- Nove cenários anteriores do painel de voz aprovados. O cenário novo teve inicialmente falha no seletor de navegação do próprio teste; corrigido e reexecutado com sucesso, verificando persistência e ausência de rolagem horizontal.
+- Rodada final no navegador em npm run dev: 12/12 cenários aprovados (painel de voz, persistência e auditoria de layout). Telas de 1100 e 1600 pixels capturadas fora do repositório e inspecionadas visualmente.
+- Compilação nativa final v0.20.17 e suíte Rust: 414 aprovados, 3 ignorados por padrão. O teste novo ignorado de síntese real do Windows foi executado separadamente e aprovado: WAV gerado e entregue à fonte OBS simulada mesmo sem chat conectado.
+- Build de produção, manual de 30 capítulos, 9 testes de atualização, npm run update:check e git diff --check aprovados. Avisos existentes de bundle acima de 500 kB e atribuição não lida em twitch_ops.rs não bloquearam a compilação.
+
+## Limitações
+
+- Esta etapa cobre os comandos administrativos já reconhecidos; não converte qualquer solicitação livre em ação nem adiciona conversa geral falada com IA.
+- Usa as vozes locais do Windows, sem clonagem ou serviço neural. O limite configurado de caracteres pode cortar a leitura.
+- Uma fonte de áudio conectada não prova volume, mixagem ou faixa de transmissão no OBS. Sem ela, a reprodução usa o aplicativo e depende da captura de áudio do OBS para chegar à live.
+- Não foram alterados categoria, título ou moderação de um canal real, nem feita homologação acústica em live. A verificação de escuta e volume final deve ser feita numa gravação curta com seu OBS.
+
+---
+
 # BotLive 0.20.16
 
 ## O que mudou

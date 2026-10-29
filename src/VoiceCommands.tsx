@@ -132,6 +132,8 @@ export default function VoiceCommands({profileId,notify}:{profileId:string;notif
   <Field label="Palavras de ativação" hint="Separe por vírgula. Só uma fala que contenha uma delas dispara as automações; vazio dispara toda fala.">
    <input value={String(config.activation||'')} onChange={e=>setConfig({...config,activation:e.target.value})} placeholder="arroba, botlive"/>
   </Field>
+  <div className="switch-row"><span>Arroba responde por voz e no chat</span><Toggle label="Respostas por voz do Arroba" checked={config.spokenReplies!==false} onChange={spokenReplies=>setConfig({...config,spokenReplies})}/></div>
+  <p className="help">Pedidos de categoria, título e moderação recebem confirmação no chat e em voz alta, inclusive quando falta informação ou ocorre uma falha. Escolha a voz em Comunidade → Texto para voz. No OBS, adicione a fonte indicada em Áudio do BotLive. Use o microfone físico na escuta e fones de ouvido para a voz do bot não voltar como comando. Desligar esta opção mantém as respostas no chat. Salve a configuração para aplicar.</p>
   <Field label="Duração do “quicar” (segundos)" hint="Quando você fala “quicar”, o alvo leva timeout de tanto tempo. Padrão 600 (10 min); nunca vira banimento.">
    <input type="number" min={1} max={1209600} value={String(config.quicarSec??600)} onChange={e=>setConfig({...config,quicarSec:Math.max(1,Math.min(1209600,Math.round(Number(e.target.value)||600)))})}/>
   </Field>

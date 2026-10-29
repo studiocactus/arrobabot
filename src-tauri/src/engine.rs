@@ -229,7 +229,7 @@ pub async fn process(rt:Arc<Runtime>,e:Event){
   let talk=crate::natural::parse(&e.message,&cfg.activation);
   match crate::intents::dispatch(&rt,&p,&e,crate::intents::Origin::Chat,talk).await{
    Ok(handled)=>{if handled{rt.log(&p.id,"module","Comando natural foi tratado antes das automações.","info");return}}
-   Err(err)=>{let _=rt.send(&p,&e,&err).await;return}
+   Err(err)=>{rt.log(&p.id,"intents",&err,"error");return}
   }
  }
  // Fala do microfone vira comando na mesma despachante, com a origem de voz.

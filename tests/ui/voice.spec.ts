@@ -264,3 +264,24 @@ test('rascunho de voz pede descarte antes de navegar e mantém valor ao cancelar
  await page.locator('.sidebar').getByRole('button',{name:'Timers',exact:true}).click();
  await expect(page.locator('main h1')).toHaveText('Timers');
 });
+
+
+test('Arroba permite desligar só a resposta falada e mantém configuração ao reabrir',async({page})=>{
+ await page.addInitScript(p=>localStorage.setItem('botlive-preview',JSON.stringify({profiles:[p],flows:[],notes:{},presets:[],theme:'dark'})),profile);
+ await page.goto('/');
+ await page.locator('.sidebar').getByRole('button',{name:'Comunidade',exact:true}).click();
+ await page.getByRole('button',{name:'Abrir Controle por voz',exact:true}).click();
+ const toggle=page.getByRole('switch',{name:'Respostas por voz do Arroba',exact:true});
+ await expect(toggle).toHaveAttribute('aria-checked','true');
+ for(const width of [1100,1600]){
+  await page.setViewportSize({width,height:1000});
+  await toggle.scrollIntoViewIfNeeded();
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  await page.screenshot({path:join(OUT,`arroba-voz-${width}.png`),fullPage:true});
+ }
+ await toggle.click();
+ await page.getByRole('button',{name:'Salvar configuração',exact:true}).click();
+ await page.getByRole('button',{name:'Abrir Texto para voz',exact:true}).click();
+ await page.getByRole('button',{name:'Abrir Controle por voz',exact:true}).click();
+ await expect(page.getByRole('switch',{name:'Respostas por voz do Arroba',exact:true})).toHaveAttribute('aria-checked','false');
+});

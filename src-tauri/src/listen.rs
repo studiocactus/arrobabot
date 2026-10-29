@@ -50,6 +50,7 @@ fn local(endpoint:&str)->Result<url::Url,String>{
 /// Salva o painel de voz: recusa endereço remoto e valores fora dos limites.
 pub fn valid_config(v:&Value)->bool{
  if !v.is_object(){return false}
+ if !v["spokenReplies"].is_null()&&!v["spokenReplies"].is_boolean(){return false}
  for key in ["listenEndpoint","language","activation"]{if !v[key].is_null()&&!v[key].is_string(){return false}}
  if let Some(endpoint)=v["listenEndpoint"].as_str(){if !endpoint.is_empty()&&local(endpoint).is_err(){return false}}
  if let Some(language)=v["language"].as_str(){if !LANGUAGES.contains(&language){return false}}
@@ -262,6 +263,9 @@ pub(crate) async fn transcribe(client:&reqwest::Client,cfg:&Config,pcm:&[u8])->R
  }
  #[test] fn so_enderecos_locais_e_limites_do_painel_sao_aceitos(){
   assert!(valid_config(&json!({"endpoint":"http://127.0.0.1:8080/inference"})),"config antiga continua válida");
+  assert!(valid_config(&json!({"spokenReplies":true})));
+  assert!(valid_config(&json!({"spokenReplies":false})));
+  assert!(!valid_config(&json!({"spokenReplies":"sim"})));
   assert!(valid_config(&json!({"listenEndpoint":"http://localhost:8010/transcribe-pcm16","language":"pt","activation":"arroba","silenceMs":600,"threshold":0.02})));
   assert!(!valid_config(&json!({"listenEndpoint":"http://192.168.0.10:8010/transcribe-pcm16"})),"servidor fora da máquina não é aceito");
   assert!(!valid_config(&json!({"listenEndpoint":"https://127.0.0.1:8010/x"})),"só HTTP local");
