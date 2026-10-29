@@ -19,15 +19,8 @@ import {AIResponseTest} from './AIConversation';
 import AIActionOptions from './AIActionOptions';
 import {friendlyError,friendlyMessage,type FriendlyError} from './errors';
 import {api,desktop,errorText} from './api';
-import {OBS_OPS,OBS_TEMP,obsNumeric,obsInput} from './obsCatalog';
-type ObsDisco={scenes:string[];current:string;inputs:string[];sources:string[]};
-function ObsTarget({profileId,op,value,onChange,issue}:{profileId:string;op:string;value:string;onChange:(v:string)=>void;issue?:string}){
- const [disco,setDisco]=useState<ObsDisco|null>(null);const [error,setError]=useState('');
- useEffect(()=>{if(!desktop){return}api<ObsDisco>('obs.discover',{profileId}).then(setDisco).catch(()=>setError('Abra o OBS e confira a integração na tela OBS Studio.'))},[profileId]);
- const options=op==='scene'?(disco?.scenes||[]):obsInput(op)?(disco?.inputs||[]):(disco?.sources||[]);
- const label=op==='scene'?'Cena':op.startsWith('media_')?'Fonte de mídia':obsInput(op)?'Entrada de áudio':'Fonte (cena atual)';
- return <><Field label={label}><select value={value} onChange={e=>onChange(e.target.value)}><option value="">Escolha…</option>{options.map(o=><option key={o} value={o}>{o}</option>)}{value&&!options.includes(value)&&<option value={value}>{value}</option>}</select></Field>{issue&&<p className="field-warn" role="status">{issue}</p>}{error&&<p className="help">{error}</p>}</>;
-}
+import {obsProblem} from './obsCatalog';
+import ObsActionFields,{ObsActionTest} from './ObsActionFields';
 type Data={label:string;action?:Action;[key:string]:unknown};
 /** Zoom atual do canvas (o transform do viewport do React Flow), para medir blocos em unidades do fluxo. */
 function flowZoom():number{
@@ -72,7 +65,7 @@ function StepReveal({target,restZoom}:{target:{id:string;x:number;y:number}|null
 /** Seção recolhível do painel lateral: agrupa campos parecidos e sai do caminho quando fechada. */
 type Reward={id:string;title:string;cost:number;enabled:boolean;paused:boolean};
 type Rewards={channel:string;rewards:Reward[]};
-function RewardPicker({profileId,value,onChange}:{profileId:string;value:string;onChange:(id:string,name:string)=>void}){
+export function RewardPicker({profileId,value,onChange}:{profileId:string;value:string;onChange:(id:string,name:string)=>void}){
  const [rewards,setRewards]=useState<Reward[]>([]);const [channel,setChannel]=useState('');const [at,setAt]=useState('');const [error,setError]=useState('');const [loading,setLoading]=useState(false);
  const [creating,setCreating]=useState(false);const [ntitle,setNtitle]=useState('');const [ncost,setNcost]=useState(100);const [ninput,setNinput]=useState(false);const [busy,setBusy]=useState(false);
  const load=useCallback(()=>{setLoading(true);setError('');api<Rewards>('twitch.rewards',{profileId}).then(r=>{setRewards(r.rewards||[]);setChannel(r.channel||'');setAt(new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}))}).catch(()=>setError('Não foi possível listar as recompensas. Confira a conexão e a autorização da conta do canal.')).finally(()=>setLoading(false))},[profileId]);
@@ -110,7 +103,7 @@ function CondEditor({action,update,issue}:{action:Action;update:(a:Action)=>void
 export default function FlowEditor({flow,platform='twitch',ai,onSave,onTest,intro}:{flow:Flow;platform?:string;ai?:AIConfig;onSave:(f:Flow)=>Promise<void>;onTest?:(f:Flow)=>void;intro?:string}){
  const [counter,setCounter]=useState(!!flow.counter);const [timerSeconds,setTimerSeconds]=useState(flow.timerSeconds||300);
  const [sendType,setSendType]=useState(flow.sendType||'chat');const [sendColor,setSendColor]=useState(flow.sendColor||'primary');const [replyTo,setReplyTo]=useState(!!flow.replyTo);
- const [audio,setAudio]=useState(flow.audio||'');const [audioVolume,setAudioVolume]=useState(flow.audioVolume??1);const [obsTest,setObsTest]=useState('');
+ const [audio,setAudio]=useState(flow.audio||'');const [audioVolume,setAudioVolume]=useState(flow.audioVolume??1);
  const layout=flow.layout as {nodes?:Node<Data>[];edges?:Edge[]}|undefined;
  const startNodes:Node<Data>[]=layout?.nodes?layout.nodes.map(n=>n.data.action?{...n,data:{...n.data,label:stepLabel(n.data.action)}}:n):[{id:'trigger',position:{x:60,y:140},data:{label:triggerLabel(flow.trigger)},type:'input'},...flow.actions.map((action,i)=>({id:'action-'+i,position:{x:60,y:140+(i+1)*90},data:{label:stepLabel(action),action}}))];
  const startEdges:Edge[]=layout?.edges||flow.actions.map((_,i)=>({id:'e'+i,source:i===0?'trigger':'action-'+(i-1),target:'action-'+i,animated:true}));
@@ -142,10 +135,7 @@ export default function FlowEditor({flow,platform='twitch',ai,onSave,onTest,intr
  function actionProblem(a:Action):{message:string}|null{
   if(a.kind==='action.ref'&&!a.target)return {message:'Escolha uma etapa da biblioteca'};
   if(a.kind==='condition'&&!(a.condVar||'').trim())return {message:'Escolha uma variável'};
-  if(a.kind==='obs'&&!(a.obsTarget||'').trim()){
-   const op=a.obsOp||'mute';
-   return {message:op==='scene'?'Escolha uma cena':['mute','unmute','toggle_mute','volume'].includes(op)?'Escolha uma entrada de áudio':'Escolha uma fonte'};
-  }
+  if(a.kind==='obs'){const message=obsProblem(a);if(message)return {message};}
   return null;
  }
  function update(a:Action){setNodes(ns=>ns.map(n=>n.id===selected?{...n,data:{label:stepLabel(a),action:a},className:actionProblem(a)?n.className:undefined}:n))}
@@ -273,13 +263,8 @@ function switchKind(current:Action,next:string){if(next==='action.ref'){update(n
  <p className="help">O alvo sai da fala: @menção primeiro, depois nome de quem está no chat, depois o alvo fixo. Sem nenhum, o bot avisa no Histórico e não executa.</p>
  <p className="help">Categoria, título e VIP executam com a conta do canal (reautorize o canal após atualizar); o resto executa com a conta do bot, que precisa ser moderadora — o clipe ainda exige a permissão de clipes, então reautorize o bot em Perfis. A prévia não executa.</p>
  </>}{action.kind==='obs'&&<>
-  <Field label="Operação no OBS"><select value={action.obsOp||'mute'} onChange={e=>update({...action,obsOp:e.target.value,obsTarget:'',text:'0',obsDuration:0})}>{Object.entries(OBS_OPS).map(([k,n])=><option key={k} value={k}>{n}</option>)}</select></Field>
-  <ObsTarget profileId={flow.profileId} op={action.obsOp||'mute'} value={action.obsTarget||''} onChange={obsTarget=>update({...action,obsTarget})} issue={issue}/>
-  {(action.obsOp||'mute')==='volume'&&<Field label="Volume (dB)" hint="Ex.: -6. Entre -100 e 30."><input type="number" min={-100} max={30} step="any" value={action.text} onChange={e=>update({...action,text:e.target.value})}/></Field>}
-  {action.obsOp==='rotate'&&<Field label="Rotação (graus)" hint="Ângulo absoluto entre -360 e 360. Preserva posição, escala e recorte."><input type="number" min={-360} max={360} step="any" value={action.text} onChange={e=>update({...action,text:e.target.value})}/></Field>}
-  {action.obsOp?.startsWith('media_')&&<p className="help">A fonte precisa aceitar controles de mídia. Próxima e anterior dependem de uma lista compatível, como VLC. O OBS informa quando não pode executar.</p>}
-  {OBS_TEMP.includes(action.obsOp||'mute')&&<Field label="Duração (segundos)" hint="0 = permanente. Temporário restaura o estado anterior no fim."><input type="number" min={0} max={3600} step={1} value={action.obsDuration??0} onChange={e=>update({...action,obsDuration:Math.max(0,Math.round(Number(e.target.value)||0))})}/></Field>}
-  <p className="help">Executa no OBS desta máquina, sem nuvem. Temporário com o mesmo alvo soma o tempo; alvo ocupado por outro efeito é recusado no Histórico.</p>
+  <ObsActionFields key={selected} profileId={flow.profileId} action={action} onChange={update} issue={issue} flow={{...flow,name,trigger,actions:orderedSteps}} at={stepIndex>=0?stepIndex:undefined}/>
+  <ObsActionTest key={selected+"-test"} profileId={flow.profileId} action={action} label="Testar no OBS" disabled={busy}/>
   </>}{action.kind==='voiceFx'&&<>
   <Field label="Voz do Voicemod" hint={vmVoices.length?'Voz real do Voicemod: a troca usa a mesma fila das recompensas e comandos.':'Conecte o Voicemod (tela Voicemod) para escolher vozes reais.'}>
    <select value={action.target||''} onChange={e=>{const v=vmVoices.find(x=>x.voiceID===e.target.value);update({...action,target:e.target.value,text:v?.name||''})}}>
@@ -291,10 +276,10 @@ function switchKind(current:Action,next:string){if(next==='action.ref'){update(n
   <Field label="Duração (segundos)" hint="0 = manter até a próxima troca. Com tempo, a voz de antes volta sozinha."><input type="number" min={0} max={3600} step={1} value={action.value??0} onChange={e=>update({...action,value:Math.max(0,Math.round(Number(e.target.value)||0))})}/></Field>
   <p className="help">Troca sua voz pelo Voicemod — fila, duração e restauração iguais às das recompensas. Se outro efeito entrar no meio, ele espera na fila: cada um cumpre o seu tempo e a voz de antes volta no fim de todos — exceto quem usa duração 0 (“até a próxima troca”), que é substituído pelo próximo.{action.target&&voiceEffects[action.target]?<strong> Este fluxo ainda usa o efeito antigo “{voiceEffects[action.target]}”: escolha uma voz do Voicemod acima para atualizar.</strong>:''}</p>
   </>}</Section>
-  {(action.kind.startsWith('ai')||action.kind==='obs')&&<Section title="Avançado">
+  {action.kind.startsWith('ai')&&<Section title="Avançado">
   {action.kind.startsWith('ai')&&<details className="ai-help"><summary>Como a IA monta a resposta</summary><p className="help">A mensagem atual, até 12 falas recentes dos últimos 5 minutos e as memórias entram automaticamente. Defina o tom aqui. {action.kind==='ai.generate'?'Esta ação só guarda a resposta. Conecte Enviar mensagem e clique em + Resposta da IA.':'Esta ação já envia ao chat e guarda a resposta para os próximos blocos.'}</p></details>}
   {action.kind.startsWith('ai')&&<AIResponseTest key={selected} profileId={flow.profileId} instruction={action.text}/>}
-  {action.kind==='obs'&&<><div className="row"><button type="button" disabled={busy||!desktop} onClick={async()=>{setBusy(true);setObsTest('');try{const done=await api<string>('obs.execute',{profileId:flow.profileId,op:action.obsOp||'mute',target:action.obsTarget||'',num:obsNumeric(action.obsOp||'mute')?Number(action.text)||0:0,secs:action.obsDuration??0});setObsTest(String(done))}catch(e){setObsTest('Falhou: '+friendlyMessage(e))}finally{setBusy(false)}}}><Play size={15}/>Testar no OBS</button></div>{obsTest&&<p className="help">{obsTest}</p>}</>}
+
   </Section>}
  {action.kind!=='action.ref'&&<Section title="Comportamento">
  <Field label="Executar só se a mensagem contiver">

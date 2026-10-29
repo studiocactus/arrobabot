@@ -83,6 +83,8 @@ export async function mock(page:Page){
       case 'obs.get':return {config:{enabled:false,host:'127.0.0.1',port:4455},hasPassword:false};
       case 'obs.status':return null;
       case 'obs.discover':return null;
+      case 'obs.targets':return {current:'Jogo',scenes:['Jogo','Intervalo'],groups:['Grupo de alertas'],inputs:[{inputName:'Microfone',inputKind:'wasapi_input_capture'},{inputName:'Texto da live',inputKind:'text_gdiplus_v2'},{inputName:'Imagem do resgate',inputKind:'image_source'},{inputName:'Página da live',inputKind:'browser_source'}],sources:[{sourceName:'Texto da live'},{sourceName:'Imagem do resgate'},{sourceName:'Página da live'}]};
+      case 'obs.filters':return {filters:[{name:'Cor',enabled:false},{name:'Recorte',enabled:true}]};
       case 'voiceFx.get':return {phase:'off',message:'Prévia no navegador: a voz ao vivo só existe no aplicativo desktop.',input:'',output:'',gate_db:-45};
       case 'voiceFx.devices':return {inputs:[{name:'Microfone (Realtek)',default:true}],outputs:[{name:'CABLE Input (VB-Audio Virtual Cable)',default:true}]};
       case 'voiceFx.selection':return {input:'Microfone (Realtek)',output:'CABLE Input (VB-Audio Virtual Cable)',gateDb:-45};

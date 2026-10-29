@@ -461,7 +461,7 @@ async fn action(rt:&Arc<Runtime>,p:&Profile,e:&Event,a:&Action,variables:&mut cr
  match a.kind.as_str(){
  "punish"=>crate::moderation::punish(rt,p,e,a,&text,Some(&mut *variables)).await,
  "twitch"=>crate::twitch_ops::run(rt,p,e,a,&text,&f.trigger.pattern,Some(variables)).await.map(|_|()),
- "obs"=>{let num=a.text.trim().parse::<f64>().unwrap_or(0.0);match crate::obs::execute_for_run(rt,p,&a.obs_op,&a.obs_target,num,a.obs_duration,exec,step).await{Ok(done)=>{rt.log(&p.id,"obs",&done,"success");Ok(())}Err(err)=>Err(err)}}
+ "obs"=>{let num=a.text.trim().parse::<f64>().unwrap_or(0.0);match crate::obs::execute_configured(rt,p,&a.obs_op,&a.obs_target,num,a.obs_duration,Some((exec,step)),&crate::obs::Options{scene:a.obs_scene.clone(),filter:a.obs_filter.clone(),content:text.clone()}).await{Ok(done)=>{rt.log(&p.id,"obs",&done,"success");Ok(())}Err(err)=>Err(err)}}
  "chat"=>rt.send_with(p,e,&text,Some(f)).await,
  "ai"|"ai.generate"=>{
  let opts=crate::ai::Options{

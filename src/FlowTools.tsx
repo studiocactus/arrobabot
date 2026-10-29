@@ -6,6 +6,9 @@ import {type Flow,type Profile,type Preset,minutesToSeconds,secondsToMinutes,tim
 import {Modal,Field,Toggle} from './components';
 import TestFlowDialog,{focusTestButton} from './TestFlow';
 import FlowEditor from './FlowEditor';
+import ObsRecipeForm from './ObsRecipeForm';
+import {obsRecipeMatches} from './obsRecipe';
+import {obsProblem} from './obsCatalog';
 import MessageEditor from './MessageEditor';
 import {SendPicker,AudioPicker} from './FlowOptions';
 import {FN_LABELS,FunctionForm,guessFn,templateMatches} from './FunctionForm';
@@ -36,7 +39,7 @@ export function TimerVariants({variants,onChange}:{variants:string[];onChange:(v
  {variants.length<10&&<button type="button" onClick={()=>onChange([...variants,''])}>+ Adicionar resposta</button>}
  </div>;
 }
-export function FlowDialog({flow,mode,profile,notify,onSaved,onClose,reservedCommands={},requireSoundReward=false,requireDonationLink=false}:{flow:Flow;mode:FlowMode;profile:Profile;notify:Notify;onSaved:()=>Promise<void>|void;onClose:()=>void;reservedCommands?:Record<string,string>;requireSoundReward?:boolean;requireDonationLink?:boolean}){
+export function FlowDialog({flow,mode,profile,notify,onSaved,onClose,reservedCommands={},requireSoundReward=false,requireDonationLink=false,requireObsReward=false}:{flow:Flow;mode:FlowMode;profile:Profile;notify:Notify;onSaved:()=>Promise<void>|void;onClose:()=>void;reservedCommands?:Record<string,string>;requireSoundReward?:boolean;requireDonationLink?:boolean;requireObsReward?:boolean}){
  const [editing,setEditing]=useState<Flow>(flow);
  const [saving,setSaving]=useState(false);
  const savingRef=useRef(false);
@@ -49,13 +52,15 @@ export function FlowDialog({flow,mode,profile,notify,onSaved,onClose,reservedCom
  const adotavel=!editing.fnId?guessFn(editing):null;
  const hasFn=!!editing.fnId&&!editing.fnId.startsWith('recipe:');
  const deviated=hasFn&&!templateMatches(editing);
- const editor=mode==='flow'||(!hasFn&&(editing.actions.length>1||editing.actions.some(a=>!['chat','ai'].includes(a.kind))))||forceVisual||deviated;
+ const obsSimple=obsRecipeMatches(editing)&&!forceVisual;
+ const editor=!obsSimple&&(mode==='flow'||(!hasFn&&(editing.actions.length>1||editing.actions.some(a=>!['chat','ai'].includes(a.kind))))||forceVisual||deviated);
  const intro=mode!=='flow'&&(forceVisual||editing.actions.length>1)?'Ao salvar, este '+kind+' mantém o mesmo nome, gatilho e ativação.':'';
  const title=mode==='flow'?'Editor de automação':mode==='timer'?'Configurar timer':'Configurar comando';
  async function save(next:Flow){
   if(savingRef.current)return;
   savingRef.current=true;setSaving(true);setSaveError('');
   try{
+   if(obsRecipeMatches(next)){const problem=obsProblem(next.actions.find(a=>a.kind==='obs')!);if(problem)throw new Error(problem);if(next.trigger.kind==='redemption'&&!next.trigger.pattern.trim())throw new Error('Escolha uma recompensa específica para esta receita do OBS.');}
    if(next.trigger.kind==='command'){
     const latest=await api<Flow[]>('flows',{profileId:profile.id});
     if(!Array.isArray(latest))throw new Error('Não foi possível conferir os comandos existentes.');
@@ -67,6 +72,7 @@ export function FlowDialog({flow,mode,profile,notify,onSaved,onClose,reservedCom
     const issue=donationLinkIssue(last.replace('{{local.aiResponse}}','').replace('💜','').trim());
     if(issue)throw new Error(issue);
    }
+   if(requireObsReward&&(next.trigger.kind!=='redemption'||!next.trigger.pattern.trim()))throw new Error('Escolha uma recompensa específica para esta receita do OBS.');
    if(requireSoundReward){
     if(next.trigger.kind!=='redemption'||!next.trigger.pattern.trim())throw new Error('Escolha uma recompensa específica para esta receita.');
     if(!next.audio)throw new Error('Escolha o som em Como sai antes de salvar esta receita.');
@@ -84,12 +90,12 @@ export function FlowDialog({flow,mode,profile,notify,onSaved,onClose,reservedCom
  }
  return <>
  <Modal wide={editor} title={title} onClose={close}>
-  {!editor&&<FormWorkflow save={'Use Salvar '+kind+'. Editar ou testar não salva as alterações.'} test="O teste usa os valores em edição e mostra o acompanhamento; confira os efeitos permitidos no painel antes de executar." requirements={mode==='timer'?'Timer ativado e perfil conectado; o primeiro envio aguarda o intervalo completo.':'Comando ativado, perfil conectado e contas com as permissões necessárias.'}/>}
+  {!editor&&!obsSimple&&<FormWorkflow save={'Use Salvar '+kind+'. Editar ou testar não salva as alterações.'} test="O teste usa os valores em edição e mostra o acompanhamento; confira os efeitos permitidos no painel antes de executar." requirements={mode==='timer'?'Timer ativado e perfil conectado; o primeiro envio aguarda o intervalo completo.':'Comando ativado, perfil conectado e contas com as permissões necessárias.'}/>}
   {!editor&&<p role="status" aria-label="Estado de salvamento do formulário" className="help form-edit-state">{saving?'Salvando…':dirty?'Alterações não salvas':'Revise os campos e salve para aplicar'}</p>}
   {saveError&&!editor&&<p role="alert" className="inline-error">{saveError}</p>}
-  {!editing.enabled&&<p className="help"><strong>Esta automação está desativada</strong>: ela não dispara na live até você ativá-la na lista. As alterações aqui continuam valendo.</p>}
+  {!editing.enabled&&<p className={obsSimple?"help obs-recipe-notice":"help"}><strong>Esta automação está desativada</strong>: ela não dispara na live até você ativá-la na lista. As alterações aqui continuam valendo.</p>}
   {adotavel&&<p className="help"><strong>Este comando tem o formato de {FN_LABELS[adotavel]||'uma função pronta'}.</strong> <button type="button" onClick={()=>setEditing({...editing,fnId:adotavel,fnVersion:1})}>Abrir no formulário dessa função</button> — ou continue no editor atual; nada é alterado sem você pedir.</p>}
- {hasFn&&!forceVisual&&!deviated?<fieldset className="form-fields" disabled={saving}><FunctionForm flow={editing} onChange={setEditing} onAdvanced={()=>setForceVisual(true)}/><footer className="form-footer"><span className="help">As alterações valem ao salvar.</span><button type="button" data-test-flow onClick={()=>setTesting(editing)}><Play size={15}/>Testar comando</button><button className="primary" disabled={saving} onClick={()=>void save(editing).catch(()=>{})}><Save size={16}/>Salvar comando</button></footer></fieldset>:editor?<>{deviated&&<p className="help"><strong>{FN_LABELS[editing.fnId||'']||'Este comando'}</strong> foi personalizado no editor avançado. O formulário simples não representa mais tudo — continue por aqui; nada é descartado. Para voltar ao formulário, desfaça as etapas extras.</p>}<FlowEditor flow={editing} platform={profile.platform} ai={profile.ai} onSave={save} onTest={f=>setTesting(f)} intro={intro}/></>:<form className="form-pad" onSubmit={e=>{e.preventDefault();save(editing).catch(()=>{})}}><fieldset className="form-fields" disabled={saving}>
+ {obsSimple?<><fieldset className="form-fields" disabled={saving}><ObsRecipeForm flow={editing} onChange={setEditing} onAdvanced={()=>setForceVisual(true)}/><footer className="form-footer"><span className="help">Salve para aplicar. Novas receitas começam desativadas.</span><button type="button" data-test-flow onClick={()=>setTesting(editing)}><Play size={15}/>Testar automação</button><button className="primary" disabled={saving} onClick={()=>void save(editing).catch(()=>{})}><Save size={16}/>Salvar automação</button></footer></fieldset></>:hasFn&&!forceVisual&&!deviated?<fieldset className="form-fields" disabled={saving}><FunctionForm flow={editing} onChange={setEditing} onAdvanced={()=>setForceVisual(true)}/><footer className="form-footer"><span className="help">As alterações valem ao salvar.</span><button type="button" data-test-flow onClick={()=>setTesting(editing)}><Play size={15}/>Testar comando</button><button className="primary" disabled={saving} onClick={()=>void save(editing).catch(()=>{})}><Save size={16}/>Salvar comando</button></footer></fieldset>:editor?<>{deviated&&<p className="help"><strong>{FN_LABELS[editing.fnId||'']||'Este comando'}</strong> foi personalizado no editor avançado. O formulário simples não representa mais tudo — continue por aqui; nada é descartado. Para voltar ao formulário, desfaça as etapas extras.</p>}<FlowEditor flow={editing} platform={profile.platform} ai={profile.ai} onSave={save} onTest={f=>setTesting(f)} intro={intro}/></>:<form className="form-pad" onSubmit={e=>{e.preventDefault();save(editing).catch(()=>{})}}><fieldset className="form-fields" disabled={saving}>
   <div className="form-grid">
    <Field label="Nome"><input required value={editing.name} onChange={e=>setEditing({...editing,name:e.target.value})}/></Field>
    {mode!=='timer'&&<Field label="Comando" hint="Variações com vírgula valem aqui: !whislist, !whishlist — quem erra o comando também dispara."><input required pattern="!\S+(\s*,\s*!\S+)*" title="Comece com ! e separe variações com vírgula, sem espaços dentro de cada um." value={editing.trigger.pattern} onChange={e=>setEditing({...editing,trigger:{...editing.trigger,pattern:e.target.value}})}/></Field>}

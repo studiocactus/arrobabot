@@ -1,8 +1,10 @@
 import {useCallback,useEffect,useState} from 'react';
-import {MonitorPlay,RefreshCw,Save} from 'lucide-react';
+import {RefreshCw,Save} from 'lucide-react';
 import {api,desktop,errorText} from './api';
 import {Card,Field} from './components';
-import {OBS_OPS,obsNumeric} from './obsCatalog';
+
+import ObsActionFields,{ObsActionTest} from './ObsActionFields';
+import {newAction} from './types';
 type Cfg={enabled:boolean;host:string;port:number};
 type Status={online:boolean;obsVersion:string;wsVersion:string;scene:string};
 type Disco={scenes:string[];current:string;inputs:string[];sources:string[]};
@@ -14,10 +16,8 @@ export default function Obs({profileId,notify}:{profileId:string;notify:(s:strin
  const [disco,setDisco]=useState<Disco|null>(null);
  const [busy,setBusy]=useState(false);
  const [error,setError]=useState('');
- const [testOp,setTestOp]=useState('mute');
- const [testTarget,setTestTarget]=useState('');
- const [testOut,setTestOut]=useState('');
- const [testNumber,setTestNumber]=useState('0');
+ const [action,setAction]=useState(()=>newAction('obs'));
+ const [sourcesVersion,setSourcesVersion]=useState(0);
  const load=useCallback(async()=>{
   try{
    const v=await api<{config:Cfg;hasPassword:boolean}>('obs.get',{profileId});
@@ -31,17 +31,10 @@ export default function Obs({profileId,notify}:{profileId:string;notify:(s:strin
   await run(async()=>{
    await api('obs.save',{profileId,config:cfg});
    if(password){await api('obs.password',{profileId,value:password});setPassword('');}
-   await load();notify('OBS salvo.');
+   await load();setSourcesVersion(v=>v+1);notify('OBS salvo.');
   });
  }
- async function check(){await run(async()=>{setSt(await api<Status>('obs.status',{profileId}));setDisco(await api<Disco>('obs.discover',{profileId}))})}
- async function test(){
-  setTestOut('');
-  await run(async()=>{
-   const done=await api<string>('obs.execute',{profileId,op:testOp,target:testTarget,num:obsNumeric(testOp)?Number(testNumber):0,secs:0});
-   setTestOut(String(done));notify('Ação executada no OBS.');
-  });
- }
+ async function check(){await run(async()=>{setSt(await api<Status>('obs.status',{profileId}));setDisco(await api<Disco>('obs.discover',{profileId}));setSourcesVersion(v=>v+1)})}
  let pill='status-pill off';
  let pillText='Parado';
  let statusText='Confira com o botão abaixo.';
@@ -66,13 +59,9 @@ export default function Obs({profileId,notify}:{profileId:string;notify:(s:strin
   {!desktop&&<p className="help">Configuração disponível no aplicativo desktop.</p>}
  </Card>
  <Card title="Testar ação">
-  <div className="row end">
-   <Field label="Operação"><select value={testOp} onChange={e=>{setTestOp(e.target.value);setTestTarget('');setTestNumber('0')}}>{Object.entries(OBS_OPS).map(([k,name])=><option key={k} value={k}>{name}</option>)}</select></Field>
-   <Field label="Alvo"><input value={testTarget} placeholder="Microfone" onChange={e=>setTestTarget(e.target.value)}/></Field>
-  </div>
-  {obsNumeric(testOp)&&<Field label={testOp==='rotate'?'Rotação (graus)':'Volume (dB)'}><input type="number" min={testOp==='rotate'?-360:-100} max={testOp==='rotate'?360:30} step="any" value={testNumber} onChange={e=>setTestNumber(e.target.value)}/></Field>}
-  <div className="row"><button disabled={!desktop||busy||!testTarget.trim()} onClick={()=>void test()}><MonitorPlay size={15}/>Executar no OBS</button></div>
-  {testOut&&<p className="help">{testOut}</p>}
+  <p className="help">Escolha o resultado, selecione uma fonte real e teste. Este botão altera o OBS imediatamente. Para usar por comando ou resgate, abra Receitas prontas em Automações.</p>
+  <ObsActionFields profileId={profileId} action={action} onChange={setAction} refreshToken={sourcesVersion}/>
+  <ObsActionTest profileId={profileId} action={action} label="Executar no OBS" disabled={busy} onSuccess={()=>notify("Ação executada no OBS.")}/>
   <p className="help">Executa direto, sem resgate. Com fio: o OBS desta máquina, nunca nuvem.</p>
  </Card>
  </div>;

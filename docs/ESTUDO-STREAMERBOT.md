@@ -34,6 +34,8 @@ O módulo Batimentos da live usa uma ponte Bluetooth local no navegador, uma cha
 
 ## Próximos blocos e critérios de conclusão
 
+O segundo bloco acrescenta seis operações de filtro/conteúdo, seleção explícita de cena/grupo, descoberta de fontes compatíveis e três receitas com formulário simples, sem duplicar o motor. Consulte [Receitas e controles do OBS](16-OBS-AUTOMACOES.md). Transições, gravação, replay, D6 e ampliação das plataformas continuam pendentes.
+
 1. Completar OBS: filtros com descoberta, edição tipada de texto/imagem/navegador, grupos e seleção de cena explícita; depois transições, gravação e replay. Cada comando deve preservar campos não alterados, propagar erro e respeitar o motor existente.
 2. Implementar o controle do D6 por atalhos configuráveis, sem remover o software da Fifine. A [página oficial de software do D6](https://fifinemicrophone.com/pages/download-fifine-d6-software) descreve atalhos e exige o aplicativo do fabricante, mas não confirma SDK público; conexão USB direta não está homologada. Evitar atalhos duplicados, exigir escolha do perfil e impedir disparos durante captura de configuração.
 3. Completar Kick e YouTube a partir de APIs oficiais. Eventos por webhook exigem um destino HTTPS acessível; a API local 127.0.0.1 não satisfaz esse requisito. Documentar claramente funções indisponíveis por permissão ou cota.

@@ -10,10 +10,12 @@ use std::{
  time::Duration,
 };
 use futures_util::{SinkExt, StreamExt};
+#[path="obs_controls.rs"] mod controls;
+pub use controls::Options;
 pub const MODULE: &str = "obs";
 const DEFAULT_PORT: u16 = 4455;
-/// Operações seguras expostas a automações. Sem stop/exit/delete/settings.
-pub const OPS: &[&str] = &["mute", "unmute", "toggle_mute", "volume", "show", "hide", "toggle_item", "scene", "media_play", "media_pause", "media_stop", "media_restart", "media_next", "media_previous", "rotate", "flip_horizontal", "flip_vertical"];
+/// Catálogo permitido; sem encerrar OBS/live, excluir fontes ou enviar comandos arbitrários.
+pub const OPS: &[&str] = &["mute", "unmute", "toggle_mute", "volume", "show", "hide", "toggle_item", "scene", "media_play", "media_pause", "media_stop", "media_restart", "media_next", "media_previous", "rotate", "flip_horizontal", "flip_vertical", "filter_enable", "filter_disable", "filter_toggle", "set_text", "set_image", "set_browser_url"];
 pub fn valid_number(op:&str,num:f64)->bool{num.is_finite()&&match op{"volume"=>(-100.0..=30.0).contains(&num),"rotate"=>(-360.0..=360.0).contains(&num),_=>true}}
 /// Operações que aceitam duração temporária com restauração do estado anterior.
 pub fn temp_ok(op: &str) -> bool {
@@ -184,7 +186,9 @@ async fn program_scene(conn: &mut Conn) -> Result<String, String> {
 }
 /// Itens da cena com nome e id, para achar fonte pelo nome.
 async fn scene_items(conn: &mut Conn, scene: &str) -> Result<Vec<(String, i64)>, String> {
- let v = call(conn, "GetSceneItemList", json!({"sceneName": scene})).await?;
+ let groups=call(conn,"GetGroupList",json!({})).await.unwrap_or(Value::Null);
+ let group=groups["groups"].as_array().is_some_and(|a|a.iter().any(|v|v.as_str()==Some(scene)));
+ let v=call(conn,if group{"GetGroupSceneItemList"}else{"GetSceneItemList"},json!({"sceneName":scene})).await?;
  Ok(v["sceneItems"]
   .as_array()
   .cloned()
@@ -342,17 +346,21 @@ async fn release_temporary(rt:Arc<Runtime>,key:String,generation:String,gate:Arc
 pub async fn execute_action(rt:&Arc<Runtime>,p:&Profile,op:&str,target:&str,num:f64,secs:u64)->Result<String,String>{execute(rt,p,op,target,num,secs,None).await}
 pub async fn execute_for_run(rt:&Arc<Runtime>,p:&Profile,op:&str,target:&str,num:f64,secs:u64,run:&str,index:usize)->Result<String,String>{execute(rt,p,op,target,num,secs,Some((run,index))).await}
 async fn execute(rt:&Arc<Runtime>,p:&Profile,op:&str,target:&str,num:f64,secs:u64,run:Option<(&str,usize)>)->Result<String,String>{
+ execute_configured(rt,p,op,target,num,secs,run,&Options::default()).await
+}
+pub async fn execute_configured(rt:&Arc<Runtime>,p:&Profile,op:&str,target:&str,num:f64,secs:u64,run:Option<(&str,usize)>,options:&Options)->Result<String,String>{
  if !OPS.contains(&op){return Err("Ação do OBS desconhecida".into())}
  if target.trim().is_empty(){return Err("Escolha o alvo da ação do OBS".into())}
  if secs>3600{return Err("Ação do OBS: duração de até 1 hora".into())}
  if !valid_number(op,num){return Err("Valor do OBS inválido: volume de -100 a 30 dB; rotação de -360 a 360 graus".into())}
  if secs>0&&!temp_ok(op){return Err("Duração temporária vale para mutar, volume, mostrar e esconder".into())}
+ controls::validate(op,options)?;
  let config=config(rt,&p.id);let endpoint=endpoint(&config);let gate=rt.obs.gate(&endpoint);
  if let Some((id,index))=run{rt.runs.step(id,index,"WAITING");}
  let (_slot,_guard)=admit(&gate,rt,run.map(|(id,_)|id)).await?;
  if let Some((id,index))=run{rt.runs.step(id,index,"RUNNING");}
  let mut conn=connect_to(p,&config).await?;
- if matches!(op,"show"|"hide"|"toggle_item"|"rotate"|"flip_horizontal"|"flip_vertical"){conn.pinned=Some(item(&mut conn,target).await?);}
+ if matches!(op,"show"|"hide"|"toggle_item"|"rotate"|"flip_horizontal"|"flip_vertical"){conn.pinned=Some(if options.scene.is_empty(){item(&mut conn,target).await?}else{(options.scene.clone(),find_item(&mut conn,&options.scene,target).await?)});}
  let resource=if let Some((scene,id))=&conn.pinned{format!("item:{scene}:{id}")}else{resource_of(op,&target.to_lowercase())};
  let key=format!("{endpoint}|{resource}");let desired=format!("{op}:{}",if op=="volume"{num}else{0.0});
  let existing={rt.obs.active.lock().unwrap().get(&key).cloned()};
@@ -372,7 +380,7 @@ async fn execute(rt:&Arc<Runtime>,p:&Profile,op:&str,target:&str,num:f64,secs:u6
   }
  }
  if run.is_some_and(|(id,_)|rt.runs.cancelled(id)){return Err("Execução cancelada".into())}
- if secs==0{let done=apply(&mut conn,op,target,num).await?;close(conn).await;return Ok(done)}
+ if secs==0{let done=controls::apply_configured(&mut conn,op,target,num,options).await?;close(conn).await;return Ok(done)}
  let prev=previous(&mut conn,op,target).await?;
  let expected=match op{"mute"=>"muted".into(),"unmute"=>"unmuted".into(),"show"=>"shown".into(),"hide"=>"hidden".into(),_=>num.to_string()};
  if run.is_some_and(|(id,_)|rt.runs.cancelled(id)){return Err("Execução cancelada".into())}
@@ -465,6 +473,8 @@ pub async fn operation(rt: &Arc<Runtime>, p: &str, op: &str, args: &Value) -> Re
   }
   "obs.status" => status(rt, &profile).await,
   "obs.discover" => discover(rt, &profile).await,
+  "obs.targets" => controls::targets(rt,&profile,args["scene"].as_str().unwrap_or("")).await,
+  "obs.filters" => controls::filters(rt,&profile,args["target"].as_str().unwrap_or("")).await,
   "obs.test" => {
    let op = args["op"].as_str().unwrap_or("");
    let target = args["target"].as_str().unwrap_or("");
@@ -475,7 +485,8 @@ pub async fn operation(rt: &Arc<Runtime>, p: &str, op: &str, args: &Value) -> Re
    let target = args["target"].as_str().unwrap_or("");
    let num = args["num"].as_f64().unwrap_or(0.0);
    let secs = args["secs"].as_u64().unwrap_or(0);
-   execute_action(rt, &profile, op, target, num, secs).await.map(|done| json!(done))
+   let options=Options{scene:args["scene"].as_str().unwrap_or("").into(),filter:args["filter"].as_str().unwrap_or("").into(),content:args["content"].as_str().unwrap_or("").into()};
+   execute_configured(rt, &profile, op, target, num, secs,None,&options).await.map(|done| json!(done))
   }
   _ => Err("Operação do OBS desconhecida".into()),
  }
@@ -485,7 +496,7 @@ mod tests {
  use super::*;
 
  #[derive(Default)]
- struct MockState {muted:bool,volume:f64,scene:String,a:bool,b:bool,sets:usize,drop_next_set:bool,reject_restore:bool,missing_state:bool,transform:Value,last_media:String}
+ struct MockState {muted:bool,volume:f64,scene:String,a:bool,b:bool,g:bool,sets:usize,drop_next_set:bool,reject_restore:bool,missing_state:bool,transform:Value,last_media:String,settings:Value,filter_enabled:bool,reject_settings:bool}
  struct MockObs {state:Arc<Mutex<MockState>>,port:u16,task:tokio::task::JoinHandle<()>}
  impl Drop for MockObs{fn drop(&mut self){self.task.abort()}}
  async fn mock_obs()->MockObs {
@@ -506,13 +517,21 @@ mod tests {
       "GetInputMute"=>if state.missing_state{json!({})}else{json!({"inputMuted":state.muted})},"GetInputVolume"=>json!({"inputVolumeDb":state.volume}),
       "SetInputMute"=>{if state.reject_restore&&args["inputMuted"]==false{ok=false}else{state.muted=args["inputMuted"]==true;state.sets+=1;drop_connection=state.drop_next_set;state.drop_next_set=false;}json!({})},
       "SetInputVolume"=>{state.volume=args["inputVolumeDb"].as_f64().unwrap_or(0.0);state.sets+=1;json!({})},
-      "GetSceneList"=>json!({"currentProgramSceneName":state.scene}),
-      "GetSceneItemList"=>json!({"sceneItems":[{"sourceName":"Cam","sceneItemId":if args["sceneName"]=="A"{1}else{2}}]}),
-      "GetSceneItemEnabled"=>json!({"sceneItemEnabled":if args["sceneName"]=="A"{state.a}else{state.b}}),
+      "GetSceneList"=>json!({"currentProgramSceneName":state.scene,"scenes":[{"sceneName":"A"},{"sceneName":"B"}]}),
+      "GetGroupList"=>json!({"groups":["Alerts"]}),
+      "GetInputList"=>json!({"inputs":[{"inputName":"Text","inputKind":"text_gdiplus_v2"},{"inputName":"Image","inputKind":"image_source"},{"inputName":"Browser","inputKind":"browser_source"}]}),
+      "GetSceneItemList"=>{if args["sceneName"]=="Alerts"{ok=false;}json!({"sceneItems":[{"sourceName":"Cam","sceneItemId":if args["sceneName"]=="A"{1}else{2}}]})},
+      "GetGroupSceneItemList"=>json!({"sceneItems":[{"sourceName":"Cam","sceneItemId":3}]}),
+      "GetSceneItemEnabled"=>json!({"sceneItemEnabled":if args["sceneName"]=="Alerts"{state.g}else if args["sceneName"]=="A"{state.a}else{state.b}}),
+      "GetSourceFilter"=>{if args["filterName"]!="Color"{ok=false}json!({"filterEnabled":state.filter_enabled})},
+      "GetSourceFilterList"=>json!({"filters":[{"filterName":"Color","filterEnabled":state.filter_enabled}]}),
+      "SetSourceFilterEnabled"=>{state.filter_enabled=args["filterEnabled"]==true;state.sets+=1;json!({})},
+      "GetInputSettings"=>json!({"inputKind":match args["inputName"].as_str().unwrap_or(""){"Text"=>"text_gdiplus_v2","FreeType"=>"text_ft2_source_v2","Image"=>"image_source","Browser"=>"browser_source",_=>"wasapi_input_capture"},"inputSettings":state.settings}),
+      "SetInputSettings"=>{if state.reject_settings{ok=false}else{if !state.settings.is_object(){state.settings=json!({})}if args["overlay"]!=true{ok=false}else{for (k,v) in args["inputSettings"].as_object().unwrap(){state.settings[k]=v.clone();}state.sets+=1;}}json!({})},
       "GetSceneItemTransform"=>json!({"sceneItemTransform":{"scaleX":2.0,"scaleY":1.5,"positionX":120,"rotation":30}}),
       "SetSceneItemTransform"=>{state.transform=args["sceneItemTransform"].clone();state.sets+=1;json!({})},
       "TriggerMediaInputAction"=>{state.last_media=args["mediaAction"].as_str().unwrap_or("").into();state.sets+=1;json!({})},
-      "SetSceneItemEnabled"=>{if args["sceneName"]=="A"{state.a=args["sceneItemEnabled"]==true}else{state.b=args["sceneItemEnabled"]==true}state.sets+=1;json!({})},
+      "SetSceneItemEnabled"=>{if args["sceneName"]=="Alerts"{state.g=args["sceneItemEnabled"]==true}else if args["sceneName"]=="A"{state.a=args["sceneItemEnabled"]==true}else{state.b=args["sceneItemEnabled"]==true}state.sets+=1;json!({})},
       "SetCurrentProgramScene"=>{state.scene=args["sceneName"].as_str().unwrap().into();json!({})},
       _=>{ok=false;json!({})}
      };(data,ok,drop_connection)};
@@ -527,6 +546,54 @@ mod tests {
   rt.db.set_module(&p.id,MODULE,&json!({"enabled":true,"host":"127.0.0.1","port":port})).unwrap();p
  }
  async fn expire(rt:&Arc<Runtime>){let (key,lock)=rt.obs.active.lock().unwrap().iter().next().map(|(k,v)|(k.clone(),v.clone())).unwrap();release_temporary(rt.clone(),key,lock.generation,lock.gate).await;}
+ #[tokio::test]
+ async fn conteudo_preserva_ajustes_tipo_incompativel_e_recusa_nao_mutam(){
+  let server=mock_obs().await;let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();let p=test_profile(&rt,server.port);
+  server.state.lock().unwrap().settings=json!({"font":{"size":48},"color":123,"width":900,"css":"body{}","read_from_file":true});
+  for (target,op,content) in [("Text","set_text","Olá comunidade"),("FreeType","set_text","Outra fonte"),("Browser","set_browser_url","http://127.0.0.1:9876/overlay")]{
+   execute_configured(&rt,&p,op,target,0.0,0,None,&Options{content:content.into(),..Default::default()}).await.unwrap();
+  }
+  let state=server.state.lock().unwrap();assert_eq!(state.settings["font"]["size"],48);assert_eq!(state.settings["color"],123);assert_eq!(state.settings["width"],900);assert_eq!(state.settings["css"],"body{}");assert_eq!(state.settings["read_from_file"],false);assert_eq!(state.settings["from_file"],false);assert_eq!(state.settings["is_local_file"],false);let before=state.sets;drop(state);
+  assert!(execute_configured(&rt,&p,"set_text","Mic",0.0,0,None,&Options{content:"texto".into(),..Default::default()}).await.unwrap_err().contains("compatível"));
+  assert!(execute_configured(&rt,&p,"set_browser_url","Browser",0.0,0,None,&Options{content:"javascript:alert(1)".into(),..Default::default()}).await.is_err());assert_eq!(server.state.lock().unwrap().sets,before);
+  server.state.lock().unwrap().reject_settings=true;assert!(execute_configured(&rt,&p,"set_text","Text",0.0,0,None,&Options{content:"negado".into(),..Default::default()}).await.is_err());assert_eq!(server.state.lock().unwrap().sets,before);
+ }
+ #[tokio::test]
+ async fn imagem_local_valida_e_filtro_explicito_sem_duracao(){
+  let server=mock_obs().await;let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();let p=test_profile(&rt,server.port);let image=dir.path().join("image.png");std::fs::write(&image,[137,80,78,71]).unwrap();
+  execute_configured(&rt,&p,"set_image","Image",0.0,0,None,&Options{content:image.to_string_lossy().into(),..Default::default()}).await.unwrap();assert_eq!(server.state.lock().unwrap().settings["file"],image.to_string_lossy().as_ref());
+  let options=Options{filter:"Color".into(),..Default::default()};
+  for (op,expected) in [("filter_enable",true),("filter_disable",false),("filter_toggle",true)]{execute_configured(&rt,&p,op,"Cam",0.0,0,None,&options).await.unwrap();assert_eq!(server.state.lock().unwrap().filter_enabled,expected);}
+  let before=server.state.lock().unwrap().sets;assert!(execute_configured(&rt,&p,"filter_enable","Cam",0.0,0,None,&Options::default()).await.is_err());assert!(execute_configured(&rt,&p,"filter_enable","Cam",0.0,1,None,&options).await.is_err());assert!(execute_configured(&rt,&p,"filter_enable","Cam",0.0,0,None,&Options{filter:"Missing".into(),..Default::default()}).await.is_err());assert_eq!(server.state.lock().unwrap().sets,before);
+ }
+ #[tokio::test]
+ async fn cena_e_grupo_explicitos_preservam_destino_da_restauracao(){
+  let server=mock_obs().await;let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();let p=test_profile(&rt,server.port);
+  let targets=controls::targets(&rt,&p,"Alerts").await.unwrap();assert_eq!(targets["sources"][0]["sourceName"],"Cam");assert_eq!(targets["groups"][0],"Alerts");assert_eq!(controls::filters(&rt,&p,"Cam").await.unwrap()["filters"][0]["name"],"Color");
+  execute_configured(&rt,&p,"show","Cam",0.0,60,None,&Options{scene:"Alerts".into(),..Default::default()}).await.unwrap();assert!(server.state.lock().unwrap().g);server.state.lock().unwrap().scene="B".into();expire(&rt).await;let state=server.state.lock().unwrap();assert!(!state.g);assert!(state.a&&state.b);drop(state);
+  execute_configured(&rt,&p,"hide","Cam",0.0,60,None,&Options{scene:"B".into(),..Default::default()}).await.unwrap();assert!(!server.state.lock().unwrap().b);
+  assert!(execute_configured(&rt,&p,"rotate","Cam",90.0,0,None,&Options{scene:"B".into(),..Default::default()}).await.unwrap_err().contains("ocupado"));expire(&rt).await;assert!(server.state.lock().unwrap().b);
+ }
+ #[test]
+ fn entradas_invalidas_do_conteudo_sao_recusadas_antes_da_conexao(){
+  for content in ["javascript:alert(1)","file:///C:/segredo","https://user:pass@example.com","URL inválida"]{assert!(controls::validate("set_browser_url",&Options{content:content.into(),..Default::default()}).is_err());}
+  assert!(controls::validate("set_image",&Options{content:"missing.png".into(),..Default::default()}).is_err());assert!(controls::validate("set_text",&Options{content:String::new(),..Default::default()}).is_ok());
+ }
+ #[tokio::test]
+ async fn fluxo_renderiza_texto_e_para_apos_recusa_sem_confirmacao_falsa(){
+  use crate::model::{Action,Flow,Trigger,Event};
+  let server=mock_obs().await;let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();let p=test_profile(&rt,server.port);
+  let mut flow=Flow{id:uuid::Uuid::new_v4().to_string(),profile_id:p.id.clone(),name:"Texto QA".into(),trigger:Trigger{kind:"command".into(),pattern:"!tela".into(),..Default::default()},actions:vec![Action{kind:"obs".into(),obs_op:"set_text".into(),obs_target:"Text".into(),text:"{{rawInput}}".into(),..Default::default()},Action{kind:"variable.set".into(),target:"global.confirmacao".into(),text:"sim".into(),..Default::default()}],..Default::default()};
+  let event:Event=serde_json::from_value(json!({"id":"test-content","profileId":p.id,"kind":"chat","user":"Pessoa","user_id":"u","role":"moderator","message":"!tela Boa noite","data":{}})).unwrap();
+  assert!(crate::engine::execute_flow(&rt,&p,&event,&flow,true,&[],None,false,None).await);assert_eq!(server.state.lock().unwrap().settings["text"],"Boa noite");
+  flow.id=uuid::Uuid::new_v4().to_string();flow.actions[1].target="global.confirmacaoErrada".into();server.state.lock().unwrap().reject_settings=true;
+  assert!(!crate::engine::execute_flow(&rt,&p,&event,&flow,true,&[],None,false,None).await);assert!(!crate::variables::list(&rt.db,&p.id,"").unwrap().as_array().unwrap().iter().any(|v|v["name"]=="confirmacaoErrada"));
+  let before=server.state.lock().unwrap().sets;assert!(crate::engine::execute_flow(&rt,&p,&event,&flow,true,&[],None,true,None).await);assert_eq!(server.state.lock().unwrap().sets,before);
+ }
+ #[test]
+ fn acao_antiga_sem_campos_novos_continua_com_a_cena_atual(){
+  let a:crate::model::Action=serde_json::from_value(json!({"kind":"obs","obsOp":"mute","obsTarget":"Mic","text":""})).unwrap();assert!(a.obs_scene.is_empty());assert!(a.obs_filter.is_empty());assert_eq!(a.obs_duration,0);
+ }
  #[tokio::test]
  async fn novas_operacoes_preservam_campos_e_respeitam_efeito_ativo(){
   let server=mock_obs().await;let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();let p=test_profile(&rt,server.port);

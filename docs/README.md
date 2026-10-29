@@ -4,6 +4,8 @@ Esta documentação descreve a versão implementada do BotLive. Os exemplos usam
 
 ## Escolha pelo que quer fazer
 
+- [Receitas e controles do OBS](16-OBS-AUTOMACOES.md): texto pelo chat, imagem e filtro por recompensa, com formulário simples, listas de fontes e teste no próprio painel.
+
 - [Exemplos práticos](EXEMPLOS-DE-USO.md): receitas de todas as áreas do bot, com entrada e resultado esperado.
 - [Timers e contadores](TIMERS-E-CONTADORES.md): lembretes periódicos, contagem individual, ajuste e simulação.
 - [Respostas TXT e sons](RESPOSTAS-E-SONS.md): regras de resposta em texto com som opcional, biblioteca de sons e sons de pessoas na tela Sons de Live.

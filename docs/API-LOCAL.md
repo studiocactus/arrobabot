@@ -6,6 +6,8 @@ O BotLive expõe um WebSocket em 127.0.0.1, somente neste computador. Ele serve 
 
 ## Controlar o OBS pelo BotLive
 
+Para configurar pelo resultado, use as [receitas e controles visuais do OBS](16-OBS-AUTOMACOES.md): texto pelo chat, imagem por resgate, filtros, seleção de cena/grupo e edição de conteúdo. As listas e operações são compartilhadas entre o teste OBS Studio e o editor de automações.
+
 Na tela **OBS Studio**: ative a integração, confira endereço (padrão `127.0.0.1`) e porta (padrão `4455`) e salve a senha se o OBS pedir (fica no cofre, nunca em log). **Testar conexão** mostra versão do OBS, versão do WebSocket e cena atual, além das listas de cenas, entradas e fontes.
 
 No OBS, ative em Ferramentas → WebSocket do OBS. A porta 4455 nunca é exposta à internet: tudo acontece nesta máquina.
@@ -18,7 +20,7 @@ Dicas de uso: use nomes estáveis nas fontes; temporário curto (5–15 s) para 
 
 No mesmo seletor da ação OBS, escolha Reproduzir, Pausar, Parar, Reiniciar, Próxima mídia ou Mídia anterior. Selecione uma entrada que aceite controles de mídia. Próxima/anterior precisam de uma lista compatível, como uma fonte VLC. Uma fonte que não aceita o comando devolve erro; o BotLive não confirma sucesso sem a confirmação do OBS.
 
-Girar fonte define um ângulo absoluto de -360 a 360 graus. Espelhar horizontalmente e verticalmente invertem o sinal da escala no eixo escolhido. Posição, recorte e os demais campos não são sobrescritos. O alvo é um item direto da cena de programa atual; fontes dentro de grupos ainda não são descobertas por este seletor. Não há duração temporária para essas operações.
+Girar fonte define um ângulo absoluto de -360 a 360 graus. Espelhar horizontalmente e verticalmente invertem o sinal da escala no eixo escolhido. Posição, recorte e os demais campos não são sobrescritos. O alvo é um item direto da cena de programa atual; para uma fonte dentro de um grupo, escolha o grupo no seletor de destino. Não há duração temporária para essas operações.
 
 Essas operações usam a mesma fila e cancelamento das ações anteriores. Transformar um item ocupado por um efeito temporário é recusado até a liberação. Nenhuma delas inicia ou encerra a live. O botão Testar no OBS produz um efeito real, enquanto o ensaio de fluxo não altera o OBS.
 

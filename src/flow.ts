@@ -4,7 +4,7 @@ import {triggers} from './types';
 /** Tipos de gatilho cujo `pattern` guarda um valor estável: o texto que dispara
  *  ou o ID da recompensa da Twitch. Só esses preservam o padrão ao salvar — e
  *  "Qualquer resgate" é a escolha explícita de deixar vazio. */
-export const patternKinds=new Set(['command','contains','voice','mention','redemption']);
+export const patternKinds=new Set(['command','contains','voice','mention','redemption','heartRate']);
 
 /** Gatilho pronto para salvar: timer limpa seus campos e tipos sem padrão
  *  também; recompensa (ID estável) e textos seguem intactos — nunca zerados

@@ -6,6 +6,8 @@ Para responder a palavras usando linhas de um arquivo externo, abra **Respostas*
 
 ## Inserir informações na mensagem com um clique
 
+Para mostrar uma imagem por resgate, ativar um filtro ou atualizar texto na cena, use Receitas prontas e procure OBS. O formulário tem gatilho, fonte e confirmação no chat, com teste do efeito separado do ensaio. Consulte [Receitas e controles do OBS](16-OBS-AUTOMACOES.md). Personalizações feitas no editor completo continuam nesse editor, preservando o desenho e as etapas adicionais.
+
 O evento Batimentos cardíacos permite reagir a mudanças de BPM ou ao cruzamento de um limite pelo sensor local conectado. Usa o mesmo fluxo, condições, intervalos e ações das demais automações. Consulte [a receita do relógio](15-BATIMENTOS.md). As ações OBS também incluem controles de mídia, rotação e espelhamento no seletor existente; veja [operações e limites](API-LOCAL.md).
 
 Posicione o cursor na resposta e clique em **+ Nome da pessoa**, **+ Nome do canal** ou **+ Texto do pedido**. O aplicativo insere o marcador para você; um texto selecionado é substituído. A leitura abaixo da mensagem mostra etiquetas com os nomes das informações.

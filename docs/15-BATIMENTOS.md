@@ -20,6 +20,8 @@ Em Automações, crie um fluxo com o evento Batimentos cardíacos. Escolha Mudou
 
 Use a variável `{{heartRate.bpm}}` nas etapas seguintes. Configure intervalo entre usos e, para efeitos na cena, duração e recuperação compatíveis com a ação. A entrada admite no máximo cinco atualizações por segundo e gera no máximo um evento de mudança por segundo. Não representa cada amostra do relógio.
 
+O editor preserva o limite de cruzamento ao salvar. Se você criou uma automação de limite na v0.20.19, confira o gatilho e escolha novamente Cruzou acima ou Cruzou abaixo: naquela versão o editor podia apagar o limite durante a gravação. O valor já apagado não pode ser reconstruído automaticamente.
+
 Esses números servem a efeitos da transmissão. O módulo não avalia saúde. O módulo e a ponte não salvam uma série de medições; uma automação configurada por você pode enviar ou guardar o valor em mensagens, variáveis ou serviços externos.
 
 ## Referência das operações

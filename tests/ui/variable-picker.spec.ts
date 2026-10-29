@@ -143,9 +143,8 @@ test('Avançado nasce recolhido, preserva valores e os editores das demais açõ
  await expect(page.getByRole('combobox',{name:'O que aplicar',exact:true})).toHaveValue('timeout');
  await page.getByRole('combobox',{name:'Tipo de etapa',exact:true}).selectOption('obs');
  await expect(page.getByRole('combobox',{name:'Operação no OBS',exact:true})).toBeVisible();
- await expect(page.locator('.node-inspector').getByText('Avançado',{exact:true})).toHaveCount(1);
- await expect(page.getByRole('button',{name:'Testar no OBS',exact:true})).toBeHidden();
- await page.locator('.node-inspector').getByText('Avançado',{exact:true}).click();
+  // O teste OBS agora é uma tarefa principal, visível junto da configuração.
+  await expect(page.locator('.node-inspector').getByText('Avançado',{exact:true})).toHaveCount(0);
  await expect(page.getByRole('button',{name:'Testar no OBS',exact:true})).toBeVisible();
  await page.getByRole('combobox',{name:'Tipo de etapa',exact:true}).selectOption('condition');
  await expect(page.getByLabel(/^Variável: /)).toBeVisible();

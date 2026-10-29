@@ -128,11 +128,14 @@ pub struct Action {
  /// vip, unvip, slow, slowoff, followers, followersoff, subsonly, subsonlyoff,
  /// emoteonly, emoteonlyoff, shoutout ou mention. Só é usado por "twitch".
  #[serde(default)] pub tw_op:String,
- /// Operação do OBS local: mute, unmute, toggle_mute, volume, show, hide,
- /// toggle_item ou scene. Só é usado por "obs".
+ /// Operação do catálogo OBS permitido; só é usado por "obs".
  #[serde(default)] pub obs_op:String,
  /// Alvo da ação do OBS: nome da entrada, da fonte ou da cena.
  #[serde(default)] pub obs_target:String,
+ /// Cena ou grupo explícito; vazio conserva a cena de programa atual.
+ #[serde(default)] pub obs_scene:String,
+ /// Nome do filtro, usado somente pelas operações filter_*.
+ #[serde(default)] pub obs_filter:String,
  /// Duração temporária em segundos (0 = permanente). Só mutar, volume,
  /// mostrar e esconder restauram o estado anterior.
  #[serde(default)] pub obs_duration:u64,
@@ -156,7 +159,7 @@ pub struct Action {
  #[serde(default)] pub ai_fallback:String,
 }
 impl Default for Action {
- fn default()->Self { Self{kind:"chat".into(),text:String::new(),target:String::new(),value:0,condition:String::new(),punish:String::new(),tw_op:String::new(),obs_op:String::new(),obs_target:String::new(),obs_duration:0,cond_var:String::new(),cond_op:String::new(),cond_value:String::new(),cond_false:String::new(),ai_anchor:String::new(),ai_knowledge:String::new(),ai_length:String::new(),ai_style:String::new(),ai_no_repeat:None,ai_fallback:String::new(),enabled:true} }
+ fn default()->Self { Self{kind:"chat".into(),text:String::new(),target:String::new(),value:0,condition:String::new(),punish:String::new(),tw_op:String::new(),obs_op:String::new(),obs_target:String::new(),obs_scene:String::new(),obs_filter:String::new(),obs_duration:0,cond_var:String::new(),cond_op:String::new(),cond_value:String::new(),cond_false:String::new(),ai_anchor:String::new(),ai_knowledge:String::new(),ai_length:String::new(),ai_style:String::new(),ai_no_repeat:None,ai_fallback:String::new(),enabled:true} }
 }
 impl Action {
  pub fn anchor<'a>(&'a self,ai:&'a AiConfig)->&'a str { self.pick(&self.ai_anchor,&ai.anchor,"all") }
@@ -321,6 +324,10 @@ pub fn validate_flow(f:&Flow)->Result<(),String> {
  if a.kind=="obs" {
   if !crate::obs::OPS.contains(&a.obs_op.as_str()){return Err("Ação do OBS: escolha uma operação válida".into())}
   if a.obs_target.trim().is_empty()||a.obs_target.chars().count()>200{return Err("Ação do OBS: escolha o alvo".into())}
+  if a.obs_scene.chars().count()>200||a.obs_filter.chars().count()>200{return Err("Ação do OBS: cena e filtro com até 200 caracteres".into())}
+  if a.obs_op.starts_with("filter_")&&a.obs_filter.trim().is_empty(){return Err("Ação do OBS: escolha o filtro".into())}
+  if ["set_text","set_image","set_browser_url"].contains(&a.obs_op.as_str())&&a.text.chars().count()>16000{return Err("Ação do OBS: conteúdo com até 16000 caracteres".into())}
+  if ["set_image","set_browser_url"].contains(&a.obs_op.as_str())&&a.text.trim().is_empty(){return Err("Ação do OBS: informe o conteúdo da fonte".into())}
   if a.obs_duration>3600{return Err("Ação do OBS: duração de até 1 hora".into())}
   if a.obs_duration>0&&!crate::obs::temp_ok(&a.obs_op){return Err("Ação do OBS: duração só vale para mutar, volume, mostrar e esconder".into())}
   if a.obs_op=="volume"&&a.text.trim().parse::<f64>().map_or(true,|n|!n.is_finite()||n < -100.0||n > 30.0){return Err("Ação do OBS: volume em dB entre -100 e 30".into())}

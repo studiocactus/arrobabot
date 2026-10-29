@@ -13,6 +13,9 @@ describe('organização e descoberta',()=>{
   expect(navigationMatches('settings','Configurações','BACKUP')).toBe(true);
   expect(navigationMatches('history','Histórico','erro')).toBe(true);
   expect(navigationMatches('flows','Automações','evento resgate')).toBe(true);
+  expect(navigationMatches('obs','OBS Studio','filtro')).toBe(true);
+  expect(navigationMatches('obs','OBS Studio','imagem')).toBe(true);
+  expect(navigationMatches('flows','Automações','receita obs')).toBe(true);
   expect(navigationMatches('commands','Comandos','spotify')).toBe(false);
  });
 });

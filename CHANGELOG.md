@@ -1,5 +1,53 @@
 # Histórico de atualizações
 
+# BotLive 0.20.20
+
+## O que mudou
+
+- O catálogo OBS passa de 17 para 23 operações: ativar, desativar e alternar filtro; atualizar texto GDI+/FreeType; trocar arquivo de imagem; e atualizar URL de navegador. As chamadas usam a mesma fila por destino, limites, cancelamento e tratamento de erro das ações anteriores.
+- Mostrar, esconder, girar e espelhar agora permitem escolher explicitamente uma cena ou grupo. Vazio mantém a cena atual da transmissão. Restaurações temporárias conservam o destino original; testes cobrem troca de cena e itens em grupo sem alterar os demais contêineres.
+- O painel OBS Studio e o editor usam os mesmos controles de operação, cenas, fontes, filtros e conteúdo. As listas são obtidas do OBS; os seletores de texto/imagem/navegador mostram fontes compatíveis. Nomes salvos são preservados mesmo com conexão indisponível. Salvar ou testar a conexão atualiza a lista automaticamente; há atualização manual após mudanças no OBS.
+- Três receitas novas: Comando atualiza texto no OBS, Resgate mostra uma imagem e Resgate ativa um filtro no OBS. Abrem um formulário simples de três passos: gatilho, resultado no OBS e confirmação no chat. Criam a mesma automação do editor completo, inicialmente desativada, e reabrem a configuração existente em vez de duplicá-la.
+- O formulário simples só aparece quando representa a sequência inteira. Desenho personalizado, passos adicionais ou outros ajustes fora do modelo continuam no editor completo; nada é convertido, apagado ou reordenado para caber no formulário simples.
+- A receita de texto usa o conteúdo depois do comando e começa restrita a moderadores/streamer. Uma condição impede alteração quando falta esse conteúdo. As receitas por resgate exigem uma recompensa específica; o efeito de imagem usa a fonte já configurada e restaura a visibilidade anterior depois de dez segundos.
+- O teste do efeito OBS ficou visível junto da configuração, inclusive nas receitas, e usa um componente compartilhado com bloqueio de pedido simultâneo e descarte de resposta de outra seleção. Conteúdo variável exige um exemplo apenas para o teste. Esse botão altera o OBS real, sem salvar a receita nem enviar confirmação no chat. O ensaio do fluxo continua sem efeitos externos.
+- Alterar texto, imagem ou navegador envia somente as propriedades necessárias, preservando os demais ajustes. Texto muda para modo direto, e navegador muda de arquivo local para URL. Tipo incompatível, filtro ausente, caminho inválido e URL fora de HTTP/HTTPS são recusados. O fluxo só segue para a confirmação no chat após o OBS aceitar a operação.
+- A busca do aplicativo reconhece filtro, imagem, texto, grupos e outras tarefas OBS, além de receita OBS para localizar Automações. O manual offline passa a 33 capítulos, com receitas, testes, referência de operações e limites de compatibilidade.
+- Corrigido um problema da v0.20.19: ao salvar pelo editor, gatilhos de batimentos podiam perder o padrão de cruzamento, pois a normalização não preservava esse tipo. O limite configurado agora é mantido e tem teste de regressão. Valores já apagados precisam ser escolhidos novamente pelo usuário.
+
+## Como usar
+
+Atualize em Configurações → Atualizações. Em OBS Studio, salve e teste o WebSocket. Crie no OBS as fontes Texto, Imagem ou Navegador e os filtros desejados. Use Testar ação para escolher operação, cena/grupo, fonte e parâmetros em listas reais. O botão Executar no OBS altera a fonte imediatamente; a resposta mostra se o pedido foi aceito.
+
+Em Comandos ou Automações, abra Receitas prontas, busque OBS e escolha o resultado. Confira o gatilho, escolha a fonte/filtro e ajuste a confirmação. Testar efeito no OBS confere a fonte real no mesmo formulário; quando houver variáveis, preencha um conteúdo de exemplo que não será salvo. Testar automação ensaia os passos sem alterar o OBS real. Salve e depois ative a automação na lista quando estiver pronta.
+
+Para texto pelo chat, a receita começa com !tela: um moderador pode enviar !tela Boa noite! Para imagem por resgate, selecione a fonte já criada no OBS e a recompensa; ela aparece por dez segundos e volta à visibilidade anterior. Para filtros, escolha ativar, desativar ou alternar o filtro existente. Se precisar de outra sequência, use Editar etapas no editor completo; a configuração permanece a mesma.
+
+Consulte Receitas e controles do OBS no manual. Se criou um gatilho de batimentos com limite na v0.20.19, reabra e confira a seleção Cruzou acima/Cruzou abaixo: a correção preserva o limite daqui em diante, mas não reconstrói um valor já apagado.
+
+## Validação
+
+- TypeScript e 185 testes frontend aprovados. Há verificações de receitas desativadas, reaproveitamento da configuração existente, preservação de desenhos personalizados, seleção por tipo, conteúdo inválido, navegação por tarefa e persistência do padrão de BPM.
+- Suíte nativa completa final da v0.20.20: 437 aprovados e três ignorados. Os 21 testes OBS incluem os novos cenários de validação e execução do fluxo. Cobrem compatibilidade de ação antiga sem campos novos, propriedades preservadas, tipo incompatível, erro de confirmação, texto do chat renderizado, parada dos passos seguintes, ensaio sem mutação, filtros, grupos e restauração.
+- Rodada inicial de navegador: 131/132 aprovados. O teste que exigia o botão OBS escondido em Avançado foi atualizado para exigir o novo comportamento visível, preservando a verificação dos outros editores. Uma falha inicial de auditoria era a notificação flutuante sobre a captura; o teste fecha esse aviso antes da medição.
+- Oito cenários direcionados finais no servidor npm run dev aprovados, com formulários em 1100 e 1680 pixels, validação de campos, teste real explícito, exemplo sem alterar o texto salvo, salvamento/reabertura da mesma automação, requisito de recompensa e manual.
+- Rodada final completa de navegador: 132/132 cenários aprovados, incluindo atualização automática das fontes após salvar conexão, receitas e teste OBS visível.
+- Build de produção e manual offline com 33 capítulos gerados; links, busca, impressão e tabelas verificados. Nove testes dos scripts de atualização aprovados. As capturas usam dados simulados, foram inspecionadas e ficam fora do repositório.
+- npm run update:check e git diff --check aprovados após a preparação oficial da versão.
+- Avisos existentes de bundle acima de 500 kB e atribuição não lida em twitch_ops.rs não impediram a compilação. Sem homologação de uma transmissão real ou da instalação física do OBS do proprietário nesta etapa.
+
+## Limitações
+
+- As fontes e filtros precisam existir no OBS. O aplicativo não cria/exclui fontes nem expõe comandos arbitrários. Texto aceita GDI+/FreeType; imagem e navegador exigem os tipos correspondentes. A aceitação do pedido pelo OBS não comprova decodificação da imagem, carregamento da página ou resultado visual na live.
+- Conteúdo e filtros pertencem à fonte compartilhada e afetam todas as cenas que a reutilizam. Visibilidade e transformação pertencem ao item do contêiner escolhido. A lista mostra itens diretos: escolha o grupo para editar seus filhos. Nomes repetidos no mesmo contêiner preservam o comportamento anterior de selecionar a primeira ocorrência.
+- Filtros e alterações de conteúdo são permanentes nesta etapa, sem restauração temporária automática. A receita de imagem utiliza mostrar/restaurar da implementação existente; se a fonte já estava visível, continuará assim no fim.
+- Trocar imagem exige arquivo absoluto existente e extensão aceita neste computador; o caminho também precisa funcionar no destino OBS configurado. Não há upload nem validação completa da decodificação. Texto muda a leitura de arquivo para conteúdo direto; URL muda o navegador de arquivo local para endereço, preservando os demais ajustes.
+- O teste direto não preenche contexto de uma pessoa real: quando há variáveis, usa o exemplo informado apenas nesse pedido. O ensaio e o teste do efeito são modos distintos e estão identificados no painel.
+- Configurações antigas continuam usando cena atual quando obsScene não existe; obsFilter também é opcional. Limites de BPM apagados por uma gravação na v0.20.19 não podem ser recuperados sem a escolha original do usuário.
+- Esta entrega conclui o bloco de filtros/conteúdo/cenas/grupos e receitas OBS planejado para esta etapa. Transições, gravação/replay, D6, ampliação Kick/YouTube e comparação individual das demais funções do Streamer.bot permanecem pendentes; não há afirmação de paridade completa.
+
+---
+
 # BotLive 0.20.19
 
 ## O que mudou
