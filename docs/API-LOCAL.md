@@ -14,6 +14,23 @@ Nas automações, a ação **Ação no OBS** oferece mutar/desmutar/alternar ent
 
 Dicas de uso: use nomes estáveis nas fontes; temporário curto (5–15 s) para zoeiras de resgate; intervalo no gatilho para não empilhar efeitos; confira o Histórico (tipo `obs`) a cada teste.
 
+### Mídia e transformação de fontes
+
+No mesmo seletor da ação OBS, escolha Reproduzir, Pausar, Parar, Reiniciar, Próxima mídia ou Mídia anterior. Selecione uma entrada que aceite controles de mídia. Próxima/anterior precisam de uma lista compatível, como uma fonte VLC. Uma fonte que não aceita o comando devolve erro; o BotLive não confirma sucesso sem a confirmação do OBS.
+
+Girar fonte define um ângulo absoluto de -360 a 360 graus. Espelhar horizontalmente e verticalmente invertem o sinal da escala no eixo escolhido. Posição, recorte e os demais campos não são sobrescritos. O alvo é um item direto da cena de programa atual; fontes dentro de grupos ainda não são descobertas por este seletor. Não há duração temporária para essas operações.
+
+Essas operações usam a mesma fila e cancelamento das ações anteriores. Transformar um item ocupado por um efeito temporário é recusado até a liberação. Nenhuma delas inicia ou encerra a live. O botão Testar no OBS produz um efeito real, enquanto o ensaio de fluxo não altera o OBS.
+
+| Identificador da operação | Alvo | Valor numérico |
+|---|---|---|
+| media_play / media_pause / media_stop | entrada de mídia | ignorado |
+| media_restart / media_next / media_previous | entrada de mídia compatível | ignorado |
+| rotate | fonte direta da cena atual | ângulo absoluto em graus |
+| flip_horizontal / flip_vertical | fonte direta da cena atual | ignorado |
+
+A chamada interna obs.execute recebe profileId, op, target, num e secs. Para as operações desta tabela, secs deve ser zero. Não é uma chamada disponível com a chave pública de overlay. Referência de protocolo: [OBS WebSocket 5.x](https://github.com/obsproject/obs-websocket/blob/master/docs/generated/protocol.md).
+
 Abra **Configurações → API local & overlays** para consultar porta e chave. A porta padrão é 9876. Alterar a porta exige reiniciar o app. A chave muda a cada abertura.
 
 A chave autoriza acesso a eventos de todos os perfis; ela não é uma chave limitada a um overlay. O filtro profile do exemplo apenas seleciona o que mostrar na tela.

@@ -303,3 +303,5 @@ td.actions-right.row{justify-content:flex-end}
 .dashboard-body>.card:last-child:nth-child(odd){grid-column:1 / -1}
 
 .dashboard-attention:not(.has-issues){border-left-color:var(--border);background:var(--surface)}:root[data-theme=light] .dashboard-attention>strong{color:#8c5100}
+
+.heart-preview{display:flex;align-items:center;gap:22px;justify-content:center;min-height:180px;background:var(--surface2);border-radius:14px;padding:24px}.heart-preview>span{color:#fb7f91;font-size:58px}.heart-preview strong{display:block;font-size:52px;font-variant-numeric:tabular-nums}.heart-preview small{display:block;color:var(--muted);margin-top:8px}.heart-studio .row{flex-wrap:wrap}.heart-studio .lp-controls{min-width:0}.heart-studio p{line-height:1.7}.heart-studio .switch-row{gap:15px}

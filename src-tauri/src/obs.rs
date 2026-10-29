@@ -13,7 +13,8 @@ use futures_util::{SinkExt, StreamExt};
 pub const MODULE: &str = "obs";
 const DEFAULT_PORT: u16 = 4455;
 /// Operações seguras expostas a automações. Sem stop/exit/delete/settings.
-pub const OPS: &[&str] = &["mute", "unmute", "toggle_mute", "volume", "show", "hide", "toggle_item", "scene"];
+pub const OPS: &[&str] = &["mute", "unmute", "toggle_mute", "volume", "show", "hide", "toggle_item", "scene", "media_play", "media_pause", "media_stop", "media_restart", "media_next", "media_previous", "rotate", "flip_horizontal", "flip_vertical"];
+pub fn valid_number(op:&str,num:f64)->bool{num.is_finite()&&match op{"volume"=>(-100.0..=30.0).contains(&num),"rotate"=>(-360.0..=360.0).contains(&num),_=>true}}
 /// Operações que aceitam duração temporária com restauração do estado anterior.
 pub fn temp_ok(op: &str) -> bool {
  matches!(op, "mute" | "unmute" | "volume" | "show" | "hide")
@@ -210,6 +211,22 @@ async fn item(conn:&mut Conn,target:&str)->Result<(String,i64),String>{
 /// Aplica a operação (efeito imediato). Devolve texto para o Histórico.
 async fn apply(conn: &mut Conn, op: &str, target: &str, num: f64) -> Result<String, String> {
  match op {
+  "media_play"|"media_pause"|"media_stop"|"media_restart"|"media_next"|"media_previous"=>{
+   let action=format!("OBS_WEBSOCKET_MEDIA_INPUT_ACTION_{}",op.trim_start_matches("media_").to_ascii_uppercase());
+   call(conn,"TriggerMediaInputAction",json!({"inputName":target,"mediaAction":action})).await?;
+   Ok(format!("Mídia {target}: {} confirmada",op.trim_start_matches("media_")))
+  }
+  "rotate"|"flip_horizontal"|"flip_vertical"=>{
+   let (scene,id)=item(conn,target).await?;
+   let transform=if op=="rotate"{json!({"rotation":num})}else{
+    let current=call(conn,"GetSceneItemTransform",json!({"sceneName":scene,"sceneItemId":id})).await?;
+    let axis=if op=="flip_horizontal"{"scaleX"}else{"scaleY"};
+    let scale=current["sceneItemTransform"][axis].as_f64().filter(|n|n.is_finite()&&*n!=0.0).ok_or("OBS não informou uma escala válida da fonte")?;
+    let mut value=json!({});value[axis]=json!(-scale);value
+   };
+   call(conn,"SetSceneItemTransform",json!({"sceneName":scene,"sceneItemId":id,"sceneItemTransform":transform})).await?;
+   Ok(format!("Transformação de {target} confirmada: {op}"))
+  }
   "mute" => {
    call(conn, "SetInputMute", json!({"inputName": target, "inputMuted": true})).await?;
    Ok(format!("{} mutado", target))
@@ -328,14 +345,14 @@ async fn execute(rt:&Arc<Runtime>,p:&Profile,op:&str,target:&str,num:f64,secs:u6
  if !OPS.contains(&op){return Err("Ação do OBS desconhecida".into())}
  if target.trim().is_empty(){return Err("Escolha o alvo da ação do OBS".into())}
  if secs>3600{return Err("Ação do OBS: duração de até 1 hora".into())}
- if !num.is_finite(){return Err("Valor do OBS inválido".into())}
+ if !valid_number(op,num){return Err("Valor do OBS inválido: volume de -100 a 30 dB; rotação de -360 a 360 graus".into())}
  if secs>0&&!temp_ok(op){return Err("Duração temporária vale para mutar, volume, mostrar e esconder".into())}
  let config=config(rt,&p.id);let endpoint=endpoint(&config);let gate=rt.obs.gate(&endpoint);
  if let Some((id,index))=run{rt.runs.step(id,index,"WAITING");}
  let (_slot,_guard)=admit(&gate,rt,run.map(|(id,_)|id)).await?;
  if let Some((id,index))=run{rt.runs.step(id,index,"RUNNING");}
  let mut conn=connect_to(p,&config).await?;
- if matches!(op,"show"|"hide"|"toggle_item"){conn.pinned=Some(item(&mut conn,target).await?);}
+ if matches!(op,"show"|"hide"|"toggle_item"|"rotate"|"flip_horizontal"|"flip_vertical"){conn.pinned=Some(item(&mut conn,target).await?);}
  let resource=if let Some((scene,id))=&conn.pinned{format!("item:{scene}:{id}")}else{resource_of(op,&target.to_lowercase())};
  let key=format!("{endpoint}|{resource}");let desired=format!("{op}:{}",if op=="volume"{num}else{0.0});
  let existing={rt.obs.active.lock().unwrap().get(&key).cloned()};
@@ -468,7 +485,7 @@ mod tests {
  use super::*;
 
  #[derive(Default)]
- struct MockState {muted:bool,volume:f64,scene:String,a:bool,b:bool,sets:usize,drop_next_set:bool,reject_restore:bool,missing_state:bool}
+ struct MockState {muted:bool,volume:f64,scene:String,a:bool,b:bool,sets:usize,drop_next_set:bool,reject_restore:bool,missing_state:bool,transform:Value,last_media:String}
  struct MockObs {state:Arc<Mutex<MockState>>,port:u16,task:tokio::task::JoinHandle<()>}
  impl Drop for MockObs{fn drop(&mut self){self.task.abort()}}
  async fn mock_obs()->MockObs {
@@ -492,6 +509,9 @@ mod tests {
       "GetSceneList"=>json!({"currentProgramSceneName":state.scene}),
       "GetSceneItemList"=>json!({"sceneItems":[{"sourceName":"Cam","sceneItemId":if args["sceneName"]=="A"{1}else{2}}]}),
       "GetSceneItemEnabled"=>json!({"sceneItemEnabled":if args["sceneName"]=="A"{state.a}else{state.b}}),
+      "GetSceneItemTransform"=>json!({"sceneItemTransform":{"scaleX":2.0,"scaleY":1.5,"positionX":120,"rotation":30}}),
+      "SetSceneItemTransform"=>{state.transform=args["sceneItemTransform"].clone();state.sets+=1;json!({})},
+      "TriggerMediaInputAction"=>{state.last_media=args["mediaAction"].as_str().unwrap_or("").into();state.sets+=1;json!({})},
       "SetSceneItemEnabled"=>{if args["sceneName"]=="A"{state.a=args["sceneItemEnabled"]==true}else{state.b=args["sceneItemEnabled"]==true}state.sets+=1;json!({})},
       "SetCurrentProgramScene"=>{state.scene=args["sceneName"].as_str().unwrap().into();json!({})},
       _=>{ok=false;json!({})}
@@ -507,6 +527,17 @@ mod tests {
   rt.db.set_module(&p.id,MODULE,&json!({"enabled":true,"host":"127.0.0.1","port":port})).unwrap();p
  }
  async fn expire(rt:&Arc<Runtime>){let (key,lock)=rt.obs.active.lock().unwrap().iter().next().map(|(k,v)|(k.clone(),v.clone())).unwrap();release_temporary(rt.clone(),key,lock.generation,lock.gate).await;}
+ #[tokio::test]
+ async fn novas_operacoes_preservam_campos_e_respeitam_efeito_ativo(){
+  let server=mock_obs().await;let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();let p=test_profile(&rt,server.port);
+  for (op,action) in [("media_play","PLAY"),("media_pause","PAUSE"),("media_stop","STOP"),("media_restart","RESTART"),("media_next","NEXT"),("media_previous","PREVIOUS")]{execute_action(&rt,&p,op,"Video",0.0,0).await.unwrap();assert_eq!(server.state.lock().unwrap().last_media,format!("OBS_WEBSOCKET_MEDIA_INPUT_ACTION_{action}"));}
+  execute_action(&rt,&p,"rotate","Cam",90.0,0).await.unwrap();assert_eq!(server.state.lock().unwrap().transform,json!({"rotation":90.0}));
+  execute_action(&rt,&p,"flip_horizontal","Cam",0.0,0).await.unwrap();assert_eq!(server.state.lock().unwrap().transform,json!({"scaleX":-2.0}));
+  execute_action(&rt,&p,"flip_vertical","Cam",0.0,0).await.unwrap();assert_eq!(server.state.lock().unwrap().transform,json!({"scaleY":-1.5}));
+  execute_action(&rt,&p,"hide","Cam",0.0,60).await.unwrap();let before=server.state.lock().unwrap().sets;
+  assert!(execute_action(&rt,&p,"rotate","Cam",0.0,0).await.unwrap_err().contains("ocupado"));assert_eq!(server.state.lock().unwrap().sets,before);
+  assert!(execute_action(&rt,&p,"rotate","Cam",361.0,0).await.is_err());assert!(execute_action(&rt,&p,"media_play","Video",0.0,1).await.is_err());
+ }
  #[tokio::test]
  async fn telemetria_observa_sem_mutacoes_ou_travas_de_efeitos(){
   let server=mock_obs().await;let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();let p=test_profile(&rt,server.port);
@@ -604,11 +635,11 @@ mod tests {
  }
  #[test]
  fn only_safe_ops_exist_and_temp_is_limited() {
-  assert_eq!(OPS, &["mute", "unmute", "toggle_mute", "volume", "show", "hide", "toggle_item", "scene"]);
+  assert!(!OPS.iter().any(|op|matches!(*op,"stop_stream"|"exit"|"delete"|"raw")));
   for op in ["mute", "unmute", "volume", "show", "hide"] {
    assert!(temp_ok(op), "{op} aceita duração");
   }
-  for op in ["toggle_mute", "toggle_item", "scene"] {
+  for op in ["toggle_mute", "toggle_item", "scene", "rotate", "flip_horizontal", "flip_vertical", "media_restart", "media_play", "media_pause", "media_stop", "media_next", "media_previous"] {
    assert!(!temp_ok(op), "{op} é momentânea");
   }
  }

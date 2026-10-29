@@ -6,6 +6,8 @@ Para responder a palavras usando linhas de um arquivo externo, abra **Respostas*
 
 ## Inserir informações na mensagem com um clique
 
+O evento Batimentos cardíacos permite reagir a mudanças de BPM ou ao cruzamento de um limite pelo sensor local conectado. Usa o mesmo fluxo, condições, intervalos e ações das demais automações. Consulte [a receita do relógio](15-BATIMENTOS.md). As ações OBS também incluem controles de mídia, rotação e espelhamento no seletor existente; veja [operações e limites](API-LOCAL.md).
+
 Posicione o cursor na resposta e clique em **+ Nome da pessoa**, **+ Nome do canal** ou **+ Texto do pedido**. O aplicativo insere o marcador para você; um texto selecionado é substituído. A leitura abaixo da mensagem mostra etiquetas com os nomes das informações.
 
 Para mais opções, abra **Inserir variável e testar mensagem**. Clique na ficha da informação para inserir na hora; em **Opções**, na mesma ficha, configure uma alternativa e a forma de apresentação e clique em **Inserir na mensagem**. Códigos técnicos são opcionais no catálogo. Consulte o [guia completo de variáveis](VARIAVEIS.md), incluindo contadores e variáveis por pessoa.

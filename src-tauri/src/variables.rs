@@ -91,7 +91,7 @@ const EXTRA:[&str;20]=["followerCount","subCount","subTier","subMonths","subStre
 const SCOPES:[&str;5]=["local","global","user","session","sessionUser"];
 /// Nomes pontuados de leitura (apelidos do contexto da execução). Vão para o
 /// catálogo, nunca para `$` legado, e nunca aceitam escrita por variável.
-const DOTTED:[&str;23]=["execution.id","viewer.id","viewer.login","viewer.name","reward.id","reward.title","reward.cost","redemption.id","redemption.input","time.timestamp","bits.amount","subscription.tier","subscription.is_gift","subscription.message","gifter.name","raider.name","raid.viewers","nowplaying.musica","nowplaying.artista","nowplaying.album","nowplaying.tempo","nowplaying.duracao","nowplaying.link"];
+const DOTTED:[&str;24]=["execution.id","viewer.id","viewer.login","viewer.name","reward.id","reward.title","reward.cost","redemption.id","redemption.input","time.timestamp","bits.amount","subscription.tier","subscription.is_gift","subscription.message","gifter.name","raider.name","raid.viewers","heartRate.bpm","nowplaying.musica","nowplaying.artista","nowplaying.album","nowplaying.tempo","nowplaying.duracao","nowplaying.link"];
 fn levenshtein(a:&str,b:&str)->usize{
  let (a,b)=(a.as_bytes(),b.as_bytes());let mut prev:Vec<usize>=(0..=b.len()).collect();
  for i in 1..=a.len(){let mut cur=vec![i];for j in 1..=b.len(){cur.push((prev[j]+1).min(cur[j-1]+1).min(prev[j-1]+usize::from(a[i-1]!=b[j-1])));}prev=cur;}
@@ -285,6 +285,7 @@ impl Context {
         values.insert("liveSpeech".into(),json!(spoken.join(" | ")));
         let uid=if e.user_id.is_empty(){String::new()}else{format!("{}:{}",p.platform,e.user_id)};
         for item in list(db,&p.id,&uid)?.as_array().unwrap() { values.insert(format!("{}.{}",item["scope"].as_str().unwrap(),item["name"].as_str().unwrap()),item["value"].clone()); }
+        if e.kind=="heartRate"{if let Some(bpm)=e.data["bpm"].as_u64(){values.insert("heartRate.bpm".into(),json!(bpm));}}
         Ok(Self{values,data:e.data.clone(),simulated:e.simulated,viewers})
     }
     pub fn set_command_count(&mut self,n:i64){self.values.insert("commandCount".into(),json!(n));}

@@ -2,6 +2,8 @@
 
 ## Comece aqui
 
+O evento Batimentos cardíacos fornece `{{heartRate.bpm}}`, o BPM validado que provocou a mudança ou cruzamento. A variável pertence à execução do evento, não é uma consulta contínua ao relógio. Fora desse evento, pode não existir; escolha uma alternativa no catálogo. Consulte [Batimentos da live](15-BATIMENTOS.md) para conexão, publicação e privacidade.
+
 Uma variável troca um marcador pelo valor daquela execução. Em **Comandos → Novo comando**, escreva `Olá, {{user}}! Você pediu: {{rawInput}}`. Se Ana enviar `!oi novidades`, a resposta será `Olá, Ana! Você pediu: novidades`.
 
 Você não precisa digitar os marcadores. Os botões **+ Nome da pessoa**, **+ Nome do canal** e **+ Texto do pedido** inserem essas informações na posição do cursor. Se houver um trecho selecionado, o botão substitui somente aquele trecho.

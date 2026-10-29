@@ -213,6 +213,7 @@ pub fn matches(t:&Trigger,e:&Event)->bool {
  "contains"=>e.kind=="chat" && contains_any(&t.pattern,&e.message),
  "mention"=>e.kind=="chat" && mention_any(&t.pattern,&e.message),
  "voice"=>e.kind=="voice" && (t.pattern.is_empty()||contains_any(&t.pattern,&e.message)),
+ "heartRate"=>crate::heart_rate::matches(&t.pattern,e),
  "redemption"=>e.kind=="redemption"&&(t.pattern.trim().is_empty()||e.data["reward"]["id"].as_str().is_some_and(|id|id==t.pattern.trim())),
  other=>other==e.kind,
  }
@@ -283,6 +284,7 @@ pub fn preview_event(f:&Flow,e:Event)->Event {
  }
 }
 pub fn validate_flow(f:&Flow)->Result<(),String> {
+ if f.trigger.kind=="heartRate"&&!f.trigger.pattern.is_empty()&&f.trigger.pattern!="change"{let Some((op,value))=f.trigger.pattern.split_once(':') else{return Err("Batimentos: escolha mudança ou cruzamento de limite".into())};if !["above","below"].contains(&op)||!value.parse::<u16>().is_ok_and(|n|(1..=300).contains(&n)){return Err("Batimentos: limite entre 1 e 300 BPM".into())}}
  if f.trigger.kind=="timer"&&!(30..=86400).contains(&f.timer_seconds){return Err("Timer: escolha de 30 segundos a 24 horas".into())}
  if f.trigger.kind=="timer"{
   if !TIMER_CATEGORIES.contains(&f.timer_category.as_str()){return Err("Timer: escolha uma categoria válida".into())}
@@ -322,6 +324,7 @@ pub fn validate_flow(f:&Flow)->Result<(),String> {
   if a.obs_duration>3600{return Err("Ação do OBS: duração de até 1 hora".into())}
   if a.obs_duration>0&&!crate::obs::temp_ok(&a.obs_op){return Err("Ação do OBS: duração só vale para mutar, volume, mostrar e esconder".into())}
   if a.obs_op=="volume"&&a.text.trim().parse::<f64>().map_or(true,|n|!n.is_finite()||n < -100.0||n > 30.0){return Err("Ação do OBS: volume em dB entre -100 e 30".into())}
+  if a.obs_op=="rotate"&&a.text.trim().parse::<f64>().map_or(true,|n|!crate::obs::valid_number("rotate",n)){return Err("Ação do OBS: rotação entre -360 e 360 graus".into())}
  }
  if a.kind=="voiceFx"{
   let effect=if a.target.trim().is_empty(){a.text.trim()}else{a.target.trim()};

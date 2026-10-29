@@ -23,6 +23,7 @@ pub struct Runtime {
  pub conversation:Mutex<crate::conversation::History>,
  pub live:crate::live_state::LiveStates,
  pub dashboard:crate::dashboard::Dashboard,
+ pub heart_rate:crate::heart_rate::Sensors,
  pub spotify:crate::spotify::States,
  pub listen:crate::listen::Sessions,
  pub chat_extras:Mutex<crate::chat_extras::State>,
@@ -51,7 +52,7 @@ impl Runtime {
  let (tx,rx)=mpsc::channel(512);let (broadcast,_)=broadcast::channel(512);
  let http=reqwest::Client::builder().timeout(Duration::from_secs(30)).redirect(reqwest::redirect::Policy::none()).build().map_err(|e|e.to_string())?;
  let actor=if db.get("accessEnabled")==true{"locked"}else{"owner"}.to_owned();
- let rt=Arc::new(Self{actor:Mutex::new(actor),db,base,http,tx,broadcast,app:Mutex::new(None),connections:Mutex::new(HashMap::new()),statuses:Mutex::new(HashMap::new()),discord_tasks:Mutex::new(HashMap::new()),discord_status:Mutex::new(HashMap::new()),discord_cache:Mutex::new(HashMap::new()),timer_pending:Mutex::new(std::collections::HashSet::new()),cooldowns:Mutex::new(HashMap::new()),conversation:Mutex::new(crate::conversation::History::default()),live:crate::live_state::LiveStates::default(),dashboard:crate::dashboard::Dashboard::default(),spotify:crate::spotify::States::default(),listen:crate::listen::Sessions::default(),chat_extras:Mutex::new(crate::chat_extras::State::default()),bot_sent:Mutex::new(std::collections::VecDeque::new()),runs,obs:crate::obs::Locks::default(),voice_fx:crate::voice_fx::Fx::default(),voicemod:crate::voicemod::Voice::default(),voice_resgates:crate::voice_redemptions::Engine::default(),intents:crate::intents::Intents::default(),audio:crate::audio::Sinks::default(),seen:Mutex::new(HashMap::new()),seen_chatters:Mutex::new(HashMap::new()),chat_seen:Mutex::new(HashMap::new()),emote_counts:Mutex::new(HashMap::new()),module_lock:Mutex::new(()),vault_lock:Mutex::new(()),send_locks:Mutex::new(HashMap::new()),api_token:format!("{}{}",uuid::Uuid::new_v4().simple(),uuid::Uuid::new_v4().simple()),api_port:Mutex::new(0)});
+ let rt=Arc::new(Self{actor:Mutex::new(actor),db,base,http,tx,broadcast,app:Mutex::new(None),connections:Mutex::new(HashMap::new()),statuses:Mutex::new(HashMap::new()),discord_tasks:Mutex::new(HashMap::new()),discord_status:Mutex::new(HashMap::new()),discord_cache:Mutex::new(HashMap::new()),timer_pending:Mutex::new(std::collections::HashSet::new()),cooldowns:Mutex::new(HashMap::new()),conversation:Mutex::new(crate::conversation::History::default()),live:crate::live_state::LiveStates::default(),dashboard:crate::dashboard::Dashboard::default(),heart_rate:crate::heart_rate::Sensors::default(),spotify:crate::spotify::States::default(),listen:crate::listen::Sessions::default(),chat_extras:Mutex::new(crate::chat_extras::State::default()),bot_sent:Mutex::new(std::collections::VecDeque::new()),runs,obs:crate::obs::Locks::default(),voice_fx:crate::voice_fx::Fx::default(),voicemod:crate::voicemod::Voice::default(),voice_resgates:crate::voice_redemptions::Engine::default(),intents:crate::intents::Intents::default(),audio:crate::audio::Sinks::default(),seen:Mutex::new(HashMap::new()),seen_chatters:Mutex::new(HashMap::new()),chat_seen:Mutex::new(HashMap::new()),emote_counts:Mutex::new(HashMap::new()),module_lock:Mutex::new(()),vault_lock:Mutex::new(()),send_locks:Mutex::new(HashMap::new()),api_token:format!("{}{}",uuid::Uuid::new_v4().simple(),uuid::Uuid::new_v4().simple()),api_port:Mutex::new(0)});
  tokio::spawn(worker(rt.clone(),rx));Ok(rt)
  }
  pub fn emit(&self,kind:&str,payload:Value){
@@ -156,8 +157,10 @@ async fn worker(rt:Arc<Runtime>,mut rx:mpsc::Receiver<Event>){
  }
 }
 pub async fn process(rt:Arc<Runtime>,e:Event){
+ if e.kind=="heartRate"&&!e.simulated&&!crate::heart_rate::trusted(&rt,&e){return}
  let _pending=crate::timers::Pending(rt.clone(),if e.kind=="timer"&&!e.simulated{e.data["timerId"].as_str().map(str::to_owned)}else{None});
  let Ok(p)=rt.db.profile(&e.profile_id) else{return};
+ if e.kind=="heartRate"&&p.modules["heartRate"]!=true{return}
  // Deleções da Twitch (apagar mensagem, limpar chat) só mexem no overlay do
  // chat: removem o que já estava renderizado e seguem o fluxo do bot.
  if matches!(e.kind.as_str(),"chat.delete"|"chat.deleteUser"|"chat.clear"){if !e.simulated{crate::chat_overlay::removed(&rt,&p,&e);}return}
@@ -247,7 +250,7 @@ pub async fn process(rt:Arc<Runtime>,e:Event){
  if e.kind=="voice"&&p.modules["voice"]!=true{rt.log(&p.id,"voice","Controle por voz desativado","info");return}
  // Evento de teste fica visível no histórico com status `ensaio`: o painel de
  // estatísticas conta só `info`, então simulação não infla seguidores/mensagens.
- rt.log(&p.id,&e.kind,&format!("{}: {}",e.user,e.message),if e.simulated{"ensaio"}else{"info"});
+ if e.kind!="heartRate"{rt.log(&p.id,&e.kind,&format!("{}: {}",e.user,e.message),if e.simulated{"ensaio"}else{"info"});}
  rt.emit("platform-event",serde_json::to_value(&e).unwrap());
  if e.kind=="chat" {
  if let Some(reason)=crate::moderation::detect(&rt,&p,&e){rt.log(&p.id,"moderation",reason,"info");if let Err(err)=crate::moderation::act(&rt,&p,&e,reason).await{rt.log(&p.id,"moderation",&err,"error");}return}

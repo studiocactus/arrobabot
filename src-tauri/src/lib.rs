@@ -9,6 +9,7 @@ mod vault;
 mod knowledge;
 mod live_state;
 mod dashboard;
+mod heart_rate;
 mod secrets;
 mod ai;
 mod conversation;
@@ -69,6 +70,7 @@ pub async fn dispatch(rt:Arc<Runtime>,op:&str,args:Value)->R<Value>{
  if op.starts_with("access."){return access::operation(&rt,op,&args)}
  let p=args["profileId"].as_str().unwrap_or("").to_owned();
  if op.starts_with("chatExtras."){return chat_extras::operation(&rt,&p,op,&args)}
+ if op.starts_with("heartRate."){return heart_rate::operation(&rt,&p,op,&args)}
  if op.starts_with("labels."){return labels::operation(&rt,&p,op,&args).await}
  if op.starts_with("obs."){return obs::operation(&rt,&p,op,&args).await}
  if op.starts_with("discord."){return discord_admin::operation(&rt,&p,op,&args).await}
@@ -81,7 +83,7 @@ pub async fn dispatch(rt:Arc<Runtime>,op:&str,args:Value)->R<Value>{
  if !profile.ai.answer_length.is_empty()&&!LENGTHS.contains(&profile.ai.answer_length.as_str()){return Err("Tamanho padrão da resposta da IA inválido".into())}
  if !KNOWLEDGE_DEPTHS.contains(&profile.ai.knowledge_depth.as_str()){return Err("Profundidade da base de conhecimento inválida".into())}
  if profile.ai.knowledge_off.len()>500||profile.ai.knowledge_off.iter().any(|o|o.len()>260){return Err("Lista da base de conhecimento inválida".into())}
- if let Ok(previous)=rt.db.profile(&profile.id){if previous.channel!=profile.channel||previous.channel_id!=profile.channel_id||previous.platform!=profile.platform{rt.conversation.lock().unwrap().clear(&profile.id);rt.live.clear(&profile.id);rt.dashboard.clear_profile(&profile.id);}if previous.platform!=profile.platform||previous.client_id!=profile.client_id{rt.disconnect(&profile.id);for key in ["bot_token","bot_refresh","channel_token","channel_refresh","bot_expires","channel_expires"]{let _=secrets::set(&profile.id,key,"");}}}profile.blocklist=profile.blocklist.into_iter().map(|s|s.trim().to_owned()).filter(|s|!s.is_empty()).collect();profile.editors=profile.editors.into_iter().map(|s|s.trim().to_lowercase()).filter(|s|!s.is_empty()).collect();profile.topics=profile.topics.into_iter().map(|s|s.trim().to_owned()).filter(|s|!s.is_empty()).collect();vault::root(&rt.base,&profile.id)?;rt.db.save_profile(&profile)?;Ok(json!(profile))},
+ if let Ok(previous)=rt.db.profile(&profile.id){if previous.channel!=profile.channel||previous.channel_id!=profile.channel_id||previous.platform!=profile.platform{rt.conversation.lock().unwrap().clear(&profile.id);rt.live.clear(&profile.id);rt.dashboard.clear_profile(&profile.id);}if previous.platform!=profile.platform||previous.client_id!=profile.client_id{rt.disconnect(&profile.id);for key in ["bot_token","bot_refresh","channel_token","channel_refresh","bot_expires","channel_expires"]{let _=secrets::set(&profile.id,key,"");}}}profile.blocklist=profile.blocklist.into_iter().map(|s|s.trim().to_owned()).filter(|s|!s.is_empty()).collect();profile.editors=profile.editors.into_iter().map(|s|s.trim().to_lowercase()).filter(|s|!s.is_empty()).collect();profile.topics=profile.topics.into_iter().map(|s|s.trim().to_owned()).filter(|s|!s.is_empty()).collect();vault::root(&rt.base,&profile.id)?;rt.db.save_profile(&profile)?;if profile.modules["heartRate"]!=true{heart_rate::stop(&rt,&profile.id);}Ok(json!(profile))},
  "profile.delete"=>{
  let _lock=rt.vault_lock.lock().unwrap();rt.db.profile(&p)?;rt.disconnect(&p);
  // Refuse paths that escape the app-data vault through junctions or symlinks.
@@ -94,7 +96,7 @@ pub async fn dispatch(rt:Arc<Runtime>,op:&str,args:Value)->R<Value>{
  if let (Ok(kroot),Ok(kparent))=(knowledge::root(&rt.base,&p),rt.base.join("knowledge").canonicalize()) {
   if let Ok(k)=kroot.canonicalize() {if k.starts_with(&kparent)&&k!=kparent {let _=std::fs::remove_dir_all(&k);}}
  }
- rt.db.delete_profile(&p)?;rt.dashboard.clear_profile(&p);rt.conversation.lock().unwrap().clear(&p);rt.live.clear(&p);rt.listen.reset(&p);secrets::clear(&p);rt.spotify.bump(&p);rt.spotify.set(&p,None);crate::discord_admin::stop(&rt,&p);crate::discord::clear_cache(&rt,&p);Ok(Value::Null)
+ heart_rate::stop(&rt,&p);rt.db.delete_profile(&p)?;rt.dashboard.clear_profile(&p);rt.conversation.lock().unwrap().clear(&p);rt.live.clear(&p);rt.listen.reset(&p);secrets::clear(&p);rt.spotify.bump(&p);rt.spotify.set(&p,None);crate::discord_admin::stop(&rt,&p);crate::discord::clear_cache(&rt,&p);Ok(Value::Null)
  },
  "command.counters"=>command_counter::list(&rt.db,&p),
  "command.counter.set"=>{let id=args["id"].as_str().ok_or("Comando ausente")?;let value=args["value"].as_i64().ok_or("Informe um número inteiro")?;let count=command_counter::change(&rt.db,&p,id,Some(value))?;rt.emit("command-counter",json!({"profileId":p,"id":id,"value":count}));Ok(json!(count))},
@@ -155,7 +157,7 @@ pub async fn dispatch(rt:Arc<Runtime>,op:&str,args:Value)->R<Value>{
  let identity=oauth::device_finish(&rt.http,&profile,account,args["code"].as_str().ok_or("Código ausente")?).await?;
  let id=identity["user_id"].as_str().ok_or("Conta sem identificador")?.to_owned();
  if account=="bot"{profile.bot_id=id;}else{profile.channel_id=id;profile.channel=identity["login"].as_str().unwrap_or(&profile.channel).to_owned();}
- rt.db.save_profile(&profile)?;Ok(json!(profile))
+ rt.db.save_profile(&profile)?;if profile.modules["heartRate"]!=true{heart_rate::stop(&rt,&profile.id);}Ok(json!(profile))
  },
  "url.open"=>{let url=args["url"].as_str().ok_or("URL inválida")?;ai::validate_url(url)?;open::that(url).map_err(|_|"Não foi possível abrir o navegador")?;Ok(Value::Null)},
  "ai.preview"=>{

@@ -1,0 +1,38 @@
+<!doctype html><html lang="pt-BR"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>BotLive · Conectar batimentos</title><style>body{font:16px system-ui;background:#0b0f16;color:#e8edf4;max-width:640px;margin:70px auto;padding:24px}button{background:#b7ef72;border:0;border-radius:8px;padding:14px;font:inherit;margin:12px 10px 12px 0}p{line-height:1.6}strong{font-size:44px}small{color:#aab8c6}</style><h1>Batimentos da live</h1><p>Ative Heart Rate Push no Amazfit Bip 6 e use Chrome ou Edge com Bluetooth no computador. Escolha o relógio no seletor. Mantenha esta página aberta enquanto transmitir.</p><button id="connect">Escolher relógio e conectar</button><button id="stop">Desconectar</button><p id="status" role="status">Aguardando sua conexão.</p><strong id="bpm">—</strong><p><small>O sinal passa do relógio para este computador e para o BotLive local. A exibição pública só ocorre se você habilitar no aplicativo. Não há histórico de saúde nesta ponte.</small></p><script>
+let active=null,last=0;const key=new URLSearchParams(location.hash.slice(1)).get('token');history.replaceState(null,'',location.pathname);
+const status=document.querySelector('#status'),bpm=document.querySelector('#bpm'),button=document.querySelector('#connect');
+function finish(session,message='Desconectado.'){
+ if(!session||session.closed)return;session.closed=true;
+ if(active===session){active=null;bpm.textContent='—';status.textContent=message;button.disabled=false;}
+ session.ws?.close();if(session.device?.gatt?.connected)session.device.gatt.disconnect();
+}
+document.querySelector('#stop').onclick=()=>finish(active);
+button.onclick=async()=>{
+ finish(active);const session={closed:false,device:null,ws:null};active=session;button.disabled=true;
+ const current=()=>{if(session.closed||active!==session)throw Error('Conexão cancelada.');};
+ try{
+  if(!key)throw Error('Abra esta ponte novamente pelo BotLive.');
+  if(!navigator.bluetooth)throw Error('Use Chrome ou Edge no computador com suporte a Bluetooth.');
+  session.device=await navigator.bluetooth.requestDevice({filters:[{services:['heart_rate']}]});current();
+  session.device.addEventListener('gattserverdisconnected',()=>finish(session,'Relógio desconectado.'),{once:true});
+  status.textContent='Conectando ao relógio…';
+  const server=await session.device.gatt.connect();if(session.closed){server.disconnect();return}current();
+  const service=await server.getPrimaryService('heart_rate');current();
+  const characteristic=await service.getCharacteristic('heart_rate_measurement');current();
+  const ws=session.ws=new WebSocket('ws://'+location.host);
+  await new Promise((resolve,reject)=>{
+   const timer=setTimeout(()=>reject(Error('A ponte não confirmou a conexão.')),5000);
+   const done=(error)=>{clearTimeout(timer);error?reject(error):resolve();};
+   ws.onopen=()=>ws.send(JSON.stringify({token:key,mode:'heart-publisher'}));
+   ws.onerror=()=>done(Error('BotLive local indisponível.'));
+   ws.onclose=()=>done(Error('Conexão com o BotLive encerrada.'));
+   ws.onmessage=e=>{try{const v=JSON.parse(e.data);if(v.type==='heart.ready')done();else if(v.type==='error')done(Error(v.message));}catch{done(Error('Resposta inválida do BotLive.'));}};
+  });current();
+  ws.onclose=()=>finish(session,'Conexão com o BotLive encerrada.');
+  ws.onmessage=e=>{if(active!==session||session.closed)return;try{const v=JSON.parse(e.data);if(v.type==='error'){bpm.textContent='—';status.textContent=v.message;}else if(v.type==='heart-reading'){bpm.textContent=v.payload.state==='fresh'?v.payload.bpm:'—';last=Date.now();status.textContent='Conectado. Recebendo medições Bluetooth.';}}catch{finish(session,'Resposta inválida do BotLive.');}};
+  characteristic.addEventListener('characteristicvaluechanged',e=>{if(active!==session||session.closed||ws.readyState!==1)return;const v=e.target.value;ws.send(JSON.stringify({type:'heartRate',packet:Array.from(new Uint8Array(v.buffer,v.byteOffset,v.byteLength))}));});
+  await characteristic.startNotifications();current();status.textContent='Conectado. Aguardando medição Bluetooth.';
+ }catch(e){finish(session,e.message||String(e));}
+};
+setInterval(()=>{if(Date.now()-last>10000)bpm.textContent='—'},1000);window.addEventListener('beforeunload',()=>finish(active));
+</script></html>

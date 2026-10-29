@@ -6,6 +6,10 @@ Abra **Comunidade**, confira o perfil e ligue a chave do módulo desejado. Cliqu
 
 Os comandos dos participantes funcionam no chat real. A simulação de fluxos não executa jogos, apostas ou concessão de pontos.
 
+## Batimentos da live
+
+O cartão Batimentos da live conecta um sensor Bluetooth pela ponte local em Chrome ou Edge e oferece uma fonte própria para OBS. A publicação dos BPM começa desligada e as leituras antigas desaparecem. Desativar este módulo também revoga os links do sensor. Consulte [o guia do relógio e das automações de batimentos](15-BATIMENTOS.md), incluindo os requisitos do Amazfit Bip 6 e as limitações de validação física.
+
 ## Shoutout e ganks
 
 Em **Comunidade → Shoutout e ganks**, ative o módulo para criar uma automação de raid. Escolha se o BotLive faz o destaque nativo do canal de origem e se a mensagem sai como anúncio da Twitch ou fala normal. O texto pode ser fixo, com `{{raider.name}}` e `{{raid.viewers}}`, ou gerado pela IA no momento da raid; nesse caso, configure uma resposta de reserva para quando a IA falhar.
