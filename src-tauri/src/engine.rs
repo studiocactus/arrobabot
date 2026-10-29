@@ -22,6 +22,7 @@ pub struct Runtime {
  pub cooldowns:Mutex<HashMap<String,Instant>>,
  pub conversation:Mutex<crate::conversation::History>,
  pub live:crate::live_state::LiveStates,
+ pub dashboard:crate::dashboard::Dashboard,
  pub spotify:crate::spotify::States,
  pub listen:crate::listen::Sessions,
  pub chat_extras:Mutex<crate::chat_extras::State>,
@@ -50,7 +51,7 @@ impl Runtime {
  let (tx,rx)=mpsc::channel(512);let (broadcast,_)=broadcast::channel(512);
  let http=reqwest::Client::builder().timeout(Duration::from_secs(30)).redirect(reqwest::redirect::Policy::none()).build().map_err(|e|e.to_string())?;
  let actor=if db.get("accessEnabled")==true{"locked"}else{"owner"}.to_owned();
- let rt=Arc::new(Self{actor:Mutex::new(actor),db,base,http,tx,broadcast,app:Mutex::new(None),connections:Mutex::new(HashMap::new()),statuses:Mutex::new(HashMap::new()),discord_tasks:Mutex::new(HashMap::new()),discord_status:Mutex::new(HashMap::new()),discord_cache:Mutex::new(HashMap::new()),timer_pending:Mutex::new(std::collections::HashSet::new()),cooldowns:Mutex::new(HashMap::new()),conversation:Mutex::new(crate::conversation::History::default()),live:crate::live_state::LiveStates::default(),spotify:crate::spotify::States::default(),listen:crate::listen::Sessions::default(),chat_extras:Mutex::new(crate::chat_extras::State::default()),bot_sent:Mutex::new(std::collections::VecDeque::new()),runs,obs:crate::obs::Locks::default(),voice_fx:crate::voice_fx::Fx::default(),voicemod:crate::voicemod::Voice::default(),voice_resgates:crate::voice_redemptions::Engine::default(),intents:crate::intents::Intents::default(),audio:crate::audio::Sinks::default(),seen:Mutex::new(HashMap::new()),seen_chatters:Mutex::new(HashMap::new()),chat_seen:Mutex::new(HashMap::new()),emote_counts:Mutex::new(HashMap::new()),module_lock:Mutex::new(()),vault_lock:Mutex::new(()),send_locks:Mutex::new(HashMap::new()),api_token:format!("{}{}",uuid::Uuid::new_v4().simple(),uuid::Uuid::new_v4().simple()),api_port:Mutex::new(0)});
+ let rt=Arc::new(Self{actor:Mutex::new(actor),db,base,http,tx,broadcast,app:Mutex::new(None),connections:Mutex::new(HashMap::new()),statuses:Mutex::new(HashMap::new()),discord_tasks:Mutex::new(HashMap::new()),discord_status:Mutex::new(HashMap::new()),discord_cache:Mutex::new(HashMap::new()),timer_pending:Mutex::new(std::collections::HashSet::new()),cooldowns:Mutex::new(HashMap::new()),conversation:Mutex::new(crate::conversation::History::default()),live:crate::live_state::LiveStates::default(),dashboard:crate::dashboard::Dashboard::default(),spotify:crate::spotify::States::default(),listen:crate::listen::Sessions::default(),chat_extras:Mutex::new(crate::chat_extras::State::default()),bot_sent:Mutex::new(std::collections::VecDeque::new()),runs,obs:crate::obs::Locks::default(),voice_fx:crate::voice_fx::Fx::default(),voicemod:crate::voicemod::Voice::default(),voice_resgates:crate::voice_redemptions::Engine::default(),intents:crate::intents::Intents::default(),audio:crate::audio::Sinks::default(),seen:Mutex::new(HashMap::new()),seen_chatters:Mutex::new(HashMap::new()),chat_seen:Mutex::new(HashMap::new()),emote_counts:Mutex::new(HashMap::new()),module_lock:Mutex::new(()),vault_lock:Mutex::new(()),send_locks:Mutex::new(HashMap::new()),api_token:format!("{}{}",uuid::Uuid::new_v4().simple(),uuid::Uuid::new_v4().simple()),api_port:Mutex::new(0)});
  tokio::spawn(worker(rt.clone(),rx));Ok(rt)
  }
  pub fn emit(&self,kind:&str,payload:Value){
@@ -98,7 +99,7 @@ impl Runtime {
  });
  self.connections.lock().unwrap().insert(key,task);Ok(())
  }
- pub fn disconnect(&self,id:&str){if let Some(h)=self.connections.lock().unwrap().remove(id){h.abort();}self.status(id,"offline");}
+ pub fn disconnect(&self,id:&str){if let Some(h)=self.connections.lock().unwrap().remove(id){h.abort();}self.status(id,"offline");self.dashboard.subscriptions.lock().unwrap().remove(id);}
  pub async fn send(&self,p:&Profile,e:&Event,text:&str)->Result<(),String>{self.send_with(p,e,text,None).await}
  pub async fn send_with(&self,p:&Profile,e:&Event,text:&str,f:Option<&Flow>)->Result<(),String>{
   // O mesmo endereço sai uma vez só: a IA imita as respostas anteriores do bot
@@ -166,6 +167,7 @@ pub async fn process(rt:Arc<Runtime>,e:Event){
   crate::chat_overlay::fire(&rt,&p,&e);
   return;
  }
+ crate::dashboard::record(&rt,&p,&e);
  // Mensagem de teste não registra frequência nem infla a explosão de emotes: o
  // ensaio não pode mexer em estado que a live usa para decidir.
  if e.kind=="chat"&&!e.simulated{crate::twitch_ops::note_chatter(&rt,&e);crate::emote_burst::count(&rt,&p.id,&e);}

@@ -33,6 +33,7 @@ async function mock(page:Page,items:Item[]){
   });
  },{items,profile});
  await page.goto('/');
+ await page.getByText('Preparação e configuração',{exact:true}).click();
 }
 const st=async(page:Page)=>page.evaluate(()=>{
  const s=(window as unknown as {__st:St}).__st;
@@ -68,6 +69,7 @@ test('pré-voo acusa o que só quebraria e cada item leva à tela de conserto',a
 
  // voltar e verificar de novo: o card remonta e o relatório se refaz com um clique
  await page.getByRole('button',{name:'Visão geral',exact:true}).click();
+ await page.getByText('Preparação e configuração',{exact:true}).click();
  await card.getByRole('button',{name:'Rodar pré-voo',exact:true}).click();
  await expect(card.getByText('O alerta de seguidor está desligado no overlay.',{exact:true})).toBeVisible();
  await page.screenshot({path:'artifacts/preflight-wide.png',fullPage:true});

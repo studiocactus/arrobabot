@@ -30,6 +30,13 @@ pub struct Intents {
  pending: Mutex<HashMap<String, (u64, String, String)>>,
 }
 
+impl Intents {
+ pub fn pending(&self,profile:&str)->serde_json::Value {
+  let prefix=format!("{profile}:");let map=self.pending.lock().unwrap();let expires=map.iter().filter(|(key,(at,_,_))|key.starts_with(&prefix)&&*at>now()).map(|(_,v)|v.0).min();
+  serde_json::json!({"expiresAt":expires})
+ }
+}
+
 fn now() -> u64 {
  SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
 }
@@ -67,12 +74,14 @@ pub async fn dispatch(rt: &Arc<Runtime>, p: &Profile, e: &Event, origin: Origin,
   rt.log(&p.id, KIND, "Comando administrativo recusado: a origem deste pedido não tem autorização.", "error");
   return Err("Este comando só sai do microfone do streamer ou do chat de quem modera.".into());
  }
+ let action_state=match &talk{Talk::Incomplete(_)=>"incomplete",Talk::Ban{..}|Talk::Confirm=>"confirmation",_=>"completed"};
  let result = execute(rt, p, e, talk).await;
  match result {
-  Ok(Some(text)) => respond(rt, p, e, &text).await,
+  Ok(Some(text)) => {let delivery=respond(rt, p, e, &text).await;rt.dashboard.requests.lock().unwrap().insert(p.id.clone(),serde_json::json!({"at":now(),"state":action_state,"text":text,"delivery":delivery}));},
   Ok(None) => {},
   Err(err) => {
-   respond(rt, p, e, &format!("Não consegui concluir o pedido: {err}")).await;
+   let delivery=respond(rt, p, e, &format!("Não consegui concluir o pedido: {err}")).await;
+   rt.dashboard.requests.lock().unwrap().insert(p.id.clone(),serde_json::json!({"at":now(),"state":"failed","text":err,"delivery":delivery}));
    return Err(err);
   }
  }
@@ -80,20 +89,16 @@ pub async fn dispatch(rt: &Arc<Runtime>, p: &Profile, e: &Event, origin: Origin,
 }
 
 /// Chat e voz são entregas independentes: uma falha nunca repete a ação.
-async fn respond(rt: &Runtime, p: &Profile, e: &Event, text: &str) {
- if let Err(err) = rt.send(p, e, text).await {
-  rt.log(&p.id, KIND, &format!("Resposta no chat não enviada: {err}"), "error");
- }
- let fresh = match rt.db.profile(&p.id) { Ok(p) => p, Err(_) => return };
- if crate::model::blocked(text, &fresh) {
-  rt.log(&p.id, KIND, "Resposta por voz bloqueada pelas restrições do perfil.", "error");
-  return;
- }
- if rt.db.module(&p.id, "voice")["spokenReplies"] != false {
-  if let Err(err) = crate::tts::speak(rt, &p.id, text).await {
-   rt.log(&p.id, KIND, &format!("Resposta por voz não enviada; confira Texto para voz e Áudio do BotLive: {err}"), "error");
+async fn respond(rt: &Runtime, p: &Profile, e: &Event, text: &str) -> serde_json::Value {
+ let chat=match rt.send(p,e,text).await {Ok(())=>"sent",Err(err)=>{rt.log(&p.id,KIND,&format!("Resposta no chat não enviada: {err}"),"error");"failed"}};
+ let mut voice="disabled";let mut audio_id=serde_json::Value::Null;
+ if let Ok(fresh)=rt.db.profile(&p.id) {
+  if crate::model::blocked(text,&fresh){voice="blocked";rt.log(&p.id,KIND,"Resposta por voz bloqueada pelas restrições do perfil.","error");}
+  else if rt.db.module(&p.id,"voice")["spokenReplies"]!=false {
+   match crate::tts::speak(rt,&p.id,text).await {Ok(out)=>{voice="delivered";audio_id=out["id"].clone();},Err(err)=>{voice="failed";rt.log(&p.id,KIND,&format!("Resposta por voz não enviada; confira Texto para voz e Áudio do BotLive: {err}"),"error");}}
   }
  }
+ serde_json::json!({"chat":chat,"voice":voice,"audioId":audio_id})
 }
 
 async fn execute(rt: &Arc<Runtime>, p: &Profile, e: &Event, talk: Talk) -> Result<Option<String>, String> {

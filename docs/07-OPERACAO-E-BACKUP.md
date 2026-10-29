@@ -142,3 +142,10 @@ O pré-voo confere as configurações que conhece. Um resultado sem achados não
 ### Histórico de execuções
 
 Os detalhes recentes de execução são diagnósticos locais, limitados a 30 finalizações por perfil mais as execuções ativas, preservados ao reiniciar. Não entram no pacote .botlivebak; o Histórico de Eventos gerais continua no backup e alimenta as estatísticas. Restaurar um pacote substitui os dados e descarta o acompanhamento em memória da base anterior. Nenhum registro importado é usado para reexecutar uma ação. Efeitos externos que já ocorreram não são desfeitos por uma importação.
+
+
+## Sessão do dashboard
+
+O agregado dashboardSession fica no estado do perfil no banco, identificado pela transmissão da Twitch. Contém amostras de audiência, cobertura e totais observados; não contém transcrição ou lista persistida de participantes. A janela de mensagens/participantes e diagnósticos de reprodução/último pedido são locais à execução do aplicativo. As preferências de apresentação ficam no armazenamento local da interface, por perfil/computador.
+
+O estado de sessão acompanha o backup de module_state. A restauração invalida leituras em cache, janela de chat e diagnósticos anteriores; uma resposta de audiência iniciada antes da restauração é descartada. Reconecte os perfis conforme a orientação da restauração. A sessão de transmissão e o contador de período da meta LivePix são independentes.

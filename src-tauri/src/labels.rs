@@ -197,21 +197,24 @@ pub fn watch_summary(db: &Db, profile: &str) -> (i64, String, i64) {
  }
 }
 /// Lista quem está no chat agora (exige o bot moderador com leitura de chatters).
-pub async fn chatters(rt: &Arc<Runtime>, p: &Profile) -> Result<(i64, Vec<String>), String> {
+pub async fn chatters(rt:&Arc<Runtime>,p:&Profile)->Result<(i64,Vec<String>),String>{crate::dashboard::chatters(rt,p).await}
+pub async fn fetch_chatters(rt: &Arc<Runtime>, p: &Profile) -> Result<(i64, Vec<String>), String> {
  if p.platform != "twitch" { return Err("Espectadores ao vivo só na Twitch.".into()); }
  let token = oauth::token(&rt.http, p, "bot").await?;
- let v: Value = crate::helix::get(&rt.http, p, &token, "chat/chatters",
+ let response = crate::helix::get(&rt.http, p, &token, "chat/chatters",
   &[("broadcaster_id", p.channel_id.as_str()), ("moderator_id", p.bot_id.as_str()), ("first", "1000")])
-  .send().await.map_err(|_| "Falha ao consultar espectadores.".to_string())?
-  .json().await.map_err(|_| "Resposta inválida de espectadores.".to_string())?;
- if v["status"].as_u64().is_some_and(|s| s == 401 || s == 403) {
-  return Err("Sem permissão de chatters: autorize novamente a conta do bot no perfil.".into());
- }
- let total = v["total"].as_i64().unwrap_or(0);
- let users: Vec<String> = v["data"].as_array().cloned().unwrap_or_default().into_iter()
-  .filter_map(|u| u["user_login"].as_str().map(|s| s.to_owned())).take(1000).collect();
- Ok((total, users))
+  .send().await.map_err(|_| "Falha ao consultar pessoas no chat.".to_string())?;
+ if !response.status().is_success(){return Err(format!("Consulta de pessoas no chat recusada (HTTP {}). Confira autorização e permissões em Perfis.",response.status().as_u16()))}
+ let v:Value=response.json().await.map_err(|_|"Resposta inválida de pessoas no chat".to_string())?;
+ parse_chatters(&v)
 }
+fn parse_chatters(v:&Value)->Result<(i64,Vec<String>),String>{
+ if !v["data"].is_array()||!v["total"].as_i64().is_some_and(|n|n>=0){return Err("Resposta de presença sem contagem válida".into())}
+ let total=v["total"].as_i64().ok_or("Total de presença inválido")?;
+ let users=v["data"].as_array().ok_or("Lista de presença inválida")?.iter().filter_map(|u|u["user_login"].as_str().map(str::to_owned)).take(1000).collect();
+ Ok((total,users))
+}
+
 async fn totals(rt: &Arc<Runtime>, p: &Profile) -> (Option<i64>, Option<i64>, String) {
  let (followers, subs) = crate::twitch_ops::channel_counts(rt, p).await;
  let mut uptime = String::new();
@@ -401,6 +404,11 @@ pub async fn operation(rt: &Arc<Runtime>, p: &str, op: &str, args: &Value) -> Re
 }
 #[cfg(test)]
 mod tests {
+ #[test]fn falhas_de_presenca_nao_parecem_zero_e_total_independe_da_pagina(){
+  for status in [401,403,429,500]{assert!(parse_chatters(&json!({"status":status,"message":"erro"})).is_err());}
+  assert_eq!(parse_chatters(&json!({"total":0,"data":[]})).unwrap(),(0,vec![]));
+  let (total,users)=parse_chatters(&json!({"total":2000,"data":[{"user_login":"ana"}]})).unwrap();assert_eq!(total,2000);assert_eq!(users.len(),1);
+ }
  use super::*;
  #[test]
  fn template_tokens_swap_values_and_keep_unknowns() {

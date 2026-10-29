@@ -185,3 +185,12 @@ Para uma execução em andamento, use **Cancelar execução** e confira o nome a
 - **Troca de OBS nas configurações:** um temporário em andamento continua associado ao destino original; não é enviado ao novo endereço para restaurar outro OBS.
 
 Essas verificações usam o estado informado pelo OBS. Não substituem gravação e audição para validar áudio real.
+
+
+## Dashboard sem audiência ou com dados antigos
+
+“—” significa ausência de medição válida, não zero espectadores. Confira a plataforma (a coleta atual é Twitch), o perfil selecionado e a autorização da conta do canal. Falha HTTP, limite de consultas e timeout conservam a leitura anterior identificada como desatualizada. Não reconecte o bot repetidamente para forçar a audiência: há cache e espaçamento de tentativas. Bot conectado não comprova transmissão ativa; OBS transmitindo também não comprova que a Twitch já confirmou a live.
+
+Uma lista vazia de pessoas no chat não equivale a zero espectadores. Falhas de presença agora são informadas em vez de retornar uma contagem zerada. Se faltar permissão, confira a conta do bot moderadora e sua autorização. A lista detalhada mostra até 1000 nomes; o total pode ser maior.
+
+Totais da sessão são observados pelo BotLive e não incluem eventos que ocorreram com o aplicativo fechado ou sem confirmação de live. O gráfico fica interrompido em lacunas de coleta. A média/pico observados podem divergir da análise oficial da plataforma. FPS, taxa de envio e quadros do OBS são leituras locais, não um teste de qualidade de áudio ou da recepção no público.

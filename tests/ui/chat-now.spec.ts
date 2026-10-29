@@ -26,6 +26,7 @@ test('Visão geral mostra quem está no chat com números e nomes',async({page})
  await page.setViewportSize({width:1100,height:860});
  await page.goto('/');
  await page.locator('.sidebar').getByRole('button',{name:'Visão geral',exact:true}).click();
+ await page.getByText('Pessoas no chat (não é audiência)',{exact:true}).click();
  const card=page.getByText('Quem está no chat agora');
  await expect(card).toBeVisible();
  await expect(page.getByText('com o chat aberto mesmo sem falar')).toBeVisible();

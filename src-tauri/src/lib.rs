@@ -8,6 +8,7 @@ mod db;
 mod vault;
 mod knowledge;
 mod live_state;
+mod dashboard;
 mod secrets;
 mod ai;
 mod conversation;
@@ -80,7 +81,7 @@ pub async fn dispatch(rt:Arc<Runtime>,op:&str,args:Value)->R<Value>{
  if !profile.ai.answer_length.is_empty()&&!LENGTHS.contains(&profile.ai.answer_length.as_str()){return Err("Tamanho padrão da resposta da IA inválido".into())}
  if !KNOWLEDGE_DEPTHS.contains(&profile.ai.knowledge_depth.as_str()){return Err("Profundidade da base de conhecimento inválida".into())}
  if profile.ai.knowledge_off.len()>500||profile.ai.knowledge_off.iter().any(|o|o.len()>260){return Err("Lista da base de conhecimento inválida".into())}
- if let Ok(previous)=rt.db.profile(&profile.id){if previous.channel!=profile.channel||previous.channel_id!=profile.channel_id||previous.platform!=profile.platform{rt.conversation.lock().unwrap().clear(&profile.id);rt.live.clear(&profile.id);}if previous.platform!=profile.platform||previous.client_id!=profile.client_id{rt.disconnect(&profile.id);for key in ["bot_token","bot_refresh","channel_token","channel_refresh","bot_expires","channel_expires"]{let _=secrets::set(&profile.id,key,"");}}}profile.blocklist=profile.blocklist.into_iter().map(|s|s.trim().to_owned()).filter(|s|!s.is_empty()).collect();profile.editors=profile.editors.into_iter().map(|s|s.trim().to_lowercase()).filter(|s|!s.is_empty()).collect();profile.topics=profile.topics.into_iter().map(|s|s.trim().to_owned()).filter(|s|!s.is_empty()).collect();vault::root(&rt.base,&profile.id)?;rt.db.save_profile(&profile)?;Ok(json!(profile))},
+ if let Ok(previous)=rt.db.profile(&profile.id){if previous.channel!=profile.channel||previous.channel_id!=profile.channel_id||previous.platform!=profile.platform{rt.conversation.lock().unwrap().clear(&profile.id);rt.live.clear(&profile.id);rt.dashboard.clear_profile(&profile.id);}if previous.platform!=profile.platform||previous.client_id!=profile.client_id{rt.disconnect(&profile.id);for key in ["bot_token","bot_refresh","channel_token","channel_refresh","bot_expires","channel_expires"]{let _=secrets::set(&profile.id,key,"");}}}profile.blocklist=profile.blocklist.into_iter().map(|s|s.trim().to_owned()).filter(|s|!s.is_empty()).collect();profile.editors=profile.editors.into_iter().map(|s|s.trim().to_lowercase()).filter(|s|!s.is_empty()).collect();profile.topics=profile.topics.into_iter().map(|s|s.trim().to_owned()).filter(|s|!s.is_empty()).collect();vault::root(&rt.base,&profile.id)?;rt.db.save_profile(&profile)?;Ok(json!(profile))},
  "profile.delete"=>{
  let _lock=rt.vault_lock.lock().unwrap();rt.db.profile(&p)?;rt.disconnect(&p);
  // Refuse paths that escape the app-data vault through junctions or symlinks.
@@ -93,12 +94,14 @@ pub async fn dispatch(rt:Arc<Runtime>,op:&str,args:Value)->R<Value>{
  if let (Ok(kroot),Ok(kparent))=(knowledge::root(&rt.base,&p),rt.base.join("knowledge").canonicalize()) {
   if let Ok(k)=kroot.canonicalize() {if k.starts_with(&kparent)&&k!=kparent {let _=std::fs::remove_dir_all(&k);}}
  }
- rt.db.delete_profile(&p)?;rt.conversation.lock().unwrap().clear(&p);rt.live.clear(&p);rt.listen.reset(&p);secrets::clear(&p);rt.spotify.bump(&p);rt.spotify.set(&p,None);crate::discord_admin::stop(&rt,&p);crate::discord::clear_cache(&rt,&p);Ok(Value::Null)
+ rt.db.delete_profile(&p)?;rt.dashboard.clear_profile(&p);rt.conversation.lock().unwrap().clear(&p);rt.live.clear(&p);rt.listen.reset(&p);secrets::clear(&p);rt.spotify.bump(&p);rt.spotify.set(&p,None);crate::discord_admin::stop(&rt,&p);crate::discord::clear_cache(&rt,&p);Ok(Value::Null)
  },
  "command.counters"=>command_counter::list(&rt.db,&p),
  "command.counter.set"=>{let id=args["id"].as_str().ok_or("Comando ausente")?;let value=args["value"].as_i64().ok_or("Informe um número inteiro")?;let count=command_counter::change(&rt.db,&p,id,Some(value))?;rt.emit("command-counter",json!({"profileId":p,"id":id,"value":count}));Ok(json!(count))},
  "timer.preview"=>{let f=rt.db.flows(&p)?.into_iter().find(|f|f.id==args["id"].as_str().unwrap_or("")&&f.trigger.kind=="timer").ok_or("Timer não encontrado")?;rt.submit(timers::event(&f,true)).await?;Ok(Value::Null)},
  "flows"=>Ok(json!(rt.db.flows(&p)?)),
+ "dashboard.get"=>{let profile=rt.db.profile(&p)?;Ok(dashboard::get(&rt,&profile).await)},
+ "dashboard.obs"=>{let profile=rt.db.profile(&p)?;Ok(dashboard::obs(&rt,&profile).await)},
  "liveConsole.get"=>{
   let profile=rt.db.profile(&p)?;let runs=rt.runs.history(&p)?;let voice=voice_redemptions::view(&rt,&profile);
   Ok(json!({"channel":rt.statuses.lock().unwrap().get(&p).cloned().unwrap_or_else(||"offline".into()),"audio":audio::state(&rt,&p),"voice":voicemod::health(&rt),"voiceQueue":{"activeName":voice["queue"]["active"]["voiceName"],"waiting":voice["queue"]["upcoming"].as_array().map_or(0,Vec::len),"pendingRestore":voice["queue"]["pendingRestore"]},"obs":obs::health(&rt,&p),"running":runs.iter().filter(|r|matches!(r["status"].as_str(),Some("RUNNING"|"WAITING"))).count(),"issues":runs.iter().filter(|r|matches!(r["status"].as_str(),Some("FAILED"|"INTERRUPTED"))).count()}))
@@ -251,6 +254,7 @@ pub fn run(){
   }
  });
  let timer_rt=rt.clone();tauri::async_runtime::spawn(timers::run(timer_rt));
+ let dashboard_rt=rt.clone();tauri::async_runtime::spawn(dashboard::monitor(dashboard_rt));
  let scheduler_rt=rt.clone();tauri::async_runtime::spawn(scheduler::run(scheduler_rt));
  let spotify_rt=rt.clone();tauri::async_runtime::spawn(spotify::run(spotify_rt));
  let update_rt=rt.clone();tauri::async_runtime::spawn(async move{if update_rt.db.get("autoUpdate")==true {if let Ok(v)=update::check(&update_rt,false).await{if v["available"]==true{update_rt.log("","update","Há uma atualização disponível nas configurações.","info");}}}});

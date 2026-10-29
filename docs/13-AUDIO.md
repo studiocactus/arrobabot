@@ -139,3 +139,8 @@ Exemplos:
 Pedidos incompletos, cancelamentos e falhas operacionais também recebem resposta. Erro ao enviar ao chat não impede tentar a voz; erro na síntese não desfaz nem repete a ação já executada. Consulte o Histórico se uma entrega falhar. As restrições de conteúdo do perfil também valem para a voz. O limite de caracteres de Texto para voz pode cortar respostas longas.
 
 Esta etapa cobre os comandos administrativos já reconhecidos (categoria, título, timeout, banimento, desbanimento, confirmação, cancelamento e retorno à voz normal). Não interpreta qualquer pedido livre nem adiciona conversa geral por voz. A voz é a síntese local disponível no Windows, sem clonagem de voz e sem promessa de naturalidade de um serviço de voz neural. Uma fonte conectada não comprova que o OBS está transmitindo áudio: faça uma gravação curta para conferir.
+
+
+### Diagnóstico na Visão geral
+
+O novo dashboard separa conexão da fonte, entrega de um áudio e confirmação de início/conclusão da reprodução. Falha de enfileiramento da fonte é registrada como erro de entrega. A última resposta administrativa do Arroba mostra os resultados de chat e voz; a confirmação de reprodução só é associada a ela quando o identificador do áudio coincide. O quadro Operação e áudio mantém atalhos às telas existentes de voz, histórico e OBS. Esses indicadores não certificam volume, faixa de transmissão, latência acústica ou som audível pelo público.

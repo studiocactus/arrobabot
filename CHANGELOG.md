@@ -1,5 +1,54 @@
 # Histórico de atualizações
 
+# BotLive 0.20.18
+
+## O que mudou
+
+- A Visão geral foi substituída por um dashboard de operação: cabeçalho da live, audiência atual, duração, mensagens por minuto, participantes ativos, atenção prioritária, gráfico, conexões e transmissão, comunidade, último pedido ao Arroba, meta ativa e atividade filtrada.
+- O banner original “Menos tarefas. Mais momentos ao vivo.” retorna com o robô, órbitas e elementos originais. Aparece sem perfil, sem bot online ou com transmissão confirmada fora do ar; fica oculto na operação ao vivo. Falha de consulta não significa transmissão encerrada.
+- A Twitch fornece estado real da transmissão, título, categoria, início e contagem de espectadores. Conexão do bot, presença no chat, transmissão do OBS e live na plataforma são estados separados. Dados antigos, indisponíveis e sem suporte têm indicação própria; erro não vira zero.
+- Coleta compartilhada por perfil/conta, serializada e com cache de 30 segundos, timeout, espaçamento progressivo após falhas e respeito a espera informada no limite de API. Audiência continua sendo observada com o aplicativo aberto em outra tela.
+- Agregados e amostras da sessão são preservados no banco por ID da transmissão: pico, média observada, cobertura, mensagens e eventos da comunidade. Reinício, falta de coleta e live encerrada deixam lacunas; não se presume continuidade nem se reconstrói eventos perdidos. Eventos simulados/ensaios e conta do bot não entram nos totais. Há deduplicação limitada de eventos e separação entre novas subs, renovações e presentes.
+- A observação OBS usa conexão de leitura independente das ações temporárias e exibe transmissão, reconexão, gravação, cena, FPS, CPU, taxa de envio calculada e quadros da saída. Não inicia/encerra live, gravação ou efeitos. Leituras e falhas têm timeout/cache.
+- Operação e áudio reaproveita e reorganiza a Central existente, com fonte de áudio, Voicemod da máquina, fila, execuções e restaurações. Pendências de restauração e falha de fonte durante a live ganham atenção prioritária.
+- A última solicitação do Arroba mostra resultado, chat e voz separadamente, associando confirmação de reprodução somente ao áudio com o mesmo identificador. Enfileiramento de áudio recusado aparece como erro. A confirmação de banimento permanece restrita a quem pediu e mostra o prazo no painel.
+- A meta LivePix ativa mostra seu contador, alvo, período e última coleta sem somar valores como receita oficial. Preferências por perfil permitem ocultar blocos secundários e ativar privacidade na Visão geral; alertas e conexões permanecem acessíveis.
+- Jornadas de configuração e pré-voo continuam nas mesmas telas e componentes, agora recolhidos em Preparação e configuração após criar perfil. O seletor de perfil também está disponível na Visão geral.
+- A presença no chat usa cache compartilhado e trata respostas HTTP/JSON inválidas como falha, sem contagem zerada falsa. Respostas tardias da interface são descartadas ao trocar de perfil. Reconexão de eventos da conta do canal deixa de alterar o estado independente da conta do bot.
+- Restauração de backup invalida cache, janela de chat e diagnóstico do dashboard; coleta de audiência iniciada antes da restauração é descartada. O estado da sessão acompanha o backup do perfil.
+
+## Como usar
+
+Instale a atualização em Configurações → Atualizações. Abra Visão geral e escolha Perfil ativo. Autorize a conta do canal Twitch em Perfis para obter audiência; a exportação de Rótulos OBS não precisa estar ligada. Conferir contas abre a configuração existente; Comandos da live abre o painel de comandos por voz já utilizado.
+
+Durante a live, use os quatro indicadores do topo e a área Precisa de atenção. O gráfico diferencia dados observados e lacunas. Pessoas no chat fica numa expansão própria e não é a audiência. A leitura da plataforma informa o horário e mantém dados antigos identificados quando uma consulta falha. Atualizar painel não ignora o cache nem limites da plataforma.
+
+Ative a integração na tela OBS Studio para obter a telemetria. Operação e áudio mantém atalhos de recuperação para áudio, Voicemod, histórico e OBS, sem executar correções automaticamente. Confira o último pedido ao Arroba e o resultado separado de ação, chat e reprodução de voz.
+
+Em Personalizar painel, escolha os blocos secundários e o modo privacidade. Em Preparação e configuração, rode o pré-voo e abra as jornadas atuais. Use Atividade recente e Ver histórico para investigar. O banner original é mostrado automaticamente nos estados previstos, sem nova tela paralela.
+
+Os capítulos GUIA-DE-USO.md, 07-OPERACAO-E-BACKUP.md, 08-SOLUCAO-DE-PROBLEMAS.md e 13-AUDIO.md explicam operação, significado das métricas e limites. docs/ESTUDO-DASHBOARD.md preserva a análise que orientou a mudança.
+
+## Validação
+
+- Verificação TypeScript e 182 testes frontend aprovados, incluindo regras de validade, banner, duração, bitrate e lacunas no gráfico.
+- Suíte nativa da v0.20.18: 421 aprovados e 3 ignorados. Após o ajuste final de fechamento da sessão, os 6 testes específicos do dashboard foram compilados e executados novamente, todos aprovados. Há testes de persistência, deduplicação, isolamento, exclusão de simulações, controle de acesso, erros de presença e observação OBS sem mutações.
+- Rodada completa inicial de navegador: 124/126 aprovados. Os dois testes antigos de pré-voo não expandiam a nova seção; o caminho foi ajustado, preservando as verificações de diagnóstico, navegação e ausência de escritas.
+- Após os ajustes, 13/13 cenários direcionados de dashboard, pré-voo, banner/configuração e layout foram aprovados; uma rodada final adicional de dashboard e pré-voo teve 6/6 aprovados.
+- Build de produção e manual de 30 capítulos gerados. npm run update:check, 9 testes de atualização e git diff --check aprovados. Avisos existentes de bundle acima de 500 kB e atribuição não lida em twitch_ops.rs não impediram a compilação. Capturas de navegador em 1100 e 1600 pixels ficam fora do repositório; dados de teste são simulados, identificáveis e não representam uma live real.
+
+## Limitações
+
+- Audiência da plataforma é Twitch nesta etapa. YouTube e Kick exibem ausência de suporte nessa coleta, preservando suas funções existentes. A prévia web não inventa audiência; dados reais requerem o aplicativo desktop e contas autorizadas.
+- Pico/média são observados pelo BotLive e não equivalem aos relatórios oficiais da Twitch. Até 2000 amostras e 2000 IDs recentes de eventos são retidos por sessão; os agregados ficam separados. Ritmo/participantes usam janela em memória de até 10000 mensagens e reiniciam com o aplicativo. A coleta para com o app fechado.
+- A média considera intervalos de até 60 segundos entre amostras válidas. Períodos sem observação e eventos perdidos durante desconexão não são reconstruídos. A presença detalhada do chat limita-se aos primeiros 1000 nomes retornados, embora o total possa ser maior.
+- O contador da meta é da integração LivePix, no período da meta; não é saldo disponível nem receita total da live. As preferências de apresentação ficam neste computador e perfil.
+- Privacidade cobre o conteúdo sensível da Visão geral e seu indicador de presença; não anonimiza nomes de perfis ou todas as outras telas. O backend retorna apenas campos permitidos de telemetria e não expõe senhas, chaves de transmissão ou tokens de overlay.
+- OBS é observado no destino configurado; perfis que compartilham OBS/Voicemod compartilham serviços físicos. Fonte conectada, entrega ou confirmação de reprodução não comprovam qualidade acústica, faixa do OBS ou áudio recebido pelo público.
+- Não foi feita uma transmissão real nem uma medição de usabilidade com participantes. A validação acústica prolongada continua adiada conforme combinado; não houve alteração de título, categoria ou moderação em canal real durante o QA.
+
+---
+
 # BotLive 0.20.17
 
 ## O que mudou

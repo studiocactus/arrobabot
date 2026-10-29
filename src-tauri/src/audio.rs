@@ -197,8 +197,10 @@ pub fn play(rt: &Runtime, p: &str, req: Req) -> Value {
     });
     // Fonte do OBS reivindicada: só ela recebe. O aplicativo ouve o mesmo
     // evento com sink="obs" apenas para diagnóstico — nunca toca junto.
+    let mut delivery_phase="delivered";
     let sink = if let Some(tx) = rt.audio.claimed(p) {
         if tx.try_send(json!({"type": "audio.play", "payload": payload.clone()})).is_err() {
+            delivery_phase="error";
             let _ = rt.log(
                 p,
                 "audio",
@@ -212,6 +214,7 @@ pub fn play(rt: &Runtime, p: &str, req: Req) -> Value {
     };
     let mut out = payload;
     out["sink"] = json!(sink);
+    rt.dashboard.deliveries.lock().unwrap().insert(p.into(),json!({"id":out["id"],"kind":out["kind"],"sink":sink,"phase":delivery_phase,"at":crate::dashboard::now()}));
     let _ = rt.emit("audio.play", out.clone());
     out
 }
@@ -265,6 +268,7 @@ pub fn ack(rt: &Runtime, p: &str, id: &str, phase: &str, detail: Option<&str>) -
         return Err("Estado de reprodução inválido".into());
     }
     let detail = detail.map(|d| d.chars().take(200).collect::<String>());
+    {let mut entries=rt.dashboard.deliveries.lock().unwrap();if let Some(item)=entries.get_mut(p){if item["id"]==id{item["phase"]=json!(phase);item["at"]=json!(crate::dashboard::now());}}}
     let _ = rt.emit(
         "audio.feedback",
         json!({"profileId": p, "id": id, "phase": phase, "detail": detail}),

@@ -1,4 +1,4 @@
-import {useCallback,useEffect,useState} from 'react';
+import {useCallback,useEffect,useState,useRef} from 'react';
 import {RefreshCw,Users,X} from 'lucide-react';
 import {api,desktop,errorText} from './api';
 import {Card} from './components';
@@ -11,15 +11,17 @@ type Viewers={total:number;users:string[]};
 export function useChatViewers(profileId:string,online:boolean){
  const [viewers,setViewers]=useState<Viewers|null>(null);
  const [error,setError]=useState('');
+ const generation=useRef(0);
  const refresh=useCallback(async()=>{
-  try{setViewers(await api<Viewers>('labels.viewers',{profileId}));setError('')}
-  catch(e){setError(errorText(e))}
+  const gen=generation.current;
+  try{const data=await api<Viewers>('labels.viewers',{profileId});if(gen!==generation.current)return;if(!data||!Array.isArray(data.users)||typeof data.total!=='number')throw Error('Presença indisponível');setViewers(data);setError('')}
+  catch(e){if(gen===generation.current)setError(errorText(e))}
  },[profileId]);
  useEffect(()=>{
-  if(!desktop||!online){setViewers(null);return}
-  void refresh();
-  const timer=setInterval(()=>{void refresh()},30000);
-  return()=>clearInterval(timer);
+  generation.current++;setViewers(null);setError('');
+  if(!desktop||!online)return;
+  void refresh();const timer=setInterval(()=>{void refresh()},30000);
+  return()=>{generation.current++;clearInterval(timer)};
  },[refresh,online]);
  return {viewers,error,refresh};
 }
@@ -33,10 +35,10 @@ export default function ChatPresence({profileId,online}:{profileId:string;online
  const [open,setOpen]=useState(false);
  const {viewers,error,refresh}=useChatViewers(profileId,online);
  if(!desktop||!online)return null;
- const total=viewers?.total||0;
+ const total=viewers?.total;
  return <div className="presence">
   <button className="presence-pill" aria-expanded={open} aria-label="Quem está no chat agora" onClick={()=>setOpen(v=>!v)}>
-   <Users size={15}/><span>{total>0?`${total} no chat`:'Chat ao vivo'}</span>
+   <Users size={15}/><span>{typeof total==='number'?`${total} no chat`:'Presença indisponível'}</span>
   </button>
   {open&&<div className="presence-panel" role="dialog" aria-label="Quem está no chat agora">
    <header><strong>Quem está no chat</strong><button className="icon-button" aria-label="Fechar lista do chat" onClick={()=>setOpen(false)}><X size={15}/></button></header>
@@ -56,14 +58,14 @@ export default function ChatPresence({profileId,online}:{profileId:string;online
 export function ChatNow({profileId,online}:{profileId:string;online:boolean}){
  const {viewers,error,refresh}=useChatViewers(profileId,online);
  if(!desktop||!online)return null;
- const total=viewers?.total||0;
+ const total=viewers?.total;
  const users=viewers?.users||[];
  return <Card title="Quem está no chat agora" action={<button onClick={()=>void refresh()}><RefreshCw size={14}/>Atualizar</button>}>
-  <div className="stat-inline"><strong>{total}</strong><span>com o chat aberto{total===1?"":" mesmo sem falar"}</span></div>
+  <div className="stat-inline"><strong>{typeof total==='number'?total:'—'}</strong><span>com o chat aberto{total===1?"":" mesmo sem falar"}</span></div>
   {error&&<p role="alert" className="inline-error">{error}</p>}
   <div className="message-readable">{users.length
    ?users.map(u=><span className="variable-chip" key={u}>{u}</span>)
-   :<p className="help">Ninguém por aqui ainda — os nomes aparecem quando alguém abrir o chat.</p>}</div>
-  <p className="help">Atualiza sozinho a cada 30 segundos e some quando a live terminar.</p>
+   :<p className="help">A lista detalhada considera as primeiras 1000 pessoas retornadas pela Twitch.</p>}</div>
+  <p className="help">Presença no chat, não espectadores assistindo. Atualiza a cada 30 segundos enquanto o bot está conectado.</p>
  </Card>;
 }

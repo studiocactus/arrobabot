@@ -7,6 +7,7 @@ test('organização preserva destinos e roteiro leva às telas existentes',async
  const nav=page.locator('.sidebar');
  await expect(nav.locator('.nav-group')).toHaveText(['SEU CANAL','CHAT','VISUAL DO OBS','ÁUDIO E VOZ','AUTOMAÇÃO E IA','COMUNIDADE','ACOMPANHAMENTO']);
  await expect(nav.locator('.nav-item')).toHaveCount(24);
+ await page.getByText('Preparação e configuração',{exact:true}).click();
  const hub=page.locator('.setup-hub');
  await hub.getByRole('button',{name:/Preparar sons e voz/}).click();
  await expect(hub.getByRole('button',{name:/Preparar sons e voz/})).toHaveAttribute('aria-pressed','true');
@@ -17,6 +18,7 @@ test('organização preserva destinos e roteiro leva às telas existentes',async
 
 test('busca por tarefa aceita sinônimos, acentos e ausência de resultados',async({page})=>{
  await mock(page);await page.goto('/');
+ await page.getByText('Preparação e configuração',{exact:true}).click();
  await expect(page.getByRole('heading',{name:'O que você quer configurar?'})).toBeVisible();
  await page.keyboard.press('Control+k');
  const input=page.getByRole('textbox',{name:'Buscar tela ou tarefa'});
@@ -45,6 +47,7 @@ test('primeiro uso explica a necessidade do perfil sem liberar etapas vazias',as
 
 test('roteiro de configuração cabe em janela estreita e larga',async({page})=>{
  await mock(page);await page.goto('/');
+ await page.getByText('Preparação e configuração',{exact:true}).click();
  const hub=page.locator('.setup-hub');
  await hub.getByRole('button',{name:/Montar o visual da live/}).click();
  for(const width of [1100,1600]){
@@ -52,4 +55,34 @@ test('roteiro de configuração cabe em janela estreita e larga',async({page})=>
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   await page.screenshot({path:join(OUT,`configurar-objetivo-${width}.png`),fullPage:true});
  }
+});
+
+
+test('banner original aparece sem conexão e sai quando o bot está online',async({page})=>{
+ await mock(page);
+ await page.addInitScript(()=>{
+  const w=window as unknown as {__TAURI_INTERNALS__:{invoke:(cmd:string,payload:{op:string})=>Promise<any>}};
+  const original=w.__TAURI_INTERNALS__.invoke;
+  w.__TAURI_INTERNALS__.invoke=async(cmd,payload)=>{
+   const value=await original(cmd,payload);
+   if(payload?.op==='snapshot')return {...value,statuses:{p1:sessionStorage.getItem('banner-online')==='yes'?'online':'offline'}};
+   return value;
+  };
+ });
+ await page.goto('/');
+ const banner=page.locator('.hero');
+ await expect(banner).toBeVisible();
+ await expect(banner.locator('h2')).toHaveText('Menos tarefas.Mais momentos ao vivo.');
+ await expect(banner.locator('.bot-illustration')).toBeVisible();
+ for(const width of [1100,1600]){
+  await page.setViewportSize({width,height:1000});
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  await page.screenshot({path:join(OUT,`banner-original-${width}.png`),fullPage:true});
+ }
+ await banner.getByRole('button',{name:'Criar uma automação',exact:true}).click();
+ await expect(page.locator('main h1')).toHaveText('Automações');
+ await page.evaluate(()=>sessionStorage.setItem('banner-online','yes'));
+ await page.reload();
+ await expect(page.locator('main h1')).toBeVisible();
+ await expect(page.locator('.hero')).toHaveCount(0);
 });

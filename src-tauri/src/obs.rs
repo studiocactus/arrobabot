@@ -483,6 +483,9 @@ mod tests {
     let d=&v["d"];let kind=d["requestType"].as_str().unwrap_or("");let args=&d["requestData"];
     let (data,ok,drop_connection)={let mut state=st.lock().unwrap();let mut ok=true;let mut drop_connection=false;
      let data=match kind {
+      "GetStreamStatus"=>json!({"outputActive":true,"outputReconnecting":false,"outputDuration":120000,"outputBytes":1000000,"outputSkippedFrames":0,"outputTotalFrames":7200}),
+      "GetStats"=>json!({"activeFps":60.0,"cpuUsage":10.0,"renderSkippedFrames":0}),
+      "GetRecordStatus"=>json!({"outputActive":false}),
       "GetInputMute"=>if state.missing_state{json!({})}else{json!({"inputMuted":state.muted})},"GetInputVolume"=>json!({"inputVolumeDb":state.volume}),
       "SetInputMute"=>{if state.reject_restore&&args["inputMuted"]==false{ok=false}else{state.muted=args["inputMuted"]==true;state.sets+=1;drop_connection=state.drop_next_set;state.drop_next_set=false;}json!({})},
       "SetInputVolume"=>{state.volume=args["inputVolumeDb"].as_f64().unwrap_or(0.0);state.sets+=1;json!({})},
@@ -504,6 +507,11 @@ mod tests {
   rt.db.set_module(&p.id,MODULE,&json!({"enabled":true,"host":"127.0.0.1","port":port})).unwrap();p
  }
  async fn expire(rt:&Arc<Runtime>){let (key,lock)=rt.obs.active.lock().unwrap().iter().next().map(|(k,v)|(k.clone(),v.clone())).unwrap();release_temporary(rt.clone(),key,lock.generation,lock.gate).await;}
+ #[tokio::test]
+ async fn telemetria_observa_sem_mutacoes_ou_travas_de_efeitos(){
+  let server=mock_obs().await;let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();let p=test_profile(&rt,server.port);
+  let value=telemetry(&rt,&p).await;assert_eq!(value["state"],"fresh");assert_eq!(value["data"]["streaming"],true);assert_eq!(value["data"]["recording"],false);assert_eq!(value["data"]["scene"],"A");assert_eq!(server.state.lock().unwrap().sets,0);assert!(rt.obs.active.lock().unwrap().is_empty());
+ }
  #[tokio::test]
  async fn shared_temporary_origin_is_preserved_across_profiles_and_conflicts_are_refused(){
   let server=mock_obs().await;let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();let p=test_profile(&rt,server.port);let q=test_profile(&rt,server.port);
@@ -613,4 +621,20 @@ mod tests {
   assert!(valid_save(&json!({"port": 70000})).is_err());
   assert!(valid_save(&json!({"enabled": true, "host": "192.168.0.10", "port": 4455})).is_ok());
  }
+}
+
+/// Observação em conexão independente: não entra na fila que restaura efeitos.
+pub async fn telemetry(rt:&Arc<Runtime>,p:&Profile)->Value {
+ let result=tokio::time::timeout(Duration::from_secs(4),async {
+  let mut conn=connect(rt,p).await?;
+  let stream=call(&mut conn,"GetStreamStatus",json!({})).await?;
+  let stats=call(&mut conn,"GetStats",json!({})).await?;
+  let record=call(&mut conn,"GetRecordStatus",json!({})).await?;
+  let scene=program_scene(&mut conn).await?;
+  close(conn).await;
+  // Campos permitidos: não expor chave de transmissão, senha, caminhos ou configurações.
+  if !stream["outputActive"].is_boolean()||!stream["outputReconnecting"].is_boolean()||!record["outputActive"].is_boolean()||!stats["activeFps"].is_number()||!stats["cpuUsage"].is_number()||["outputDuration","outputBytes","outputSkippedFrames","outputTotalFrames"].iter().any(|key|stream[*key].as_u64().is_none()){return Err("Telemetria incompleta do OBS".to_string())}
+  Ok::<Value,String>(json!({"streaming":stream["outputActive"],"reconnecting":stream["outputReconnecting"],"durationMs":stream["outputDuration"],"bytes":stream["outputBytes"],"skipped":stream["outputSkippedFrames"],"total":stream["outputTotalFrames"],"recording":record["outputActive"],"fps":stats["activeFps"],"cpu":stats["cpuUsage"],"renderSkipped":stats["renderSkippedFrames"],"scene":scene}))
+ }).await.unwrap_or_else(|_|Err("OBS sem resposta no prazo de observação".into()));
+ let at=crate::dashboard::now();match result{Ok(data)=>json!({"state":"fresh","observedAt":at,"lastSuccessAt":at,"data":data}),Err(error)=>json!({"state":"unavailable","observedAt":at,"data":null,"error":error})}
 }

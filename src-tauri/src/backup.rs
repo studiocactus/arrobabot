@@ -297,7 +297,7 @@ pub fn restore(rt:&Runtime,path:&str)->Result<Value,String>{
  let files=v["files"].as_array().cloned().unwrap_or_default();
  let safety=Some(safety_copy(rt).ok_or("Não foi possível criar a cópia de segurança. A restauração foi cancelada sem alterar os dados.")?);
  let old:Vec<String>=rt.db.profiles().unwrap_or_default().into_iter().map(|p|p.id).collect();
- let written=rt.runs.reset_after(||write_tables(&rt.db,tables))?;
+ let written=rt.dashboard.reset_after(||rt.runs.reset_after(||write_tables(&rt.db,tables)))?;
  let file_count=write_files(&rt.base,&files)?;
  for id in &old{rt.disconnect(id);rt.conversation.lock().unwrap().clear(id);rt.live.clear(id);}
  let tasks:Vec<String>={rt.discord_tasks.lock().unwrap().keys().cloned().collect()};

@@ -119,7 +119,7 @@ async fn session_forever(rt:Arc<Runtime>,p:Profile,account:&'static str){
  let mut delay=2;
  loop{
   if let Err(e)=twitch_session(rt.clone(),p.clone(),account).await{rt.log(&p.id,"connection",&format!("{account}: {e}"),"error");}
-  rt.status(&p.id,"reconnecting");
+  if account=="bot"{rt.status(&p.id,"reconnecting");}else{rt.dashboard.subscriptions.lock().unwrap().insert(p.id.clone(),json!({"state":"unavailable","at":crate::dashboard::now()}));}
   tokio::time::sleep(Duration::from_secs(delay)).await;delay=(delay*2).min(60);
  }
 }
@@ -156,7 +156,7 @@ async fn twitch_session(rt:Arc<Runtime>,p:Profile,account:&str)->Result<(),Strin
   }
   rt.status(&p.id,"online");seed_category(&rt,&p).await;
  }
- if account=="channel"{let channel=bot.clone();
+ if account=="channel"{let channel=bot.clone();let mut registered=0;let mut failed=0;
  for (kind,version,condition) in [
  ("channel.follow","2",json!({"broadcaster_user_id":p.channel_id,"moderator_user_id":p.channel_id})),
  ("channel.subscribe","1",json!({"broadcaster_user_id":p.channel_id})),
@@ -169,11 +169,13 @@ async fn twitch_session(rt:Arc<Runtime>,p:Profile,account:&str)->Result<(),Strin
  ("stream.online","1",json!({"broadcaster_user_id":p.channel_id})),
  ("stream.offline","1",json!({"broadcaster_user_id":p.channel_id}))
  ] {
- if let Err(err)=subscribe(&rt,&p,&channel,session,kind,version,condition).await{rt.log(&p.id,"subscription",&format!("{kind}: {err}"),"error");}
+ if let Err(err)=subscribe(&rt,&p,&channel,session,kind,version,condition).await{failed+=1;rt.log(&p.id,"subscription",&format!("{kind}: {err}"),"error");}else{registered+=1;}
  }
+ rt.dashboard.subscriptions.lock().unwrap().insert(p.id.clone(),json!({"state":if failed==0{"fresh"}else{"partial"},"registered":registered,"failed":failed,"at":crate::dashboard::now()}));
  }
  },
  "notification"=>{
+  if account=="channel"{if let Some(s)=rt.dashboard.subscriptions.lock().unwrap().get_mut(&p.id){s["lastEventAt"]=json!(crate::dashboard::now());}}
   let sub=v["metadata"]["subscription_type"].as_str().unwrap_or("").to_owned();
   if let Some(e)=normalize_twitch(&p,&v){rt.submit(e).await?;}
   else if sub=="channel.chat.message"{
@@ -182,6 +184,10 @@ async fn twitch_session(rt:Arc<Runtime>,p:Profile,account:&str)->Result<(),Strin
    let what=payload["message"]["text"].as_str().unwrap_or("");
    rt.log(&p.id,"chat",&format!("Mensagem própria ignorada ({who}): {what}"),"info");
   }
+ },
+ "revocation"=>{
+  if account=="bot"{return Err("A Twitch revogou uma assinatura da conta do bot; confira permissões".into())}
+  let mut states=rt.dashboard.subscriptions.lock().unwrap();let state=states.entry(p.id.clone()).or_insert_with(||json!({"registered":0,"failed":0}));state["state"]=json!("partial");state["registered"]=json!(state["registered"].as_u64().unwrap_or(0).saturating_sub(1));state["failed"]=json!(state["failed"].as_u64().unwrap_or(0)+1);state["at"]=json!(crate::dashboard::now());drop(states);rt.log(&p.id,"subscription","Uma autorização Twitch foi revogada. Confira a conta do canal.","error");
  },
  "session_reconnect"=>{
  let target=v["payload"]["session"]["reconnect_url"].as_str().ok_or("Reconexão sem URL")?;
@@ -192,7 +198,6 @@ async fn twitch_session(rt:Arc<Runtime>,p:Profile,account:&str)->Result<(),Strin
  if !welcome.is_text(){return Err("Reconexão sem confirmação".into())}
  let _=ws.close(None).await;ws=next;
  },
- "revocation"=>{rt.log(&p.id,"subscription","Uma autorização Twitch foi revogada. Reconecte a conta.","error");},
  _=>{}
  }
  },_=>{}

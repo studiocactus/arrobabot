@@ -67,6 +67,8 @@ export async function mock(page:Page){
       case 'snapshot':return {profiles:[arg.profile],logs:arg.logs,statuses:{p1:'connected'},theme:'dark',accent:'',apiPort:0,dataDir:'C:/dados'};
       case 'flows':return arg.flows;
       case 'actionLibrary.list':return [];
+      case 'dashboard.get':return {platform:{state:'unconfigured',data:null,error:'Autorize a conta do canal em Perfis'},local:{session:{},messagesPerMinute:0,activeChatters:0,observedAt:Date.now()/1000}};
+      case 'dashboard.obs':return {state:'unconfigured',data:null,error:'Integração OBS desligada'};
       case 'liveConsole.get':return {channel:'offline',audio:{clients:0},voice:{phase:'off',restorePending:false,testActive:false},voiceQueue:{activeName:null,waiting:0,pendingRestore:false},obs:{temporary:0,pendingRestore:0},running:0,issues:0};
       case 'command.counters':return {c:{v:12}};
       case 'module.config.get':return {};

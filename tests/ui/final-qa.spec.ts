@@ -26,7 +26,7 @@ test('etapa reutilizável usa o inspetor atual, vincula e reabre sem copiar o or
 });
 
 test('central substitui o roteiro repetido, mostra pendências e falha sem executar serviços',async({page})=>{
- await mock(page);await page.goto('/');await expect(page.getByRole('heading',{name:'Central da live',exact:true})).toBeVisible();
+ await mock(page);await page.goto('/');await expect(page.getByRole('heading',{name:'Operação e áudio',exact:true})).toBeVisible();
  await expect(page.getByRole('heading',{name:'Comece por aqui',exact:true})).toHaveCount(0);
  await page.evaluate(()=>{
   const w=window as unknown as {__TAURI_INTERNALS__:{invoke:(cmd:string,payload:{op:string})=>Promise<unknown>}};const original=w.__TAURI_INTERNALS__.invoke;

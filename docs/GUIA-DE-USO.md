@@ -6,11 +6,31 @@ Para escolher uma função pelo resultado que você deseja, abra [Exemplos prát
 
 ## Encontre a configuração pelo objetivo
 
-Na **Visão geral**, use **O que você quer configurar?**: conectar canal, chat, visual da live, sons e voz, comunidade ou automação personalizada. Escolher um objetivo mostra um roteiro; cada passo abre a tela existente. O roteiro não indica conclusão nem executa alterações sozinho. Sem perfil, crie um pelo botão indicado antes de configurar os recursos.
+O banner original **Menos tarefas. Mais momentos ao vivo.** aparece no topo sem perfil, enquanto o bot selecionado não está online ou quando a Twitch confirma uma transmissão fora do ar. Ele mantém a ilustração do robô e abre a criação do primeiro perfil ou a tela de Automações. Com bot conectado e live no ar, sai para dar espaço à operação. Falha de consulta não é interpretada como live encerrada.
+
+Na **Visão geral**, expanda **Preparação e configuração** e use **O que você quer configurar?**: conectar canal, chat, visual da live, sons e voz, comunidade ou automação personalizada. Escolher um objetivo mostra um roteiro; cada passo abre a tela existente. O roteiro não indica conclusão nem executa alterações sozinho. Sem perfil, o roteiro fica visível; crie um perfil antes de configurar recursos.
 
 O menu agrupa as mesmas telas por finalidade: **Seu canal**, **Chat**, **Visual do OBS**, **Áudio e voz**, **Automação e IA**, **Comunidade** e **Acompanhamento**. **Configurações** continua no rodapé.
 
 Use **Ctrl+K** para procurar uma tela ou tarefa: “resgate” encontra Voicemod e Automações, “erro” encontra Histórico, “backup” encontra Configurações. A busca aceita palavras sem acentos.
+
+## Use a Visão geral durante a transmissão
+
+Selecione **Perfil ativo** no topo. O cabeçalho diferencia **Ao vivo na Twitch**, **Fora do ar na Twitch** e **Estado da live não confirmado**. Bot conectado, transmissão do OBS e live da plataforma são estados independentes. Espectadores agora e início da live vêm da Twitch; mensagens por minuto e participantes ativos são observados pelo BotLive, sem bots, simulações e ensaios.
+
+A consulta compartilhada da Twitch é feita no máximo a cada 30 segundos por perfil/conta; em falhas há espaçamento progressivo até cinco minutos, respeitando espera maior informada pela API. **Atualizar painel** relê o cache e os serviços; não ignora limites de consultas. Se faltar autorização, abra **Conferir contas**. YouTube e Kick continuam com suas ferramentas atuais, mas esta etapa de audiência é exclusiva da Twitch. A prévia no navegador mostra estado indisponível, sem números fictícios.
+
+O gráfico mantém lacunas de coleta. Pico e média são observados, sem equivaler ao relatório oficial da plataforma. A média considera intervalos de até 60 segundos entre amostras válidas. Os totais de follows, novas subs, renovações, presentes, bits, raids e resgates pertencem ao ID da transmissão e persistem ao reabrir o app. O período antes de iniciar a observação e os intervalos sem confirmação não são reconstruídos. Presença no chat fica em uma expansão própria: não é audiência e a lista detalhada limita-se às primeiras 1000 pessoas retornadas pela Twitch.
+
+**Precisa de atenção** destaca falhas de consulta, fonte de áudio ausente durante a live e restaurações de voz/OBS pendentes. Os botões abrem as telas existentes para conferir e recuperar, sem repetir efeitos. **Conexões e transmissão** mostra o estado da conta de chat, assinaturas de eventos e leituras do OBS. Telemetria OBS usa a integração já configurada, somente leitura, com timeout e conexão separada das ações temporárias. Uma assinatura aceita não prova que nenhum evento será perdido; o estado pode levar até o timeout da conexão para detectar uma queda.
+
+Em **Último pedido ao Arroba**, confira resultado, envio ao chat e entrega da voz separadamente. O último áudio distingue entrega, início, conclusão e erro informados pela fonte; isso não prova som audível no público. Confirmações pendentes mostram o prazo, mas a confirmação continua restrita a quem pediu. **Operação e áudio** reúne fonte OBS, Voicemod compartilhado da máquina, fila, execuções e restaurações. Falhas do histórico retido não são necessariamente pendências atuais.
+
+A meta da comunidade aparece quando há uma meta LivePix ativa, com valor, período e última coleta. Não representa saldo disponível nem receita total da live. **Atividade recente desta live** filtra o histórico local, enquanto os totais da sessão são calculados separadamente. Abra **Ver histórico** para investigar etapas.
+
+Em **Personalizar painel**, escolha gráfico, totais, último pedido, atividade e meta. **Modo privacidade** oculta conteúdo do canal no cabeçalho, pedidos, mensagens, valores da meta e bits, e remove o indicador de presença do topo enquanto estiver na Visão geral. Não é um modo de anonimização de todas as telas: nomes de perfis e informações das outras páginas continuam visíveis. Preferências ficam neste computador, por perfil; alertas e conexões permanecem disponíveis.
+
+A observação de audiência continua enquanto o aplicativo estiver aberto, mesmo em outra tela. Não há coleta com o aplicativo fechado. São preservadas até 2000 amostras recentes e até 2000 IDs recentes para deduplicação; pico, média e totais da sessão têm agregados separados. O ritmo e participantes do chat usam uma janela em memória de até 10000 mensagens e reiniciam com o app. O contador da sessão persiste. A leitura de audiência não usa nem depende de habilitar exportação de Rótulos OBS.
 
 ## 1. Abra o aplicativo certo
 
