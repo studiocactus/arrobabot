@@ -1,5 +1,37 @@
 # Histórico de atualizações
 
+# BotLive 0.20.24
+
+# BotLive v0.20.24 — painel organizado e autorização Pulsoid
+
+## O que mudou
+Esta versão reúne os ajustes visuais e a autorização Pulsoid preparados na v0.20.23, que não chegou a ser publicada porque a validação completa encontrou uma expectativa de texto antigo no teste do cartão de restauração. A verificação foi atualizada para o texto atual, mantendo a checagem de pendência, erro de leitura e acesso à recuperação. Nenhum teste foi removido.
+
+O quadro Precisa de atenção desaparece quando a leitura atual confirma a recuperação de todas as pendências. Reautorizar Twitch invalida o cache da consulta antiga e renova a conexão de eventos quando ela já estava ativa; um bot desconectado por escolha permanece desconectado. Uma resposta da consulta invalidada não recoloca o erro antigo no cache atual. Erros verdadeiros continuam visíveis até a recuperação; o Histórico é preservado.
+
+Operação e áudio agora tem três cartões com ícones, indicadores de estado, números e ações: Sons do bot, Voicemod da máquina e OBS e execuções. A área distingue restaurações pendentes de falhas históricas. Os botões de provedor de IA ganharam altura flexível e descrições contidas; não alteram o provedor, endereço ou modelo configurados. As barras de rolagem usam a cor de destaque do BotLive, verde no padrão, com respeito ao alto contraste do sistema.
+
+Batimentos da live ganhou Autorizar Pulsoid pelo navegador usando somente o Client ID público do aplicativo cadastrado pelo usuário, sem Client Secret nem URL de retorno. O BotLive abre o consentimento, aguarda aprovação no intervalo do fornecedor, salva a autorização no cofre e usa o mesmo conector/overlay existente. Recusa, expiração e cancelamento encerram a tentativa. A chave pessoal continua como alternativa explícita. A autorização pelo navegador não garante API gratuita; recusas de assinatura são informadas sem expor credenciais.
+
+Foi corrigida também a sincronização de um teste antigo do Voicemod. O teste agora aguarda aplicação e restauração confirmadas, em vez de depender de pausas fixas. Mantém todas as verificações de simulação, restauração e isolamento entre perfis; o comportamento de voz do aplicativo não foi alterado.
+
+## Como usar
+Corrija a conexão em Perfis e autorize a conta Twitch novamente quando necessário. A Visão geral acompanha os estados; os avisos somem após a confirmação. Use Atualizar painel ou Atualizar estado para solicitar nova leitura da interface. Em Operação e áudio, abra a função pelo botão do respectivo cartão. Na área de IA, escolha o provedor como antes; os campos e valores são preservados.
+
+Para Pulsoid, vá a Comunidade → Batimentos da live → Pelo celular · Pulsoid, informe o Client ID público de API Clients e clique em Autorizar Pulsoid. Aprove na mesma conta usada no Android. Aguarde BPM recente antes de publicar no OBS. Não é preciso informar Client Secret. Nas próximas sessões, use Conectar Pulsoid com a autorização salva. Não houve assinatura ou compra. Os capítulos Guia de uso, IA e memória e Batimentos da live foram atualizados.
+
+## Validação
+TypeScript e 185 testes de frontend passaram. A suíte nativa da implementação passou com 451 testes e três ignorados, inclusive no Windows da publicação anterior. A compilação de produção, os nove testes de atualização, o manual com 33 capítulos e update:check também passaram. Os novos testes cobrem invalidação do cache por perfil, URL de consentimento restrita ao Pulsoid, intervalo de consulta, autorização pendente/aprovada, recusa, expiração, cancelamento, proteção da chave e preservação do Client ID ao mudar publicação.
+
+Oito cenários de navegador passaram na execução final com npm run dev: dashboard, recuperação de avisos, área de IA, chave pessoal e autorização Pulsoid pelo navegador com continuidade da prévia. Capturas de layout foram revisadas em 1100px e 1680px para operação/áudio e IA; o novo fluxo de consentimento também foi capturado nessas larguras. Todos usam dados fictícios. Na validação completa da v0.20.23, 136 dos 137 cenários passaram e somente a expectativa do texto antigo bloqueou a publicação; o teste foi ajustado para a redação atual. Após a correção, os dois cenários de final-qa passaram localmente na v0.20.24, incluindo aviso de restauração, erro de leitura e botão de recuperação. A compilação e os nove testes de atualização foram repetidos com sucesso. Uma execução nativa apontou a corrida do teste antigo de voz, corrigida com espera por estado e sem remover assertivas.
+
+## Limitações
+Nenhuma conta real Twitch, Pulsoid ou equipamento de áudio foi usada na validação. O registro real dos eventos Twitch e a disponibilidade da API Pulsoid sem assinatura dependem das respostas dos serviços e precisam de conferência com a conta do usuário. O fluxo OAuth não contorna restrições do fornecedor. Tokens ficam no cofre local e não entram em código, presets ou backups.
+
+O painel atualiza leituras periodicamente, sem prometer remoção instantânea durante indisponibilidade de rede. A conexão de uma fonte de áudio não prova som audível na transmissão. Histórico de falhas é mantido e pode continuar com contagens após a causa ter sido resolvida. O ajuste visual não valida nem corrige automaticamente o endereço ou modelo de IA configurado.
+
+---
+
 # BotLive 0.20.23
 
 # BotLive v0.20.23 — painel organizado e autorização Pulsoid

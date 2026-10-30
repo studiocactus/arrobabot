@@ -32,7 +32,7 @@ test('central substitui o roteiro repetido, mostra pendências e falha sem execu
   const w=window as unknown as {__TAURI_INTERNALS__:{invoke:(cmd:string,payload:{op:string})=>Promise<unknown>}};const original=w.__TAURI_INTERNALS__.invoke;
   w.__TAURI_INTERNALS__.invoke=async(cmd,payload)=>{if(payload?.op==='liveConsole.get'){if(sessionStorage.getItem('consoleFail'))throw Error('Consulta interrompida');return {channel:'online',audio:{clients:1},voice:{phase:'connected',restorePending:true,testActive:false},voiceQueue:{activeName:null,waiting:2,pendingRestore:true},obs:{temporary:1,pendingRestore:1},running:2,issues:1}}return original(cmd,payload)};
  });
- await page.getByRole('button',{name:'Atualizar estado',exact:true}).click();await expect(page.getByText('Restauração precisa de atenção',{exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'Atualizar estado',exact:true}).click();await expect(page.locator('.operation-card').filter({hasText:'Voicemod da máquina'}).getByText('Restauração da voz pendente',{exact:true})).toBeVisible();
  for(const width of [1100,1600]){await page.setViewportSize({width,height:1000});await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBeTruthy();await page.screenshot({path:join(OUT,`central-live-${width}.png`),fullPage:true,animations:'disabled'});}
  await page.evaluate(()=>sessionStorage.setItem('consoleFail','yes'));await page.getByRole('button',{name:'Atualizar estado',exact:true}).click();await expect(page.getByRole('alert')).toContainText('desatualizados');
  await page.getByRole('button',{name:'Recuperar na tela Voicemod',exact:true}).click();await expect(page.locator('main h1')).toHaveText('Voicemod');
