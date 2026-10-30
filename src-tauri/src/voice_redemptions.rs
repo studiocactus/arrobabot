@@ -1277,18 +1277,17 @@ mod tests {
  #[tokio::test]
  async fn comando_do_chat_troca_a_voz_pelo_mesmo_servico_sem_ser_resgate() {
   let (_dir, rt, p, m) = connected_runtime().await;
-  setup_with(&rt, &p, cfg_json(&[command_binding("!robo", "moderator", "robot", 1, 0, "queue")], 3)).await;
+  setup_with(&rt, &p, cfg_json(&[command_binding("!robo", "moderator", "robot", 10, 0, "queue")], 3)).await;
   // Moderador pede o comando: troca pelo mesmo serviço, sem cumprir resgate.
   on_chat(&rt, &p, &chat(&p.id, "!robo agora", "moderator")).await;
-  tokio::time::sleep(Duration::from_millis(400)).await;
+  tokio::time::timeout(Duration::from_secs(20),async{while m.voice()!="robot"{tokio::time::sleep(Duration::from_millis(10)).await;}}).await.expect("Comando deveria aplicar a voz");
   assert_eq!(m.voice(), "robot", "comando do chat usa o mesmo serviço de troca");
   assert!(rt.voice_resgates.fulfilled.lock().unwrap().is_empty(), "chat nunca vira resgate de pontos");
   // Simulação (teste/ensaio) nunca troca voz.
   on_chat(&rt, &p, &chat_sim(&p.id, "!robo de novo", "moderator")).await;
-  tokio::time::sleep(Duration::from_millis(300)).await;
   assert_eq!(m.loads().len(), 1, "simulação não toca a voz");
   // O efeito curto termina e devolve a voz de antes antes do teste de perfis.
-  tokio::time::sleep(Duration::from_millis(1500)).await;
+  tokio::time::timeout(Duration::from_secs(20),async{loop{let idle=rt.voice_resgates.state.lock().unwrap().active.is_none();if idle&&m.voice()=="nofx"&&m.loads().len()==2{break}tokio::time::sleep(Duration::from_millis(10)).await;}}).await.expect("Efeito deveria restaurar a origem antes de comparar os perfis");
   let before = m.loads().len();
   // Outro perfil tem as regras dele: o chat deste perfil nunca pega a do
   // vizinho, e o chat do vizinho dispara a voz do vizinho.
@@ -1296,10 +1295,9 @@ mod tests {
   rt.db.save_profile(&other).unwrap();
   setup_with(&rt, &other, cfg_json(&[command_binding("!alien", "moderator", "alien", 60, 0, "queue")], 3)).await;
   on_chat(&rt, &p, &chat(&p.id, "!alien", "broadcaster")).await;
-  tokio::time::sleep(Duration::from_millis(300)).await;
   assert_eq!(m.loads().len(), before, "a regra do outro perfil não dispara com o chat deste");
   on_chat(&rt, &other, &chat(&other.id, "!alien", "moderator")).await;
-  tokio::time::sleep(Duration::from_millis(400)).await;
+  tokio::time::timeout(Duration::from_secs(20),async{while m.voice()!="alien"{tokio::time::sleep(Duration::from_millis(10)).await;}}).await.expect("Outro perfil deveria aplicar sua própria voz");
   assert_eq!(m.voice(), "alien", "cada perfil dispara as regras dele");
   let applied: Vec<String> = m.loads().into_iter().filter(|v| v.as_str() != "nofx").collect();
   assert_eq!(applied, vec!["robot".to_string(), "alien".to_string()], "só vozes de efeito aplicadas, sem contar a devolução da origem");

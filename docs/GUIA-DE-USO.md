@@ -155,3 +155,14 @@ Com um perfil criado, a **Central da live** substitui o cartão repetido Comece 
 A consulta ocorre a cada cinco segundos e oferece Atualizar estado. Falha mantém a última leitura com aviso de dados possivelmente desatualizados; não transforma ausência de resposta em serviço conectado. Os atalhos levam às telas existentes para corrigir contas, áudio, voz, OBS e execuções. Abrir a central não conecta serviços, aplica efeitos, reinicia filas ou repete ações. Uma fonte de áudio conectada não comprova áudio audível; confirme por gravação. O pré-voo continua sendo conferência estática distinta do estado operacional.
 
 As etapas compartilhadas ficam no próprio editor de automações: configure, guarde e vincule uma etapa; em outro fluxo, selecione Etapa reutilizável. Atualizar um original vale para os próximos disparos e não altera execuções já iniciadas.
+
+
+### Avisos atuais e operação
+
+O quadro Precisa de atenção só aparece quando há avisos nas leituras atuais. Após corrigir a causa e obter uma leitura bem-sucedida, o aviso e, se for o último, o quadro desaparecem. O Histórico permanece disponível; falhas antigas não são apagadas nem tratadas automaticamente como problemas atuais.
+
+Ao reautorizar uma conta, o BotLive invalida a consulta antiga da Twitch. Se o bot já estava conectado ou tentando conectar, a conexão é renovada para registrar os eventos com a autorização nova. Se estava desconectado por escolha do usuário, permanece assim. Uma autenticação bem-sucedida não garante que todos os eventos tenham sido registrados: os avisos de eventos somem somente após confirmar a recuperação.
+
+Operação e áudio usa três cartões: Sons do bot, Voicemod da máquina e OBS e execuções. Os cartões distinguem fontes conectadas, efeito/fila, execuções em andamento e restaurações pendentes. Falhas retidas aparecem como histórico, sem declarar problema atual. Use os botões para abrir as telas existentes. A leitura se repete a cada cinco segundos e pode ser solicitada em Atualizar estado; conexão não comprova som audível.
+
+As barras de rolagem seguem a cor de destaque do BotLive, verde no tema padrão. As preferências de alto contraste do sistema continuam sendo respeitadas.

@@ -155,10 +155,14 @@ pub async fn dispatch(rt:Arc<Runtime>,op:&str,args:Value)->R<Value>{
  "oauth.start"=>{let profile=rt.db.profile(&p)?;let account=args["account"].as_str().unwrap_or("bot");if !["bot","channel"].contains(&account){return Err("Conta inválida".into())}if profile.platform=="twitch"{oauth::device_start(&rt.http,&profile,account).await}else{oauth::browser_auth(&rt.http,&profile,account).await}},
  "oauth.finish"=>{
  let mut profile=rt.db.profile(&p)?;let account=args["account"].as_str().unwrap_or("bot");
+ if !["bot","channel"].contains(&account){return Err("Conta inválida".into())}
  let identity=oauth::device_finish(&rt.http,&profile,account,args["code"].as_str().ok_or("Código ausente")?).await?;
  let id=identity["user_id"].as_str().ok_or("Conta sem identificador")?.to_owned();
  if account=="bot"{profile.bot_id=id;}else{profile.channel_id=id;profile.channel=identity["login"].as_str().unwrap_or(&profile.channel).to_owned();}
- rt.db.save_profile(&profile)?;if profile.modules["heartRate"]!=true{heart_rate::stop(&rt,&profile.id);}Ok(json!(profile))
+ rt.db.save_profile(&profile)?;rt.dashboard.invalidate_platform(&profile.id);
+ let reconnect=rt.statuses.lock().unwrap().get(&profile.id).is_some_and(|s|matches!(s.as_str(),"online"|"connecting"|"reconnecting"));
+ if reconnect{if let Err(e)=rt.connect(&profile.id).await{rt.log(&profile.id,"connection",&e,"error");}}
+ if profile.modules["heartRate"]!=true{heart_rate::stop(&rt,&profile.id);}Ok(json!(profile))
  },
  "url.open"=>{let url=args["url"].as_str().ok_or("URL inválida")?;ai::validate_url(url)?;open::that(url).map_err(|_|"Não foi possível abrir o navegador")?;Ok(Value::Null)},
  "ai.preview"=>{

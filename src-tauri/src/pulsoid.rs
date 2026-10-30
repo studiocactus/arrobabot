@@ -16,6 +16,7 @@ use tokio_tungstenite::{connect_async_with_config,tungstenite::{Message,protocol
 }
 const VALIDATE:&str="https://dev.pulsoid.net/api/v1/token/validate";
 const SOCKET:&str="wss://dev.pulsoid.net/api/v1/data/real_time";
+#[path="pulsoid_auth.rs"]mod auth;
 fn token_ok(t:&str)->bool{(16..=2048).contains(&t.len())&&t.bytes().all(|b|b.is_ascii_alphanumeric()||b"-_.".contains(&b))}
 fn authorization(v:&Value)->Result<(),String>{
  if !v["scopes"].as_array().is_some_and(|a|a.iter().any(|s|s=="data:heart_rate:read")){return Err("A chave precisa da permissão data:heart_rate:read. Crie uma nova chave no Pulsoid.".into())}
@@ -25,6 +26,9 @@ fn rejection(status:u16)->Option<&'static str>{match status{
  401=>Some("A chave do Pulsoid expirou ou foi revogada. Gere outra chave e conecte novamente."),
  402=>Some("O Pulsoid exige acesso à API pelo plano BRO ou teste ativo. Confira sua assinatura no Pulsoid."),
  403=>Some("O Pulsoid recusou a permissão desta chave. Confira o acesso à API e data:heart_rate:read."),_=>None}}
+fn response_rejection(status:u16,v:&Value)->Option<&'static str>{
+ match v["error_code"].as_u64(){Some(7007)=>rejection(402),Some(7005|7006)=>rejection(401),_=>rejection(status)}
+}
 /// Não transforma pacotes antigos, duplicados, fora de ordem ou futuros em sinal novo.
 fn measurement(v:&Value,now:i64,last:Option<i64>)->Option<(u16,i64,Duration)>{
  let bpm=v["data"]["heart_rate"].as_u64().filter(|n|(1..=300).contains(n))? as u16;
@@ -34,12 +38,13 @@ fn measurement(v:&Value,now:i64,last:Option<i64>)->Option<(u16,i64,Duration)>{
 }
 fn phase(rt:&Runtime,p:&str,key:&str,next:&'static str,error:&str,connected:bool)->bool{
  let mut map=rt.heart_rate.sessions.lock().unwrap();let Some(s)=map.get_mut(p).filter(|s|s.publisher==key&&s.source=="pulsoid")else{return false};
- s.phase=next;s.error=error.into();s.connected=connected;if !connected{s.bpm=None;s.at=None;s.previous=None;s.last_event=None;}drop(map);rt.emit("heart-rate",state(rt,p,true));true
+ s.phase=next;s.error=error.into();s.connected=connected;if next!="authorizing"{s.authorization=None;}if !connected{s.bpm=None;s.at=None;s.previous=None;s.last_event=None;}drop(map);rt.emit("heart-rate",state(rt,p,true));true
 }
 pub fn operation(rt:&Arc<Runtime>,p:&str,op:&str,args:&Value)->Result<Value,String>{
  let profile=rt.db.profile(p)?;
  match op{
-  "heartRate.pulsoid.get"=>Ok(json!({"hasToken":vault::get(p).is_ok_and(|s|!s.is_empty())})),
+  "heartRate.pulsoid.get"=>Ok(json!({"hasToken":vault::get(p).is_ok_and(|s|!s.is_empty()),"clientId":rt.db.module(p,"heartRate")["pulsoidClientId"].as_str().unwrap_or("")})),
+  "heartRate.pulsoid.auth.start"=>auth::start(rt,p,args),
   "heartRate.pulsoid.forget"=>{vault::set(p,"")?;if rt.heart_rate.sessions.lock().unwrap().get(p).is_some_and(|s|s.source=="pulsoid"){stop(rt,p);}Ok(Value::Null)},
   "heartRate.pulsoid.connect"=>{
    if profile.modules["heartRate"]!=true{return Err("Ative Batimentos da live neste perfil".into())}
@@ -90,7 +95,7 @@ pub fn operation(rt:&Arc<Runtime>,p:&str,op:&str,args:&Value)->Result<Value,Stri
   let (_dir,rt,p)=setup();let listener=TcpListener::bind("127.0.0.1:0").await.unwrap();let url=format!("http://{}",listener.local_addr().unwrap());let (accepted,wait)=tokio::sync::oneshot::channel();let server=tokio::spawn(async move{let (_conn,_)=listener.accept().await.unwrap();let _=accepted.send(());tokio::time::sleep(Duration::from_secs(10)).await;});let (_,overlay)=launch(&rt,&p,url,"ws://127.0.0.1:1".into());wait.await.unwrap();stop(&rt,&p);assert_eq!(profile_for(&rt,&overlay,false),None);assert!(state(&rt,&p,false)["source"].is_null());
   *rt.actor.lock().unwrap()="editor".into();for op in ["heartRate.pulsoid.get","heartRate.pulsoid.connect","heartRate.pulsoid.forget","heartRate.links"]{assert!(crate::dispatch(rt.clone(),op,json!({"profileId":p,"token":SECRET})).await.is_err());}server.abort();
  }
- #[tokio::test]async fn chave_salva_so_sinaliza_presenca_e_remocao_revoga_sessao(){let (_dir,rt,p)=setup();vault::set(&p,SECRET).unwrap();assert_eq!(operation(&rt,&p,"heartRate.pulsoid.get",&json!({})).unwrap(),json!({"hasToken":true}));let mut s=Session::new("pulsoid");s.connected=true;let overlay=s.overlay.clone();rt.heart_rate.sessions.lock().unwrap().insert(p.clone(),s);operation(&rt,&p,"heartRate.pulsoid.forget",&json!({})).unwrap();assert!(vault::get(&p).is_err());assert_eq!(profile_for(&rt,&overlay,false),None);}
+ #[tokio::test]async fn chave_salva_so_sinaliza_presenca_e_remocao_revoga_sessao(){let (_dir,rt,p)=setup();vault::set(&p,SECRET).unwrap();assert_eq!(operation(&rt,&p,"heartRate.pulsoid.get",&json!({})).unwrap(),json!({"hasToken":true,"clientId":""}));let mut s=Session::new("pulsoid");s.connected=true;let overlay=s.overlay.clone();rt.heart_rate.sessions.lock().unwrap().insert(p.clone(),s);operation(&rt,&p,"heartRate.pulsoid.forget",&json!({})).unwrap();assert!(vault::get(&p).is_err());assert_eq!(profile_for(&rt,&overlay,false),None);}
 }
 async fn run(runtime:std::sync::Weak<Runtime>,p:String,key:String,credential:String,validate:String,socket:String,retry:Duration){
  let mut attempts=0u32;let mut last=None;
@@ -102,7 +107,7 @@ async fn run(runtime:std::sync::Weak<Runtime>,p:String,key:String,credential:Str
   let mut fatal=None;let mut ready=false;
   if let Ok(response)=result{
    let status=response.status().as_u16();
-   if let Some(message)=rejection(status){fatal=Some(message.to_owned());}
+   if rejection(status).is_some(){let body=tokio::time::timeout(Duration::from_secs(12),response.json::<Value>()).await.ok().and_then(Result::ok).unwrap_or(Value::Null);fatal=response_rejection(status,&body).map(str::to_owned);}
    else if response.status().is_success(){match tokio::time::timeout(Duration::from_secs(12),response.json::<Value>()).await{Ok(Ok(v))=>match authorization(&v){Ok(())=>ready=true,Err(e)=>fatal=Some(e)},_=>{}}}
   }
   if let Some(message)=fatal{phase(&rt,&p,&key,"error",&message,false);return}

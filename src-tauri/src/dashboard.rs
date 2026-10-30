@@ -23,7 +23,8 @@ pub struct Session {
  pub samples:Vec<(i64,Option<u64>)>,pub event_ids:Vec<String>,pub messages:u64,pub follows:u64,pub subs:u64,pub resubs:u64,pub gifts:u64,pub bits:u64,pub raids:u64,pub redemptions:u64,
 }
 impl Dashboard {
- pub fn clear_profile(&self,id:&str){self.recent.lock().unwrap().remove(id);self.requests.lock().unwrap().remove(id);self.deliveries.lock().unwrap().remove(id);self.subscriptions.lock().unwrap().remove(id);}
+ pub fn invalidate_platform(&self,id:&str){let prefix=format!("{id}|");self.gates.lock().unwrap().retain(|key,_|!key.starts_with(&prefix));}
+ pub fn clear_profile(&self,id:&str){self.invalidate_platform(id);self.recent.lock().unwrap().remove(id);self.requests.lock().unwrap().remove(id);self.deliveries.lock().unwrap().remove(id);self.subscriptions.lock().unwrap().remove(id);}
  pub fn reset_after<T>(&self,work:impl FnOnce()->Result<T,String>)->Result<T,String>{let _session=self.sessions.lock().unwrap();self.generation.fetch_add(1,Ordering::SeqCst);let result=work();self.gates.lock().unwrap().clear();self.recent.lock().unwrap().clear();self.requests.lock().unwrap().clear();self.deliveries.lock().unwrap().clear();result}
 }
 pub fn now()->i64 {chrono::Utc::now().timestamp()}
@@ -57,9 +58,10 @@ pub async fn platform(rt:&Arc<Runtime>,p:&Profile)->Value {
  if p.channel_id.is_empty()||p.client_id.is_empty(){return json!({"state":"unconfigured","error":"Autorize a conta do canal em Perfis","data":null})}
  let generation=rt.dashboard.generation.load(Ordering::SeqCst);
  let key=format!("{}|{}|{}|{}",p.id,p.platform,p.channel_id,p.client_id);
- let gate=rt.dashboard.gates.lock().unwrap().entry(key).or_default().clone();
+ let gate=rt.dashboard.gates.lock().unwrap().entry(key.clone()).or_default().clone();
  let mut cache=gate.lock().await;
  if rt.dashboard.generation.load(Ordering::SeqCst)!=generation{return json!({"state":"unavailable","data":null,"error":"Dados restaurados; atualize a leitura"})}
+ if !rt.dashboard.gates.lock().unwrap().get(&key).is_some_and(|current|Arc::ptr_eq(current,&gate)){return json!({"state":"refreshing","data":null,"error":null})}
  let wait=(30u64.saturating_mul(1u64<<cache.failures.min(4))).min(300).max(cache.cooldown);
  if cache.attempted.is_some_and(|t|t.elapsed()<Duration::from_secs(wait)){return cache.platform.clone()}
  let first_attempt=cache.attempted.is_none();
@@ -85,6 +87,7 @@ pub async fn platform(rt:&Arc<Runtime>,p:&Profile)->Value {
  }}
 
  // Um perfil reconfigurado não recebe resposta da conta anterior.
+ if !rt.dashboard.gates.lock().unwrap().get(&key).is_some_and(|current|Arc::ptr_eq(current,&gate)){return json!({"state":"refreshing","data":null,"error":null})}
  if rt.dashboard.generation.load(Ordering::SeqCst)!=generation||!rt.db.profile(&p.id).is_ok_and(|current|current.channel_id==p.channel_id&&current.client_id==p.client_id&&current.platform==p.platform){return json!({"state":"unavailable","data":null,"error":"Perfil alterado; atualize a tela"})}
  let at=now();
  match result {
@@ -132,6 +135,7 @@ pub fn local(rt:&Runtime,p:&Profile)->Value {
 pub async fn get(rt:&Arc<Runtime>,p:&Profile)->Value {let platform=platform(rt,p).await;json!({"platform":platform,"local":local(rt,p)})}
 #[cfg(test)]mod tests{
  use super::*;
+ #[test]fn reautorizar_invalida_so_o_cache_da_conta_afetada(){let d=Dashboard::default();let old=Arc::new(tokio::sync::Mutex::new(Cache{failures:4,cooldown:300,..Default::default()}));d.gates.lock().unwrap().insert("p1|twitch|id|client".into(),old.clone());d.gates.lock().unwrap().insert("p2|twitch|id|client".into(),Arc::default());d.invalidate_platform("p1");assert!(!d.gates.lock().unwrap().contains_key("p1|twitch|id|client"));assert!(d.gates.lock().unwrap().contains_key("p2|twitch|id|client"));let next=d.gates.lock().unwrap().entry("p1|twitch|id|client".into()).or_default().clone();assert!(!Arc::ptr_eq(&next,&old));}
  fn live(id:&str,n:u64)->Value{json!({"live":true,"id":id,"startedAt":"2026-10-29T20:00:00Z","viewers":n})}
  #[test]fn respostas_invalidas_nao_viram_zero_ou_offline(){assert!(parse_stream(&json!({"status":429})).is_err());assert!(parse_stream(&json!({"data":[{"id":"a","started_at":"invalido","viewer_count":0}]})).is_err());assert_eq!(parse_stream(&json!({"data":[]})).unwrap()["live"],false);}
  #[test]fn sessao_mantem_medias_lacunas_e_troca_sem_inflar(){let mut s=Session::default();sample(&mut s,&live("a",10),100);sample(&mut s,&live("a",20),130);assert_eq!(s.covered_seconds,30);assert_eq!(s.viewer_seconds,300);sample(&mut s,&live("a",50),300);assert_eq!(s.covered_seconds,30);assert_eq!(s.peak,50);sample(&mut s,&live("b",5),330);assert_eq!(s.peak,5);assert_eq!(s.covered_seconds,0);assert_eq!(s.samples.len(),1);}

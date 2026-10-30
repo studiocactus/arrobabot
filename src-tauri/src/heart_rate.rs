@@ -4,9 +4,9 @@ use serde_json::{json,Value};
 use std::{collections::HashMap,sync::{Arc,Mutex},time::Instant};
 #[path="pulsoid.rs"]pub mod pulsoid;
 #[derive(Default)]pub struct Sensors{sessions:Mutex<HashMap<String,Session>>,events:Mutex<HashMap<String,(String,Instant)>>}
-struct Session{publisher:String,overlay:String,bpm:Option<u16>,at:Option<Instant>,previous:Option<u16>,last_event:Option<Instant>,connected:bool,source:&'static str,phase:&'static str,error:String,task:Option<tokio::task::AbortHandle>}
+struct Session{publisher:String,overlay:String,bpm:Option<u16>,at:Option<Instant>,previous:Option<u16>,last_event:Option<Instant>,connected:bool,source:&'static str,phase:&'static str,error:String,authorization:Option<Value>,task:Option<tokio::task::AbortHandle>}
 impl Drop for Session{fn drop(&mut self){if let Some(task)=self.task.take(){task.abort();}}}
-impl Session{fn new(source:&'static str)->Self{Self{publisher:token(),overlay:token(),bpm:None,at:None,previous:None,last_event:None,connected:false,source,phase:"disconnected",error:String::new(),task:None}}}
+impl Session{fn new(source:&'static str)->Self{Self{publisher:token(),overlay:token(),bpm:None,at:None,previous:None,last_event:None,connected:false,source,phase:"disconnected",error:String::new(),authorization:None,task:None}}}
 fn token()->String{format!("{}{}",uuid::Uuid::new_v4().simple(),uuid::Uuid::new_v4().simple())}
 /// Heart Rate Measurement 0x2A37: UINT8/UINT16, contato e campos opcionais validados.
 pub fn decode(bytes:&[u8])->Result<Option<u16>,String>{
@@ -24,7 +24,7 @@ pub fn state(rt:&Runtime,p:&str,public:bool)->Value{
  let map=rt.heart_rate.sessions.lock().unwrap();let entry=map.get(p);
  let age=entry.and_then(|s|s.at.map(|a|a.elapsed().as_secs()));
  let fresh=entry.is_some_and(|s|s.connected&&s.bpm.is_some()&&s.at.is_some_and(|at|at.elapsed()<=std::time::Duration::from_secs(10)));
- json!({"profileId":p,"state":if !allowed{"hidden"}else if fresh{"fresh"}else if entry.is_some_and(|s|s.connected){"waiting"}else{"disconnected"},"bpm":if allowed&&fresh{entry.and_then(|s|s.bpm)}else{None},"ageSeconds":age,"showOnObs":cfg["showOnObs"]==true,"source":entry.map(|s|s.source),"phase":entry.map(|s|s.phase),"error":if public{None}else{entry.map(|s|s.error.as_str())}})
+ json!({"profileId":p,"state":if !allowed{"hidden"}else if fresh{"fresh"}else if entry.is_some_and(|s|s.connected){"waiting"}else{"disconnected"},"bpm":if allowed&&fresh{entry.and_then(|s|s.bpm)}else{None},"ageSeconds":age,"showOnObs":cfg["showOnObs"]==true,"source":entry.map(|s|s.source),"phase":entry.map(|s|s.phase),"error":if public{None}else{entry.map(|s|s.error.as_str())},"authorization":if public{None}else{entry.and_then(|s|s.authorization.clone())}})
 }
 pub fn profile_for(rt:&Runtime,key:&str,publisher:bool)->Option<String>{
  if key.len()!=64{return None}
@@ -76,7 +76,7 @@ pub fn operation(rt:&Runtime,p:&str,op:&str,args:&Value)->Result<Value,String>{
  match op{
  "heartRate.get"=>Ok(state(rt,p,false)),
  "heartRate.links"=>{let map=rt.heart_rate.sessions.lock().unwrap();let port=*rt.api_port.lock().unwrap();Ok(json!({"overlayUrl":map.get(p).filter(|_|port>0).map(|s|format!("http://127.0.0.1:{port}/heart-overlay#token={}",s.overlay))}))},
- "heartRate.visibility"=>{let enabled=args["enabled"].as_bool().ok_or("Escolha se quer exibir no OBS")?;rt.db.set_module(p,"heartRate",&json!({"showOnObs":enabled}))?;rt.emit("heart-rate",state(rt,p,true));Ok(Value::Null)},
+ "heartRate.visibility"=>{let enabled=args["enabled"].as_bool().ok_or("Escolha se quer exibir no OBS")?;let mut cfg=rt.db.module(p,"heartRate");if !cfg.is_object(){cfg=json!({});}cfg["showOnObs"]=json!(enabled);rt.db.set_module(p,"heartRate",&cfg)?;rt.emit("heart-rate",state(rt,p,true));Ok(Value::Null)},
  "heartRate.stop"=>{stop(rt,p);Ok(Value::Null)},
  "heartRate.prepare"=>{
   if profile.modules["heartRate"]!=true{return Err("Ative Batimentos da live neste perfil".into())}

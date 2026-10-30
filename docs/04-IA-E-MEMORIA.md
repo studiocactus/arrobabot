@@ -244,3 +244,8 @@ Para usar a ponte com Obsidian, tenha a instância e o plugin Local REST API con
 5. Confira o caminho retornado: BotLive/ID-do-perfil/caminho-da-nota.
 
 A cópia é manual e em uma direção. Pode substituir a nota remota nesse mesmo caminho. Não existe sincronização automática bidirecional nem resolução de conflitos com edições feitas no Obsidian. O endereço inicial é http://127.0.0.1:27123; ele precisa corresponder à configuração real do plugin.
+
+
+### Escolher o provedor na interface
+
+Os botões Ollama, API compatível e Anthropic exibem nome e descrição dentro da mesma área, com altura flexível e reorganização conforme a largura disponível. O endereço do provedor e o modelo continuam nos campos existentes; o ajuste visual não altera valores ou troca o provedor salvo.

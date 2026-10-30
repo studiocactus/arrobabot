@@ -6,10 +6,15 @@ Em Comunidade, ative Batimentos da live e abra o cartão. Selecione Pelo celular
 
 1. No relógio, abra a lista de aplicativos e procure Heart Rate Push: um coração branco com ondas em um círculo azul. Ative o compartilhamento. Nome, posição e disponibilidade dependem da versão do relógio.
 2. No Pulsoid do Android, escolha Amazfit Bip 6. Confirme um BPM atualizado e os indicadores Device On e Network On. Confira se o sinal continua depois de bloquear a tela do celular.
-3. No computador, abra a página de chaves pelo botão do BotLive. Entre na mesma conta usada no celular: https://pulsoid.net/ui/keys. Crie uma chave pessoal com a permissão `data:heart_rate:read`.
-4. Cole somente a chave no campo Chave pessoal do Pulsoid e clique em Conectar Pulsoid. Aguarde Recebendo batimentos reais. A prévia deve acompanhar o celular; não haverá número enquanto não chegar uma medição recente.
+3. Na página API Clients do Pulsoid, cadastre ou abra seu aplicativo e copie seu Client ID público: https://pulsoid.net/ui/api-clients. Na seção Pelo celular · Pulsoid do BotLive, cole-o em Client ID do Pulsoid.
+4. Clique em Autorizar Pulsoid. O BotLive abre a página oficial de consentimento no navegador. Entre na mesma conta usada no Android e permita a leitura dos batimentos. Não é necessário Client Secret nem cadastrar URL de retorno para esse fluxo.
+5. Volte ao BotLive e aguarde Recebendo batimentos reais. A autorização fica no cofre do Windows para usar Conectar Pulsoid nas próximas sessões.
 
-**A chave pessoal exige plano BRO ou teste ativo no Pulsoid.** Ter BPM no aplicativo Android não comprova acesso à API. O BotLive não compra nem ativa assinatura. Esta integração usa uma chave pessoal; a autorização por um clique com aplicativo OAuth próprio não está incluída. Confira as condições atuais do fornecedor antes de contratar algo.
+Enquanto aguarda, Abrir autorização do Pulsoid permite reabrir a página. O BotLive respeita o intervalo de consulta informado pelo fornecedor. Recusar, expirar ou desconectar encerra a tentativa; uma resposta atrasada da sessão cancelada não grava a chave nem reinicia a conexão.
+
+**A autorização pelo navegador não garante acesso gratuito.** O Pulsoid pode exigir assinatura, inclusive depois do consentimento. O BotLive informa a recusa e não faz assinatura ou compra. O fluxo foi validado com um servidor de teste; a autorização e a disponibilidade da API na conta gratuita real precisam ser conferidas pelo usuário.
+
+Como alternativa, clique em Usar chave pessoal. Abra a página de chaves pelo botão, na mesma conta: https://pulsoid.net/ui/keys. Gere uma chave com `data:heart_rate:read`, cole no campo protegido e use Salvar chave e conectar. **A emissão manual exige BRO ou teste ativo.** Não cole Client ID ou Client Secret no campo de chave pessoal.
 
 A chave fica no cofre do Windows, separada por perfil. Não é devolvida à interface, exposta no overlay, registrada no histórico ou incluída no backup do BotLive. Para reconectar, deixe o campo vazio e use a chave salva. Remover chave salva apaga a credencial local e encerra a sessão Pulsoid; para revogar a autorização no fornecedor, remova a chave também no site do Pulsoid.
 
@@ -87,3 +92,14 @@ As operações abaixo são internas ao aplicativo e exigem o proprietário; não
 O transporte usa validação Bearer em `https://dev.pulsoid.net/api/v1/token/validate` e leitura WebSocket em `wss://dev.pulsoid.net/api/v1/data/real_time`, com escopo `data:heart_rate:read`. O conector aceita apenas os destinos oficiais em produção. O timestamp `measured_at` é verificado antes de usar `data.heart_rate`. Conexão interrompida limpa a medição anterior; o primeiro sinal após reconexão não dispara cruzamento de limite. A mesma variável e os mesmos gatilhos existentes funcionam com as duas origens.
 
 Fontes Pulsoid: [chave pessoal e requisito BRO](https://docs.pulsoid.net/getting-started/access-token-management/manual-token-issuing.md), [validação de autorização](https://docs.pulsoid.net/getting-started/access-token-management/validate-authorization-token.md), [contrato do cliente oficial](https://github.com/pulsoid-oss/pulsoid-socket) e [Bip 6 no Android](https://blog.pulsoid.net/post/how-to-use-pulsoid-with-your-amazfit-device).
+
+
+### Referência da autorização pelo navegador
+
+`heartRate.pulsoid.get` também devolve `clientId`, um identificador público salvo no perfil. `heartRate.pulsoid.auth.start` recebe `clientId` (UUID), cria uma sessão de autorização e devolve o endereço do overlay existente. É uma operação interna exclusiva do proprietário; não é um endpoint público.
+
+Enquanto `phase=authorizing`, a leitura privada de `heartRate.get` pode incluir `authorization` com `url` de consentimento e `expiresAt` em segundos Unix. O device_code e o access_token nunca são devolvidos. O estado público do overlay não inclui o consentimento. Ao concluir, recusar, expirar ou desconectar, o endereço de consentimento é removido do estado.
+
+O Client ID é salvo junto da preferência de publicação sem apagá-la. A autorização usa `https://pulsoid.net/oauth2/device_authorization` e `https://pulsoid.net/oauth2/token`, com escopo apenas `data:heart_rate:read`. Não usa segredo de aplicativo. O token recebido passa pela mesma validação e pelo mesmo conector de batimentos. O código de recusa `premium_required` é tratado como requisito de assinatura; não é apresentado como promessa de API gratuita.
+
+Fonte: [fluxo oficial de autorização para desktop](https://docs.pulsoid.net/getting-started/access-token-management/oauth-2-device-authorization-flow.md).
