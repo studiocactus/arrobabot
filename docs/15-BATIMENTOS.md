@@ -1,12 +1,29 @@
 # Batimentos da live
 
-## Preparar o relógio
+## Conectar pelo Android com Pulsoid
 
-Em Comunidade, ative Batimentos da live e abra o cartão. No Amazfit Bip 6, procure Heart Rate Push nas configurações do relógio ou no Zepp. A disponibilidade depende do firmware e de o relógio anunciar o serviço Bluetooth padrão Heart Rate (180D). A compatibilidade física com o relógio do proprietário ainda precisa ser validada; a implementação não lê o histórico do Zepp.
+Em Comunidade, ative Batimentos da live e abra o cartão. Selecione Pelo celular · Pulsoid. O caminho é Amazfit Bip 6 → Bluetooth → Android com Pulsoid → internet → BotLive. O computador não precisa de Bluetooth nem de uma página aberta.
 
-No computador, habilite Bluetooth e use Chrome ou Edge. Clique em Conectar relógio no navegador e, na página aberta, em Escolher relógio e conectar. Se o navegador padrão não oferecer Bluetooth, copie o link da ponte e abra no Chrome ou Edge. Selecione o relógio no seletor do navegador e mantenha a página aberta durante o uso.
+1. No relógio, abra a lista de aplicativos e procure Heart Rate Push: um coração branco com ondas em um círculo azul. Ative o compartilhamento. Nome, posição e disponibilidade dependem da versão do relógio.
+2. No Pulsoid do Android, escolha Amazfit Bip 6. Confirme um BPM atualizado e os indicadores Device On e Network On. Confira se o sinal continua depois de bloquear a tela do celular.
+3. No computador, abra a página de chaves pelo botão do BotLive. Entre na mesma conta usada no celular: https://pulsoid.net/ui/keys. Crie uma chave pessoal com a permissão `data:heart_rate:read`.
+4. Cole somente a chave no campo Chave pessoal do Pulsoid e clique em Conectar Pulsoid. Aguarde Recebendo batimentos reais. A prévia deve acompanhar o celular; não haverá número enquanto não chegar uma medição recente.
 
-O primeiro valor deve aparecer na ponte e na prévia do aplicativo. Se não houver uma medição recente por mais de dez segundos, o número desaparece. Um dispositivo que não oferece o serviço padrão não será listado. Não é necessário conceder acesso aos seus arquivos ou à conta Zepp.
+**A chave pessoal exige plano BRO ou teste ativo no Pulsoid.** Ter BPM no aplicativo Android não comprova acesso à API. O BotLive não compra nem ativa assinatura. Esta integração usa uma chave pessoal; a autorização por um clique com aplicativo OAuth próprio não está incluída. Confira as condições atuais do fornecedor antes de contratar algo.
+
+A chave fica no cofre do Windows, separada por perfil. Não é devolvida à interface, exposta no overlay, registrada no histórico ou incluída no backup do BotLive. Para reconectar, deixe o campo vazio e use a chave salva. Remover chave salva apaga a credencial local e encerra a sessão Pulsoid; para revogar a autorização no fornecedor, remova a chave também no site do Pulsoid.
+
+Fechar esta área do BotLive mantém a leitura. Fechar o aplicativo interrompe. Após abrir novamente, clique em Conectar Pulsoid; a integração não inicia a coleta automaticamente. O celular e o computador precisam de internet; o relógio usa Bluetooth com o celular. Não é necessário que os dois estejam na mesma rede Wi-Fi.
+
+O usuário confirmou neste atendimento o funcionamento de Bip 6 → Pulsoid no Android, incluindo retorno após tela bloqueada. A integração Pulsoid → BotLive foi validada com servidores de teste locais; a conta real do usuário ainda precisa ser conferida após atualizar.
+
+## Alternativa: Bluetooth do computador
+
+Selecione Bluetooth do computador. Ative Heart Rate Push no Bip 6 e use Chrome ou Edge com Bluetooth no computador. Desconecte o sensor no Pulsoid antes de tentar esta alternativa, para evitar disputa entre receptores. O Zepp pode continuar configurado; não remova seu vínculo nem restaure o relógio.
+
+Clique em Conectar relógio no navegador e, na página aberta, em Escolher relógio e conectar. Se o navegador padrão não oferecer Bluetooth, copie o link da ponte e abra no Chrome ou Edge. Selecione o relógio e mantenha a página aberta durante o uso. Esta alternativa depende de o dispositivo anunciar o serviço padrão Heart Rate (180D), e não lê o histórico do Zepp. O pareamento do Windows sozinho não confirma recebimento de BPM.
+
+Desconecte e revogue a sessão atual antes de trocar entre as duas pontes. Elas alimentam a mesma prévia e o mesmo tipo de overlay, sem criar outra área de configuração.
 
 ## Publicar no OBS
 
@@ -41,6 +58,32 @@ A ponte autentica com modo heart-publisher e só envia mensagens heartRate conte
 
 ## Diagnóstico
 
+- Chave expirada ou revogada: gere outra no Pulsoid e cole no campo do BotLive.
+- Acesso à API recusado: confira BRO/teste e a permissão `data:heart_rate:read`. A mensagem explica recusas HTTP 401, 402 e 403 sem mostrar a credencial.
+- Conectado, aguardando sinal: confira Device On e Network On no Android, o relógio no pulso e se celular e chave pertencem à mesma conta.
+- Internet interrompida: o BPM é ocultado e o BotLive tenta reconectar, com intervalos crescentes de dois a trinta segundos. Após oito falhas consecutivas, clique em Conectar Pulsoid para tentar novamente. Uma leitura válida reinicia esse limite. A reconexão automática preserva o endereço do overlay.
+- Sinal antigo: leituras com mais de dez segundos, duplicadas, fora de ordem ou mais de cinco segundos no futuro não renovam a prévia. O horário do computador precisa estar correto. O BPM aceito está limitado ao formato de 1 a 300, sem interpretação médica.
+- Campo removido do cofre: a operação no BotLive não revoga uma chave que já foi copiada para outro aplicativo; faça isso no site do Pulsoid.
+
+
 Se o relógio não aparecer, confira Heart Rate Push, Bluetooth e o navegador; feche outras pontes que disputem a conexão. Se o aplicativo estiver fechado, a página indica conexão encerrada. Se a medição ficar antiga, confira o contato do relógio com o pulso e a conexão. Desconecte antes de preparar uma nova ponte. Após revogar os links, abra uma ponte nova pelo aplicativo.
 
 Fontes: [Web Bluetooth no Chrome](https://developer.chrome.com/docs/capabilities/bluetooth), [manual oficial do Bip 6](https://support.amazfit.com/en/amazfit_bip_6/files/user-manual.pdf.pdf) e [orientação do fornecedor de integração sobre Heart Rate Push](https://blog.hyperate.io/post/amazfit-heart-rate-push-live-bluetooth-heart-rate-streaming-with-zepp-os-hyperate-compatible/).
+
+
+## Referência Pulsoid e sessão existente
+
+As operações abaixo são internas ao aplicativo e exigem o proprietário; não são novos comandos HTTP públicos. Todas recebem `profileId`.
+
+| Operação | Entrada adicional | Resultado |
+|---|---|---|
+| `heartRate.pulsoid.get` | nenhuma | apenas `hasToken`, sem a credencial |
+| `heartRate.pulsoid.connect` | `token` opcional; vazio usa o cofre | inicia validação/conexão assíncrona e retorna `overlayUrl`; o retorno não comprova sinal |
+| `heartRate.pulsoid.forget` | nenhuma | remove a chave local e encerra a sessão Pulsoid |
+| `heartRate.links` | nenhuma | recupera somente o endereço atual do overlay, se houver sessão |
+
+`heartRate.get` mantém os campos anteriores e acrescenta `source` (`bluetooth` ou `pulsoid`), `phase` (`connecting`, `reconnecting`, `waiting`, `error` ou `disconnected`) e mensagem de erro sanitizada. O estado `fresh` só aparece com BPM recente; `phase=waiting` significa transporte conectado, não autorização para inventar uma leitura. O estado público nunca contém a chave Pulsoid nem mensagem privada de erro.
+
+O transporte usa validação Bearer em `https://dev.pulsoid.net/api/v1/token/validate` e leitura WebSocket em `wss://dev.pulsoid.net/api/v1/data/real_time`, com escopo `data:heart_rate:read`. O conector aceita apenas os destinos oficiais em produção. O timestamp `measured_at` é verificado antes de usar `data.heart_rate`. Conexão interrompida limpa a medição anterior; o primeiro sinal após reconexão não dispara cruzamento de limite. A mesma variável e os mesmos gatilhos existentes funcionam com as duas origens.
+
+Fontes Pulsoid: [chave pessoal e requisito BRO](https://docs.pulsoid.net/getting-started/access-token-management/manual-token-issuing.md), [validação de autorização](https://docs.pulsoid.net/getting-started/access-token-management/validate-authorization-token.md), [contrato do cliente oficial](https://github.com/pulsoid-oss/pulsoid-socket) e [Bip 6 no Android](https://blog.pulsoid.net/post/how-to-use-pulsoid-with-your-amazfit-device).

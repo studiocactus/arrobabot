@@ -2,8 +2,11 @@
 use crate::{engine::Runtime,model::Event};
 use serde_json::{json,Value};
 use std::{collections::HashMap,sync::{Arc,Mutex},time::Instant};
+#[path="pulsoid.rs"]pub mod pulsoid;
 #[derive(Default)]pub struct Sensors{sessions:Mutex<HashMap<String,Session>>,events:Mutex<HashMap<String,(String,Instant)>>}
-struct Session{publisher:String,overlay:String,bpm:Option<u16>,at:Option<Instant>,previous:Option<u16>,last_event:Option<Instant>,connected:bool}
+struct Session{publisher:String,overlay:String,bpm:Option<u16>,at:Option<Instant>,previous:Option<u16>,last_event:Option<Instant>,connected:bool,source:&'static str,phase:&'static str,error:String,task:Option<tokio::task::AbortHandle>}
+impl Drop for Session{fn drop(&mut self){if let Some(task)=self.task.take(){task.abort();}}}
+impl Session{fn new(source:&'static str)->Self{Self{publisher:token(),overlay:token(),bpm:None,at:None,previous:None,last_event:None,connected:false,source,phase:"disconnected",error:String::new(),task:None}}}
 fn token()->String{format!("{}{}",uuid::Uuid::new_v4().simple(),uuid::Uuid::new_v4().simple())}
 /// Heart Rate Measurement 0x2A37: UINT8/UINT16, contato e campos opcionais validados.
 pub fn decode(bytes:&[u8])->Result<Option<u16>,String>{
@@ -21,25 +24,33 @@ pub fn state(rt:&Runtime,p:&str,public:bool)->Value{
  let map=rt.heart_rate.sessions.lock().unwrap();let entry=map.get(p);
  let age=entry.and_then(|s|s.at.map(|a|a.elapsed().as_secs()));
  let fresh=entry.is_some_and(|s|s.connected&&s.bpm.is_some()&&s.at.is_some_and(|at|at.elapsed()<=std::time::Duration::from_secs(10)));
- json!({"profileId":p,"state":if !allowed{"hidden"}else if fresh{"fresh"}else if entry.is_some_and(|s|s.connected){"waiting"}else{"disconnected"},"bpm":if allowed&&fresh{entry.and_then(|s|s.bpm)}else{None},"ageSeconds":age,"showOnObs":cfg["showOnObs"]==true})
+ json!({"profileId":p,"state":if !allowed{"hidden"}else if fresh{"fresh"}else if entry.is_some_and(|s|s.connected){"waiting"}else{"disconnected"},"bpm":if allowed&&fresh{entry.and_then(|s|s.bpm)}else{None},"ageSeconds":age,"showOnObs":cfg["showOnObs"]==true,"source":entry.map(|s|s.source),"phase":entry.map(|s|s.phase),"error":if public{None}else{entry.map(|s|s.error.as_str())}})
 }
 pub fn profile_for(rt:&Runtime,key:&str,publisher:bool)->Option<String>{
  if key.len()!=64{return None}
- let id=rt.heart_rate.sessions.lock().unwrap().iter().find(|(_,s)|if publisher{s.publisher==key}else{s.overlay==key}).map(|(id,_)|id.clone())?;
+ let id=rt.heart_rate.sessions.lock().unwrap().iter().find(|(_,s)|if publisher{s.source=="bluetooth"&&s.publisher==key}else{s.overlay==key}).map(|(id,_)|id.clone())?;
  let p=rt.db.profile(&id).ok()?;if p.modules["heartRate"]!=true{return None}Some(id)
 }
 pub fn connected(rt:&Runtime,p:&str,key:&str,next:bool)->Result<(),String>{
- let mut map=rt.heart_rate.sessions.lock().unwrap();let s=map.get_mut(p).filter(|s|s.publisher==key).ok_or("Conexão de batimentos expirada")?;
+ let mut map=rt.heart_rate.sessions.lock().unwrap();let s=map.get_mut(p).filter(|s|s.source=="bluetooth"&&s.publisher==key).ok_or("Conexão de batimentos expirada")?;
  if next&&s.connected{return Err("Já há uma ponte de batimentos conectada neste perfil".into())}
- s.connected=next;s.bpm=None;s.previous=None;s.at=None;Ok(())
+ s.connected=next;s.phase=if next{"waiting"}else{"disconnected"};s.bpm=None;s.previous=None;s.at=None;Ok(())
 }
 pub async fn receive(rt:&Arc<Runtime>,p:&str,key:&str,raw:&Value)->Result<(),String>{
  let data=raw.as_array().filter(|a|a.len()<=64).ok_or("Pacote Bluetooth inválido")?;
  let bytes:Vec<u8>=data.iter().map(|v|v.as_u64().filter(|n|*n<=255).map(|n|n as u8).ok_or("Byte Bluetooth inválido")).collect::<Result<_,_>>()?;
- let bpm=decode(&bytes)?;let profile=rt.db.profile(p)?;if profile.modules["heartRate"]!=true{return Err("Módulo de batimentos desligado".into())}
+ let bpm=decode(&bytes)?;
+ if profile_for(rt,key,true).as_deref()!=Some(p){return Err("Conexão de batimentos expirada".into())}
+ accept(rt,p,key,bpm,std::time::Duration::ZERO).await
+}
+/// Único caminho validado para prévia, overlay e eventos, independente da ponte.
+async fn accept(rt:&Arc<Runtime>,p:&str,key:&str,bpm:Option<u16>,age:std::time::Duration)->Result<(),String>{
+ let profile=rt.db.profile(p)?;if profile.modules["heartRate"]!=true{return Err("Módulo de batimentos desligado".into())}
+ if bpm.is_some_and(|n|!(1..=300).contains(&n))||age>std::time::Duration::from_secs(10){return Err("Medição de batimentos inválida ou antiga".into())}
+ let source;
  let previous={let mut map=rt.heart_rate.sessions.lock().unwrap();let s=map.get_mut(p).filter(|s|s.publisher==key&&s.connected).ok_or("Conexão de batimentos expirada")?;
   if s.at.is_some_and(|a|a.elapsed().as_millis()<200){return Ok(())}
-  let previous=if s.at.is_some_and(|a|a.elapsed().as_secs()<=10){s.bpm}else{None};s.previous=previous;s.bpm=bpm;s.at=Some(Instant::now());
+  source=s.source;let previous=if s.at.is_some_and(|a|a.elapsed()<=std::time::Duration::from_secs(10)){s.bpm}else{None};s.previous=previous;s.bpm=bpm;s.at=Some(Instant::now()-age);s.phase="waiting";s.error.clear();
   let emit=bpm.is_some()&&previous.is_some()&&bpm!=previous&&s.last_event.map_or(true,|a|a.elapsed().as_secs()>=1);
   if emit{s.last_event=Some(Instant::now());previous}else{None}
  };
@@ -48,7 +59,7 @@ pub async fn receive(rt:&Arc<Runtime>,p:&str,key:&str,raw:&Value)->Result<(),Str
   // Só aciona fluxos explicitamente configurados; não grava uma série de saúde no histórico.
   if rt.db.flows(p)?.iter().any(|f|f.enabled&&f.trigger.kind=="heartRate"){
    let id=uuid::Uuid::new_v4().to_string();{let mut events=rt.heart_rate.events.lock().unwrap();events.retain(|_,(_,at)|at.elapsed().as_secs()<30);events.insert(id.clone(),(p.into(),Instant::now()));}
-   rt.submit(Event{id,profile_id:p.into(),kind:"heartRate".into(),user:"Sensor local".into(),user_id:"local-heart-sensor".into(),role:"everyone".into(),message:String::new(),data:json!({"bpm":bpm,"previousBpm":previous,"source":"bluetooth-heart-rate"}),simulated:false,rehearsal:false}).await?;
+   rt.submit(Event{id,profile_id:p.into(),kind:"heartRate".into(),user:"Sensor de batimentos".into(),user_id:"local-heart-sensor".into(),role:"everyone".into(),message:String::new(),data:json!({"bpm":bpm,"previousBpm":previous,"source":if source=="pulsoid"{"pulsoid-heart-rate"}else{"bluetooth-heart-rate"}}),simulated:false,rehearsal:false}).await?;
   }
  }
  Ok(())
@@ -64,12 +75,13 @@ pub fn operation(rt:&Runtime,p:&str,op:&str,args:&Value)->Result<Value,String>{
  let profile=rt.db.profile(p)?;
  match op{
  "heartRate.get"=>Ok(state(rt,p,false)),
+ "heartRate.links"=>{let map=rt.heart_rate.sessions.lock().unwrap();let port=*rt.api_port.lock().unwrap();Ok(json!({"overlayUrl":map.get(p).filter(|_|port>0).map(|s|format!("http://127.0.0.1:{port}/heart-overlay#token={}",s.overlay))}))},
  "heartRate.visibility"=>{let enabled=args["enabled"].as_bool().ok_or("Escolha se quer exibir no OBS")?;rt.db.set_module(p,"heartRate",&json!({"showOnObs":enabled}))?;rt.emit("heart-rate",state(rt,p,true));Ok(Value::Null)},
  "heartRate.stop"=>{stop(rt,p);Ok(Value::Null)},
  "heartRate.prepare"=>{
   if profile.modules["heartRate"]!=true{return Err("Ative Batimentos da live neste perfil".into())}
-  let mut map=rt.heart_rate.sessions.lock().unwrap();if map.get(p).is_some_and(|s|s.connected){return Err("Desconecte a ponte atual antes de preparar outra".into())}
-  let publisher=token();let overlay=token();map.insert(p.into(),Session{publisher:publisher.clone(),overlay:overlay.clone(),bpm:None,at:None,previous:None,last_event:None,connected:false});drop(map);
+  let mut map=rt.heart_rate.sessions.lock().unwrap();if map.get(p).is_some_and(|s|s.connected||s.task.is_some()){return Err("Desconecte a ponte atual antes de preparar outra".into())}
+  let session=Session::new("bluetooth");let publisher=session.publisher.clone();let overlay=session.overlay.clone();map.insert(p.into(),session);drop(map);
   let port=*rt.api_port.lock().unwrap();if port==0{stop(rt,p);return Err("A API local ainda não está disponível".into())}
   Ok(json!({"bridgeUrl":format!("http://127.0.0.1:{port}/heart-connect#token={publisher}"),"overlayUrl":format!("http://127.0.0.1:{port}/heart-overlay#token={overlay}")}))
  },_=>Err("Operação de batimentos desconhecida".into())
@@ -93,8 +105,9 @@ pub fn operation(rt:&Runtime,p:&str,op:&str,args:&Value)->Result<Value,String>{
  }
  #[tokio::test]async fn sinal_antigo_e_modulo_desligado_nao_expoem_bpm(){
   let (_dir,rt,p)=setup();let (key,_)=prepare(&rt,&p);connected(&rt,&p,&key,true).unwrap();receive(&rt,&p,&key,&json!([0,79])).await.unwrap();
-  {let mut map=rt.heart_rate.sessions.lock().unwrap();map.get_mut(&p).unwrap().at=Some(Instant::now()-std::time::Duration::from_secs(11));}
+  {let mut map=rt.heart_rate.sessions.lock().unwrap();map.get_mut(&p).unwrap().at=Some(Instant::now()-std::time::Duration::from_millis(10500));}
   assert!(state(&rt,&p,false)["bpm"].is_null());assert_eq!(state(&rt,&p,false)["state"],"waiting");
+  receive(&rt,&p,&key,&json!([0,80])).await.unwrap();assert!(rt.heart_rate.sessions.lock().unwrap().get(&p).unwrap().previous.is_none());
   let mut profile=rt.db.profile(&p).unwrap();profile.modules["heartRate"]=json!(false);rt.db.save_profile(&profile).unwrap();assert_eq!(profile_for(&rt,&key,true),None);assert!(receive(&rt,&p,&key,&json!([0,80])).await.is_err());assert_eq!(state(&rt,&p,false)["state"],"hidden");
  }
  #[tokio::test]async fn evento_externo_nao_se_passa_por_sensor_e_ticket_nao_reutiliza(){

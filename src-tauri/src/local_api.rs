@@ -265,6 +265,19 @@ mod tests {
     use super::*;
 
     #[tokio::test]
+    async fn fonte_revogada_nao_recebe_batimentos_da_sessao_seguinte(){
+        let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();
+        let p:crate::model::Profile=serde_json::from_value(json!({"id":uuid::Uuid::new_v4().to_string(),"name":"Overlay revogado","platform":"twitch","channel":"qa","modules":{"heartRate":true}})).unwrap();rt.db.save_profile(&p).unwrap();*rt.api_port.lock().unwrap()=12345;
+        let links=crate::heart_rate::operation(&rt,&p.id,"heartRate.prepare",&json!({})).unwrap();let key=links["overlayUrl"].as_str().unwrap().split("#token=").nth(1).unwrap().to_owned();
+        let listener=tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();let addr=listener.local_addr().unwrap();let rt2=rt.clone();let pid=p.id.clone();let task=tokio::spawn(async move{let (socket,_)=listener.accept().await.unwrap();let ws=tokio_tungstenite::accept_async(socket).await.unwrap();heart_source(&rt2,ws,&pid,&key,false).await;});
+        let (mut client,_)=tokio_tungstenite::connect_async(format!("ws://{addr}")).await.unwrap();let _=client.next().await;
+        crate::heart_rate::stop(&rt,&p.id);
+        let next=crate::heart_rate::operation(&rt,&p.id,"heartRate.prepare",&json!({})).unwrap();let publisher=next["bridgeUrl"].as_str().unwrap().split("#token=").nth(1).unwrap();crate::heart_rate::connected(&rt,&p.id,publisher,true).unwrap();crate::heart_rate::operation(&rt,&p.id,"heartRate.visibility",&json!({"enabled":true})).unwrap();crate::heart_rate::receive(&rt,&p.id,publisher,&json!([0,95])).await.unwrap();
+        tokio::time::timeout(Duration::from_secs(3),async{while let Some(Ok(msg))=client.next().await{match msg{Message::Text(raw)=>{let v:Value=serde_json::from_str(&raw).unwrap();assert!(v["payload"]["bpm"].is_null(),"Fonte revogada recebeu medição");},Message::Close(_)=>break,_=>{}}}}).await.unwrap();
+        tokio::time::timeout(Duration::from_secs(3),task).await.unwrap().unwrap();crate::heart_rate::stop(&rt,&p.id);
+    }
+
+    #[tokio::test]
     async fn publisher_rejeita_comandos_e_so_confirma_bpm_validado(){
         let dir=tempfile::tempdir().unwrap();let rt=Runtime::new(dir.path().into()).unwrap();
         let p:crate::model::Profile=serde_json::from_value(json!({"id":uuid::Uuid::new_v4().to_string(),"name":"Sensor socket","platform":"twitch","channel":"qa","modules":{"heartRate":true}})).unwrap();rt.db.save_profile(&p).unwrap();*rt.api_port.lock().unwrap()=12345;
@@ -316,7 +329,7 @@ async fn heart_source(rt:&Arc<Runtime>,mut ws:tokio_tungstenite::WebSocketStream
     if ws.send(Message::Text(reply.to_string().into())).await.is_err(){break}
    },Some(Ok(Message::Ping(v)))=>{if ws.send(Message::Pong(v)).await.is_err(){break}},Some(Ok(Message::Close(_)))|None|Some(Err(_))=>break,_=>{}
   }},
-  value=updates.recv()=>{if let Ok(v)=value{if !publisher&&v["type"]=="heart-rate"&&v["payload"]["profileId"]==pid{if ws.send(Message::Text(v.to_string().into())).await.is_err(){break}}}}
+  value=updates.recv()=>{if crate::heart_rate::profile_for(rt,key,publisher).as_deref()!=Some(pid){break}if let Ok(v)=value{if !publisher&&v["type"]=="heart-rate"&&v["payload"]["profileId"]==pid{if ws.send(Message::Text(v.to_string().into())).await.is_err(){break}}}}
  }}
  if publisher{let _=crate::heart_rate::connected(rt,pid,key,false);rt.emit("heart-rate",crate::heart_rate::state(rt,pid,true));}
  let _=ws.close(None).await;

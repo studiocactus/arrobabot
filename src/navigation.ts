@@ -28,7 +28,7 @@ const keywords:Record<string,string>={
  ai:'ia inteligencia artificial personalidade modelo provedor',
  memory:'memoria conhecimento notas contexto',
  presets:'modelo pronto importar exportar pacote',
- community:'pontos loja sorteio fila jogos comunidade',
+ community:'pontos loja sorteio fila jogos comunidade batimentos bpm amazfit relogio pulsoid bluetooth android celular',
  discord:'discord servidor cargos membros',
  history:'erro falha diagnostico historico logs eventos',
  stats:'estatistica numero relatorio atividade',

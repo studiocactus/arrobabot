@@ -1,5 +1,33 @@
 # Histórico de atualizações
 
+# BotLive 0.20.22
+
+# BotLive v0.20.22 — Amazfit pelo Android com Pulsoid
+
+## O que mudou
+Batimentos da live agora oferece Pelo celular · Pulsoid no mesmo estúdio da ponte Bluetooth existente. O caminho é Bip 6 → Android/Pulsoid → internet → BotLive. O computador deixa de precisar de Bluetooth e de uma aba de navegador nesse modo. A prévia, a fonte do OBS, os gatilhos de cruzamento e a variável heartRate.bpm são os mesmos, sem duplicar configurações ou simular valores.
+
+O conector nativo valida a chave pessoal e a permissão data:heart_rate:read, lê o WebSocket oficial e verifica BPM e horário de medição. Pacotes antigos, repetidos, fora de ordem ou mais de cinco segundos no futuro não renovam o sinal. A conexão interrompida apaga a leitura anterior e tenta novamente com intervalos de dois a trinta segundos, até oito falhas consecutivas; chave inválida, permissão recusada e acesso ao plano têm mensagens próprias. O primeiro sinal após reconectar não dispara cruzamento falso.
+
+A chave fica no cofre do Windows por perfil. A interface recebe somente a informação de que há uma chave salva. Overlay, logs e backups do BotLive não carregam essa credencial. Remover chave salva encerra a sessão Pulsoid. Desconectar, apagar o perfil ou desligar o módulo cancela a tarefa e revoga os links. A fonte antiga também é verificada antes de receber novas notificações. Reconexão automática mantém o mesmo endereço do overlay.
+
+## Como usar
+Em Comunidade → Batimentos da live, escolha Pelo celular · Pulsoid. Mantenha o relógio conectado ao Pulsoid no Android, na mesma conta da chave. Abra a página de chaves pelo botão do BotLive, gere uma chave pessoal com data:heart_rate:read, cole no campo protegido e clique em Conectar Pulsoid. Aguarde Recebendo batimentos reais. Depois ative Publicar batimentos no OBS e copie a fonte para uma Fonte de navegador no OBS.
+
+A chave pessoal exige BRO ou teste ativo no Pulsoid. Não há assinatura ou compra automática. Em sessões seguintes, use a chave salva; o BotLive não inicia coleta automaticamente ao abrir. Desconectar revoga o link, portanto copie um novo na próxima sessão. A opção Bluetooth do computador continua disponível no mesmo cartão. O capítulo Batimentos da live e a referência da API local documentam passos, custos, limites e diagnóstico. A busca também encontra Pulsoid, Amazfit e Android.
+
+## Validação
+TypeScript e 185 testes de frontend passaram. A suíte nativa passou com 446 testes e três ignorados. Os sete novos testes Pulsoid cobrem formato/escopo, recusa 401/402/403, pacotes antigos/duplicados/inválidos, leitura pelo mesmo overlay, reconexão sem cruzamento falso, interrupção durante autorização, acesso exclusivo do proprietário e remoção da chave. Um teste adicional verifica que a fonte revogada não recebe batimentos da próxima sessão. A compilação de produção, a geração do manual de 33 capítulos e os nove testes de atualização também passaram. Os testes usam servidores locais e credenciais fictícias; não acessam a conta real.
+
+Quatro testes no navegador passaram com npm run dev, incluindo o novo assistente Pulsoid e os testes existentes de batimentos, Bluetooth e controles OBS. O layout foi conferido e capturado em 1100px e 1680px, com prévia sticky, campos e botões acessíveis. A primeira execução nativa nova identificou um ID inválido na preparação do teste; a preparação foi corrigida e a suíte completa passou.
+
+## Limitações
+Não foi feita uma conexão real da conta Pulsoid ao BotLive nesta validação; o proprietário confirmou somente Bip 6 → Android/Pulsoid, incluindo sinal após tela bloqueada. O acesso da API pessoal depende das condições BRO/teste do fornecedor e da internet nos dois dispositivos. Não foi implementado OAuth de um clique com aplicativo próprio registrado no Pulsoid. Nenhum valor de assinatura é prometido.
+
+O BotLive não guarda histórico de saúde neste módulo; o Pulsoid tem política própria. Fluxos configurados pelo usuário podem publicar ou persistir valores em outros destinos. Remover a chave no BotLive não revoga a autorização no site do fornecedor. A chave não é migrada por backup; precisa ser informada em outro computador. O overlay e as conexões são de sessão e precisam ser preparados novamente após fechar/reiniciar. O teste físico final de Pulsoid → BotLive → OBS permanece pendente.
+
+---
+
 # BotLive 0.20.21
 
 # BotLive v0.20.21 — identificação e padrão visual do topo

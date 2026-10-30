@@ -70,6 +70,7 @@ pub async fn dispatch(rt:Arc<Runtime>,op:&str,args:Value)->R<Value>{
  if op.starts_with("access."){return access::operation(&rt,op,&args)}
  let p=args["profileId"].as_str().unwrap_or("").to_owned();
  if op.starts_with("chatExtras."){return chat_extras::operation(&rt,&p,op,&args)}
+ if op.starts_with("heartRate.pulsoid."){return heart_rate::pulsoid::operation(&rt,&p,op,&args)}
  if op.starts_with("heartRate."){return heart_rate::operation(&rt,&p,op,&args)}
  if op.starts_with("labels."){return labels::operation(&rt,&p,op,&args).await}
  if op.starts_with("obs."){return obs::operation(&rt,&p,op,&args).await}

@@ -231,3 +231,8 @@ Não exponha diretamente o WebSocket local como substituto de um receptor oficia
 - Músicas sem áudio: o overlay só mostra URLs.
 - Mudou a porta: reinicie o app e atualize a URL da fonte.
 - Reiniciou o app: atualize o token na fonte e recarregue-a.
+
+
+## Batimentos via Pulsoid
+
+O conector Pulsoid usa o mesmo overlay dedicado e os mesmos eventos de batimentos da ponte Bluetooth. A chave do fornecedor nunca é a chave da fonte do OBS. As operações de conexão são internas e exclusivas do proprietário; não ampliam a API pública. Veja conexão pelo Android, requisito BRO/teste, formato do estado e operações em [Batimentos da live](15-BATIMENTOS.md).
