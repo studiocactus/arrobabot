@@ -180,6 +180,7 @@ pub async fn dispatch(rt:Arc<Runtime>,op:&str,args:Value)->R<Value>{
  "knowledge.import"=>{let mut profile=rt.db.profile(&p)?;let source=args["path"].as_str().ok_or("Escolha uma pasta")?.to_owned();let made=knowledge::import(&rt.base,&p,&source)?;profile.ai.knowledge_source=source;rt.db.save_profile(&profile)?;Ok(made)},
  "knowledge.remove"=>{rt.db.profile(&p)?;knowledge::remove(&rt.base,&p,args["path"].as_str().ok_or("Arquivo ausente")?)?;Ok(Value::Null)},
  "community"=>{rt.db.profile(&p)?;Ok(json!(modules::load(&rt,&p)))},
+ "twitch.identity"=>{let profile=rt.db.profile(&p)?;crate::twitch_ops::identity(&rt,&profile).await},
  "twitch.rewards"=>{let profile=rt.db.profile(&p)?;crate::twitch_ops::custom_rewards(&rt,&profile).await},
  "twitch.reward.create"=>{let profile=rt.db.profile(&p)?;crate::twitch_ops::create_reward(&rt,&profile,args["title"].as_str().unwrap_or(""),args["cost"].as_i64().unwrap_or(0),args["userInput"].as_bool().unwrap_or(false)).await},
  "community.action"=>modules::admin(&rt,&p,args["action"].as_str().ok_or("Ação ausente")?,args["data"].clone()),

@@ -96,3 +96,10 @@ Para desinstalar, use o recurso de aplicativos instalados do Windows. A remoçã
 ## Estado dos pacotes
 
 Executável e instaladores Windows foram gerados. A abertura nativa foi verificada no computador de desenvolvimento. A instalação em máquina limpa e os pacotes macOS/Linux ainda não foram homologados. Consulte [Validação](VALIDACAO.md).
+
+
+### Identificação no topo
+
+O canto superior direito mostra automaticamente a foto do canal Twitch vinculado ao perfil ativo. A conta do bot pode ser diferente: a foto continua sendo a do canal. Trocar de perfil atualiza a identificação. Sem conta Twitch vinculada, sem acesso à rede ou se a imagem não carregar, aparece a inicial do perfil. A foto é consultada ao abrir, reconectar ou trocar o perfil e novamente a cada cinco minutos; não é preciso configurar uma imagem no BotLive.
+
+O indicador de pessoas no chat segue o mesmo formato compacto da busca “Ir para…”. Clique nele para abrir a lista; a contagem representa presença no chat, não espectadores assistindo à live.

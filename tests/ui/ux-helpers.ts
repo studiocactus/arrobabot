@@ -66,6 +66,7 @@ export async function mock(page:Page){
      switch(op){
       case 'snapshot':return {profiles:[arg.profile],logs:arg.logs,statuses:{p1:'connected'},theme:'dark',accent:'',apiPort:0,dataDir:'C:/dados'};
       case 'flows':return arg.flows;
+      case 'twitch.identity':return null;
       case 'actionLibrary.list':return [];
       case 'dashboard.get':return {platform:{state:'unconfigured',data:null,error:'Autorize a conta do canal em Perfis'},local:{session:{},messagesPerMinute:0,activeChatters:0,observedAt:Date.now()/1000}};
       case 'dashboard.obs':return {state:'unconfigured',data:null,error:'Integração OBS desligada'};

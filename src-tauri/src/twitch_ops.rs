@@ -11,6 +11,31 @@ pub const OPS:&[&str]=&["game","title","timeout","ban","unban","warn","vip","unv
 /// Quem passou pelo chat fica aqui por 24 h para a fala livre achar nomes sem @.
 const SEEN_TTL:Duration=Duration::from_secs(86400);
 const SEEN_CAP:usize=2000;
+/// Foto pública do canal ativo; não devolve tokens nem outros dados da conta.
+pub async fn identity(rt:&Arc<Runtime>,p:&Profile)->Result<Value,String>{
+ if p.platform!="twitch"||p.channel_id.is_empty(){return Ok(Value::Null)}
+ let token=match crate::oauth::token(&rt.http,p,"channel").await{Ok(t)=>t,Err(_)=>crate::oauth::token(&rt.http,p,"bot").await?};
+ let res=crate::helix::get(&rt.http,p,&token,"users",&[("id",p.channel_id.as_str())]).send().await.map_err(|_|"Foto da Twitch indisponível")?;
+ if !res.status().is_success(){return Err("Foto da Twitch indisponível".into())}
+ let v:Value=res.json().await.map_err(|_|"Identidade da Twitch inválida")?;
+ parse_identity(&v,&p.channel_id)
+}
+fn parse_identity(v:&Value,id:&str)->Result<Value,String>{
+ let user=v["data"].as_array().and_then(|rows|rows.iter().find(|u|u["id"].as_str()==Some(id))).ok_or("Canal não encontrado na Twitch")?;
+ let image=user["profile_image_url"].as_str().unwrap_or("");
+ let url=reqwest::Url::parse(image).map_err(|_|"Foto da Twitch inválida")?;
+ if url.scheme()!="https"||url.host_str()!=Some("static-cdn.jtvnw.net")||!url.username().is_empty()||url.password().is_some(){return Err("Foto da Twitch inválida".into())}
+ Ok(json!({"imageUrl":image,"displayName":user["display_name"].as_str().unwrap_or("")}))
+}
+#[cfg(test)] mod identity_tests{
+ use super::*;
+ #[test] fn foto_pertence_ao_canal_solicitado_e_nao_expoe_email(){
+  let v=json!({"data":[{"id":"bot","profile_image_url":"https://static-cdn.jtvnw.net/bot.png"},{"id":"channel","display_name":"Canal","profile_image_url":"https://static-cdn.jtvnw.net/canal.png","email":"privado"}]});
+  assert_eq!(parse_identity(&v,"channel").unwrap(),json!({"imageUrl":"https://static-cdn.jtvnw.net/canal.png","displayName":"Canal"}));
+  assert!(parse_identity(&v,"outro").is_err());
+  for image in ["","http://example.com/a","javascript:alert(1)","https://user:password@example.com/a"]{assert!(parse_identity(&json!({"data":[{"id":"channel","profile_image_url":image}]}),"channel").is_err());}
+ }
+}
 pub(crate) fn login_chars(s:&str)->bool{!s.is_empty()&&s.len()<=25&&s.chars().all(|c|c.is_ascii_alphanumeric()||c=='_'||c=='-')}
 fn mention_ok(s:&str)->bool{s.len()>=2&&login_chars(s)}
 fn bare_ok(s:&str)->bool{s.len()>=4&&login_chars(s)}

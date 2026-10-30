@@ -1,5 +1,25 @@
 # Histórico de atualizações
 
+# BotLive 0.20.21
+
+# BotLive v0.20.21 — identificação e padrão visual do topo
+
+## O que mudou
+O indicador de pessoas no chat usa a mesma altura de 32px, fundo, borda e raio discreto do campo de busca “Ir para…”, substituindo o formato de cápsula. A lista de participantes continua acessível pelo mesmo botão.
+
+O círculo no canto superior direito carrega a foto pública do canal Twitch vinculado ao perfil ativo. A consulta seleciona explicitamente o ID do canal, mesmo quando a autorização usada pertence à conta do bot. Somente nome público e endereço da foto são devolvidos à interface. As imagens são aceitas apenas por HTTPS no CDN da Twitch, autorizado na política de imagens do aplicativo.
+
+## Como usar
+Abra o BotLive com o canal Twitch autorizado em Perfis. A foto aparece automaticamente, sem novo cadastro de imagem. Trocar o perfil ou reconectar atualiza a consulta; enquanto o aplicativo está aberto, ela também se repete a cada cinco minutos. Sem imagem disponível, a inicial do perfil permanece como alternativa. Clique no indicador de chat para consultar os participantes como antes. O capítulo de instalação explica a identificação do topo.
+
+## Validação
+TypeScript, 185 testes de frontend, 438 testes nativos (três ignorados) e nove testes dos scripts de atualização passaram. O teste de navegador executado com npm run dev passou em 1100px e 1680px: comparou altura, raio, fundo e borda dos dois boxes, verificou ausência de rolagem horizontal, abertura da lista do chat, carregamento da foto e retorno à inicial em caso de erro; capturas revisadas nas duas larguras. Uma primeira execução encontrou a altura sobrescrita por uma regra geral e a correção foi validada; outra tentativa foi interrompida por espera de carregamento e o teste passou ao retirar a dependência de fontes externas. O teste nativo novo confere que a identidade pertence ao canal solicitado, não expõe e-mail e rejeita URLs inadequadas.
+
+## Limitações
+A foto depende da autorização existente, da rede e do CDN da Twitch. Nenhuma conta real foi conectada para a validação; o navegador usa dados controlados de QA. A presença no chat não é a contagem de espectadores. O módulo Amazfit não foi alterado nesta atualização e a ponte Android continua pendente de avaliação.
+
+---
+
 # BotLive 0.20.20
 
 ## O que mudou
